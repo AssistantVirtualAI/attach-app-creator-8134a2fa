@@ -2,9 +2,9 @@
 // pour un courtier Planiprêt, via Lovable AI Gateway (Claude / GPT-5.5).
 // Retourne { report, period, stats }.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { getAiConsent, consentRequiredBody } from "../_shared/ai-consent.ts";
 import { generateText } from "npm:ai";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
+import { hasValidAiConsent } from "../_shared/ai-consent.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -36,10 +36,9 @@ Deno.serve(async (req) => {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Mode service (voice agent / scheduler) : accepte broker_user_id via header/body si appelé avec service_role.
-    // Un appel interne doit présenter le VRAI bearer service role (un en-tête
-    // personnalisé n'est jamais une preuve de confiance).
-    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const isService = bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const isService = !!serviceKey && bearer === serviceKey;
     let effectiveUserId: string | null = null;
     if (isService) {
       effectiveUserId = req.headers.get("x-broker-user-id") ?? body?.broker_user_id ?? body?._user_id ?? null;
@@ -55,14 +54,11 @@ Deno.serve(async (req) => {
     }
     if (!effectiveUserId) return json({ error: "no_user" }, 400);
 
-    {
-      const consent = await getAiConsent(admin, effectiveUserId);
-      if (!consent.granted) return json(consentRequiredBody(consent), 403);
-    }
-
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("id, user_id, full_name, extension")
+      .select("id, user_id, full_name, extension, ai_consent_at, ai_consent_revoked_at")
       .eq("user_id", effectiveUserId).maybeSingle();
+    if (!profile) return json({ error: "profile_not_found" }, 404);
+    if (!hasValidAiConsent(profile)) return json({ error: "ai_consent_required" }, 403);
 
     const daysBack = period === "day" ? 1 : period === "week" ? 7 : 30;
     const since = new Date(Date.now() - daysBack * 86400000).toISOString();

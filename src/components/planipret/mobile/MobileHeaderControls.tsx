@@ -14,43 +14,57 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function MobileHeaderControls({ profile, reloadProfile }: { profile: any; reloadProfile: () => Promise<void> | void }) {
-  const { t, lang, toggle: toggleLang } = useMplanipretLang();
+  const { lang, toggle: toggleLang } = useMplanipretLang();
   const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
 
+  // Mirror the active theme on <html> so Tailwind `dark:` utilities react too.
   useEffect(() => {
     if (theme === "dark") document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
   }, [theme]);
 
   useEffect(() => {
+    const userId = profile?.user_id;
+    if (!userId) return;
     let cancelled = false;
     const load = async () => {
       try {
-        const { data: u } = await supabase.auth.getUser();
-        if (!u?.user) return;
         const { count } = await supabase
           .from("planipret_ava_notifications" as any)
           .select("id", { count: "exact", head: true })
-          .eq("user_id", u.user.id)
+          .eq("user_id", userId)
           .is("read_at", null);
         if (!cancelled) setUnread(count ?? 0);
       } catch { /* noop */ }
     };
-    load();
-    const t = setInterval(load, 30000);
-    return () => { cancelled = true; clearInterval(t); };
-  }, []);
+    void load();
+    const channel = supabase
+      .channel(`mobile-header-notifications:${userId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "planipret_ava_notifications",
+        filter: `user_id=eq.${userId}`,
+      }, () => { void load(); })
+      .subscribe();
+    const onVisible = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      void supabase.removeChannel(channel);
+    };
+  }, [profile?.user_id]);
 
   const initials = (profile?.full_name || profile?.email || "?")
     .split(/\s+/).map((s: string) => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
   const status = profile?.status ?? "available";
 
   const btn: CSSProperties = {
-    width: 32,
-    height: 32,
+    width: 32, height: 32,
     background: "var(--pp-bg-elevated)",
     border: "1px solid var(--pp-bg-border-2)",
     color: "var(--pp-text-secondary)",
@@ -73,6 +87,7 @@ export default function MobileHeaderControls({ profile, reloadProfile }: { profi
           <Languages className="w-3.5 h-3.5" />
           <span className="sr-only">{lang === "fr" ? "EN" : "FR"}</span>
         </button>
+
         <button
           onClick={toggleTheme}
           style={btn}
@@ -81,15 +96,22 @@ export default function MobileHeaderControls({ profile, reloadProfile }: { profi
         >
           {theme === "dark" ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
         </button>
-        <button onClick={() => navigate("/mplanipret/more")}
+
+        <button
+          onClick={() => navigate("/mplanipret/more")}
           style={btn}
-          aria-label="Settings">
+          aria-label="Settings"
+        >
           <SettingsIcon className="w-4 h-4" />
         </button>
-        <button onClick={() => navigate("/mplanipret/notifications")}
+
+        {/* Bell */}
+        <button
+          onClick={() => navigate("/mplanipret/notifications")}
           className="relative"
           style={btn}
-          aria-label="Notifications">
+          aria-label="Notifications"
+        >
           <Bell className="w-4 h-4" />
           {unread > 0 && (
             <span style={{
@@ -100,7 +122,10 @@ export default function MobileHeaderControls({ profile, reloadProfile }: { profi
             }}>{unread > 99 ? "99+" : unread}</span>
           )}
         </button>
-        <button onClick={() => setOpen(true)}
+
+        {/* Avatar initiales + status dot */}
+        <button
+          onClick={() => setOpen(true)}
           className="relative flex items-center justify-center rounded-full font-bold text-white"
           style={{
             width: 32, height: 32,
@@ -109,10 +134,13 @@ export default function MobileHeaderControls({ profile, reloadProfile }: { profi
             fontSize: 12,
             flexShrink: 0,
           }}
-          aria-label={t("header.profile")}>
+          aria-label="Profile"
+        >
           {initials}
-          <span className="absolute -bottom-0.5 -right-0.5 rounded-full"
-            style={{ width: 9, height: 9, background: STATUS_COLOR[status], border: "1.5px solid var(--pp-bg-surface)" }} />
+          <span
+            className="absolute -bottom-0.5 -right-0.5 rounded-full"
+            style={{ width: 9, height: 9, background: STATUS_COLOR[status], border: "1.5px solid var(--pp-bg-surface)" }}
+          />
         </button>
       </div>
       {open && <MobileProfileSheet profile={profile} reloadProfile={reloadProfile} onClose={() => setOpen(false)} />}

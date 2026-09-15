@@ -1,11 +1,9 @@
 /**
  * Arbitrage du chemin d'appel sortant.
  *
- * Règle : quand le moteur natif est présent, il est le seul propriétaire de
- * l'AOR `<ext>M` et porte l'audio. Quand le binaire installé n'embarque pas le
- * moteur (build livrée sans PJSIP), la WebView reprend l'AOR : JsSIP établit un
- * vrai dialogue WebRTC et transporte l'audio dans l'application. C'est le seul
- * chemin réparable par mise à jour à distance (OTA), sans nouvelle soumission.
+ * Règle : iOS utilise exclusivement PJSIP/TLS sur `<ext>M`. Android et le web
+ * utilisent JsSIP/WSS sur `<ext>W`. Un binaire iOS sans moteur PJSIP doit
+ * échouer explicitement plutôt que de mélanger l'identité W avec l'AOR M.
  *
  * Le repli REST (`pp-ns-calls action:start`) n'établit aucune jambe média vers
  * l'appareil : il affichait « Ringing » alors que rien ne sonnait. Il reste
@@ -20,11 +18,14 @@ export type OutboundRoute =
 export function decideOutboundRoute(input: {
   clientType: string;
   isNativePlatform: boolean;
+  platform: string;
   engineAvailable: boolean;
   engineRegistered: boolean;
 }): OutboundRoute {
   const nativeMobile = input.clientType === "mobile" && input.isNativePlatform;
   if (!nativeMobile) return "web";
-  if (!input.engineAvailable) return "webview";
-  return input.engineRegistered ? "native" : "native_unregistered";
+  if (input.platform === "ios") {
+    return input.engineAvailable && input.engineRegistered ? "native" : "native_unregistered";
+  }
+  return "webview";
 }

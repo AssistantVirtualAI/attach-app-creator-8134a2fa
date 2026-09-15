@@ -4,9 +4,8 @@ import { ChevronDown, ChevronLeft, Plus, Search, X } from "lucide-react";
 import { toApiDateTime, listClientTargets, type ClientTaskTarget } from "@/lib/planipret/tasks";
 import { MILESTONES, QUICK_TASKS, catalogLabel, type TaskCatalogItem } from "@/lib/planipret/taskMilestones";
 import { getPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
-import { matchAllTokens, normalizeText, tokenize } from "@/lib/textNormalize";
 import { supabase } from "@/integrations/supabase/client";
-
+import { matchAllTokens, normalizeText, tokenize } from "@/lib/textNormalize";
 
 export interface TaskComposerValue {
   target: string;
@@ -102,7 +101,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [hidden, setHidden] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(false);
   const [syncCal, setSyncCal] = useState(false);
-  const [notify, setNotify] = useState(true);
+  const [notify, setNotify] = useState(false);
   const [notifyTo, setNotifyTo] = useState("");
   const [notifyClient, setNotifyClient] = useState(false);
   const [notifyClientSecondary, setNotifyClientSecondary] = useState(false);
@@ -132,9 +131,8 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [searching, setSearching] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<ClientTaskTarget | null>(null);
   const [people, setPeople] = useState<any[]>(() => peekPpContacts("maestro_brokers") ?? []);
-  /** Maestro team members (eligible assignees) for the signed-in broker. */
+  /** Maestro team members eligible for direct task assignment. */
   const [team, setTeam] = useState<Array<{ id: string; name: string | null; email: string | null; self?: boolean }>>([]);
-
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -152,7 +150,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     setAssignee(initial?.users_id ? String(initial.users_id) : "");
     setHidden(initial?.is_hidden ?? false);
     setUpdateStatus(initial?.update_status ?? false);
-    setSyncCal(initial?.sync_calendar ?? true);
+    setSyncCal(initial?.sync_calendar ?? false);
     setNotify(initial?.notification ?? false);
     setNotifyTo((initial?.send_notification_to ?? []).join(", "));
     setNotifyClient(initial?.send_notification_client ?? false);
@@ -192,18 +190,16 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     void getPpContacts("maestro").then((v) => { if (alive) setClients(v || []); }).catch(() => {});
     void listClientTargets().then((v) => { if (alive) setTargets(v || []); }).catch(() => {});
     void getPpContacts("maestro_brokers", { force: true, limit: 500 }).then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
-    // Maestro teams: brokers eligible on this broker's clients.
     void supabase.functions
       .invoke("planipret-task-api", { body: { action: "team" } })
       .then(({ data }: any) => {
         if (!alive) return;
-        const m = Array.isArray(data?.members) ? data.members : [];
-        setTeam(m.filter((x: any) => /^\d+$/.test(String(x?.id ?? ""))));
+        const members = Array.isArray(data?.members) ? data.members : [];
+        setTeam(members.filter((x: any) => /^\d+$/.test(String(x?.id ?? ""))));
       })
       .catch(() => {});
     return () => { alive = false; };
   }, [open, step]);
-
 
   // Server-side client search (Maestro Client List API): the cached page only
   // holds the first 200 clients, so anything else must be searched remotely.
@@ -371,15 +367,14 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!selectedTarget) return;
     setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
   };
-  // Assignment: the signed-in broker and their real Maestro team.
-  const teamUsers = (() => {
+  // Only show members of the signed-in broker's real Maestro team.
+  const assignableUsers = (() => {
     const byId = new Map((people as any[]).map((u) => [String(u?.id ?? u?.broker_id ?? u?.user_id ?? ""), u]));
     return team
-      .filter((t) => !t.self)
-      .map((t) => ({ ...(byId.get(String(t.id)) ?? {}), id: String(t.id), name: t.name, email: t.email }))
+      .filter((member) => !member.self)
+      .map((member) => ({ ...(byId.get(String(member.id)) ?? {}), ...member, id: String(member.id) }))
       .sort((a, b) => contactName(a).localeCompare(contactName(b)));
   })();
-
 
   const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;
   const host = frame ?? (typeof document !== "undefined" ? document.body : null);
@@ -627,25 +622,17 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                 <select className={`${field} appearance-none pr-9`} style={fieldStyle} value={assignee}
                   aria-label={L("Assigné à", "Assigned to")} onChange={(e) => setAssignee(e.target.value)}>
                   <option value="">{L("Moi (auto)", "Me (auto)")}</option>
-                  {teamUsers.length > 0 && (
+                  {assignableUsers.length > 0 && (
                     <optgroup label={L("Mon équipe (Maestro)", "My team (Maestro)")}>
-                      {teamUsers.map((u: any) => (
-                        <option key={`t-${String(u.id)}`} value={String(u.id)}>{contactName(u)}</option>
+                      {assignableUsers.map((u: any) => (
+                        <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
                       ))}
                     </optgroup>
                   )}
-
                 </select>
                 <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--pp-text-muted)" }} />
               </div>
-              <p className="mt-1 text-[11px] leading-snug" style={{ color: "var(--pp-text-muted)" }}>
-                {L(
-                  "Vous-même ou un membre autorisé de votre équipe Maestro.",
-                  "You or an authorized member of your Maestro team.",
-                )}
-              </p>
               <FieldError keys={["users_id"]} />
-
             </div>
           </div>
 
@@ -654,6 +641,17 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
             <Toggle label={L("Masquer la tâche aux conseillers", "Hide task from advisors")} checked={hidden} onChange={setHidden} />
             <Toggle label={L("Créer l'événement calendrier", "Create calendar event")} checked={syncCal} onChange={setSyncCal} />
             <Toggle label={L("Envoyer une notification", "Send a notification")} checked={notify} onChange={setNotify} />
+            <Toggle
+              label={L("Avertir le client par courriel", "Email the client")}
+              checked={notifyClient}
+              onChange={(v) => {
+                setNotifyClient(v);
+                if (!v) {
+                  setNotifyClientSecondary(false);
+                  setNotificationUsers("");
+                }
+              }}
+            />
             <Toggle label={L("Tâche récurrente", "Recurring task")} checked={recurring} onChange={setRecurring} last />
           </div>
 
@@ -708,7 +706,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
 
           {showAdvanced && (
             <div className="space-y-4 rounded-2xl p-4" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
-              <Toggle label={L("Notifier le client", "Notify the client")} checked={notifyClient} onChange={setNotifyClient} />
+
               <Toggle label={L("Notifier le client secondaire", "Notify the secondary client")} checked={notifyClientSecondary} onChange={setNotifyClientSecondary} />
               <Toggle label={L("Notifier l'adjoint(e)", "Notify the assistant")} checked={notifyAssistant} onChange={setNotifyAssistant} />
               {notifyAssistant && (

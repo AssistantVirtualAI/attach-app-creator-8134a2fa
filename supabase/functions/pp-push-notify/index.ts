@@ -17,10 +17,7 @@ Deno.serve(async (req) => {
     if (vapidReady) webpush.setVapidDetails(SUBJECT, VAPID_PUBLIC!, VAPID_PRIVATE!);
 
     const body = await req.json().catch(() => ({}));
-    const { user_id, title, body: text, data, icon, category, deep_link } = body ?? {};
-    const idempotencyKey = typeof body?.idempotency_key === "string" && body.idempotency_key.trim()
-      ? body.idempotency_key.trim().slice(0, 200)
-      : null;
+    const { user_id, title, body: text, data, icon, category, deep_link, idempotency_key } = body ?? {};
     if (!user_id || !title) return json({ error: "missing_fields" }, 400);
 
     // ---- Authorization -------------------------------------------------
@@ -73,22 +70,42 @@ Deno.serve(async (req) => {
       : null;
     const finalDeepLink = safeDeepLink ?? rawFallbackLink;
 
-    // Always log in-app notification (even if push disabled).
-    // Une clé d'idempotence (ex: post_call_ready:{call_id}) garantit qu'un
-    // retry ne crée jamais une deuxième notification ni un deuxième push.
-    const { data: notifRow, error: notifErr } = await admin.from("planipret_ava_notifications").insert({
+    // Always log in-app notification (even if push disabled)
+    const safeIdempotencyKey = idempotency_key == null ? null : String(idempotency_key).slice(0, 200);
+    const notificationData = {
+      ...(data ?? {}),
+      deep_link: finalDeepLink,
+      ...(safeIdempotencyKey ? { idempotency_key: safeIdempotencyKey } : {}),
+    };
+    let { data: notifRow, error: notifError } = await admin.from("planipret_ava_notifications").insert({
       user_id, category: cat, title: safeTitle, body: safeText || null,
-      data: { ...(data ?? {}), deep_link: finalDeepLink }, deep_link: finalDeepLink,
+      data: notificationData, deep_link: finalDeepLink,
       delivered: false,
-      ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
-    }).select("id").maybeSingle();
-
-    if (notifErr && idempotencyKey && String(notifErr.code) === "23505") {
-      return json({ delivered: 0, duplicate: true, idempotent_replay: true, idempotency_key: idempotencyKey });
+      delivery_attempts: 0,
+      ...(safeIdempotencyKey ? { idempotency_key: safeIdempotencyKey } : {}),
+    }).select("id, delivered, delivery_attempts").maybeSingle();
+    if (notifError?.code === "23505" && safeIdempotencyKey) {
+      const { data: existing } = await admin.from("planipret_ava_notifications")
+        .select("id, delivered, delivery_attempts")
+        .eq("idempotency_key", safeIdempotencyKey)
+        .maybeSingle();
+      if (existing?.delivered) return json({ delivered: 0, duplicate: true, logged: true });
+      if (!existing?.id) return json({ error: "notification_retry_lookup_failed" }, 500);
+      notifRow = existing;
+      notifError = null;
     }
-    if (notifErr) return json({ error: "notification_log_failed", detail: notifErr.message }, 500);
+    if (notifError) return json({ error: "notification_log_failed" }, 500);
 
-    if (!allowed) return json({ delivered: 0, blocked_by_preference: true, logged: true });
+    if (!allowed) {
+      if (notifRow?.id) await admin.from("planipret_ava_notifications")
+        .update({ last_delivery_error: "blocked_by_preference" }).eq("id", notifRow.id);
+      return json({ delivered: 0, blocked_by_preference: true, logged: true });
+    }
+
+    const attempt = Number(notifRow?.delivery_attempts ?? 0) + 1;
+    if (notifRow?.id) await admin.from("planipret_ava_notifications")
+      .update({ delivery_attempts: attempt, last_delivery_at: new Date().toISOString(), last_delivery_error: null })
+      .eq("id", notifRow.id);
 
     // 1) Native devices (iOS APNs / Android FCM) — the installed mobile apps.
     const native = await sendNativeAlertPush(admin, user_id, {
@@ -116,11 +133,14 @@ Deno.serve(async (req) => {
     }
     if (delivered > 0 && notifRow?.id) {
       await admin.from("planipret_ava_notifications")
-        .update({ delivered: true }).eq("id", notifRow.id);
+        .update({ delivered: true, last_delivery_error: null }).eq("id", notifRow.id);
     }
     if (expired.length) await admin.from("planipret_push_subscriptions").delete().in("id", expired);
     if (delivered === 0) {
-      return json({ delivered: 0, logged: true, reason: native.reason ?? (vapidReady ? "no_subscription" : "vapid_not_configured"), native });
+      const reason = native.reason ?? (vapidReady ? "no_subscription" : "vapid_not_configured");
+      if (notifRow?.id) await admin.from("planipret_ava_notifications")
+        .update({ last_delivery_error: String(reason).slice(0, 300) }).eq("id", notifRow.id);
+      return json({ delivered: 0, logged: true, retryable: true, reason, native });
     }
     return json({ delivered, native, expired: expired.length });
 

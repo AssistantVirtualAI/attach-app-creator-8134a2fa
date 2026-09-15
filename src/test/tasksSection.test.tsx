@@ -135,7 +135,7 @@ describe("TasksSection", () => {
   it("requires a confirmation before deleting and then calls the API", async () => {
     deleteTask.mockResolvedValue({ success: true });
     render(<TasksSection userId="u1" lang="fr" />);
-    (await screen.findAllByText("Rappeler Jean"))[0];
+    fireEvent.click((await screen.findAllByText("Rappeler Jean"))[0]);
     fireEvent.click(screen.getAllByLabelText("Supprimer")[0]);
     expect(await screen.findByText("Supprimer la tâche ?")).toBeInTheDocument();
     expect(deleteTask).not.toHaveBeenCalled();
@@ -145,7 +145,7 @@ describe("TasksSection", () => {
 
   it("cancelling the delete dialog mutates nothing", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
-    (await screen.findAllByText("Rappeler Jean"))[0];
+    fireEvent.click((await screen.findAllByText("Rappeler Jean"))[0]);
     fireEvent.click(screen.getAllByLabelText("Supprimer")[0]);
     fireEvent.click(await screen.findByText("Annuler"));
     await waitFor(() => expect(screen.queryByText("Supprimer la tâche ?")).not.toBeInTheDocument());
@@ -155,7 +155,7 @@ describe("TasksSection", () => {
   it("snoozes a task through update", async () => {
     updateTask.mockResolvedValue({ success: true });
     render(<TasksSection userId="u1" lang="fr" />);
-    (await screen.findAllByText("Rappeler Jean"))[0];
+    fireEvent.click((await screen.findAllByText("Rappeler Jean"))[0]);
     fireEvent.click(screen.getAllByLabelText("Reporter")[0]);
     await waitFor(() => expect(updateTask).toHaveBeenCalled());
     expect(updateTask.mock.calls[0][0]).toBe("a");

@@ -28,7 +28,7 @@ import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
-import { Radio, Wallet, Users as UsersIcon, ListChecks, Link2 } from "lucide-react";
+import { Radio, Wallet, Users as UsersIcon, ListChecks } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
 const initials = (name?: string) =>
@@ -110,10 +110,15 @@ export default function MMore() {
       if (!stop && res) setPbx(res);
     };
     run(true);
-    const id = setInterval(() => run(true), 30000);
     const onVis = () => { if (document.visibilityState === "visible") run(true); };
+    const onOnline = () => { void run(true); };
     document.addEventListener("visibilitychange", onVis);
-    return () => { stop = true; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+    window.addEventListener("online", onOnline);
+    return () => {
+      stop = true;
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", onOnline);
+    };
   }, []);
   const pbxRegistered = Boolean(pbx?.registration?.mobile_registered || (pbx?.registration?.count ?? 0) > 0);
   const sipSnap = pbxRegistered && rawSipSnap.status !== "registered"
@@ -270,7 +275,6 @@ export default function MMore() {
         {(profile?.role === "broker" || profile?.role === "admin") && (
           <Row icon={<Wallet className="w-4 h-4" />} label="Commissions" onClick={() => navigate("/mplanipret/commissions")} chevron />
         )}
-        <Row icon={<Link2 className="w-4 h-4" />} label="Maestro" onClick={() => navigate("/mplanipret/maestro")} chevron />
         <Row icon={<UsersIcon className="w-4 h-4" />} label={t("more.clientTracking")} onClick={() => navigate("/mplanipret/clients-360")} chevron />
         <Row icon={<UsersIcon className="w-4 h-4" />} label={t("more.brokerClients") === "more.brokerClients" ? "Clients par courtier" : t("more.brokerClients")} onClick={() => navigate("/mplanipret/brokers-360")} chevron />
         <Row icon={<UsersIcon className="w-4 h-4" />} label={t("more.brokerActivity") === "more.brokerActivity" ? "Suivi par courtier" : t("more.brokerActivity")} onClick={() => navigate("/mplanipret/broker-activity")} chevron />
@@ -470,7 +474,11 @@ export default function MMore() {
         <Row icon={<Bot className="w-4 h-4" />} label={aiOk ? "Consentement IA (AVA) : accordé" : "Consentement IA (AVA) : non accordé"}
           sub="AVA envoie vos messages et transcriptions à OpenAI, Google (Gemini) et ElevenLabs. Touchez pour accorder ou retirer votre consentement."
           onClick={async () => {
-            if (aiOk) { revokeAiConsent(); setAiOk(false); toast.success("Consentement IA retiré"); }
+            if (aiOk) {
+              const revoked = await revokeAiConsent();
+              if (revoked) { setAiOk(false); toast.success("Consentement IA retiré"); }
+              else toast.error("Impossible de retirer le consentement. Réessayez.");
+            }
             else { const ok = await ensureAiConsent(); setAiOk(ok); }
           }} chevron />
         <Row icon={<Shield className="w-4 h-4" />} label={t("more.privacy")} onClick={() => navigate("/mplanipret/privacy")} chevron />

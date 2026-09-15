@@ -74,6 +74,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "agent_config_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       agent_daily_reports: {
@@ -174,6 +181,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "agent_daily_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       agent_health_scores: {
@@ -250,6 +264,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "agent_health_scores_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       agent_insights: {
@@ -318,6 +339,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_insights_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -393,6 +421,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "agent_mcp_servers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       agent_platform_webhooks: {
@@ -458,6 +493,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_platform_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -560,6 +602,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -668,6 +717,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "alert_notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       analytics: {
@@ -710,6 +766,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -969,6 +1032,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "appointments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       audit_logs: {
@@ -1026,6 +1096,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -1091,6 +1168,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: true
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_config_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -1176,6 +1260,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "business_hour_schedules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       calendar_integrations: {
@@ -1221,6 +1312,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -1813,6 +1911,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "clients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       conversation_tags: {
@@ -1901,6 +2006,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_topics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -2017,6 +2129,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       custom_tags: {
@@ -2053,6 +2172,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_tags_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -2094,6 +2220,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -2179,6 +2312,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "handoff_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       holiday_schedules: {
@@ -2233,6 +2373,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holiday_schedules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -2328,6 +2475,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_base_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -2428,6 +2582,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -3295,6 +3456,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "org_business_hours_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       org_chat_blocks: {
@@ -3848,6 +4016,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "org_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       org_notifications: {
@@ -3991,6 +4166,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "organization_api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       organization_integrations: {
@@ -4047,6 +4229,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "organization_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       organization_members: {
@@ -4080,6 +4269,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -4289,8 +4485,29 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "organizations_parent_org_id_fkey"
+            columns: ["parent_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "organizations_reseller_id_fkey"
             columns: ["reseller_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organizations_reseller_id_fkey"
+            columns: ["reseller_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organizations_root_org_id_fkey"
+            columns: ["root_org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
@@ -4299,7 +4516,7 @@ export type Database = {
             foreignKeyName: "organizations_root_org_id_fkey"
             columns: ["root_org_id"]
             isOneToOne: false
-            referencedRelation: "organizations"
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -4379,6 +4596,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -4523,6 +4747,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_admin_users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pbx_ai_conversations: {
@@ -4656,6 +4887,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_ai_insights_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -4936,6 +5174,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_call_queues_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pbx_call_recording_rules: {
@@ -5102,6 +5347,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_call_recordings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -5291,6 +5543,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_call_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pbx_call_transcripts: {
@@ -5367,6 +5626,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_call_transcripts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
           {
@@ -5642,6 +5908,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_devices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -6063,10 +6336,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pbx_extensions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pbx_extensions_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_extensions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -6105,6 +6392,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_feature_codes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -6271,6 +6565,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pbx_ivr_audio: {
@@ -6340,6 +6641,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_ivr_audio_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -6465,6 +6773,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_ivrs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pbx_object_owner: {
@@ -6566,6 +6881,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_phone_number_assignments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
           {
@@ -6739,6 +7061,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pbx_queue_agents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pbx_queue_agents_queue_id_fkey"
             columns: ["queue_id"]
             isOneToOne: false
@@ -6794,6 +7123,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_queue_recording_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
           {
@@ -6878,6 +7214,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_ring_groups_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -6976,6 +7319,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pbx_sms_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pbx_sms_messages_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
@@ -7067,6 +7417,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_sms_threads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
           {
@@ -7357,6 +7714,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_softphone_users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pbx_sync_jobs: {
@@ -7414,6 +7778,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_sync_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -7858,6 +8229,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "performance_metrics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       phone_numbers: {
@@ -7930,6 +8308,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_numbers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -8082,6 +8467,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      planipret_ava_action_confirmations: {
+        Row: {
+          action: string
+          broker_id: string | null
+          call_id: string | null
+          created_at: string
+          decided_at: string | null
+          decision: string
+          destination: string | null
+          error_code: string | null
+          executed_at: string | null
+          id: string
+          idempotency_key: string
+          proposed_at: string
+          provider: string | null
+          result: Json | null
+          session_id: string | null
+          status: string
+          surface: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          broker_id?: string | null
+          call_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision?: string
+          destination?: string | null
+          error_code?: string | null
+          executed_at?: string | null
+          id?: string
+          idempotency_key: string
+          proposed_at?: string
+          provider?: string | null
+          result?: Json | null
+          session_id?: string | null
+          status?: string
+          surface?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          broker_id?: string | null
+          call_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision?: string
+          destination?: string | null
+          error_code?: string | null
+          executed_at?: string | null
+          id?: string
+          idempotency_key?: string
+          proposed_at?: string
+          provider?: string | null
+          result?: Json | null
+          session_id?: string | null
+          status?: string
+          surface?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       planipret_ava_action_log: {
         Row: {
@@ -8401,7 +8852,11 @@ export type Database = {
           data: Json
           deep_link: string | null
           delivered: boolean
+          delivery_attempts: number
           id: string
+          idempotency_key: string | null
+          last_delivery_at: string | null
+          last_delivery_error: string | null
           read_at: string | null
           title: string
           user_id: string
@@ -8413,7 +8868,11 @@ export type Database = {
           data?: Json
           deep_link?: string | null
           delivered?: boolean
+          delivery_attempts?: number
           id?: string
+          idempotency_key?: string | null
+          last_delivery_at?: string | null
+          last_delivery_error?: string | null
           read_at?: string | null
           title: string
           user_id: string
@@ -8425,7 +8884,11 @@ export type Database = {
           data?: Json
           deep_link?: string | null
           delivered?: boolean
+          delivery_attempts?: number
           id?: string
+          idempotency_key?: string | null
+          last_delivery_at?: string | null
+          last_delivery_error?: string | null
           read_at?: string | null
           title?: string
           user_id?: string
@@ -8651,6 +9114,68 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "planipret_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planipret_call_followups: {
+        Row: {
+          approved_at: string | null
+          body: string
+          call_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          maestro_client_id: string | null
+          recipient: string
+          recipient_name: string | null
+          sent_at: string | null
+          status: string
+          subject: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          body: string
+          call_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind: string
+          maestro_client_id?: string | null
+          recipient: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          body?: string
+          call_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          maestro_client_id?: string | null
+          recipient?: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planipret_call_followups_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "planipret_phone_calls"
             referencedColumns: ["id"]
           },
         ]
@@ -9414,6 +9939,84 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_contracts: {
+        Row: {
+          broker_name: string | null
+          broker_profile_id: string
+          calls_synced: number
+          calls_total: number
+          clients: Json
+          contract_id: string
+          contract_number: string | null
+          created_at: string
+          date_closing: string | null
+          date_maturity: string | null
+          id: string
+          last_activity_at: string | null
+          loan_amt: number | null
+          maestro_status: string | null
+          rate: string | null
+          raw: Json
+          source: string | null
+          status: string | null
+          synced_at: string
+          updated_at: string
+          with_coaching: number
+          with_summary: number
+          with_transcript: number
+        }
+        Insert: {
+          broker_name?: string | null
+          broker_profile_id: string
+          calls_synced?: number
+          calls_total?: number
+          clients?: Json
+          contract_id: string
+          contract_number?: string | null
+          created_at?: string
+          date_closing?: string | null
+          date_maturity?: string | null
+          id?: string
+          last_activity_at?: string | null
+          loan_amt?: number | null
+          maestro_status?: string | null
+          rate?: string | null
+          raw?: Json
+          source?: string | null
+          status?: string | null
+          synced_at?: string
+          updated_at?: string
+          with_coaching?: number
+          with_summary?: number
+          with_transcript?: number
+        }
+        Update: {
+          broker_name?: string | null
+          broker_profile_id?: string
+          calls_synced?: number
+          calls_total?: number
+          clients?: Json
+          contract_id?: string
+          contract_number?: string | null
+          created_at?: string
+          date_closing?: string | null
+          date_maturity?: string | null
+          id?: string
+          last_activity_at?: string | null
+          loan_amt?: number | null
+          maestro_status?: string | null
+          rate?: string | null
+          raw?: Json
+          source?: string | null
+          status?: string | null
+          synced_at?: string
+          updated_at?: string
+          with_coaching?: number
+          with_summary?: number
+          with_transcript?: number
+        }
+        Relationships: []
+      }
       planipret_did_assignments: {
         Row: {
           callerid_name: string | null
@@ -9903,6 +10506,60 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_maestro_activity: {
+        Row: {
+          created_at: string
+          direction: string | null
+          duration_seconds: number
+          id: string
+          is_ai: boolean
+          kind: string
+          maestro_object_id: string | null
+          maestro_status: string
+          occurred_at: string
+          peer_number: string | null
+          source_id: string
+          source_table: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number
+          id?: string
+          is_ai?: boolean
+          kind: string
+          maestro_object_id?: string | null
+          maestro_status?: string
+          occurred_at?: string
+          peer_number?: string | null
+          source_id: string
+          source_table: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number
+          id?: string
+          is_ai?: boolean
+          kind?: string
+          maestro_object_id?: string | null
+          maestro_status?: string
+          occurred_at?: string
+          peer_number?: string | null
+          source_id?: string
+          source_table?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_maestro_call_dedupe: {
         Row: {
           created_at: string
@@ -10080,6 +10737,54 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_maestro_sms_threads: {
+        Row: {
+          contact_number: string
+          created_at: string
+          id: string
+          last_error: string | null
+          last_message_at: string | null
+          last_pushed_at: string | null
+          maestro_broker_id: string | null
+          maestro_thread_id: string | null
+          message_count: number
+          pushed_count: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_number: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_message_at?: string | null
+          last_pushed_at?: string | null
+          maestro_broker_id?: string | null
+          maestro_thread_id?: string | null
+          message_count?: number
+          pushed_count?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_number?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_message_at?: string | null
+          last_pushed_at?: string | null
+          maestro_broker_id?: string | null
+          maestro_thread_id?: string | null
+          message_count?: number
+          pushed_count?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_maestro_sync_log: {
         Row: {
           action: string | null
@@ -10118,6 +10823,53 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      planipret_ms_auth_attempts: {
+        Row: {
+          attempt_type: string
+          created_at: string
+          email: string | null
+          error_code: string | null
+          error_message: string | null
+          id: string
+          paused: boolean
+          profile_id: string | null
+          source: string | null
+          status: string
+        }
+        Insert: {
+          attempt_type?: string
+          created_at?: string
+          email?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          paused?: boolean
+          profile_id?: string | null
+          source?: string | null
+          status: string
+        }
+        Update: {
+          attempt_type?: string
+          created_at?: string
+          email?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          paused?: boolean
+          profile_id?: string | null
+          source?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planipret_ms_auth_attempts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "planipret_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       planipret_ms_contacts: {
         Row: {
@@ -10352,6 +11104,45 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_outbound_settings: {
+        Row: {
+          caller_id_name: string | null
+          caller_id_number: string | null
+          client_type: string
+          created_at: string
+          extension: string | null
+          id: string
+          notes: string | null
+          outbound_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          caller_id_name?: string | null
+          caller_id_number?: string | null
+          client_type?: string
+          created_at?: string
+          extension?: string | null
+          id?: string
+          notes?: string | null
+          outbound_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          caller_id_name?: string | null
+          caller_id_number?: string | null
+          client_type?: string
+          created_at?: string
+          extension?: string | null
+          id?: string
+          notes?: string | null
+          outbound_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_pbx_action_queue: {
         Row: {
           action: string
@@ -10409,6 +11200,9 @@ export type Database = {
           callback_reason: string | null
           coaching_score: number | null
           created_at: string
+          delete_reason: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           direction: string
           duration_seconds: number | null
           ended_at: string | null
@@ -10429,6 +11223,8 @@ export type Database = {
           maestro_media_sync_error: string | null
           maestro_media_synced_at: string | null
           maestro_mortgage_stage: string | null
+          maestro_purge_error: string | null
+          maestro_purged_at: string | null
           maestro_synced: boolean
           maestro_tasks_created: Json
           metadata: Json
@@ -10450,6 +11246,10 @@ export type Database = {
           recording_cached_at: string | null
           recording_storage_path: string | null
           recording_url: string | null
+          save_consent: string
+          save_consent_at: string | null
+          save_consent_by: string | null
+          save_consent_channel: string | null
           started_at: string | null
           status: string | null
           suggested_callback_delay: string | null
@@ -10465,6 +11265,7 @@ export type Database = {
           transcript_raw: string | null
           transcript_segments: Json | null
           transcript_source: string | null
+          transcript_status: string | null
           updated_at: string
           user_id: string | null
         }
@@ -10485,6 +11286,9 @@ export type Database = {
           callback_reason?: string | null
           coaching_score?: number | null
           created_at?: string
+          delete_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           direction: string
           duration_seconds?: number | null
           ended_at?: string | null
@@ -10505,6 +11309,8 @@ export type Database = {
           maestro_media_sync_error?: string | null
           maestro_media_synced_at?: string | null
           maestro_mortgage_stage?: string | null
+          maestro_purge_error?: string | null
+          maestro_purged_at?: string | null
           maestro_synced?: boolean
           maestro_tasks_created?: Json
           metadata?: Json
@@ -10526,6 +11332,10 @@ export type Database = {
           recording_cached_at?: string | null
           recording_storage_path?: string | null
           recording_url?: string | null
+          save_consent?: string
+          save_consent_at?: string | null
+          save_consent_by?: string | null
+          save_consent_channel?: string | null
           started_at?: string | null
           status?: string | null
           suggested_callback_delay?: string | null
@@ -10541,6 +11351,7 @@ export type Database = {
           transcript_raw?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
+          transcript_status?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -10561,6 +11372,9 @@ export type Database = {
           callback_reason?: string | null
           coaching_score?: number | null
           created_at?: string
+          delete_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           direction?: string
           duration_seconds?: number | null
           ended_at?: string | null
@@ -10581,6 +11395,8 @@ export type Database = {
           maestro_media_sync_error?: string | null
           maestro_media_synced_at?: string | null
           maestro_mortgage_stage?: string | null
+          maestro_purge_error?: string | null
+          maestro_purged_at?: string | null
           maestro_synced?: boolean
           maestro_tasks_created?: Json
           metadata?: Json
@@ -10602,6 +11418,10 @@ export type Database = {
           recording_cached_at?: string | null
           recording_storage_path?: string | null
           recording_url?: string | null
+          save_consent?: string
+          save_consent_at?: string | null
+          save_consent_by?: string | null
+          save_consent_channel?: string | null
           started_at?: string | null
           status?: string | null
           suggested_callback_delay?: string | null
@@ -10617,6 +11437,7 @@ export type Database = {
           transcript_raw?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
+          transcript_status?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -10820,96 +11641,6 @@ export type Database = {
           },
         ]
       }
-      planipret_portal_2fa_backup_codes: {
-        Row: {
-          code_hash: string
-          created_at: string
-          id: string
-          used_at: string | null
-          user_id: string
-        }
-        Insert: {
-          code_hash: string
-          created_at?: string
-          id?: string
-          used_at?: string | null
-          user_id: string
-        }
-        Update: {
-          code_hash?: string
-          created_at?: string
-          id?: string
-          used_at?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      planipret_portal_2fa_challenges: {
-        Row: {
-          attempts: number
-          code_hash: string
-          consumed_at: string | null
-          created_at: string
-          email: string | null
-          expires_at: string
-          id: string
-          phone_e164: string | null
-          sent_via: string | null
-          session_id: string | null
-          user_id: string
-        }
-        Insert: {
-          attempts?: number
-          code_hash: string
-          consumed_at?: string | null
-          created_at?: string
-          email?: string | null
-          expires_at: string
-          id?: string
-          phone_e164?: string | null
-          sent_via?: string | null
-          session_id?: string | null
-          user_id: string
-        }
-        Update: {
-          attempts?: number
-          code_hash?: string
-          consumed_at?: string | null
-          created_at?: string
-          email?: string | null
-          expires_at?: string
-          id?: string
-          phone_e164?: string | null
-          sent_via?: string | null
-          session_id?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      planipret_portal_2fa_sessions: {
-        Row: {
-          expires_at: string
-          id: string
-          session_id: string
-          user_id: string
-          verified_at: string
-        }
-        Insert: {
-          expires_at: string
-          id?: string
-          session_id: string
-          user_id: string
-          verified_at?: string
-        }
-        Update: {
-          expires_at?: string
-          id?: string
-          session_id?: string
-          user_id?: string
-          verified_at?: string
-        }
-        Relationships: []
-      }
       planipret_portal_access_log: {
         Row: {
           created_at: string
@@ -10999,6 +11730,9 @@ export type Database = {
       }
       planipret_profiles: {
         Row: {
+          ai_consent_at: string | null
+          ai_consent_revoked_at: string | null
+          ai_consent_version: string | null
           auth_method: string | null
           ava_autonomy_mode: string
           ava_chat_mode: string
@@ -11052,6 +11786,8 @@ export type Database = {
           metadata: Json
           mobile_app_enabled: boolean
           ms365_access_token: string | null
+          ms365_auth_error: string | null
+          ms365_auth_paused_at: string | null
           ms365_display_name: string | null
           ms365_email: string | null
           ms365_refresh_token: string | null
@@ -11106,6 +11842,9 @@ export type Database = {
           widget_enabled: boolean
         }
         Insert: {
+          ai_consent_at?: string | null
+          ai_consent_revoked_at?: string | null
+          ai_consent_version?: string | null
           auth_method?: string | null
           ava_autonomy_mode?: string
           ava_chat_mode?: string
@@ -11159,6 +11898,8 @@ export type Database = {
           metadata?: Json
           mobile_app_enabled?: boolean
           ms365_access_token?: string | null
+          ms365_auth_error?: string | null
+          ms365_auth_paused_at?: string | null
           ms365_display_name?: string | null
           ms365_email?: string | null
           ms365_refresh_token?: string | null
@@ -11213,6 +11954,9 @@ export type Database = {
           widget_enabled?: boolean
         }
         Update: {
+          ai_consent_at?: string | null
+          ai_consent_revoked_at?: string | null
+          ai_consent_version?: string | null
           auth_method?: string | null
           ava_autonomy_mode?: string
           ava_chat_mode?: string
@@ -11266,6 +12010,8 @@ export type Database = {
           metadata?: Json
           mobile_app_enabled?: boolean
           ms365_access_token?: string | null
+          ms365_auth_error?: string | null
+          ms365_auth_paused_at?: string | null
           ms365_display_name?: string | null
           ms365_email?: string | null
           ms365_refresh_token?: string | null
@@ -11779,6 +12525,42 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_task_reminders: {
+        Row: {
+          created_at: string
+          due_at: string | null
+          email: string | null
+          id: string
+          kind: string
+          sent_at: string
+          task_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_at?: string | null
+          email?: string | null
+          id?: string
+          kind: string
+          sent_at?: string
+          task_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          due_at?: string | null
+          email?: string | null
+          id?: string
+          kind?: string
+          sent_at?: string
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_tasks_projection: {
         Row: {
           created_at: string
@@ -12177,6 +12959,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "prompt_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       provider_credentials_audit: {
@@ -12329,6 +13118,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sms_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       super_admin_exceptions: {
@@ -12406,6 +13202,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "telecom_admin_ai_actions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       telecom_audit_logs: {
@@ -12460,6 +13263,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telecom_audit_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -12530,6 +13340,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "telecom_live_calls_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       telecom_sync_health: {
@@ -12575,6 +13392,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telecom_sync_health_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -12633,6 +13457,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "telecom_sync_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       topic_aggregates: {
@@ -12675,6 +13506,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_aggregates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -12748,6 +13586,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "twilio_active_calls_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -12872,6 +13717,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_consents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_notification_prefs: {
@@ -12977,6 +13829,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -13241,6 +14100,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "voice_agent_conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "voice_agent_conversations_voice_agent_id_fkey"
             columns: ["voice_agent_id"]
             isOneToOne: false
@@ -13314,6 +14180,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "voice_agent_gateway_routes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       voice_agent_transcripts: {
@@ -13363,6 +14236,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_agent_transcripts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -13450,6 +14330,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "webhook_endpoints_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       webhook_events: {
@@ -13491,6 +14378,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "webhook_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       workflows: {
@@ -13529,6 +14423,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "workflows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -13542,6 +14443,7 @@ export type Database = {
           config: Json | null
           created_at: string | null
           description: string | null
+          has_api_key: boolean | null
           id: string | null
           is_external: boolean | null
           name: string | null
@@ -13562,6 +14464,7 @@ export type Database = {
           config?: Json | null
           created_at?: string | null
           description?: string | null
+          has_api_key?: never
           id?: string | null
           is_external?: boolean | null
           name?: string | null
@@ -13582,6 +14485,7 @@ export type Database = {
           config?: Json | null
           created_at?: string | null
           description?: string | null
+          has_api_key?: never
           id?: string | null
           is_external?: boolean | null
           name?: string | null
@@ -13630,6 +14534,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "agents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       calendar_integrations_safe: {
@@ -13672,6 +14583,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -13768,6 +14686,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "clients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       lemtel_config_safe: {
@@ -13843,6 +14768,251 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations_safe: {
+        Row: {
+          allow_user_self_forwarding: boolean | null
+          allowed_platforms: string[] | null
+          baa_signed_at: string | null
+          baa_signed_by: string | null
+          backend_domain: string | null
+          billing_email: string | null
+          billing_plan: string | null
+          brand_accent_color: string | null
+          brand_app_name: string | null
+          brand_favicon_url: string | null
+          brand_logo_url: string | null
+          brand_name: string | null
+          brand_portal_domain: string | null
+          brand_primary_color: string | null
+          brand_support_email: string | null
+          brand_support_phone: string | null
+          brand_website: string | null
+          client_limit: number | null
+          client_portal_favicon_url: string | null
+          client_portal_logo_url: string | null
+          client_portal_primary_color: string | null
+          client_portal_title: string | null
+          created_at: string | null
+          domain: string | null
+          email_domain: string | null
+          email_logo_url: string | null
+          email_sender: string | null
+          email_sender_name: string | null
+          favicon_url: string | null
+          fusionpbx_domain_name: string | null
+          fusionpbx_domain_uuid: string | null
+          fusionpbx_server_url: string | null
+          gdpr_enabled: boolean | null
+          hipaa_enabled: boolean | null
+          id: string | null
+          is_active: boolean | null
+          is_internal: boolean | null
+          loading_icon: string | null
+          loading_icon_size: string | null
+          logo_dashboard_url: string | null
+          logo_login_url: string | null
+          logo_url: string | null
+          max_dids: number | null
+          max_extensions: number | null
+          max_resellers: number | null
+          max_storage_gb: number | null
+          name: string | null
+          onboarding_completed: boolean | null
+          org_level: number | null
+          org_type: string | null
+          parent_org_id: string | null
+          primary_color: string | null
+          privacy_policy_url: string | null
+          reseller_id: string | null
+          root_org_id: string | null
+          slug: string | null
+          status: string | null
+          stripe_customer_id: string | null
+          terms_url: string | null
+          trial_ends_at: string | null
+          updated_at: string | null
+          website_title: string | null
+        }
+        Insert: {
+          allow_user_self_forwarding?: boolean | null
+          allowed_platforms?: string[] | null
+          baa_signed_at?: string | null
+          baa_signed_by?: string | null
+          backend_domain?: string | null
+          billing_email?: string | null
+          billing_plan?: string | null
+          brand_accent_color?: string | null
+          brand_app_name?: string | null
+          brand_favicon_url?: string | null
+          brand_logo_url?: string | null
+          brand_name?: string | null
+          brand_portal_domain?: string | null
+          brand_primary_color?: string | null
+          brand_support_email?: string | null
+          brand_support_phone?: string | null
+          brand_website?: string | null
+          client_limit?: number | null
+          client_portal_favicon_url?: string | null
+          client_portal_logo_url?: string | null
+          client_portal_primary_color?: string | null
+          client_portal_title?: string | null
+          created_at?: string | null
+          domain?: string | null
+          email_domain?: string | null
+          email_logo_url?: string | null
+          email_sender?: string | null
+          email_sender_name?: string | null
+          favicon_url?: string | null
+          fusionpbx_domain_name?: string | null
+          fusionpbx_domain_uuid?: string | null
+          fusionpbx_server_url?: string | null
+          gdpr_enabled?: boolean | null
+          hipaa_enabled?: boolean | null
+          id?: string | null
+          is_active?: boolean | null
+          is_internal?: boolean | null
+          loading_icon?: string | null
+          loading_icon_size?: string | null
+          logo_dashboard_url?: string | null
+          logo_login_url?: string | null
+          logo_url?: string | null
+          max_dids?: number | null
+          max_extensions?: number | null
+          max_resellers?: number | null
+          max_storage_gb?: number | null
+          name?: string | null
+          onboarding_completed?: boolean | null
+          org_level?: number | null
+          org_type?: string | null
+          parent_org_id?: string | null
+          primary_color?: string | null
+          privacy_policy_url?: string | null
+          reseller_id?: string | null
+          root_org_id?: string | null
+          slug?: string | null
+          status?: string | null
+          stripe_customer_id?: string | null
+          terms_url?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string | null
+          website_title?: string | null
+        }
+        Update: {
+          allow_user_self_forwarding?: boolean | null
+          allowed_platforms?: string[] | null
+          baa_signed_at?: string | null
+          baa_signed_by?: string | null
+          backend_domain?: string | null
+          billing_email?: string | null
+          billing_plan?: string | null
+          brand_accent_color?: string | null
+          brand_app_name?: string | null
+          brand_favicon_url?: string | null
+          brand_logo_url?: string | null
+          brand_name?: string | null
+          brand_portal_domain?: string | null
+          brand_primary_color?: string | null
+          brand_support_email?: string | null
+          brand_support_phone?: string | null
+          brand_website?: string | null
+          client_limit?: number | null
+          client_portal_favicon_url?: string | null
+          client_portal_logo_url?: string | null
+          client_portal_primary_color?: string | null
+          client_portal_title?: string | null
+          created_at?: string | null
+          domain?: string | null
+          email_domain?: string | null
+          email_logo_url?: string | null
+          email_sender?: string | null
+          email_sender_name?: string | null
+          favicon_url?: string | null
+          fusionpbx_domain_name?: string | null
+          fusionpbx_domain_uuid?: string | null
+          fusionpbx_server_url?: string | null
+          gdpr_enabled?: boolean | null
+          hipaa_enabled?: boolean | null
+          id?: string | null
+          is_active?: boolean | null
+          is_internal?: boolean | null
+          loading_icon?: string | null
+          loading_icon_size?: string | null
+          logo_dashboard_url?: string | null
+          logo_login_url?: string | null
+          logo_url?: string | null
+          max_dids?: number | null
+          max_extensions?: number | null
+          max_resellers?: number | null
+          max_storage_gb?: number | null
+          name?: string | null
+          onboarding_completed?: boolean | null
+          org_level?: number | null
+          org_type?: string | null
+          parent_org_id?: string | null
+          primary_color?: string | null
+          privacy_policy_url?: string | null
+          reseller_id?: string | null
+          root_org_id?: string | null
+          slug?: string | null
+          status?: string | null
+          stripe_customer_id?: string | null
+          terms_url?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string | null
+          website_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organizations_parent_org_id_fkey"
+            columns: ["parent_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organizations_parent_org_id_fkey"
+            columns: ["parent_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organizations_reseller_id_fkey"
+            columns: ["reseller_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organizations_reseller_id_fkey"
+            columns: ["reseller_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organizations_root_org_id_fkey"
+            columns: ["root_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organizations_root_org_id_fkey"
+            columns: ["root_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -14046,6 +15216,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_devices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pbx_extensions_directory: {
@@ -14091,6 +15268,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_extensions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -14338,10 +15522,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pbx_extensions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pbx_extensions_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_extensions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -14586,10 +15784,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pbx_extensions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pbx_extensions_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_extensions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -14672,6 +15884,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_softphone_users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -14878,6 +16097,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_softphone_users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pending_sync_retry_metrics: {
@@ -14925,6 +16151,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_numbers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -15074,6 +16307,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_call_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       telecom_extensions_v: {
@@ -15131,6 +16371,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_extensions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -15215,6 +16462,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pbx_call_queues_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       telecom_recordings_v: {
@@ -15291,6 +16545,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pbx_call_recordings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -15537,6 +16798,7 @@ export type Database = {
       }
       current_user_internal_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
+      current_user_realtime_org_ids: { Args: never; Returns: string[] }
       current_user_softphone_domain_uuids: {
         Args: never
         Returns: {
@@ -15573,6 +16835,16 @@ export type Database = {
         }[]
       }
       get_my_extension_summary: { Args: never; Returns: Json }
+      get_my_softphone_credentials: {
+        Args: never
+        Returns: {
+          extension: string
+          id: string
+          sip_domain: string
+          sip_password: string
+          wss_url: string
+        }[]
+      }
       get_org_by_fusionpbx_domain: {
         Args: { _domain_uuid: string }
         Returns: {
@@ -15662,6 +16934,14 @@ export type Database = {
       is_planipret_only: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       lemtel_can_grant_app_access: { Args: { _uid: string }; Returns: boolean }
+      lemtel_dashboard_daily_calls: {
+        Args: { _org: string; _since: string }
+        Returns: {
+          day: string
+          missed: number
+          total: number
+        }[]
+      }
       log_access_violation: {
         Args: {
           _action: string
@@ -15700,12 +16980,34 @@ export type Database = {
       }
       pin_chat_message: { Args: { _message_id: string }; Returns: undefined }
       planipret_ava_org_id: { Args: never; Returns: string }
+      planipret_broker_activity_stats: {
+        Args: { _since: string }
+        Returns: {
+          ai_calls: number
+          calls: number
+          calls_synced: number
+          last_activity: string
+          talk_seconds: number
+          texts: number
+          texts_synced: number
+          user_id: string
+        }[]
+      }
       planipret_broker_ids: { Args: { _uid: string }; Returns: string[] }
+      planipret_broker_task_stats: {
+        Args: never
+        Returns: {
+          open_tasks: number
+          overdue_tasks: number
+          user_id: string
+        }[]
+      }
       pp_audit_realtime_check: { Args: never; Returns: Json }
       pp_claim_call: {
         Args: { _answered_by: string; _call_id: string }
         Returns: boolean
       }
+      pp_norm_name: { Args: { t: string }; Returns: string }
       read_planipret_sip_secret: { Args: { _name: string }; Returns: string }
       reconcile_pbx_call_records: { Args: { _org_id: string }; Returns: Json }
       relink_my_softphone_user: { Args: never; Returns: Json }
@@ -15834,12 +17136,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -15863,11 +17165,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -15888,11 +17190,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -15913,11 +17215,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -15930,11 +17232,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

@@ -204,9 +204,11 @@ Deno.serve(async (req) => {
       maxPages: 80,
     });
     if (body?.debug_raw) {
+      const { data: canDebug } = await admin.rpc("is_planipret_admin", { _user_id: callerId });
+      if (canDebug !== true) return j({ success: false, error: "forbidden_debug_raw" }, 403);
       return j({
         debug: true, ok: r.ok, status: r.status, error: r.error,
-        users_id: probeId, resolved_id: maestroId,
+        users_id: maestroId, resolved_id: maestroId,
         rows_returned: r.rows.length, pages: r.pages,
         meta: r.meta,
         sample: r.rows.slice(0, 2),

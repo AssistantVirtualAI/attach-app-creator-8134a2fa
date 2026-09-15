@@ -9,6 +9,7 @@
  * READ-ONLY on NetSapiens — never touches routing, answering rules or DIDs.
  */
 import { invokeEdge } from "@/lib/planipret/edgeAuth";
+import { Capacitor } from "@capacitor/core";
 
 export type SipBackendCheck = {
   ok: boolean;
@@ -23,6 +24,8 @@ export type SipBackendCheck = {
     core_server_ok?: boolean;
     contact?: string | null;
     user_agent?: string | null;
+    /** L'inscription possède un moteur média, pas seulement un keep-alive. */
+    media_capable?: boolean;
     /** Qui tient la ligne côté serveur : l'app, le service d'arrière-plan, personne. */
     holder?: "app" | "background" | "none";
     registered_at?: string | null;
@@ -62,7 +65,7 @@ export async function checkSipBackendRegistration(
     try {
       // Background poll: stay silent so it never bounces the user to login.
       const { data, error, unauthorized } = await invokeEdge<SipBackendCheck & { ok?: boolean }>(
-        "pp-sip-registration-check", {}, { silent: true },
+        "pp-sip-registration-check", { platform: Capacitor.getPlatform() }, { silent: true },
       );
       if (unauthorized || error || !data?.ok) return null;
       lastResult = data as SipBackendCheck;

@@ -22,6 +22,7 @@ import {
 } from "../_shared/maestro.ts";
 import { markCdrRetrySucceeded, scheduleCdrRetry } from "../_shared/maestro-cdr-retry.ts";
 import { callDedupeKey, claimCallPost, releaseClaim, saveClaimResult } from "../_shared/maestro-call-dedupe.ts";
+import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 
 function metaString(meta: unknown, key: string): string | null {
   const value = (meta as Record<string, unknown> | null)?.[key];
@@ -86,10 +87,10 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!call) return json({ success: false, error: "call_not_found" }, 404);
-    if ((call as any).deleted_at) return json({ success: false, error: "call_deleted" }, 403);
-    if (String((call as any).save_consent ?? "pending") !== "approved") {
-      return json({ success: false, error: "post_call_consent_required", save_consent: (call as any).save_consent ?? "pending" }, 403);
-    }
+    const access = await authorizeCallAccess(req, admin, call);
+    if (!access.ok) return json({ success: false, error: access.error }, access.status);
+    const consent = requireApprovedCallConsent(call);
+    if (!consent.ok) return json({ success: true, skipped: consent.error }, 200);
     if (!force && call.maestro_synced && (call as any).maestro_call_id) {
       return json({ success: true, already_synced: true });
     }

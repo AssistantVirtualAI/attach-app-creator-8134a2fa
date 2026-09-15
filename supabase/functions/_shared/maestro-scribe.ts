@@ -13,33 +13,12 @@
 //   Tasks        POST /tasks, GET /tasks, PUT /tasks/{id}, DELETE /tasks/{id}
 import { MaestroConfig } from "./maestro.ts";
 
-const HOST_RE = /^(https?:\/\/[^/]+)/i;
-
-/** Documented route prefix. Override only via MAESTRO_API_PREFIX. */
-export const API_PREFIX = (Deno.env.get("MAESTRO_API_PREFIX") ?? "/api/main").replace(/\/$/, "");
+/** Public CRM API root documented by Planiprêt. Never accept a client override. */
+export const API_PREFIX = "/api/main";
 export const DEFAULT_HOST = "https://client.planipret.com";
 
-/** Hôte verrouillé : seul le domaine Planiprêt officiel est joignable. */
-function host(cfg: MaestroConfig): string {
-  const raw = (cfg.url || DEFAULT_HOST).trim();
-  const candidate = (raw.match(HOST_RE)?.[1] ?? DEFAULT_HOST).replace(/\/$/, "");
-  try {
-    const h = new URL(candidate).hostname.toLowerCase();
-    if (h === "client.planipret.com" || h.endsWith(".planipret.com")) return candidate;
-  } catch { /* ignore */ }
-  return DEFAULT_HOST;
-}
-
-export function apiRoot(cfg: MaestroConfig, prefix?: string | null): { base: string; prefix: string } {
-  // Un préfixe ne peut JAMAIS déplacer l'appel vers un autre hôte : toute URL
-  // absolue fournie en paramètre est réduite à son chemin.
-  const pinned = (prefix ?? "").trim();
-  if (pinned) {
-    const m = pinned.match(HOST_RE);
-    const path = m ? pinned.slice(m[1].length) : pinned;
-    return { base: host(cfg), prefix: path.replace(/\/$/, "") };
-  }
-  return { base: host(cfg), prefix: API_PREFIX };
+export function apiRoot(_cfg?: MaestroConfig): { base: string; prefix: string } {
+  return { base: DEFAULT_HOST, prefix: API_PREFIX };
 }
 
 export interface ScribeResult<T = any> {
@@ -47,6 +26,8 @@ export interface ScribeResult<T = any> {
   status: number;
   data: T | null;
   meta?: any;
+  links?: any;
+  success?: boolean;
   error: string | null;
   errors?: Record<string, string[]> | null;
   endpoint: string;
@@ -59,15 +40,16 @@ export async function scribeFetch<T = any>(
     method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: unknown;
     query?: Record<string, string | number | boolean | undefined | null>;
-    prefix?: string | null;
     token?: string | null;
   } = {},
 ): Promise<ScribeResult<T>> {
-  const token = opts.token ?? cfg.key;
+  // `/api/main` accepts OAuth/static Planiprêt access tokens. The Telecom
+  // machine key in cfg.key is intentionally never used for this API.
+  const token = opts.token ?? null;
   if (!token) {
     return { ok: false, status: 0, data: null, error: "maestro_not_configured", endpoint: path };
   }
-  const root = apiRoot(cfg, opts.prefix ?? null);
+  const root = apiRoot(cfg);
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(opts.query ?? {})) {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
@@ -92,6 +74,8 @@ export async function scribeFetch<T = any>(
       // The documented envelope is { data, meta?, links?, success }.
       data: payload && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload,
       meta: payload?.meta ?? null,
+      links: payload?.links ?? null,
+      success: payload?.success !== false,
       error: res.ok ? null : (payload?.message || payload?.error || `HTTP ${res.status}`),
       errors: payload?.errors ?? null,
       endpoint,
@@ -101,7 +85,7 @@ export async function scribeFetch<T = any>(
   }
 }
 
-type Opts = { prefix?: string | null; token?: string | null };
+type Opts = { token?: string | null };
 const id = (v: string | number) => encodeURIComponent(String(v));
 
 // ── Clients ──────────────────────────────────────────────────────────────
@@ -176,7 +160,6 @@ export const commissionDeposits = (cfg: MaestroConfig, query: Record<string, any
 export const commissionAgents = (cfg: MaestroConfig, o: Opts = {}) =>
   scribeFetch(cfg, "/commissions/reports/agents", o);
 
-/** Rapports de commissions documentés (/commission-reports). */
 export const listCommissionReports = (cfg: MaestroConfig, query: Record<string, any> = {}, o: Opts = {}) =>
   scribeFetch(cfg, "/commission-reports", { query, ...o });
 export const getCommissionReport = (cfg: MaestroConfig, reportId: string | number, o: Opts = {}) =>

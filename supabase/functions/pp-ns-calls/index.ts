@@ -12,8 +12,12 @@ import {
 } from "../_shared/planipret-ns.ts";
 import {
   maestroTelecomMirror,
+  getMaestroTelecomConfig,
+  isMaestroTelecomConfigured,
+  maestroTelecomFetch,
 } from "../_shared/maestro-telecom.ts";
 import { buildIdempotencyKey, claimAction, finishAction } from "../_shared/ava-confirm.ts";
+import { mobileDeviceId, webDeviceId } from "../_shared/pp-device-ids.ts";
 
 
 Deno.serve(async (req) => {
@@ -73,10 +77,10 @@ Deno.serve(async (req) => {
       }
 
       const requestedClientType = String(payload.client_type ?? "mobile").toLowerCase();
-      // "web"/"widget" → {ext}_web device (SIP.js in the browser).
-      // Anything else (default) → {ext}_mobile device (Capacitor app).
+      // "web"/"widget" → {ext}W (JsSIP/WSS).
+      // Anything else (default) → {ext}M (PJSIP/TLS on iOS).
       const clientType: "web" | "mobile" = (requestedClientType === "web" || requestedClientType === "widget") ? "web" : "mobile";
-      let deviceName = `${ctx.extension}_${clientType}`;
+      let deviceName = clientType === "web" ? webDeviceId(ctx.extension) : mobileDeviceId(ctx.extension);
       if (clientType === "mobile") {
         const { data: profileDevice } = await guard.supabase
           .from("planipret_profiles")
@@ -104,26 +108,10 @@ Deno.serve(async (req) => {
         }
       } catch { /* fallback to constructed */ }
 
-      // Si l'appareil visé n'est pas inscrit, utiliser n'importe quel appareil
-      // inscrit du poste (web/mobile). Erreur explicite seulement si aucun.
-      const origFallback: "device" = "device";
-      if (!deviceRegistered) {
-        try {
-          const regRes = await nsFetch(`/domains/${encodeURIComponent(ctx.nsDomain)}/users/${encodeURIComponent(ctx.extension)}/registrations`, { method: "GET" });
-          if (regRes.ok) {
-            const rd = await regRes.json().catch(() => null);
-            const regs = Array.isArray(rd) ? rd : (rd ? [rd] : []);
-            const alt = regs.find((r: any) => typeof (r?.["aor"] ?? r?.["registration-uri"] ?? r?.["contact-uri"]) === "string");
-            const aor = alt?.["aor"] ?? alt?.["registration-uri"] ?? alt?.["contact-uri"];
-            if (typeof aor === "string" && aor.length) {
-              callOrigUser = String(aor).replace(/^sip:/i, "").split(";")[0];
-              deviceRegistered = true;
-              deviceState = "registered_alt";
-              console.log(`[pp-ns-calls] fallback to registered device aor=${callOrigUser}`);
-            }
-          }
-        } catch { /* ignore */ }
-      }
+      // NS-API v2 n'expose pas de ressource /registrations. Le statut documenté
+      // est porté par le device lui-même; ne jamais substituer un autre AOR car
+      // cela pourrait router le média WSS vers M ou inversement.
+      const origFallback = "none";
       if (!deviceRegistered) {
         return jsonResponse({
           success: false,
@@ -248,60 +236,15 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
-    // Click-to-call pickup for inbound calls when the SIP WebSocket is not
-    // usable (wss://core*.cluster1.ucstack.io:9002 is not publicly reachable).
-    // NS-API: POST /domains/{d}/users/{ext}/calls with the mobile AOR as
-    // origination and the caller as termination, auto-answered on our leg.
+    // A callback cannot answer the original SIP dialog and creates a second
+    // outbound call with different media. Keep this legacy action explicitly
+    // disabled so no client can reintroduce the false-answer/double-call path.
     if (action === "callback") {
-      const payload = cachedBody ?? (await req.json().catch(() => ({})));
-      const raw = String(payload?.number ?? payload?.from_number ?? "");
-      const digits = raw.replace(/[^\d+]/g, "");
-      if (!digits) return jsonResponse({ success: false, error: "number required" }, 200);
-      let dest = digits;
-      const bare = digits.replace(/\D/g, "");
-      if (bare.length >= 2 && bare.length <= 6) {
-        dest = bare;
-      } else if (!dest.startsWith("+")) {
-        dest = "+" + (bare.length === 10 ? "1" + bare : bare);
-      }
-
-      let deviceName = `${ctx.extension}_mobile`;
-      try {
-        const { data: profileDevice } = await guard.supabase
-          .from("planipret_profiles")
-          .select("ns_mobile_device_id")
-          .eq("user_id", ctx.userId)
-          .maybeSingle();
-        if (profileDevice?.ns_mobile_device_id) deviceName = String(profileDevice.ns_mobile_device_id);
-      } catch { /* keep default */ }
-
-      const cbCallId = crypto.randomUUID();
-      const nsDest = dest.replace(/^\+/, "");
-      const cbBody = (term: string) => ({
-        "call-id": cbCallId,
-        "call-orig-user": `${deviceName}@${ctx.nsDomain}`,
-        "call-term-user": term,
-        "auto-answer-enabled": "yes",
-        "synchronous": "no",
-      });
-      console.log(`[pp-ns-calls] callback orig=${deviceName}@${ctx.nsDomain} term=${nsDest}`);
-      let res = await nsFetch(base, { method: "POST", body: JSON.stringify(cbBody(nsDest)) });
-      let text = await res.text();
-      let parsed: any = null;
-      try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
-      if (res.status === 404 && nsDest !== dest) {
-        res = await nsFetch(base, { method: "POST", body: JSON.stringify(cbBody(dest)) });
-        text = await res.text();
-        try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
-      }
-      const ok = res.ok || res.status === 202;
       return jsonResponse({
-        success: ok,
-        call_id: parsed?.["call-id"] ?? parsed?.call_id ?? cbCallId,
-        destination: dest,
-        ns_status: res.status,
-        error: ok ? undefined : ((typeof parsed === "object" && parsed?.message) || `NS-API error ${res.status}`),
-      }, 200);
+        success: false,
+        error: "callback_disabled_use_sip_dialog",
+        message: "Répondez uniquement au dialogue SIP entrant; aucun nouvel appel serveur n'est créé.",
+      }, 409);
     }
 
     // ---- Transfert supervisé (attended transfer) -------------------------
@@ -458,13 +401,16 @@ Deno.serve(async (req) => {
           try {
             const { data: row } = await guard.supabase
               .from("planipret_phone_calls")
-              .select("id, maestro_call_id")
+              .select("id, maestro_call_id, save_consent, deleted_at")
               .or(`id.eq.${callId},ns_callid.eq.${callId},ns_call_id.eq.${callId}`)
               .maybeSingle();
             const maestroId = (row as any)?.maestro_call_id;
             const localId = (row as any)?.id;
             const endedReason = nsAction === "reject" ? "rejected" : "completed";
-            if (maestroId) {
+            const canSync = (row as any)?.save_consent === "approved" && !(row as any)?.deleted_at;
+            if (!canSync) {
+              console.info(`[pp-ns-calls] Maestro end deferred pending consent call=${localId ?? callId}`);
+            } else if (maestroId) {
               maestroTelecomMirror(
                 guard.supabase,
                 `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls/${encodeURIComponent(maestroId)}`,

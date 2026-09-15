@@ -20,6 +20,20 @@ function extractCaller(data: any): string {
   return /^\+?[0-9*#]{2,}$/.test(user) ? user : user;
 }
 
+async function stableWebhookId(prefix: string, data: any, explicit: unknown): Promise<string> {
+  const value = String(explicit ?? "").trim();
+  if (value) return value.slice(0, 240);
+  const canonical = JSON.stringify({
+    from: data?.from_number ?? data?.from ?? null,
+    to: data?.to_number ?? data?.to ?? null,
+    body: data?.body ?? data?.message ?? null,
+    duration: data?.duration ?? data?.duration_seconds ?? null,
+    created: data?.created_at ?? data?.timestamp ?? data?.time ?? null,
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+  return `${prefix}:${Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+}
+
 const ok = () => new Response(JSON.stringify({ received: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 function b64url(input: ArrayBuffer | string) {
@@ -296,10 +310,10 @@ async function processEvent(event: any) {
         status: "completed",
       }, { onConflict: "ns_call_id" });
 
-      // Chemin unique : seul pp-auto-process-call orchestre l'après-appel, et
-      // il ne démarre rien tant que le courtier n'a pas donné son consentement.
-      // Aucun appel direct à ns-transcription / ai-analyze-call / maestro-sync-call.
       const authH = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+      // Resolve the local UUID and enter the single consent-aware orchestrator.
+      // It returns `consent_pending` without fetching audio, invoking AI or
+      // writing Maestro until pp-call-consent records an explicit approval.
       void admin.from("planipret_phone_calls").select("id").eq("ns_call_id", String(callId)).maybeSingle()
         .then(({ data: row }) => {
           if (row?.id) {
@@ -312,25 +326,24 @@ async function processEvent(event: any) {
     }
   } else if (type === "call.inbound") {
     const callId = data.call_id ?? data.id;
-    // Un appel entrant sans Call-ID ne peut pas être dédupliqué : on refuse de
-    // créer une entrée fantôme et d'afficher un second écran CallKit.
     if (!callId) {
-      console.warn("[ns-webhook] inbound event without call id ignored");
+      console.warn("[ns-webhook] inbound call without call id ignored");
       return;
     }
     const dndActive = isDndActive(brokerProfile);
-    // Upsert idempotent sur ns_call_id : un réenvoi du même événement ne crée
-    // ni deuxième appel, ni deuxième push, ni deuxième écran CallKit.
-    const { data: inserted } = await admin.from("planipret_phone_calls").upsert({
-      user_id: userId, ns_call_id: String(callId), direction: "inbound",
+    const { data: insertedCall, error: insertCallError } = await admin.from("planipret_phone_calls").upsert({
+      user_id: userId, ns_call_id: callId ? String(callId) : null, direction: "inbound",
       from_number: extractCaller(data) || null,
       to_number: data.to_number ?? data.to ?? null,
       status: dndActive ? "voicemail" : "inbound_ringing",
       metadata: dndActive ? { dnd_auto_voicemail: true, dnd_message: brokerProfile?.dnd_message_fr } : null,
-    }, { onConflict: "ns_call_id", ignoreDuplicates: true }).select("id");
-    const isDuplicate = !inserted || inserted.length === 0;
-    if (isDuplicate) {
-      console.log("[ns-webhook] inbound call already known — no second push", { call_id: String(callId) });
+    }, { onConflict: "ns_call_id", ignoreDuplicates: true }).select("id").maybeSingle();
+    if (insertCallError) {
+      console.error("[ns-webhook] inbound call persist failed", insertCallError.message);
+      return;
+    }
+    if (!insertedCall) {
+      console.info("[ns-webhook] inbound call already persisted; duplicate push suppressed", { call_id: callId });
       return;
     }
     if (userId && !dndActive) {
@@ -359,7 +372,6 @@ async function processEvent(event: any) {
           body: data.from_number ?? data.from ?? "Inconnu",
           data: { url: "/mplanipret/calls", call_id: callId },
           actions: [{ action: "answer", title: "Répondre" }],
-          idempotency_key: `inbound_call:${String(callId)}`,
         });
       }
     } else if (userId && dndActive) {
@@ -369,13 +381,20 @@ async function processEvent(event: any) {
       });
     }
   } else if (type === "message.inbound") {
-    const { data: inboundMsg } = await admin.from("planipret_phone_messages").insert({
+    if (!userId) return;
+    const messageId = await stableWebhookId("sms", data, data.id ?? data.message_id ?? data["message-id"]);
+    const { data: inboundMsg, error: messageError } = await admin.from("planipret_phone_messages").insert({
       user_id: userId, direction: "inbound",
-      from_number: data.from_number ?? data.from ?? null, ns_message_id: data.id ?? data.message_id ?? data["message-id"] ?? null, thread_id: data.messagesession_id ?? data["messagesession-id"] ?? null,
+      from_number: data.from_number ?? data.from ?? null, ns_message_id: messageId, thread_id: data.messagesession_id ?? data["messagesession-id"] ?? null,
       to_number: data.to_number ?? data.to ?? null,
       body: data.body ?? data.message ?? "",
       type: "sms",
     }).select("id").maybeSingle();
+    if (messageError?.code === "23505") {
+      console.log("[ns-webhook] duplicate SMS ignored", { ns_message_id: messageId });
+      return;
+    }
+    if (messageError || !inboundMsg?.id) throw messageError ?? new Error("message_insert_failed");
     if (inboundMsg?.id) {
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-sync-message`, {
         method: "POST",
@@ -396,17 +415,24 @@ async function processEvent(event: any) {
           title: `💬 ${data.from_number ?? data.from ?? "SMS"}`,
           body: String(data.body ?? data.message ?? "").slice(0, 140),
           data: { url: "/mplanipret/messages" },
+          idempotency_key: `inbound_sms:${messageId}`,
         });
       }
     }
   } else if (type === "voicemail.new") {
-    const vmId = data.vm_id ?? data.id;
-    await admin.from("planipret_voicemails").insert({
-      user_id: userId, vm_id: vmId,
+    if (!userId) return;
+    const vmId = await stableWebhookId("voicemail", data, data.vm_id ?? data.id ?? data.message_id ?? data["message-id"]);
+    const { data: voicemail, error: voicemailError } = await admin.from("planipret_voicemails").insert({
+      user_id: userId, ns_vm_id: vmId,
       from_number: data.from_number ?? data.from ?? null, ns_message_id: data.id ?? data.message_id ?? data["message-id"] ?? null, thread_id: data.messagesession_id ?? data["messagesession-id"] ?? null,
       duration_seconds: data.duration ?? data.duration_seconds ?? null,
       is_read: false,
-    });
+    }).select("id").maybeSingle();
+    if (voicemailError?.code === "23505") {
+      console.log("[ns-webhook] duplicate voicemail ignored", { ns_vm_id: vmId });
+      return;
+    }
+    if (voicemailError || !voicemail?.id) throw voicemailError ?? new Error("voicemail_insert_failed");
     if (userId) {
       await admin.channel(`voicemails:${userId}`).send({
         type: "broadcast", event: "new_voicemail",
@@ -418,6 +444,7 @@ async function processEvent(event: any) {
           body: `De ${data.from_number ?? data.from ?? "inconnu"}`,
           data: { url: "/mplanipret/voicemail" },
           actions: [{ action: "listen", title: "Écouter" }],
+          idempotency_key: `inbound_voicemail:${vmId}`,
         });
       }
     }

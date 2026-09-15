@@ -5,9 +5,9 @@
 
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 // @ts-ignore npm package has no bundled TS declarations.
 import GSMDecoder from "npm:gsm-decoder@1.0.0";
-import { requireCallAccess } from "../_shared/planipret-call-access.ts";
 
 const FALLBACK_NS_API_BASE_URL = (Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2").replace(/\/$/, "");
 const FALLBACK_NS_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? Deno.env.get("NS_API_DOMAIN") ?? "planipret.ca";
@@ -422,24 +422,20 @@ Deno.serve(async (req) => {
   let domain = String(body.domain ?? url.searchParams.get("domain") ?? cfg.domain);
   const attempts: any[] = [];
   const preferUrl = body?.prefer_url === true || url.searchParams.get("prefer_url") === "1";
-
-  // Identité + propriété + consentement post-appel approuvé.
-  {
-    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const targetId = call_db_id ?? body.call_id ?? null;
-    if (!targetId) return json({ success: false, error: "call_db_id_required" }, 400);
-    const access = await requireCallAccess(req, admin, String(targetId), { headers: corsHeaders, requireConsent: true });
-    if ("error" in access) return access.error;
-  }
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   if ((!ns_callid || !ns_extension || preferUrl) && call_db_id) {
-    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const { data } = await admin
       .from("planipret_phone_calls")
-      .select("id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, recording_storage_path, started_at, duration_seconds, from_number, to_number")
+      .select("id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, recording_storage_path, started_at, duration_seconds, from_number, to_number, save_consent, deleted_at")
       .eq("id", call_db_id)
       .maybeSingle();
     row = data;
+    if (!row) return json({ success: false, error: "call_not_found" }, 404);
+    const access = await authorizeCallAccess(req, admin, row);
+    if (!access.ok) return json({ success: false, error: access.error }, access.status);
+    const consent = requireApprovedCallConsent(row);
+    if (!consent.ok) return json({ success: false, error: consent.error }, consent.status);
     domain = row?.ns_domain || row?.metadata?.domain || domain;
     ns_callid = ns_callid || row?.ns_callid || row?.ns_orig_callid || row?.ns_term_callid
       || row?.metadata?.["call-orig-call-id"] || row?.metadata?.["call-term-call-id"] || row?.metadata?.["call-parent-cdr-id"] || null;
@@ -471,6 +467,11 @@ Deno.serve(async (req) => {
     if (row?.recording_url && String(row.recording_url).startsWith("http")) {
       const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts, { callDbId: call_db_id, preferUrl });
       if (direct) return direct;
+    }
+  } else if (!call_db_id) {
+    const access = await authorizeCallAccess(req, admin, {});
+    if (!access.ok || !access.serviceRole) {
+      return json({ success: false, error: "call_db_id_required" }, 400);
     }
   }
 

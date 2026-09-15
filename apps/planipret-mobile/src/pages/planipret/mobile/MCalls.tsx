@@ -18,6 +18,7 @@ import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStud
 
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
+import { createClientFollowUpTask } from "@/lib/planipret/tasks";
 
 
 const PRIMARY = "var(--pp-brand-accent-2)";
@@ -350,33 +351,24 @@ export default function MCalls() {
     void loadRecordings(true);
   }, [userId, loadRecordings]);
 
-  // While the Recordings tab is open, refresh in the background with adaptive
-  // backoff: poll fast (5s → 10s → 20s → 40s, cap 60s) as long as some items
-  // are still missing audio or transcript, then relax to 60s once everything
-  // is settled.
+  // Recording/transcript updates arrive through Realtime. Avoid periodic API
+  // polling, which previously added traffic while SIP was trying to register.
   useEffect(() => {
-    // Only poll when recordings tab is open AND some items are still pending.
-    // Start at 30s (not 5s) to avoid constant refreshes.
-    if (tab !== "recordings" || !userId) return;
-    const allSettled = recordings.length > 0 && recordings.every((r: any) =>
-      (r.recording_url || r.has_recording) && (r.transcript || r.ai_summary)
-    );
-    if (allSettled) return; // nothing pending — no polling needed
-    let cancelled = false;
-    let timer: number | null = null;
-    let delay = 30_000; // start at 30s
-    const tick = async () => {
-      await loadRecordings(true);
-      if (cancelled) return;
-      const pending = recordings.some((r: any) =>
-        !r.recording_url || !r.has_recording || (!r.transcript && !r.ai_summary)
-      );
-      delay = pending ? Math.min(delay * 2, 120_000) : 120_000; // max 2min
-      timer = window.setTimeout(tick, delay);
-    };
-    timer = window.setTimeout(tick, delay);
-    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
-  }, [tab, userId, loadRecordings, recordings]);
+    if (!userId) return;
+    const ids = [...new Set([userId, profileAuthId].filter(Boolean))];
+    const channels = ids.map((id) => supabase
+      .channel(`mcalls-recordings:${id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "planipret_phone_calls",
+        filter: `user_id=eq.${id}`,
+      }, () => {
+        if (tab === "recordings") void loadRecordingsFromCache(true);
+      })
+      .subscribe());
+    return () => { channels.forEach((channel) => { void supabase.removeChannel(channel); }); };
+  }, [tab, userId, profileAuthId, loadRecordingsFromCache]);
 
 
   // Reset pagination when tab or search changes
@@ -1235,11 +1227,39 @@ function CallDetailSheet({
     const key = String(idx);
     if (type === "task") setTaskState((s) => ({ ...s, [key]: { creating: true } }));
     else setEventState((s) => ({ ...s, [key]: { creating: true } }));
-    const { data, error } = await supabase.functions.invoke("maestro-actions", {
-      body: { action: type === "task" ? "create_task" : "create_event", call_id: call.id, payload: item },
-    });
-    const createdId = (data as any)?.id ?? (data as any)?.maestro_task_id ?? (data as any)?.maestro_event_id ?? "ok";
-    if (error || (data as any)?.success === false) {
+    let data: any = null;
+    let error: any = null;
+    if (type === "task") {
+      data = await createClientFollowUpTask({
+        maestro_client_id: String(call.maestro_client_id ?? ""),
+        client_name: call.direction === "outbound" ? (call.to_name ?? undefined) : (call.from_name ?? undefined),
+        notes: String(item?.title ?? item?.notes ?? item?.description ?? "Suivi après appel"),
+        description: String(item?.description ?? item?.notes ?? item?.title ?? "Suivi après appel"),
+        due_at: item?.due_at ?? item?.date ?? item?.start ?? undefined,
+        call_id: call.id,
+      });
+    } else {
+      const start = new Date(item?.start ?? item?.start_at ?? item?.date ?? Date.now());
+      const end = new Date(item?.end ?? item?.end_at ?? start.getTime() + 30 * 60_000);
+      const response = await supabase.functions.invoke("ms365-actions", {
+        body: {
+          action: "create_calendar_event",
+          payload: {
+            subject: item?.title ?? "Suivi après appel",
+            start: { dateTime: start.toISOString(), timeZone: "America/Toronto" },
+            end: { dateTime: end.toISOString(), timeZone: "America/Toronto" },
+            body: item?.description ?? item?.notes ?? "",
+            confirmed: true,
+            call_id: call.id,
+            idempotency_key: `post_call_event:${call.id}:${idx}`,
+          },
+        },
+      });
+      data = response.data;
+      error = response.error;
+    }
+    const createdId = data?.task?.id ?? data?.task_id ?? data?.event_id ?? data?.event?.id ?? "ok";
+    if (error || data?.success === false) {
       toast.error(`Échec création ${type === "task" ? "tâche" : "événement"}`);
       if (type === "task") setTaskState((s) => ({ ...s, [key]: {} }));
       else setEventState((s) => ({ ...s, [key]: {} }));
@@ -1528,9 +1548,17 @@ function CallbackSuggestion({ call, onScheduled }: { call: Call; onScheduled: ()
     });
     setBusy(false);
     if (error) { toast.error("Erreur création rappel"); return; }
-    // Best-effort Maestro event
-    supabase.functions.invoke("maestro-actions", {
-      body: { action: "create_event", call_id: call.id, payload: { title: `Rappel: ${call.from_name ?? call.from_number ?? ""}`, start: at.toISOString(), end: new Date(at.getTime() + 30*60000).toISOString(), description: call.callback_reason ?? "" } },
+    // Explicit user click = confirmation to mirror this reminder in Outlook.
+    supabase.functions.invoke("ms365-actions", {
+      body: { action: "create_calendar_event", payload: {
+        subject: `Rappel: ${call.from_name ?? call.from_number ?? ""}`,
+        start: { dateTime: at.toISOString(), timeZone: "America/Toronto" },
+        end: { dateTime: new Date(at.getTime() + 30 * 60000).toISOString(), timeZone: "America/Toronto" },
+        body: call.callback_reason ?? "",
+        confirmed: true,
+        call_id: call.id,
+        idempotency_key: `callback_event:${call.id}:${at.toISOString()}`,
+      } },
     }).catch(() => {});
     onScheduled();
   };
@@ -1615,7 +1643,6 @@ function ActiveCallsTab({ userId, openDialer }: { userId: string; openDialer: (n
   const [incoming, setIncoming] = useState<ActiveCall | null>(null);
   const [incomingMaestro, setIncomingMaestro] = useState<any>(null);
   const [maestroLoading, setMaestroLoading] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Maestro lookup on incoming
   useEffect(() => {
@@ -1646,9 +1673,15 @@ function ActiveCallsTab({ userId, openDialer }: { userId: string; openDialer: (n
   };
 
   useEffect(() => {
-    fetchActive();
-    pollRef.current = setInterval(fetchActive, 5000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    void fetchActive();
+    const onVisible = () => { if (document.visibilityState === "visible") void fetchActive(); };
+    const onOnline = () => { void fetchActive(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+    };
   }, []);
 
   useEffect(() => {
@@ -1748,9 +1781,21 @@ function ActiveCallsTab({ userId, openDialer }: { userId: string; openDialer: (n
                   <button
                     onClick={async () => {
                       try {
-                        await supabase.functions.invoke("maestro-client-create", {
-                          body: { phone: incoming.number, source: "inbound_call" },
+                        const parts = String(incoming.name ?? "").trim().split(/\s+/).filter(Boolean);
+                        if (!parts.length) {
+                          toast.error("Nom requis", { description: "Ajoutez le contact depuis la page Contacts pour créer sa fiche Maestro." });
+                          return;
+                        }
+                        const { data, error } = await supabase.functions.invoke("maestro-client-create", {
+                          body: {
+                            phone: incoming.number,
+                            first_name: parts[0],
+                            last_name: parts.slice(1).join(" "),
+                            source: "inbound_call",
+                          },
                         });
+                        if (error) throw error;
+                        if (!(data as any)?.success) throw new Error((data as any)?.error ?? "create_failed");
                         toast.success("Créé dans Maestro");
                       } catch (e: any) {
                         toast.error("Échec création", { description: e?.message });
@@ -2150,4 +2195,3 @@ function VmAudio({ vm }: { vm: VM }) {
     </div>
   );
 }
-

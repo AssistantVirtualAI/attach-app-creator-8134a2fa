@@ -421,9 +421,22 @@ async function validateTaskTarget(
     return { ok: true, type, xid, reason: "locally_mapped_contract", available, targets_source, matched: null };
   }
   // No scope information available (API down, empty page, missing telecom id):
-  // do not block task creation — let Maestro itself accept or reject the xid.
+  // fail closed for an explicit client/contract target. Personal tasks already
+  // passed above through `ownIds`; an arbitrary xid must never cross tenants.
   if (targets_source === "unavailable") {
-    return { ok: true, type, xid, reason: "scope_unavailable_passthrough", available, targets_source, matched: null };
+    return type === "user"
+      ? {
+          ...base, available, targets_source,
+          error: "xid_out_of_scope",
+          reason: "scope_unavailable_fail_closed",
+          message: "Le périmètre client n'a pas pu être vérifié. Réessayez avant de créer la tâche.",
+        }
+      : {
+          ...base, available, targets_source,
+          error: "target_mapping_required",
+          reason: "scope_unavailable_fail_closed",
+          message: "Le contrat n'a pas pu être vérifié. Réessayez avant de créer la tâche.",
+        };
   }
   return type === "user"
     ? {
@@ -750,7 +763,7 @@ export async function handleTaskRequest(
     const guard = assertAssigneeAllowed(requested, allowedIds);
     if (guard.ok === false) {
       steps.push({ step: "assignee_guard", ok: false, detail: guard.message });
-      return { status: 200, body: { success: false, ok: false, steps, ...guard, correlation_id } };
+      return { status: 200, body: { success: false, steps, ...guard, correlation_id } };
     }
     steps.push({ step: "assignee_guard", ok: true, detail: requested ? `users_id ${requested} autorisé` : "auto-assignation (moi)" });
 
@@ -774,7 +787,7 @@ export async function handleTaskRequest(
     if (!res.ok) {
       steps.push({ step: "create", ok: false, detail: `HTTP ${res.status}` });
       await audit(admin, { action: "task_selftest", user_id: userId, source, session_id: sessionId, status: res.status, correlation_id, result: "create_failed" });
-      return { status: 200, body: { success: false, ok: false, steps, ...mapTaskApiError(res.status, res.data), correlation_id } };
+      return { status: 200, body: { ok: false, steps, ...mapTaskApiError(res.status, res.data), correlation_id } };
     }
     const raw = res.data?.data ?? res.data?.task ?? res.data ?? {};
     const created = normalizeTask({ ...built.payload, ...raw });

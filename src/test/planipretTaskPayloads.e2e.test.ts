@@ -59,9 +59,14 @@ describe("POST /api/main/tasks — doc-aligned payload", () => {
       xid: "387460525", type: "user", date: "2026-08-21 09:30:00", notes: "Rappel client",
     });
     expect(r.ok).toBe(true);
-    expect((r as any).payload).toEqual({
+    expect((r as any).payload).toMatchObject({
       xid: 387460525, type: "user", date: "2026-08-21 09:30:00",
       notes: "Rappel client", description: "Rappel client", status: "pending",
+      sync_cal: 0,
+      send_notification: 0,
+      send_notification_client: 0,
+      send_notification_client_secondary: 0,
+      send_notification_assistant: 0,
     });
   });
 
@@ -150,8 +155,8 @@ describe("PUT /api/main/tasks/{taskId} — doc-aligned payload", () => {
     expect(r.payload).toEqual({ task_id: 9001, notes: "maj", date: "2026-08-22 14:00:00" });
   });
 
-  it("drops non-updatable fields and refuses an empty change set", () => {
-    const r = buildUpdateBody(9001, { xid: 5, type: "user" }) as any;
+  it("drops unknown fields and refuses an empty change set", () => {
+    const r = buildUpdateBody(9001, { unknown_field: "ignored" }) as any;
     expect(r.ok).toBe(false);
     expect(r.fields.changes).toBe("no_updatable_field");
   });

@@ -110,10 +110,15 @@ export default function MMore() {
       if (!stop && res) setPbx(res);
     };
     run(true);
-    const id = setInterval(() => run(true), 30000);
     const onVis = () => { if (document.visibilityState === "visible") run(true); };
+    const onOnline = () => { void run(true); };
     document.addEventListener("visibilitychange", onVis);
-    return () => { stop = true; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+    window.addEventListener("online", onOnline);
+    return () => {
+      stop = true;
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", onOnline);
+    };
   }, []);
   const pbxRegistered = Boolean(pbx?.registration?.mobile_registered || (pbx?.registration?.count ?? 0) > 0);
   const sipSnap = pbxRegistered && rawSipSnap.status !== "registered"
@@ -469,7 +474,11 @@ export default function MMore() {
         <Row icon={<Bot className="w-4 h-4" />} label={aiOk ? "Consentement IA (AVA) : accordé" : "Consentement IA (AVA) : non accordé"}
           sub="AVA envoie vos messages et transcriptions à OpenAI, Google (Gemini) et ElevenLabs. Touchez pour accorder ou retirer votre consentement."
           onClick={async () => {
-            if (aiOk) { revokeAiConsent(); setAiOk(false); toast.success("Consentement IA retiré"); }
+            if (aiOk) {
+              const revoked = await revokeAiConsent();
+              if (revoked) { setAiOk(false); toast.success("Consentement IA retiré"); }
+              else toast.error("Impossible de retirer le consentement. Réessayez.");
+            }
             else { const ok = await ensureAiConsent(); setAiOk(ok); }
           }} chevron />
         <Row icon={<Shield className="w-4 h-4" />} label={t("more.privacy")} onClick={() => navigate("/mplanipret/privacy")} chevron />

@@ -112,16 +112,16 @@ describe("task creation with task_targets", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("passes through when the Client List API is unavailable", async () => {
+  it("fails closed when the Client List API is unavailable", async () => {
     const { deps } = makeDeps({ clientTargetsFetch: undefined });
     const out = await handleTaskRequest({ ...base, type: "user", xid: 387428079 }, deps);
-    expect(out.body.error).toBeUndefined();
+    expect(out.body).toMatchObject({ success: false, error: "xid_out_of_scope" });
   });
 
-  it("passes through when the Client List API throws", async () => {
+  it("fails closed when the Client List API throws", async () => {
     const { deps } = makeDeps({ clientTargetsFetch: async () => { throw new Error("boom"); } });
     const out = await handleTaskRequest({ ...base, type: "contract", xid: 311059 }, deps);
-    expect(out.body.error).toBeUndefined();
+    expect(out.body).toMatchObject({ success: false, error: "target_mapping_required" });
   });
 
 
@@ -175,22 +175,23 @@ describe("client_targets & validate_target endpoints", () => {
   });
 });
 
-describe("task sync status (Nylas)", () => {
+describe("task sync status (Maestro)", () => {
   it("marks a task synced when a Nylas event is linked", () => {
     expect(computeTaskSync({ id: 1, nylas_event_id: "evt_1" }, ["93135"]).sync_status).toBe("synced");
   });
 
-  it("marks a task pending when calendar sync was requested but no event exists", () => {
+  it("marks a created Maestro task synced even when calendar linking is pending", () => {
     expect(computeTaskSync({ id: 1, sync_calendar: true }, ["93135"]))
-      .toEqual({ sync_status: "pending", sync_reason: "awaiting_nylas" });
+      .toEqual({ sync_status: "synced", sync_reason: "nylas_event_linked" });
   });
 
-  it("explains a missing assignment", () => {
-    expect(computeTaskSync({ id: 1, sync_calendar: true }, []).sync_reason).toBe("assignment_missing");
+  it("does not confuse an empty assignee list with a missing Maestro task", () => {
+    expect(computeTaskSync({ id: 1, sync_calendar: true }, []).sync_status).toBe("synced");
   });
 
-  it("explains a disabled calendar sync", () => {
-    expect(computeTaskSync({ id: 1 }, ["93135"]).sync_reason).toBe("calendar_sync_disabled");
+  it("reports a missing Maestro task id as not created", () => {
+    expect(computeTaskSync({}, ["93135"]))
+      .toEqual({ sync_status: "not_synced", sync_reason: "not_created_yet" });
   });
 
   it("reports upstream sync failures", () => {

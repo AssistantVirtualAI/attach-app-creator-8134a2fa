@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { supabase } from "@/integrations/supabase/client";
-import { AVA_MUTATING_ACTIONS } from "@/lib/planipret/avaMutations";
 import { Button } from "@/components/ui/button";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -30,7 +29,12 @@ type Msg = { id: string; role: "user" | "assistant"; message: string; created_at
 const isPagerSuggestion = (s: AvaSuggestion) => s.id.startsWith("maestro-prev-") || s.id.startsWith("maestro-next-");
 type Session = { id: string; title: string; last_message_at: string };
 
-const MUTATING_ACTIONS = AVA_MUTATING_ACTIONS;
+const MUTATING_ACTIONS = new Set([
+  "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event",
+  "send_teams_message", "reply_teams_message", "create_teams_chat",
+  "create_task", "update_task", "delete_task", "create_event", "create_appointment",
+  "create_client", "update_client", "push_call_summary", "push_client_note", "push_communication_log",
+]);
 const CONFIRM_RE = /^(oui|ok|okay|confirm[eé]?|confirm[eé] pour envoyer|j['’]?autorise|autorise|vas-y|go|envoie|envoyer|appelle|appel|cr[eé]e|supprime|delete|yes|yep|approved?|approuv[eé])\b/i;
 const CANCEL_RE = /^(non|annule|annuler|stop|cancel|cancelled?|no|n\b)/i;
 
@@ -58,7 +62,6 @@ export default function MAvaChat() {
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const avaContext = useAvaContext();
-  const navigate = useNavigate();
   const outlet = useOutletContext<PlanipretMobileContext>() as any;
   const { t, lang } = useMplanipretLang();
 
@@ -182,30 +185,11 @@ export default function MAvaChat() {
       if (suggestion.kind === "call") {
         const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
         if (!number) throw new Error(t("avaChat.callMissingNumber"));
-        // 1) Ouvre le dialer avec le numéro déjà rempli (auto-dial)
+        // Un seul propriétaire de l'appel : le dialer/softphone mobile.
         if (typeof outlet?.openDialer === "function") outlet.openDialer(number, true);
         else window.dispatchEvent(new CustomEvent("ava:open-dialer", { detail: { number, autoDial: true } }));
-        // 2) Filet de sécurité : déclenche l'appel via l'API native si le dialer n'a pas composé
-        window.setTimeout(() => {
-          try {
-            const sp: any = outlet?.softphone;
-            const st = String(sp?.snap?.status ?? "");
-            const inCall = ["dialing", "ringing-out", "ringing", "active", "connected", "in-call", "held"].includes(st);
-            if (!inCall && typeof sp?.placeCall === "function") void sp.placeCall(number);
-          } catch { /* noop */ }
-        }, 2200);
         setMessages((m) => [...m, { id: `dial-${Date.now()}`, role: "assistant", message: t("avaChat.dialerOpening").replace("{number}", number), created_at: new Date().toISOString() }]);
         toast.success(t("avaChat.callInProgress"));
-        return;
-      }
-
-      if (suggestion.kind === "open_commissions") {
-        const qp = new URLSearchParams();
-        for (const k of ["period", "date_from", "date_to", "commission_type", "financial_inst_id"]) {
-          const v = (suggestion.payload as any)?.[k];
-          if (v != null && String(v).trim() !== "") qp.set(k, String(v).trim().slice(0, 40));
-        }
-        navigate(`/mplanipret/commissions${qp.toString() ? `?${qp}` : ""}`);
         return;
       }
 
@@ -213,28 +197,19 @@ export default function MAvaChat() {
         const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
         const body = String(suggestion.payload?.message ?? suggestion.payload?.text ?? suggestion.payload?.body ?? "").trim();
         if (!number) throw new Error(t("avaChat.callMissingNumber"));
-        // 1) Ouvre la page Texto avec le message pré-rempli et envoi automatique
-        window.dispatchEvent(new CustomEvent("ava:open-sms-composer", { detail: { number, body, autoSend: true } }));
-        // 2) Filet de sécurité : si aucun accusé d'envoi, envoyer directement via pp-ns-sms
-        if (body) {
-          let acked = false;
-          const onSent = () => { acked = true; };
-          window.addEventListener("ava:sms-sent", onSent, { once: true });
-          window.setTimeout(async () => {
-            window.removeEventListener("ava:sms-sent", onSent);
-            if (acked) return;
-            try {
-              const { data, error } = await supabase.functions.invoke("pp-ns-sms", { body: { action: "send", to: number, message: body, language: lang } });
-              if (error) throw error;
-              if ((data as any)?.ok === false || (data as any)?.error) throw new Error(String((data as any)?.error ?? t("avaChat.smsRefused")));
-              toast.success(t("avaChat.smsSent"));
-            } catch (err: any) {
-              toast.error(err?.message ?? t("avaChat.smsSendFailed"));
-            }
-          }, 4000);
-        }
-        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: t("avaChat.smsOpening").replace("{number}", number), created_at: new Date().toISOString() }]);
-        toast.success(t("avaChat.smsSending"));
+        if (!body) throw new Error(t("avaChat.smsRefused"));
+        const { data, error } = await supabase.functions.invoke("ava-tool-executor", {
+          body: {
+            tool_name: "send_sms",
+            parameters: { to: number, message: body, confirmed: true },
+            session_id: sessionId,
+          },
+        });
+        if (error) throw error;
+        const result = data as any;
+        if (result?.success !== true) throw new Error(String(result?.error ?? t("avaChat.smsSendFailed")));
+        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: result?.message ?? t("avaChat.smsSent"), created_at: new Date().toISOString() }]);
+        toast.success(t("avaChat.smsSent"));
         return;
       }
 
@@ -334,7 +309,16 @@ export default function MAvaChat() {
   if (mode === "voice" && voiceAgentAllowed && userId) {
     return (
       <div className="relative min-h-full">
-        <AvaVoiceAgent userId={userId} onClose={() => switchMode("chat")} />
+        <AvaVoiceAgent
+          userId={userId}
+          onClose={() => switchMode("chat")}
+          onPlaceCall={(number) => {
+            switchMode("chat");
+            if (typeof outlet?.openDialer === "function") outlet.openDialer(number, true);
+            else window.dispatchEvent(new CustomEvent("ava:open-dialer", { detail: { number, autoDial: true } }));
+          }}
+          onHangupCall={() => outlet?.softphone?.hangup?.()}
+        />
         <button
           onClick={() => setVoiceSettingsOpen(true)}
           className="absolute top-4 right-16 z-[70] w-9 h-9 rounded-full bg-white/5 text-white/80 flex items-center justify-center"
@@ -613,7 +597,7 @@ function parseAvaReply(raw: string, suggestions: AvaSuggestion[]): { text: strin
       for (const item of parsed) {
         if (!item || typeof item !== "object") continue;
         const kind = String((item as any).kind ?? "");
-        if (!["call", "sms", "email", "reminder", "maestro_action", "ms365_action", "open_voice", "open_coach", "commission_action", "open_commissions"].includes(kind)) continue;
+        if (!["call", "sms", "email", "reminder", "maestro_action", "ms365_action", "open_voice", "open_coach"].includes(kind)) continue;
         found.push({
           id: String((item as any).id ?? `${kind}-${Date.now()}-${found.length}`),
           label: String((item as any).label ?? (kind === "call" ? "Appeler" : kind === "sms" ? "Texto" : "Action")),

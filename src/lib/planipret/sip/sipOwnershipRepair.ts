@@ -13,6 +13,8 @@
  * marteler ni créer de double REGISTER.
  */
 import { ppSipProvider } from "@/lib/planipret/sip/ppSipProvider";
+import { Capacitor } from "@capacitor/core";
+import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
 import {
   getPlanipretSipKeepAliveStatus,
   stopPlanipretSipKeepAlive,
@@ -34,6 +36,7 @@ export type OwnershipRepairResult = {
 
 function callActive(): boolean {
   try {
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios" && nativeSip.getCallId()) return true;
     const s = ppSipProvider.getSnapshot();
     return s.callState !== "idle" && s.callState !== "ended";
   } catch {
@@ -66,6 +69,21 @@ export async function ensureForegroundOwnership(
 
   running = true;
   try {
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios") {
+      const repaired = await nativeSip.repairRegistration();
+      if (repaired) resetOwnershipRepairBackoff();
+      else {
+        attempt = Math.min(attempt + 1, BACKOFF_MS.length - 1);
+        nextAllowedAt = Date.now() + BACKOFF_MS[attempt];
+      }
+      return {
+        attempted: true,
+        holder: repaired ? "app" : "none",
+        repaired,
+        reason: repaired ? "pjsip_registered" : "pjsip_registration_failed",
+      };
+    }
+
     const state = check ?? (await checkSipBackendRegistration({ force: true, minIntervalMs: 0 }));
     const holder = (state?.registration?.holder ?? "unknown") as OwnershipRepairResult["holder"];
     if (!state) return { attempted: false, holder, repaired: false, reason: "no_backend_state" };

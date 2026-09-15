@@ -2,10 +2,10 @@
 // Input : { ms_message_id: string }
 // Auth : JWT du courtier. Retourne l'analyse et l'insère dans planipret_ava_email_analyses.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { getAiConsent, consentRequiredBody } from "../_shared/ai-consent.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 import { callAnthropic } from "../_shared/anthropic.ts";
+import { hasValidAiConsent } from "../_shared/ai-consent.ts";
 
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -153,16 +153,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
     const svcHeader = req.headers.get("x-ava-service") ?? "";
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    // Un appel interne de confiance = vrai bearer service-role, jamais un
-    // en-tête personnalisé forgeable.
-    void svcHeader;
-    const isService = Boolean(serviceKey) && bearer === serviceKey;
+    const isService = svcHeader && svcHeader === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     const payload = await req.json();
     const { ms_message_id } = payload;
+    if (!ms_message_id) return j({ success: false, error: "ms_message_id required" }, 400);
 
     let userId: string | undefined;
     if (isService) {
@@ -176,13 +172,6 @@ Deno.serve(async (req) => {
       if (!userId) return j({ success: false, error: "Unauthorized" }, 401);
     }
 
-    {
-      const consent = await getAiConsent(admin, userId);
-      if (!consent.granted) return j(consentRequiredBody(consent), 403);
-    }
-
-    if (!ms_message_id) return j({ success: false, error: "ms_message_id required" }, 400);
-
     // Check cached analysis first
     const { data: existing } = await admin
       .from("planipret_ava_email_analyses")
@@ -194,11 +183,12 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await admin
       .from("planipret_profiles")
-      .select("id, user_id, email, ms365_email, ms365_access_token, ms365_refresh_token, ava_learned_preferences")
+      .select("id, user_id, email, ms365_email, ms365_access_token, ms365_refresh_token, ava_learned_preferences, ai_consent_at, ai_consent_revoked_at")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (!profile) return j({ success: false, error: "Courtier introuvable" }, 404);
+    if (!hasValidAiConsent(profile)) return j({ success: false, error: "ai_consent_required" }, 403);
 
     let emailResp: Response;
     if (isService && payload.graph_mode === "application") {

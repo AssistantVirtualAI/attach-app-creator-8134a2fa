@@ -4,36 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { startMicrosoftSignIn } from '@/lib/ms365AuthLogin';
 
-// Structured client-side auth logging so failures can be diagnosed from the console.
-function logAuthError(op: string, error: any, extra?: Record<string, any>) {
-  try {
-    const details = {
-      op,
-      message: error?.message ?? String(error),
-      name: error?.name,
-      status: error?.status ?? error?.statusCode,
-      code: error?.code ?? error?.error_code,
-      details: error?.details ?? error?.error_description,
-      ...extra,
-    };
-    // eslint-disable-next-line no-console
-    console.error(`[auth:${op}]`, details, error);
-  } catch { /* noop */ }
-}
-
-function friendlyAuthError(error: any): string {
-  const msg = String(error?.message || "");
-  const code = String(error?.code || error?.error_code || "");
-  if (/invalid.login.credentials/i.test(msg) || code === "invalid_credentials") return "Email ou mot de passe invalide.";
-  if (/email.not.confirmed/i.test(msg) || code === "email_not_confirmed") return "Email non confirmé. Vérifiez votre boîte de réception.";
-  if (/user.already.registered/i.test(msg) || code === "user_already_exists") return "Ce compte existe déjà. Connectez-vous.";
-  if (/rate.limit|over_email_send_rate_limit|too many/i.test(msg)) return "Trop de tentatives. Réessayez dans quelques minutes.";
-  if (/network|failed to fetch/i.test(msg)) return "Problème réseau. Vérifiez votre connexion et réessayez.";
-  if (/provider is not enabled|validation_failed/i.test(msg)) return "Ce fournisseur SSO n'est pas activé.";
-  return msg || "Une erreur inattendue est survenue.";
-}
-
-
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -41,49 +11,34 @@ export const useAuth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    let lastUserId: string | null = null;
-
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        const nextUser = session?.user ?? null;
-        // Supabase refreshes the token every time the tab regains focus. Only
-        // propagate state when the identity actually changes, otherwise every
-        // consumer re-renders and each page refetches on tab switch.
-        const identityChanged = (nextUser?.id ?? null) !== lastUserId;
-        lastUserId = nextUser?.id ?? null;
-        if (identityChanged || event === "SIGNED_OUT") {
-          setSession(session);
-          setUser(nextUser);
-        }
+        setSession(session);
+        setUser(session?.user ?? null);
         setLoading(false);
-
-
-        // Auto-link Microsoft 365 tokens when the user signed in via Azure SSO.
-        // We defer to avoid blocking the auth callback, and only fire on
-        // SIGNED_IN with a provider_token present.
-        if (
-          event === "SIGNED_IN" &&
-          (session as any)?.provider_token &&
-          (session?.user?.app_metadata?.provider === "azure" ||
-            session?.user?.app_metadata?.provider === "microsoft")
-        ) {
-          setTimeout(() => {
-            supabase.functions
-              .invoke("ms365-store-session", {
-                body: {
-                  provider_token: (session as any).provider_token,
-                  provider_refresh_token: (session as any).provider_refresh_token,
-                  expires_in: (session as any).expires_in ?? 3600,
-                  email: session.user?.email,
-                  display_name:
-                    session.user?.user_metadata?.full_name ??
-                    session.user?.user_metadata?.name,
-                },
-              })
-              .catch((err) => console.warn("[MS365 SSO link] failed:", err));
-          }, 0);
+        // Renouvellement automatique de l'inscription SIP dès la connexion,
+        // sans attendre l'ouverture de l'écran téléphone. Aucun impact PJSIP :
+        // seul l'objet Device NetSapiens est rafraîchi côté serveur.
+        if (event === 'SIGNED_IN' && session?.user) {
+          void supabase.functions
+            .invoke('ns-resolve-sip-credentials', {
+              body: { client_type: 'mobile', transport: 'tls', on_login: true },
+            })
+            .catch(() => { /* silencieux : la connexion ne doit jamais échouer pour ça */ });
+          // Démarre/répare l'inscription SIP du poste `<ext>M` dès la connexion,
+          // sans attendre l'ouverture de l'écran téléphone. Natif uniquement.
+          void (async () => {
+            try {
+              const { Capacitor } = await import('@capacitor/core');
+              if (!Capacitor.isNativePlatform()) return;
+              const { nativeSip } = await import('@/lib/planipret/sip/nativeSipService');
+              const ok = await nativeSip.repairRegistration();
+              if (!ok) setTimeout(() => { void nativeSip.repairRegistration().catch(() => {}); }, 8000);
+            } catch { /* jamais bloquant pour la connexion */ }
+          })();
         }
+
       }
     );
 
@@ -156,10 +111,9 @@ export const useAuth = () => {
       });
       return { error: null };
     } catch (error: any) {
-      logAuthError("signUp", error, { email });
       toast({
         title: "Erreur d'inscription",
-        description: friendlyAuthError(error),
+        description: error.message,
         variant: "destructive",
       });
       return { error };
@@ -181,10 +135,9 @@ export const useAuth = () => {
       });
       return { error: null };
     } catch (error: any) {
-      logAuthError("signIn", error, { email });
       toast({
         title: "Erreur de connexion",
-        description: friendlyAuthError(error),
+        description: error.message,
         variant: "destructive",
       });
       return { error };
@@ -203,10 +156,9 @@ export const useAuth = () => {
       if (error) throw error;
       return { error: null };
     } catch (error: any) {
-      logAuthError("signInWithGoogle", error);
       toast({
         title: "Erreur de connexion Google",
-        description: friendlyAuthError(error),
+        description: error.message,
         variant: "destructive",
       });
       return { error };
@@ -215,20 +167,17 @@ export const useAuth = () => {
 
   const signInWithMicrosoft = async () => {
     try {
-      await startMicrosoftSignIn('/post-login');
+      await startMicrosoftSignIn('/mplanipret/home');
       return { error: null };
     } catch (error: any) {
-      const msg = String(error?.message || "");
-      logAuthError("signInWithMicrosoft", error);
       toast({
         title: "Erreur de connexion Microsoft",
-        description: msg || friendlyAuthError(error),
+        description: error.message,
         variant: "destructive",
       });
       return { error };
     }
   };
-
 
   const signInWithApple = async () => {
     try {
@@ -242,10 +191,9 @@ export const useAuth = () => {
       if (error) throw error;
       return { error: null };
     } catch (error: any) {
-      logAuthError("signInWithApple", error);
       toast({
         title: "Erreur de connexion Apple",
-        description: friendlyAuthError(error),
+        description: error.message,
         variant: "destructive",
       });
       return { error };

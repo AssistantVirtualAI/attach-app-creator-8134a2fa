@@ -213,13 +213,26 @@ verify_jwt = false
 [functions.maestro-oauth-state-info]
 verify_jwt = false
 
-# --- Planiprêt Mobile 1.4.8 — politique JWT ---
+# --- Planiprêt Mobile 1.4.9 — politique JWT ---
 # Ces fonctions exigent un porteur JWT valide au niveau de la passerelle
 # (utilisateur authentifié OU vrai bearer SUPABASE_SERVICE_ROLE_KEY pour les
 # appels internes) et refont la validation d'identité dans le code.
-# ava-tool-executor / ava-agent-config / elevenlabs-tool-handler restent en
-# verify_jwt = false car ElevenLabs y présente un jeton de session signé AVA :
-# leur authentification est intégralement validée dans le code.
+# Les webhooks ElevenLabs présentent également l'anon JWT configuré dans leurs
+# en-têtes, puis ava-tool-executor valide séparément la session HMAC AVA.
+
+[functions.ava-tool-executor]
+verify_jwt = true
+
+[functions.ava-agent-config]
+verify_jwt = true
+
+[functions.elevenlabs-tool-handler]
+verify_jwt = true
+
+# NetSapiens ne présente pas un JWT Supabase. La passerelle laisse donc entrer
+# la requête, puis ns-webhook-receiver exige et compare son secret partagé.
+[functions.ns-webhook-receiver]
+verify_jwt = false
 
 [functions.pp-ai-consent]
 verify_jwt = true

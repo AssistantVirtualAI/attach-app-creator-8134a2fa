@@ -1,79 +1,54 @@
-// Accès à un appel Planiprêt : identité + propriété + consentement post-appel.
-//
-// Aucune lecture d'enregistrement / transcription et aucun traitement IA ne
-// peut se faire sans :
-//   1. un appelant identifié (JWT courtier, ou vrai bearer service role pour
-//      les appels internes — jamais un en-tête personnalisé) ;
-//   2. la propriété de l'appel (ou un administrateur Planiprêt) ;
-//   3. save_consent = "approved" et appel non supprimé.
+export type CallAccessResult =
+  | { ok: true; serviceRole: boolean; userId: string | null }
+  | { ok: false; status: number; error: string };
 
-export type CallAccess =
-  | { error: Response }
-  | { call: any; userId: string | null; isService: boolean; isAdmin: boolean };
+const bearer = (req: Request) =>
+  (req.headers.get("Authorization") ?? req.headers.get("authorization") ?? "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
 
-export async function requireCallAccess(
+export async function authorizeCallAccess(
   req: Request,
   admin: any,
-  callId: string,
-  opts: { headers: Record<string, string>; requireConsent?: boolean; select?: string } = { headers: {} },
-): Promise<CallAccess> {
-  const headers = { ...(opts.headers ?? {}), "Content-Type": "application/json" };
-  const fail = (status: number, body: unknown) =>
-    ({ error: new Response(JSON.stringify(body), { status, headers }) });
-
-  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!bearer) return fail(401, { success: false, error: "unauthorized" });
-
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const isService = !!serviceKey && bearer === serviceKey;
-
-  let userId: string | null = null;
-  if (!isService) {
-    const { data } = await admin.auth.getUser(bearer);
-    userId = data?.user?.id ?? null;
-    if (!userId) return fail(401, { success: false, error: "unauthorized" });
+  call: { user_id?: string | null },
+): Promise<CallAccessResult> {
+  const token = bearer(req);
+  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (serviceRole && token === serviceRole) {
+    return { ok: true, serviceRole: true, userId: null };
   }
+  if (!token) return { ok: false, status: 401, error: "unauthorized" };
 
-  const { data: call } = await admin
-    .from("planipret_phone_calls")
-    .select(opts.select ?? "*")
-    .eq("id", callId)
-    .maybeSingle();
-  if (!call) return fail(404, { success: false, error: "call_not_found" });
+  const { data: authData } = await admin.auth.getUser(token);
+  const userId = authData?.user?.id ?? null;
+  if (!userId) return { ok: false, status: 401, error: "unauthorized" };
 
-  let isAdmin = false;
-  if (userId) {
-    const { data: adminFlag } = await admin.rpc("is_planipret_admin", { _user_id: userId });
-    isAdmin = adminFlag === true;
-    if (!isAdmin && !(await ownsCall(admin, userId, (call as any).user_id))) {
-      return fail(403, { success: false, error: "forbidden" });
-    }
-  }
+  const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userId });
+  if (isAdmin === true) return { ok: true, serviceRole: false, userId };
 
-  if ((call as any).deleted_at) return fail(403, { success: false, error: "call_deleted" });
-
-  if (opts.requireConsent !== false) {
-    const consent = String((call as any).save_consent ?? "pending");
-    if (consent !== "approved") {
-      return fail(403, {
-        success: false,
-        error: "post_call_consent_required",
-        save_consent: consent,
-        message: "Le courtier doit approuver la sauvegarde de cet appel avant tout traitement.",
-      });
-    }
-  }
-
-  return { call, userId, isService, isAdmin };
-}
-
-export async function ownsCall(admin: any, authUserId: string, callUserId: string | null): Promise<boolean> {
-  if (!callUserId) return false;
-  if (callUserId === authUserId) return true;
-  const { data } = await admin
+  const owner = String(call?.user_id ?? "");
+  if (owner === userId) return { ok: true, serviceRole: false, userId };
+  const { data: profiles } = await admin
     .from("planipret_profiles")
     .select("id, user_id")
-    .or(`id.eq.${callUserId},user_id.eq.${callUserId}`)
-    .limit(5);
-  return (data ?? []).some((p: any) => p.user_id === authUserId || p.id === authUserId);
+    .or(`id.eq.${owner},user_id.eq.${owner},user_id.eq.${userId}`)
+    .limit(10);
+  const ownProfileIds = new Set(
+    (profiles ?? [])
+      .filter((p: any) => String(p.user_id ?? "") === userId)
+      .map((p: any) => String(p.id)),
+  );
+  if (ownProfileIds.has(owner)) return { ok: true, serviceRole: false, userId };
+  return { ok: false, status: 403, error: "forbidden" };
+}
+
+export function requireApprovedCallConsent(call: {
+  save_consent?: string | null;
+  deleted_at?: string | null;
+}): { ok: true } | { ok: false; status: number; error: string } {
+  if (call?.deleted_at) return { ok: false, status: 410, error: "call_deleted" };
+  if (String(call?.save_consent ?? "pending") !== "approved") {
+    return { ok: false, status: 409, error: "call_consent_required" };
+  }
+  return { ok: true };
 }

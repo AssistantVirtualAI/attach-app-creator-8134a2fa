@@ -4,21 +4,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Conversation } from "@elevenlabs/client";
-import { AVA_CONFIRM_REQUIRED } from "@/lib/planipret/avaMutations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { X, Mic, Send, Settings, AlertTriangle, Sparkles, PhoneOutgoing, MessageSquare, Search, Calendar, Mail, Bot, Map } from "lucide-react";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
 import AiConsentGate, { hasAiConsent } from "@/components/planipret/mobile/AiConsentGate";
+import ReconnectStatus from "@/components/planipret/mobile/ReconnectStatus";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { getAvaToolLabel } from "@/lib/i18n/avaToolLabels";
 
 type AgentState = "idle" | "connecting" | "listening" | "speaking" | "processing" | "tool_running" | "error";
-type AutonomyMode = "confirm" | "semi_auto" | "full_auto";
-
-interface Props { onClose: () => void; userId: string; onFallbackToChat?: () => void; }
+interface Props {
+  onClose: () => void;
+  userId: string;
+  onFallbackToChat?: () => void;
+  onPlaceCall?: (number: string) => void | Promise<void>;
+  onHangupCall?: () => void | Promise<void>;
+}
 
 interface TranscriptEntry { id: string; role: "user" | "agent" | "tool" | "nav"; text: string; toolIcon?: string; }
 interface PendingTool { tool: string; params: any; resolve: (v: any) => void; reject: (e: any) => void; }
@@ -47,6 +51,13 @@ const STATE_LABELS: Record<"fr" | "en", Record<AgentState, string>> = {
 // Retry any async op with exponential backoff. Returns the value or throws the
 // last error after `attempts` tries. Used to smooth over transient
 // ElevenLabs / edge-function hiccups before falling back to text chat.
+/** Reconnexion voicebot : 700 ms, 1.4 s, 2.8 s, 5.6 s (plafond 8 s) ±30 % de jitter. */
+const MAX_AUTO_RECOVERIES = 4;
+export function reconnectDelay(attempt: number, base = 700, cap = 8000): number {
+  const exp = Math.min(cap, base * Math.pow(2, Math.max(0, attempt - 1)));
+  return Math.round(exp * (0.7 + Math.random() * 0.6));
+}
+
 async function withBackoff<T>(fn: () => Promise<T>, attempts = 3, baseMs = 400): Promise<T> {
   let lastErr: any;
   for (let i = 0; i < attempts; i++) {
@@ -70,9 +81,17 @@ const TOOL_ICONS: Record<string, any> = {
   get_upcoming_meetings: Calendar,
 };
 
-const CONFIRM_REQUIRED = AVA_CONFIRM_REQUIRED;
+const CONFIRM_REQUIRED = new Set([
+  "make_call", "hangup_call", "send_sms", "send_email",
+  "create_task", "update_task", "delete_task", "create_appointment",
+  "create_client", "update_client", "generate_voicemail_greeting",
+  "create_calendar_event", "move_calendar_event", "update_calendar_event",
+  "cancel_calendar_event", "delete_calendar_event",
+  "create_teams_chat", "send_teams_message",
+  "push_call_summary", "push_client_note", "push_communication_log",
+]);
 
-export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Props) {
+export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPlaceCall, onHangupCall }: Props) {
   const navigate = useNavigate();
   const { lang } = useMplanipretLang();
   const L = useCallback((fr: string, en: string) => (lang === "en" ? en : fr), [lang]);
@@ -86,7 +105,6 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   const [textInput, setTextInput] = useState("");
   const [micError, setMicError] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [autonomy, setAutonomy] = useState<AutonomyMode>("confirm");
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const convRef = useRef<any>(null);
   const sessionIdRef = useRef<string>(`s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
@@ -125,15 +143,11 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
     }
     const d = data as any;
     if (d?.message) showToolNotif("✅ " + d.message);
-    if (typeof d?.navigate === "string" && d.navigate.startsWith("/")) {
-      appendTranscript({ role: "nav", text: `🗺️ ${d.navigate}` });
-      navigate(d.navigate);
-    }
     if (toolName === "navigate_to") {
       appendTranscript({ role: "nav", text: `🗺️ ${d.message ?? "Navigation"}` });
     }
     return d;
-  }, [sessionId, toolLabel, L, navigate]);
+  }, [sessionId, toolLabel, L]);
 
   // Client-only tools execute in the browser (no server round-trip).
   const CLIENT_ONLY: Record<string, (p: any) => any> = useMemo(() => ({
@@ -183,13 +197,18 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
       return CLIENT_ONLY[toolName](params ?? {});
     }
     // Confirmation gate for mutating server tools.
-    if (autonomy === "confirm" && CONFIRM_REQUIRED.has(toolName)) {
+    if (CONFIRM_REQUIRED.has(toolName)) {
       return new Promise((resolve, reject) => {
-        setPending({ tool: toolName, params, resolve, reject });
+        setPending({
+          tool: toolName,
+          params: params ?? {},
+          resolve,
+          reject,
+        });
       }).then((r: any) => r ?? { success: false, error: "user_cancelled" });
     }
     return callServerTool(toolName, params);
-  }, [autonomy, callServerTool, CLIENT_ONLY, toolLabel]);
+  }, [callServerTool, CLIENT_ONLY, toolLabel]);
 
   // Build clientTools map dynamically (server + client-side tools)
   const clientTools = useMemo(() => {
@@ -197,18 +216,26 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
       "make_call", "get_active_calls", "hangup_call", "get_call_history",
       "get_recording", "get_transcript", "send_sms", "get_sms_conversations",
       "get_voicemails", "generate_voicemail_greeting",
-      "list_tasks", "get_task",
       "analyze_call", "get_hot_leads", "get_coaching_summary",
       "search_client", "get_client_profile", "get_client_history",
-      "create_task", "update_task", "delete_task", "create_appointment", "get_pending_tasks",
+      "list_tasks", "get_task", "list_task_targets", "create_task", "update_task", "delete_task",
+      "create_appointment", "get_pending_tasks",
       "get_upcoming_appointments", "update_client", "create_client",
-      "read_emails", "summarize_email", "send_email",
+      "list_my_clients", "get_maestro_client_profile", "list_my_brokers", "get_maestro_broker_profile",
+      "get_commission_summary", "get_commission_by_lender", "compare_commission_periods",
+      "list_commission_deposits", "list_financial_institutions", "get_commission_deposits",
+      "get_commission_agents", "get_financial_institutions", "open_commission_report",
+      "read_emails", "get_unread_emails", "get_recent_emails", "summarize_email", "send_email",
+      "search_contact", "propose_email_reply", "summarize_inbox",
       "get_calendar_today", "get_calendar_week",
-      "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
+      "get_upcoming_meetings", "search_ms365_contacts", "find_contact", "search_directory", "list_company_directory",
+      "create_calendar_event", "move_calendar_event", "update_calendar_event", "cancel_calendar_event", "delete_calendar_event",
+      "open_email_composer", "list_teams_chats", "create_teams_chat", "send_teams_message",
       "navigate_to", "show_client_in_app", "open_call_detail",
       "show_toast", "open_dialer", "open_sms_composer", "close_ava",
-      "get_daily_briefing", "get_my_stats",
+      "get_daily_briefing", "get_my_stats", "get_performance_report",
       "explain_feature", "get_integration_status",
+      "push_call_summary", "push_client_note", "push_communication_log",
     ];
     const map: Record<string, (p: any) => Promise<any>> = {};
     for (const t of TOOL_NAMES) map[t] = (p: any) => Promise.resolve(handleTool(t, p));
@@ -222,6 +249,8 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   const connectionGenerationRef = useRef(0);
   const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const automaticRecoveriesRef = useRef(0);
+  /** État visible de la boucle de reconnexion (spinner + compte à rebours). */
+  const [reconnectInfo, setReconnectInfo] = useState<{ attempt: number; nextAt: number | null } | null>(null);
 
   const logSession = useCallback(async (patch: {
     connection_type?: string; agent_id?: string;
@@ -307,8 +336,6 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         if (cancelled) return;
 
         const c = cfg;
-        setAutonomy(c.autonomy_mode ?? "confirm");
-
         if (!c.agent_id) {
           fallback(L("Agent vocal non provisionné", "Voice agent not provisioned"), "no_agent");
           return;
@@ -355,21 +382,34 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
           onConnect: () => {
             if (cancelled || generation !== connectionGenerationRef.current) return;
             connectedAtRef.current = Date.now();
+            setReconnectInfo(null);
             setState("listening");
           },
           onDisconnect: (info: any) => {
             if (cancelled || generation !== connectionGenerationRef.current) return;
             const reason = info?.reason ?? info?.code ?? "closed";
             const recoverable = ![1000, 1008, "1000", "1008", "user_disconnected"].includes(reason);
-            if (recoverable && automaticRecoveriesRef.current < 2) {
+            // Boucle de reconnexion robuste : backoff exponentiel + jitter,
+            // plafonné, et reprise immédiate dès que le réseau revient.
+            if (recoverable && automaticRecoveriesRef.current < MAX_AUTO_RECOVERIES) {
               automaticRecoveriesRef.current += 1;
               logSession({ disconnect_reason: `recovering_${reason}`, ended: true });
               setState("connecting");
-              recoveryTimerRef.current = setTimeout(() => {
-                if (!cancelled && generation === connectionGenerationRef.current) setInitAttempt((n) => n + 1);
-              }, Math.min(1800, 500 * automaticRecoveriesRef.current));
+              const relaunch = () => {
+                if (recoveryTimerRef.current) { clearTimeout(recoveryTimerRef.current); recoveryTimerRef.current = null; }
+                window.removeEventListener("online", relaunch);
+                if (!cancelled && generation === connectionGenerationRef.current) {
+                  setReconnectInfo({ attempt: automaticRecoveriesRef.current, nextAt: null });
+                  setInitAttempt((n) => n + 1);
+                }
+              };
+              window.addEventListener("online", relaunch, { once: true });
+              const delay = reconnectDelay(automaticRecoveriesRef.current);
+              setReconnectInfo({ attempt: automaticRecoveriesRef.current, nextAt: Date.now() + delay });
+              recoveryTimerRef.current = setTimeout(relaunch, delay);
               return;
             }
+            setReconnectInfo(null);
             logSession({ disconnect_reason: reason, ended: true });
             setState("idle");
           },
@@ -498,11 +538,23 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
     if (state === "connecting") return;
     if (recoveryTimerRef.current) { clearTimeout(recoveryTimerRef.current); recoveryTimerRef.current = null; }
     automaticRecoveriesRef.current = 0;
+    setReconnectInfo(null);
     sessionRowIdRef.current = null;
     connectedAtRef.current = 0;
     sessionIdRef.current = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     setInitAttempt((n) => n + 1);
   }, [state]);
+
+  /** Annulation utilisateur explicite de la boucle de reconnexion. */
+  const cancelReconnect = useCallback(() => {
+    if (recoveryTimerRef.current) { clearTimeout(recoveryTimerRef.current); recoveryTimerRef.current = null; }
+    connectionGenerationRef.current += 1;
+    automaticRecoveriesRef.current = MAX_AUTO_RECOVERIES;
+    setReconnectInfo(null);
+    try { convRef.current?.endSession(); } catch { /* noop */ }
+    logSession({ disconnect_reason: "user_cancelled_reconnect", ended: true });
+    setState("idle");
+  }, [logSession]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [transcript.length]);
 
@@ -542,12 +594,13 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
     const msg = textInput.trim();
     setTextInput("");
     appendTranscript({ role: "user", text: msg });
-    // Fallback: send to ava-assistant (Claude) if no voice session active
+    // Fallback texte : réutilise le chatbot Planiprêt canonique.
     try {
       await convRef.current?.sendUserMessage?.(msg);
     } catch (_) {
-      // No voice: text fallback via ava-assistant
-      const { data } = await supabase.functions.invoke("ava-assistant", { body: { message: msg, session_id: sessionId } });
+      const { data } = await supabase.functions.invoke("pp-ava-chat", {
+        body: { user_message: msg, session_id: sessionId, language: lang },
+      });
       if ((data as any)?.reply) appendTranscript({ role: "agent", text: (data as any).reply });
     }
   };
@@ -561,7 +614,28 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
     }
     const { tool, params, resolve } = pending;
     setPending(null);
-    callServerTool(tool, params).then(resolve);
+    if (tool === "make_call") {
+      const number = String(params?.to_number ?? params?.to ?? params?.destination ?? params?.number ?? params?.phone ?? "").trim();
+      if (!number || !onPlaceCall) {
+        resolve({ success: false, error: "mobile_softphone_unavailable" });
+        return;
+      }
+      Promise.resolve(onPlaceCall(number))
+        .then(() => resolve({ success: true, destination: number, owner: "mobile_softphone" }))
+        .catch((error) => resolve({ success: false, error: String(error) }));
+      return;
+    }
+    if (tool === "hangup_call") {
+      if (!onHangupCall) {
+        resolve({ success: false, error: "mobile_softphone_unavailable" });
+        return;
+      }
+      Promise.resolve(onHangupCall())
+        .then(() => resolve({ success: true, owner: "mobile_softphone" }))
+        .catch((error) => resolve({ success: false, error: String(error) }));
+      return;
+    }
+    callServerTool(tool, { ...params, confirmed: true }).then(resolve);
   };
 
   // ─── render ────────────────────────────────────────────────────
@@ -595,6 +669,18 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
           </button>
         </div>
       </div>
+
+      {/* Bandeau de reconnexion — spinner, compte à rebours, annulation */}
+      {reconnectInfo && (
+        <ReconnectStatus
+          attempt={reconnectInfo.attempt}
+          maxAttempts={MAX_AUTO_RECOVERIES}
+          nextAttemptAt={reconnectInfo.nextAt}
+          onCancel={cancelReconnect}
+          lang={lang}
+          label={L("Reconnexion vocale…", "Reconnecting voice…")}
+        />
+      )}
 
       {/* Tool notif */}
       {toolNotif && (
@@ -714,22 +800,16 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         <div className="absolute inset-0 z-20 flex items-end bg-black/40" onClick={() => setSettingsOpen(false)}>
           <div className="w-full rounded-t-2xl p-5" style={{ background: "#0A1628", border: "1px solid #0E2A45" }} onClick={(e) => e.stopPropagation()}>
             <div className="text-[13px] font-semibold mb-3 text-white">{L("Mode d'autonomie", "Autonomy mode")}</div>
-            {(["confirm", "semi_auto", "full_auto"] as const).map((m) => (
-              <button key={m} onClick={async () => {
-                setAutonomy(m);
-                await supabase.from("planipret_profiles").update({ ava_autonomy_mode: m }).eq("user_id", userId);
-              }}
-                className="w-full text-left p-3 rounded-xl mb-2 flex items-center justify-between"
-                style={{ background: autonomy === m ? "rgba(46,155,220,0.15)" : "rgba(255,255,255,0.03)", border: `1px solid ${autonomy === m ? "#2E9BDC" : "#0E2A45"}` }}>
-                <div>
-                  <div className="text-[13px] text-white font-medium">{m === "confirm" ? L("Confirmation requise", "Confirmation required") : m === "semi_auto" ? L("Semi-automatique", "Semi-automatic") : L("Pleinement autonome", "Fully autonomous")}</div>
-                  <div className="text-[11px]" style={{ color: "#4A7FA5" }}>
-                    {m === "confirm" ? L("AVA confirme avant chaque action", "AVA confirms before every action") : m === "semi_auto" ? L("Auto pour lectures, confirme les envois", "Auto for reads, confirms sends") : L("AVA agit sans demander ⚡", "AVA acts without asking ⚡")}
-                  </div>
+            <div className="w-full text-left p-3 rounded-xl mb-2 flex items-center justify-between"
+              style={{ background: "rgba(46,155,220,0.15)", border: "1px solid #2E9BDC" }}>
+              <div>
+                <div className="text-[13px] text-white font-medium">{L("Confirmation requise", "Confirmation required")}</div>
+                <div className="text-[11px]" style={{ color: "#4A7FA5" }}>
+                  {L("AVA prépare l’action; vous confirmez toujours avant son exécution.", "AVA prepares the action; you always confirm before execution.")}
                 </div>
-                {autonomy === m && <span className="text-[#2E9BDC]">●</span>}
-              </button>
-            ))}
+              </div>
+              <span className="text-[#2E9BDC]">●</span>
+            </div>
             <button
               onClick={() => { setSettingsOpen(false); setVoiceSheetOpen(true); }}
               className="w-full text-left p-3 rounded-xl mb-2 flex items-center justify-between"
@@ -904,5 +984,3 @@ export function CalendarAwareConfirm({
     </div>
   );
 }
-
-

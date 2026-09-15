@@ -34,17 +34,8 @@ Deno.serve(async (req) => {
   const auth = await requirePlanipretBroker(req);
   if (auth instanceof Response) return auth;
   const { ctx, supabase } = auth;
-
-  // Plateforme appelante : les règles d'AOR diffèrent et ne doivent jamais être
-  // mélangées (docs/netsapiens/registrations.md).
-  //   iOS natif : {ext}M, PJSIP/TLS 5061 + jeton PushKit
-  //   Android   : {ext}W, JsSIP/WSS + jeton FCM
-  //   web       : {ext}W
-  const reqBody: any = await req.clone().json().catch(() => ({}));
-  const rawPlatform = String(reqBody?.platform ?? "").toLowerCase();
-  const platform: "ios" | "android" | "web" =
-    rawPlatform === "ios" ? "ios" : (rawPlatform === "android" ? "android" : (rawPlatform === "web" ? "web" : "ios"));
-  const isIos = platform === "ios";
+  const body = await req.json().catch(() => ({} as any));
+  const platform = String(body?.platform ?? "ios").toLowerCase() === "android" ? "android" : "ios";
 
   const d = encodeURIComponent(ctx.nsDomain);
   const e = encodeURIComponent(ctx.extension);
@@ -70,7 +61,7 @@ Deno.serve(async (req) => {
     regExpiresOk(x);
 
   const aors = Array.from(new Set(devices.filter(isRegistered).map(devId).filter(Boolean)));
-  const mobileAor = isIos ? `${ctx.extension}M` : `${ctx.extension}W`;
+  const mobileAor = `${ctx.extension}${platform === "ios" ? "M" : "W"}`;
   let mobileRegistered = aors.some((a) => a.toLowerCase() === mobileAor.toLowerCase());
 
   // The LIST endpoint sometimes omits registration fields — confirm via DETAIL
@@ -119,14 +110,21 @@ Deno.serve(async (req) => {
 
 
   // 3) VoIP push token freshness (Supabase side).
-  const { data: tokenRow } = await supabase
-    .from(isIos ? "planipret_voip_push_tokens" : "mobile_push_tokens")
-    .select(isIos ? "device_token, environment, updated_at" : "token, platform, updated_at")
-    .eq("user_id", ctx.userId)
+  const tokenQuery = platform === "ios"
+    ? supabase
+      .from("planipret_voip_push_tokens")
+      .select("device_token, environment, updated_at")
+      .eq("user_id", ctx.userId)
+    : supabase
+      .from("mobile_push_tokens")
+      .select("token, platform, updated_at")
+      .eq("user_id", ctx.userId)
+      .eq("platform", "android");
+  const { data: tokenRow } = await tokenQuery
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const androidTokenOk = isIos ? true : String((tokenRow as any)?.platform ?? "android").toLowerCase() === "android";
+  const pushToken = platform === "ios" ? tokenRow?.device_token : tokenRow?.token;
   const tokenAgeH = tokenRow?.updated_at
     ? Math.round((Date.now() - new Date(tokenRow.updated_at).getTime()) / 3_600_000)
     : null;
@@ -140,31 +138,13 @@ Deno.serve(async (req) => {
 
   const actions: string[] = [];
   const blockers: string[] = [];
-  const warnings: string[] = [];
-  const warningsEarly = warnings;
-  const hasPushToken = !!((tokenRow as any)?.device_token ?? (tokenRow as any)?.token);
   if (!mobileRegistered) actions.push("reregister");
-  if (!hasPushToken || (tokenAgeH != null && tokenAgeH > 24)) actions.push("refresh_push_token");
-  // iOS : device-push-enabled=no => NS ne déclenche jamais le push VoIP APNs,
-  // aucun webhook ne peut compenser -> bloquant.
-  // Android : le réveil passe par le jeton FCM + le webhook applicatif, donc le
-  // champ NetSapiens device-push-enabled n'est qu'un avertissement. Le vrai
-  // bloquant Android est l'absence (ou la péremption) du jeton FCM.
-  if (devicePushEnabled === false) {
-    if (isIos) {
-      blockers.push("MOBILE_PUSH_DISABLED");
-      actions.push("repair_device_push");
-    } else {
-      warningsEarly.push("NS_DEVICE_PUSH_DISABLED");
-    }
-  }
-  if (!isIos && !hasPushToken) {
-    blockers.push("ANDROID_FCM_TOKEN_MISSING");
-    actions.push("refresh_push_token");
-  }
-  if (isIos && !hasPushToken) blockers.push("IOS_PUSHKIT_TOKEN_MISSING");
-  if (hasPushToken && tokenAgeH != null && tokenAgeH > 24 * 30) {
-    warningsEarly.push("PUSH_TOKEN_STALE");
+  if (!pushToken || (tokenAgeH != null && tokenAgeH > 24)) actions.push("refresh_push_token");
+  // device-push-enabled=no => NS never fires the APNs VoIP push, no webhook can
+  // compensate for that. Surface it as a hard blocker so it gets repaired.
+  if (platform === "ios" && devicePushEnabled === false) {
+    blockers.push("MOBILE_PUSH_DISABLED");
+    actions.push("repair_device_push");
   }
   if (!mobileDevice) blockers.push("MOBILE_DEVICE_MISSING");
   if (!callSubscription) blockers.push("CALL_SUBSCRIPTION_MISSING");
@@ -176,52 +156,37 @@ Deno.serve(async (req) => {
   // sans que le moteur d'appel PJSIP soit présent dans le binaire installé :
   // la ligne paraît inscrite mais aucun appel ne peut porter d'audio.
   const uaLower = String(regUserAgent ?? "").toLowerCase();
-  const contactLower = String(regContact ?? "").toLowerCase();
-
-  // Un moteur média capable de porter l'appel doit tenir l'AOR. Le service de
-  // maintien (`Planipret iOS KeepAlive`) inscrit `<ext>M` sans PJSIP : la ligne
-  // paraît inscrite mais aucun appel ne peut porter d'audio. Sur iOS, seul
-  // PJSIP/TLS est acceptable ; WSS sur l'AOR M est un mélange M/W interdit.
-  const keepAliveOnly = uaLower.includes("keepalive") && !uaLower.includes("pj");
-  const iosTransportOk = contactLower.includes("transport=tls") || contactLower.includes("sips:");
-  const mediaEngineOk = !mobileRegistered
-    ? false
-    : (isIos ? (!keepAliveOnly && iosTransportOk) : contactLower.includes("transport=wss") || !contactLower);
-
-  if (mobileRegistered && !mediaEngineOk) {
-    if (isIos) {
-      blockers.push(keepAliveOnly ? "CALL_ENGINE_MISSING" : "IOS_AOR_NOT_ON_TLS");
-      actions.push("open_app", "takeover_foreground");
-    } else {
-      warnings.push("ANDROID_AOR_NOT_ON_WSS");
-      actions.push("open_app");
-    }
+  // Depuis la mise à jour à distance, la WebView (JsSIP) reprend l'AOR et porte
+  // l'audio quand le moteur natif est absent : ce n'est plus un blocage dur,
+  // seulement un avertissement (l'app doit être ouverte au moment de l'appel).
+  const engineMissing = mobileRegistered && uaLower.includes("keepalive") &&
+    !uaLower.includes("pj");
+  const warnings: string[] = [];
+  if (engineMissing) {
+    warnings.push("CALL_ENGINE_BACKGROUND_ONLY");
+    actions.push("open_app");
+    // L'app au premier plan doit reprendre l'AOR au service de maintien :
+    // un seul propriétaire par AOR (docs/netsapiens/registrations.md).
+    actions.push("takeover_foreground");
   }
-  const engineMissing = mobileRegistered && !mediaEngineOk;
 
   // Qui tient réellement la ligne, et depuis quand.
   const holder: "app" | "background" | "none" = !mobileRegistered
     ? "none"
-    : (keepAliveOnly ? "background" : "app");
+    : (uaLower.includes("keepalive") && !uaLower.includes("pj") ? "background" : "app");
+  const mediaCapable = mobileRegistered && !engineMissing;
   const registeredAtRaw = String(mobileRow?.["device-sip-registration-datetime"] ?? "");
   const registeredAtMs = registeredAtRaw ? Date.parse(registeredAtRaw.replace(" ", "T")) : NaN;
   const registeredAt = Number.isFinite(registeredAtMs) ? new Date(registeredAtMs).toISOString() : null;
 
-  // Jamais « sain » sur une simple connexion keep-alive : il faut un moteur
-  // média capable de porter un appel.
-  const pushToken = (androidTokenOk ? ((tokenRow as any)?.device_token ?? (tokenRow as any)?.token) : null) ?? null;
-  const healthy = mobileRegistered && mediaEngineOk && !!pushToken && callSubscription &&
-    (isIos ? devicePushEnabled !== false : true) && coreServerOk;
+  const healthy = mediaCapable && !!pushToken && callSubscription &&
+    (platform !== "ios" || devicePushEnabled !== false) && coreServerOk;
 
 
   return jsonResponse({
     ok: true,
     healthy,
     platform,
-    expected_aor: mobileAor,
-    expected_transport: isIos ? "tls:5061" : "wss",
-    media_engine_required: isIos ? "pjsip" : "jssip",
-    media_engine_ok: mediaEngineOk,
     extension: ctx.extension,
     domain: ctx.nsDomain,
     registration: {
@@ -233,14 +198,14 @@ Deno.serve(async (req) => {
       core_server_ok: coreServerOk,
       contact: regContact || null,
       user_agent: regUserAgent || null,
+      media_capable: mediaCapable,
       holder,
       registered_at: registeredAt,
     },
     push: {
       device_push_enabled: devicePushEnabled,
-      kind: isIos ? "pushkit" : "fcm",
       token_present: !!pushToken,
-      token_environment: (tokenRow as any)?.environment ?? null,
+      token_environment: platform === "ios" ? tokenRow?.environment ?? null : "fcm",
       token_age_hours: tokenAgeH,
     },
     call_subscription: callSubscription,

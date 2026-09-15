@@ -8,10 +8,9 @@ function daysAgo(days: number) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Two modes: cron (real service-role bearer only) or admin (manual run)
+  // Two modes: cron (service-role bearer) or admin (manual run).
+  // A public boolean header is not an authentication secret.
   const auth = req.headers.get("Authorization") ?? "";
-  // Seul le VRAI bearer service role est un appel interne de confiance :
-  // un en-tête personnalisé est forgeable et n'est plus accepté.
   const isCron = auth === `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
   let adminId: string | null = null;
 

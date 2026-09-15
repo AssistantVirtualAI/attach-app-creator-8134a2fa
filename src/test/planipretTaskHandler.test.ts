@@ -46,9 +46,10 @@ describe("planipret task handler — create", () => {
     const payload = JSON.parse(calls[0].init.body);
     expect(payload).toMatchObject({ xid: 387460525, type: "user", date: "2026-09-01 10:00:00", notes: "Appeler Jean" });
     expect(payload.users_id).toBe(93135);
-    // Notifications / calendar sync are opt-in only.
-    expect(payload.send_notification).toBeUndefined();
-    expect(payload.sync_cal).toBeUndefined();
+    // Notifications / calendar sync are opt-in only and must be explicitly off
+    // because Maestro otherwise enables some notification defaults server-side.
+    expect(payload.send_notification).toBe(0);
+    expect(payload.sync_cal).toBe(0);
   });
 
   it("returns validation_failed (422 equivalent) when notes are missing", async () => {

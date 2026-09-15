@@ -303,4 +303,3 @@ export async function fetchClientContacts(
   // Secours : interroger Maestro en direct (cache local vide ou pas encore synchronisé).
   return await fetchMaestroClientsLive(term, opts.limit ?? 200);
 }
-

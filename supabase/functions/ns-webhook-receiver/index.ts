@@ -312,14 +312,27 @@ async function processEvent(event: any) {
     }
   } else if (type === "call.inbound") {
     const callId = data.call_id ?? data.id;
+    // Un appel entrant sans Call-ID ne peut pas être dédupliqué : on refuse de
+    // créer une entrée fantôme et d'afficher un second écran CallKit.
+    if (!callId) {
+      console.warn("[ns-webhook] inbound event without call id ignored");
+      return;
+    }
     const dndActive = isDndActive(brokerProfile);
-    await admin.from("planipret_phone_calls").insert({
-      user_id: userId, ns_call_id: callId ? String(callId) : null, direction: "inbound",
+    // Upsert idempotent sur ns_call_id : un réenvoi du même événement ne crée
+    // ni deuxième appel, ni deuxième push, ni deuxième écran CallKit.
+    const { data: inserted } = await admin.from("planipret_phone_calls").upsert({
+      user_id: userId, ns_call_id: String(callId), direction: "inbound",
       from_number: extractCaller(data) || null,
       to_number: data.to_number ?? data.to ?? null,
       status: dndActive ? "voicemail" : "inbound_ringing",
       metadata: dndActive ? { dnd_auto_voicemail: true, dnd_message: brokerProfile?.dnd_message_fr } : null,
-    });
+    }, { onConflict: "ns_call_id", ignoreDuplicates: true }).select("id");
+    const isDuplicate = !inserted || inserted.length === 0;
+    if (isDuplicate) {
+      console.log("[ns-webhook] inbound call already known — no second push", { call_id: String(callId) });
+      return;
+    }
     if (userId && !dndActive) {
       await admin.channel(`call-events:${userId}`).send({
         type: "broadcast", event: "inbound_call",
@@ -346,6 +359,7 @@ async function processEvent(event: any) {
           body: data.from_number ?? data.from ?? "Inconnu",
           data: { url: "/mplanipret/calls", call_id: callId },
           actions: [{ action: "answer", title: "Répondre" }],
+          idempotency_key: `inbound_call:${String(callId)}`,
         });
       }
     } else if (userId && dndActive) {

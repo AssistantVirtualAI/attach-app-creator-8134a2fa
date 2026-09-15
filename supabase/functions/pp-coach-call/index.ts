@@ -6,6 +6,7 @@ import { aiFetch } from "../_shared/claude-compat.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";
+import { requireCallAccess } from "../_shared/planipret-call-access.ts";
 
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -59,6 +60,14 @@ Deno.serve(async (req) => {
   const reprocess = body.reprocess === true;
   const bodyTranscript = typeof body.transcript === "string" ? body.transcript : null;
   if (!call_id) return json({ error: "call_id required" }, 400);
+
+  // Identité + propriété + consentement post-appel approuvé : aucun coaching
+  // IA sans accord explicite du courtier propriétaire de l'appel.
+  {
+    const accessAdmin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const access = await requireCallAccess(req, accessAdmin, String(call_id), { headers: corsHeaders, requireConsent: true });
+    if ("error" in access) return access.error;
+  }
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const { data: row, error } = await admin

@@ -3,6 +3,7 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { signAvaSession } from "../_shared/ava-session.ts";
+import { getAiConsent, consentRequiredBody } from "../_shared/ai-consent.ts";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
 const ELEVENLABS_DEFAULT_AGENT_ID = Deno.env.get("ELEVENLABS_DEFAULT_AGENT_ID") ?? "";
@@ -59,6 +60,10 @@ Deno.serve(async (req) => {
     if (!allow(`${ip}:${userRes.user.id}`)) return json({ error: "rate_limited" }, 429);
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const consent = await getAiConsent(admin, userRes.user.id);
+    if (!consent.granted) return json(consentRequiredBody(consent), 403);
+
     const { data: prof } = await admin
       .from("planipret_profiles")
       .select("elevenlabs_agent_id, voice_agent_enabled, full_name, extension, email")

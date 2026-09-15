@@ -2,6 +2,7 @@
 // Input : { ms_message_id: string }
 // Auth : JWT du courtier. Retourne l'analyse et l'insère dans planipret_ava_email_analyses.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getAiConsent, consentRequiredBody } from "../_shared/ai-consent.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 import { callAnthropic } from "../_shared/anthropic.ts";
@@ -152,8 +153,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
     const svcHeader = req.headers.get("x-ava-service") ?? "";
-    const isService = svcHeader && svcHeader === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const isService = Boolean(serviceKey) && (bearer === serviceKey || svcHeader === serviceKey);
 
     const payload = await req.json();
     const { ms_message_id } = payload;
@@ -169,6 +172,11 @@ Deno.serve(async (req) => {
       const { data: claims } = await userClient.auth.getClaims(authHeader.replace("Bearer ", ""));
       userId = claims?.claims?.sub as string | undefined;
       if (!userId) return j({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    {
+      const consent = await getAiConsent(admin, userId);
+      if (!consent.granted) return j(consentRequiredBody(consent), 403);
     }
 
     // Check cached analysis first

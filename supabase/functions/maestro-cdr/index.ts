@@ -80,12 +80,16 @@ Deno.serve(async (req) => {
     const { data: call } = await admin
       .from("planipret_phone_calls")
       .select(
-        "id, user_id, direction, from_number, to_number, started_at, ended_at, duration_seconds, recording_url, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, metadata",
+        "id, user_id, direction, from_number, to_number, started_at, ended_at, duration_seconds, recording_url, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, metadata, save_consent, deleted_at",
       )
       .eq("id", call_id)
       .maybeSingle();
 
     if (!call) return json({ success: false, error: "call_not_found" }, 404);
+    if ((call as any).deleted_at) return json({ success: false, error: "call_deleted" }, 403);
+    if (String((call as any).save_consent ?? "pending") !== "approved") {
+      return json({ success: false, error: "post_call_consent_required", save_consent: (call as any).save_consent ?? "pending" }, 403);
+    }
     if (!force && call.maestro_synced && (call as any).maestro_call_id) {
       return json({ success: true, already_synced: true });
     }

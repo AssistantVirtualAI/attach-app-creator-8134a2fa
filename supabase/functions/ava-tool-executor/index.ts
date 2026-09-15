@@ -1371,6 +1371,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== ALIASES (naming harmonization with ava-tools.ts specs) =====
   async update_calendar_event(ctx, p) { return TOOLS.move_calendar_event(ctx, { ...p, new_start: p.new_start ?? p.start, new_end: p.new_end ?? p.end, confirmed: p.confirmed ?? true }); },
   async delete_calendar_event(ctx, p) { return TOOLS.cancel_calendar_event(ctx, p); },
+  async search_contact(ctx, p) { return TOOLS.search_ms365_contacts(ctx, p); },
   async search_ms365_contacts(ctx, p) {
     const query = String(p?.query ?? "").trim();
     if (!query) return { success: false, error: "query_required" };
@@ -1778,6 +1779,21 @@ Deno.serve(async (req) => {
   // AVA prépare, le courtier confirme, le serveur exécute. Un tool call
   // ElevenLabs ou une requête directe ne peuvent pas sauter cette étape.
   if (isSensitiveAvaTool(tool_name)) {
+    // Une action sensible exige un JWT utilisateur vérifiable (l'app mobile
+    // après confirmation) ou un appel interne service-role. Un simple jeton de
+    // session vocale ElevenLabs ne peut jamais exécuter une action sensible.
+    const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    const isServiceCall = !!bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const hasUserJwt = !!bearer && bearer !== Deno.env.get("SUPABASE_ANON_KEY") && bearer.split(".").length === 3;
+    if (!isServiceCall && !hasUserJwt) {
+      return jsonResponse({
+        ...confirmationRequiredResult(tool_name, params),
+        error: "user_confirmation_required",
+        message: "Cette action doit être confirmée dans l'application Planiprêt par le courtier (client tool), " +
+          "puis rejouée avec le JWT utilisateur et confirmed=true.",
+      }, 200);
+    }
+
     const destination = String(
       params.to ?? params.number ?? params.phone ?? params.recipient ?? params.email ?? params.client_id ?? "",
     ).slice(0, 120) || null;

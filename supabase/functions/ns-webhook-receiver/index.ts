@@ -296,21 +296,14 @@ async function processEvent(event: any) {
         status: "completed",
       }, { onConflict: "ns_call_id" });
 
+      // Chemin unique : seul pp-auto-process-call orchestre l'après-appel, et
+      // il ne démarre rien tant que le courtier n'a pas donné son consentement.
+      // Aucun appel direct à ns-transcription / ai-analyze-call / maestro-sync-call.
       const authH = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-      fetch(`${SUPABASE_URL}/functions/v1/ns-transcription?call_id=${encodeURIComponent(callId)}`, {
-        method: "GET", headers: { Authorization: authH },
-      }).catch(() => {});
-      fetch(`${SUPABASE_URL}/functions/v1/ai-analyze-call`, {
-        method: "POST", headers: { Authorization: authH, "Content-Type": "application/json" },
-        body: JSON.stringify({ call_id: callId }),
-      }).catch(() => {});
-
-      // Maestro pipeline: resolve uuid by ns_call_id, then push CDR + recording
-      // + transcript + AI analytics in one idempotent orchestrator call.
       void admin.from("planipret_phone_calls").select("id").eq("ns_call_id", String(callId)).maybeSingle()
         .then(({ data: row }) => {
           if (row?.id) {
-            void fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
+            void fetch(`${SUPABASE_URL}/functions/v1/pp-auto-process-call`, {
               method: "POST", headers: { Authorization: authH, "Content-Type": "application/json" },
               body: JSON.stringify({ call_id: row.id }),
             }).catch(() => {});

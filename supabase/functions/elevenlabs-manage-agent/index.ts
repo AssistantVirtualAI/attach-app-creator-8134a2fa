@@ -2,7 +2,7 @@
 // Planiprêt admin "Intégrations" page to create, configure, and sync
 // the AVA conversational agent without touching the ElevenLabs dashboard.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { buildAvaToolsArray, buildAvaToolConfigs } from "../_shared/ava-tools.ts";
+import { buildAvaToolsArray, buildAvaToolConfigs, isSensitiveSpec } from "../_shared/ava-tools.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -311,6 +311,25 @@ Deno.serve(async (req) => {
           }
         }
 
+        // 5. Purge des définitions obsolètes : tout outil AVA resté dans le
+        // registre mais absent de la liste canonique est supprimé (notamment
+        // les anciens webhooks serveur devenus client tools).
+        const desiredNames = new Set(desired.map((d) => d.tool_config.name));
+        const keptIds = new Set(uniqIds);
+        const removed: string[] = [];
+        for (const t of existing) {
+          const nm = t?.tool_config?.name ?? t?.name;
+          const tid = t?.id ?? t?.tool_id;
+          if (!tid || keptIds.has(tid)) continue;
+          if (!desiredNames.has(nm)) continue; // outil tiers : on n'y touche pas
+          const del = await elFetch(apiKey, `/convai/tools/${tid}`, { method: "DELETE" });
+          if (del.ok) removed.push(String(nm));
+        }
+
+        const sensitiveClientTools = desired.filter((d) => d.tool_config.type === "client").map((d) => d.tool_config.name);
+        const serverWebhookTools = desired.filter((d) => d.tool_config.type !== "client").map((d) => d.tool_config.name);
+        const sensitiveStillWebhook = serverWebhookTools.filter((n) => isSensitiveSpec(n));
+
         await setConfig(admin, "tools_count", String(uniqIds.length), userId);
         await setConfig(admin, "tools_synced_at", new Date().toISOString(), userId);
         await broadcastSetup(admin, userId, { type: "setup_complete", agent_id: agentId, tools_count: uniqIds.length });
@@ -318,6 +337,13 @@ Deno.serve(async (req) => {
           success: true,
           tools_synced: uniqIds.length,
           total_expected: desired.length,
+          tools_before: existing.length,
+          tools_after: uniqIds.length,
+          obsolete_removed: removed,
+          sensitive_client_tools: sensitiveClientTools.length,
+          sensitive_client_tool_names: sensitiveClientTools,
+          sensitive_still_webhook: sensitiveStillWebhook,
+          partial: uniqIds.length !== desired.length,
           errors: errors.length ? errors : undefined,
           errors_detailed: errors_detailed.length ? errors_detailed : undefined,
           agent_id: agentId,

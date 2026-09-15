@@ -8,6 +8,13 @@
 //    with the current ElevenLabs Convai Tools API
 //    (POST/PATCH /v1/convai/tools → reference by `tool_ids` on the agent).
 
+import { AVA_SENSITIVE_TOOLS } from "./ava-confirm.ts";
+
+/** Un outil sensible ne peut jamais être un webhook serveur ElevenLabs :
+ *  il revient dans l'application, le courtier confirme, puis le client
+ *  rappelle ava-tool-executor avec son JWT et confirmed=true. */
+export const isSensitiveSpec = (name: string) => AVA_SENSITIVE_TOOLS.has(name);
+
 type ToolSpec = {
   name: string;
   description: string;
@@ -32,7 +39,13 @@ export function buildAvaToolsArray(supabaseUrl: string, anonKey: string) {
     { key: "X-Ava-Session-Fallback", value: "{{ava_session_token}}" },
   ];
 
-  const mk = (name: string, description: string, properties: Record<string, any> = {}, required: string[] = []) => ({
+  const mk = (name: string, description: string, properties: Record<string, any> = {}, required: string[] = []) => (isSensitiveSpec(name) ? {
+    type: "client",
+    name,
+    description: `${description} [Action sensible : confirmation explicite du courtier requise dans l'application.]`,
+    expects_response: true,
+    parameters: { type: "object", properties, ...(required.length ? { required } : {}) },
+  } : {
     type: "webhook",
     name,
     description,
@@ -69,6 +82,22 @@ export function buildAvaToolConfigs(supabaseUrl: string, anonKey: string) {
       properties: s.properties ?? {},
     };
     if (s.required && s.required.length) request_body_schema.required = s.required;
+
+    if (isSensitiveSpec(s.name)) {
+      // Client tool : ElevenLabs renvoie la demande à l'application mobile.
+      // Aucune exécution serveur immédiate n'est possible.
+      return {
+        tool_config: {
+          type: "client",
+          name: s.name,
+          description: `${s.description} [Action sensible : AVA prépare et propose, le courtier confirme dans l'application avant toute exécution.]`,
+          expects_response: true,
+          response_timeout_secs: 60,
+          parameters: request_body_schema,
+        },
+      };
+    }
+
     return {
       tool_config: {
         type: "webhook",
@@ -422,14 +451,81 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 }
 
 export const EXPECTED_TOOL_NAMES = [
-  "make_call","get_active_calls","hangup_call","get_call_history","get_recording","get_transcript","send_sms","get_sms_conversations","get_voicemails",
-  "analyze_call","get_hot_leads","get_coaching_summary",
-  "search_client","get_client_profile","get_client_history","update_client","list_tasks","get_task","list_task_targets","create_task","update_task","delete_task","create_appointment","get_pending_tasks","get_upcoming_appointments","create_client",
-  "read_emails","get_unread_emails","get_recent_emails","summarize_email","send_email","search_contact","propose_email_reply","summarize_inbox",
-  "update_calendar_event","delete_calendar_event","get_calendar_today","get_calendar_week","get_upcoming_meetings",
-  "search_ms365_contacts","find_contact","search_directory","list_company_directory",
-  "list_teams_chats","create_teams_chat","send_teams_message",
-  "navigate_to","show_client_in_app","open_call_detail",
-  "get_daily_briefing","get_my_stats","get_performance_report","generate_voicemail_greeting","explain_feature","get_integration_status",
-  "push_call_summary","push_client_note","push_communication_log",
+  "make_call",
+  "get_active_calls",
+  "hangup_call",
+  "get_call_history",
+  "get_recording",
+  "get_transcript",
+  "send_sms",
+  "get_voicemails",
+  "analyze_call",
+  "get_hot_leads",
+  "get_coaching_summary",
+  "search_client",
+  "get_client_profile",
+  "get_client_history",
+  "list_tasks",
+  "get_task",
+  "list_task_targets",
+  "create_task",
+  "update_task",
+  "delete_task",
+  "create_appointment",
+  "get_pending_tasks",
+  "get_upcoming_appointments",
+  "create_client",
+  "list_my_clients",
+  "get_maestro_client_profile",
+  "list_my_brokers",
+  "get_maestro_broker_profile",
+  "get_commission_summary",
+  "get_commission_by_lender",
+  "compare_commission_periods",
+  "list_commission_deposits",
+  "list_financial_institutions",
+  "get_commission_deposits",
+  "get_commission_agents",
+  "get_financial_institutions",
+  "open_commission_report",
+  "read_emails",
+  "send_email",
+  "search_contact",
+  "propose_email_reply",
+  "summarize_inbox",
+  "update_calendar_event",
+  "delete_calendar_event",
+  "get_calendar_today",
+  "get_calendar_week",
+  "get_upcoming_meetings",
+  "search_ms365_contacts",
+  "find_contact",
+  "search_directory",
+  "list_company_directory",
+  "navigate_to",
+  "show_client_in_app",
+  "open_call_detail",
+  "open_dialer",
+  "open_sms_composer",
+  "open_email_composer",
+  "create_calendar_event",
+  "move_calendar_event",
+  "cancel_calendar_event",
+  "get_sms_conversations",
+  "get_unread_emails",
+  "get_recent_emails",
+  "summarize_email",
+  "update_client",
+  "list_teams_chats",
+  "create_teams_chat",
+  "send_teams_message",
+  "get_daily_briefing",
+  "get_my_stats",
+  "get_performance_report",
+  "generate_voicemail_greeting",
+  "explain_feature",
+  "get_integration_status",
+  "push_call_summary",
+  "push_client_note",
+  "push_communication_log",
 ];

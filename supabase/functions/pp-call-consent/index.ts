@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       return json({ error: "client_selection_required", needs_client_selection: true }, 409);
     }
 
-    await admin.from("planipret_phone_calls").update({
+    const { data: approvedRows } = await admin.from("planipret_phone_calls").update({
       save_consent: "approved",
       ...endedPatch,
       save_consent_at: new Date().toISOString(),
@@ -123,7 +123,14 @@ Deno.serve(async (req) => {
       ...(clientName && !String((call as any).maestro_client_name ?? "").trim()
         ? { maestro_client_name: clientName }
         : {}),
-    }).eq("id", callId);
+    }).eq("id", callId)
+      .or("save_consent.is.null,save_consent.neq.approved")
+      .select("id");
+
+    // Double tap / retry : la décision est déjà enregistrée, aucun deuxième pipeline.
+    if (!approvedRows || approvedRows.length === 0) {
+      return json({ ok: true, save_consent: "approved", processing: "already_started", idempotent_replay: true });
+    }
 
     // Lance la chaîne complète : transcription → IA → Maestro.
     fetch(`${SUPABASE_URL}/functions/v1/pp-auto-process-call`, {

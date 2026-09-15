@@ -100,9 +100,9 @@ export async function authBroker(req: Request) {
     const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
+      { global: { headers: { Authorization: authHeader ?? "" } } },
     );
-    const { data: claims } = await userClient.auth.getClaims(authHeader.replace("Bearer ", ""));
+    const { data: claims } = await userClient.auth.getClaims((authHeader ?? "").replace("Bearer ", ""));
     if (!claims?.claims?.sub) {
       return { error: jsonResponse({ success: false, error: "Unauthorized", code: 401 }, 401) };
     }

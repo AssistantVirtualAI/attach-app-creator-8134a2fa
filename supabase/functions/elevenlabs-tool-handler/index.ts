@@ -1,6 +1,7 @@
 // Legacy compatibility adapter. All tool execution is centralized in
 // ava-tool-executor so confirmation, ownership and idempotence cannot drift.
 import { corsHeaders, jsonResponse } from "../_shared/ns-broker.ts";
+import { isSensitiveAvaTool } from "../_shared/ava-confirm.ts";
 
 const ALIASES: Record<string, string> = {
   cancel_task: "delete_task",

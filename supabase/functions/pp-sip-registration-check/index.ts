@@ -140,13 +140,31 @@ Deno.serve(async (req) => {
 
   const actions: string[] = [];
   const blockers: string[] = [];
+  const warnings: string[] = [];
+  const warningsEarly = warnings;
+  const hasPushToken = !!((tokenRow as any)?.device_token ?? (tokenRow as any)?.token);
   if (!mobileRegistered) actions.push("reregister");
-  if (!((tokenRow as any)?.device_token ?? (tokenRow as any)?.token) || (tokenAgeH != null && tokenAgeH > 24)) actions.push("refresh_push_token");
-  // device-push-enabled=no => NS never fires the APNs VoIP push, no webhook can
-  // compensate for that. Surface it as a hard blocker so it gets repaired.
+  if (!hasPushToken || (tokenAgeH != null && tokenAgeH > 24)) actions.push("refresh_push_token");
+  // iOS : device-push-enabled=no => NS ne déclenche jamais le push VoIP APNs,
+  // aucun webhook ne peut compenser -> bloquant.
+  // Android : le réveil passe par le jeton FCM + le webhook applicatif, donc le
+  // champ NetSapiens device-push-enabled n'est qu'un avertissement. Le vrai
+  // bloquant Android est l'absence (ou la péremption) du jeton FCM.
   if (devicePushEnabled === false) {
-    blockers.push("MOBILE_PUSH_DISABLED");
-    actions.push("repair_device_push");
+    if (isIos) {
+      blockers.push("MOBILE_PUSH_DISABLED");
+      actions.push("repair_device_push");
+    } else {
+      warningsEarly.push("NS_DEVICE_PUSH_DISABLED");
+    }
+  }
+  if (!isIos && !hasPushToken) {
+    blockers.push("ANDROID_FCM_TOKEN_MISSING");
+    actions.push("refresh_push_token");
+  }
+  if (isIos && !hasPushToken) blockers.push("IOS_PUSHKIT_TOKEN_MISSING");
+  if (hasPushToken && tokenAgeH != null && tokenAgeH > 24 * 30) {
+    warningsEarly.push("PUSH_TOKEN_STALE");
   }
   if (!mobileDevice) blockers.push("MOBILE_DEVICE_MISSING");
   if (!callSubscription) blockers.push("CALL_SUBSCRIPTION_MISSING");
@@ -159,7 +177,6 @@ Deno.serve(async (req) => {
   // la ligne paraît inscrite mais aucun appel ne peut porter d'audio.
   const uaLower = String(regUserAgent ?? "").toLowerCase();
   const contactLower = String(regContact ?? "").toLowerCase();
-  const warnings: string[] = [];
 
   // Un moteur média capable de porter l'appel doit tenir l'AOR. Le service de
   // maintien (`Planipret iOS KeepAlive`) inscrit `<ext>M` sans PJSIP : la ligne
@@ -194,14 +211,16 @@ Deno.serve(async (req) => {
   // média capable de porter un appel.
   const pushToken = (androidTokenOk ? ((tokenRow as any)?.device_token ?? (tokenRow as any)?.token) : null) ?? null;
   const healthy = mobileRegistered && mediaEngineOk && !!pushToken && callSubscription &&
-    devicePushEnabled !== false && coreServerOk;
+    (isIos ? devicePushEnabled !== false : true) && coreServerOk;
 
 
   return jsonResponse({
     ok: true,
     healthy,
     platform,
+    expected_aor: mobileAor,
     expected_transport: isIos ? "tls:5061" : "wss",
+    media_engine_required: isIos ? "pjsip" : "jssip",
     media_engine_ok: mediaEngineOk,
     extension: ctx.extension,
     domain: ctx.nsDomain,

@@ -44,7 +44,7 @@ export async function verifyAvaSession(token: string): Promise<{ uid: string } |
     const [p, s] = token.split(".");
     if (!p || !s) return null;
     const key = await hmacKey();
-    const ok = await crypto.subtle.verify("HMAC", key, b64uDecode(s), enc.encode(p));
+    const ok = await crypto.subtle.verify("HMAC", key, b64uDecode(s) as unknown as BufferSource, enc.encode(p) as unknown as BufferSource);
     if (!ok) return null;
     const payload = JSON.parse(new TextDecoder().decode(b64uDecode(p))) as { uid: string; exp: number };
     if (!payload?.uid || !payload?.exp) return null;

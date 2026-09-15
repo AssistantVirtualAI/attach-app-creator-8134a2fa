@@ -296,6 +296,22 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     }
     if (!to_number) return { success: false, error: "to_number_required" };
     to_number = normalizePhoneE164(to_number) ?? to_number;
+    // Chemin d'appel UNIQUE sur mobile : le softphone local place l'appel
+    // (iOS PJSIP/CallKit sur {ext}M, Android JsSIP/WSS sur {ext}W). Aucun
+    // click-to-call serveur, qui créerait une deuxième jambe.
+    const platform = String(p?.platform ?? p?.client_platform ?? "").toLowerCase();
+    const clientType = String(p?.client_type ?? "mobile").toLowerCase();
+    const isMobileClient = platform === "ios" || platform === "android" ||
+      clientType === "mobile" || clientType === "native";
+    if (isMobileClient) {
+      await broadcastNav(ctx, "/mplanipret/calls", { open_dialer: { number: to_number, autoDial: true } });
+      return {
+        success: true,
+        execution: "client_softphone",
+        destination: to_number,
+        message: `J'ai préparé l'appel vers ${contact_name ?? to_number} sur ton softphone.`,
+      };
+    }
     const r = await callPlanipretFunction(ctx, "pp-ns-calls", {
       action: "start",
       to_number,

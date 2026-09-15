@@ -1,4 +1,5 @@
 import { authBroker, corsHeaders, jsonResponse, supaAdmin } from "../_shared/ns-broker.ts";
+import { isSensitiveAvaTool } from "../_shared/ava-confirm.ts";
 
 const BASE = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
 
@@ -22,6 +23,19 @@ Deno.serve(async (req) => {
 
     const { tool_name, parameters = {} } = await req.json().catch(() => ({}));
     if (!tool_name) return jsonResponse({ success: false, error: "tool_name requis" }, 200);
+
+    // Ce webhook vocal historique ne doit JAMAIS exécuter une mutation.
+    // Toute action sensible (appel, SMS, courriel, tâche, RDV, Maestro…) passe
+    // obligatoirement par un client tool confirmé puis ava-tool-executor.
+    if (isSensitiveAvaTool(tool_name)) {
+      return jsonResponse({
+        success: false,
+        error: "client_execution_required",
+        confirmation_required: true,
+        tool_name,
+        message: "Cette action doit être confirmée par le courtier et exécutée par l'application (client tool), jamais par ce webhook.",
+      }, 200);
+    }
 
     let result: any = { success: false, error: "Outil inconnu" };
 

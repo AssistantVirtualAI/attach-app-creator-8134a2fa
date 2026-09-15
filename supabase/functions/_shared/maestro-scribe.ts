@@ -19,18 +19,25 @@ const HOST_RE = /^(https?:\/\/[^/]+)/i;
 export const API_PREFIX = (Deno.env.get("MAESTRO_API_PREFIX") ?? "/api/main").replace(/\/$/, "");
 export const DEFAULT_HOST = "https://client.planipret.com";
 
+/** Hôte verrouillé : seul le domaine Planiprêt officiel est joignable. */
 function host(cfg: MaestroConfig): string {
   const raw = (cfg.url || DEFAULT_HOST).trim();
-  return (raw.match(HOST_RE)?.[1] ?? DEFAULT_HOST).replace(/\/$/, "");
+  const candidate = (raw.match(HOST_RE)?.[1] ?? DEFAULT_HOST).replace(/\/$/, "");
+  try {
+    const h = new URL(candidate).hostname.toLowerCase();
+    if (h === "client.planipret.com" || h.endsWith(".planipret.com")) return candidate;
+  } catch { /* ignore */ }
+  return DEFAULT_HOST;
 }
 
 export function apiRoot(cfg: MaestroConfig, prefix?: string | null): { base: string; prefix: string } {
+  // Un préfixe ne peut JAMAIS déplacer l'appel vers un autre hôte : toute URL
+  // absolue fournie en paramètre est réduite à son chemin.
   const pinned = (prefix ?? "").trim();
   if (pinned) {
     const m = pinned.match(HOST_RE);
-    return m
-      ? { base: m[1], prefix: pinned.slice(m[1].length).replace(/\/$/, "") }
-      : { base: host(cfg), prefix: pinned.replace(/\/$/, "") };
+    const path = m ? pinned.slice(m[1].length) : pinned;
+    return { base: host(cfg), prefix: path.replace(/\/$/, "") };
   }
   return { base: host(cfg), prefix: API_PREFIX };
 }

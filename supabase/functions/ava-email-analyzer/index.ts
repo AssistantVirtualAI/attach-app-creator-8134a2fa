@@ -156,11 +156,13 @@ Deno.serve(async (req) => {
     const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
     const svcHeader = req.headers.get("x-ava-service") ?? "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const isService = Boolean(serviceKey) && (bearer === serviceKey || svcHeader === serviceKey);
+    // Un appel interne de confiance = vrai bearer service-role, jamais un
+    // en-tête personnalisé forgeable.
+    void svcHeader;
+    const isService = Boolean(serviceKey) && bearer === serviceKey;
 
     const payload = await req.json();
     const { ms_message_id } = payload;
-    if (!ms_message_id) return j({ success: false, error: "ms_message_id required" }, 400);
 
     let userId: string | undefined;
     if (isService) {
@@ -178,6 +180,8 @@ Deno.serve(async (req) => {
       const consent = await getAiConsent(admin, userId);
       if (!consent.granted) return j(consentRequiredBody(consent), 403);
     }
+
+    if (!ms_message_id) return j({ success: false, error: "ms_message_id required" }, 400);
 
     // Check cached analysis first
     const { data: existing } = await admin

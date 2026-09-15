@@ -616,10 +616,19 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   // ===== MAESTRO — endpoints mobiles (/users/{id}/clients|brokers) =====
   async list_my_clients(ctx, p) {
+    // Route officielle documentée : GET /api/main/clients (pp-maestro-scribe).
+    const main = await callPlanipretFunction(ctx, "pp-maestro-scribe", {
+      action: "clients.list",
+      query: { search: p?.search, per_page: p?.limit ?? 25 },
+    });
+    const md: any = main.data ?? {};
+    const rows = Array.isArray(md?.data) ? md.data : (Array.isArray(md?.result?.data) ? md.result.data : null);
+    if (main.httpOk && rows) return { success: true, source: "api_main", clients: rows, count: rows.length };
+
     const r = await maestroActions(ctx, "list_clients", { search: p?.search, limit: p?.limit ?? 25 });
     return r?.success
-      ? { success: true, clients: r.clients ?? [], count: (r.clients ?? []).length }
-      : { success: false, error: r?.error ?? "maestro_list_clients_failed" };
+      ? { success: true, source: "telecom_fallback", clients: r.clients ?? [], count: (r.clients ?? []).length }
+      : { success: false, error: r?.error ?? md?.error ?? "maestro_list_clients_failed" };
   },
 
   async get_maestro_client_profile(ctx, p) {

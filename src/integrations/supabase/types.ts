@@ -8852,11 +8852,8 @@ export type Database = {
           data: Json
           deep_link: string | null
           delivered: boolean
-          delivery_attempts: number
           id: string
           idempotency_key: string | null
-          last_delivery_at: string | null
-          last_delivery_error: string | null
           read_at: string | null
           title: string
           user_id: string
@@ -8868,11 +8865,8 @@ export type Database = {
           data?: Json
           deep_link?: string | null
           delivered?: boolean
-          delivery_attempts?: number
           id?: string
           idempotency_key?: string | null
-          last_delivery_at?: string | null
-          last_delivery_error?: string | null
           read_at?: string | null
           title: string
           user_id: string
@@ -8884,11 +8878,8 @@ export type Database = {
           data?: Json
           deep_link?: string | null
           delivered?: boolean
-          delivery_attempts?: number
           id?: string
           idempotency_key?: string | null
-          last_delivery_at?: string | null
-          last_delivery_error?: string | null
           read_at?: string | null
           title?: string
           user_id?: string

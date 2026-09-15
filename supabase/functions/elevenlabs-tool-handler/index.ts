@@ -28,6 +28,19 @@ Deno.serve(async (req) => {
   const toolName = ALIASES[requested] ?? requested;
   if (!toolName) return jsonResponse({ success: false, error: "tool_name_required" }, 400);
 
+  // A legacy webhook session can never execute a sensitive mutation: the mobile
+  // client must present the proposal and re-call ava-tool-executor itself.
+  if (isSensitiveAvaTool(toolName)) {
+    return jsonResponse({
+      success: false,
+      error: "client_confirmation_required",
+      needs_confirmation: true,
+      client_execution_required: true,
+      tool_name: toolName,
+      message: "Cette action doit être confirmée par le courtier dans l'application avant exécution.",
+    }, 200);
+  }
+
   const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ava-tool-executor`, {
     method: "POST",
     headers: {

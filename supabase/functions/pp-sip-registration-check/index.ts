@@ -120,12 +120,13 @@ Deno.serve(async (req) => {
 
   // 3) VoIP push token freshness (Supabase side).
   const { data: tokenRow } = await supabase
-    .from(isIos ? "planipret_voip_push_tokens" : "planipret_push_subscriptions")
-    .select("device_token, environment, updated_at")
+    .from(isIos ? "planipret_voip_push_tokens" : "mobile_push_tokens")
+    .select(isIos ? "device_token, environment, updated_at" : "token, platform, updated_at")
     .eq("user_id", ctx.userId)
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  const androidTokenOk = isIos ? true : String((tokenRow as any)?.platform ?? "android").toLowerCase() === "android";
   const tokenAgeH = tokenRow?.updated_at
     ? Math.round((Date.now() - new Date(tokenRow.updated_at).getTime()) / 3_600_000)
     : null;
@@ -191,7 +192,7 @@ Deno.serve(async (req) => {
 
   // Jamais « sain » sur une simple connexion keep-alive : il faut un moteur
   // média capable de porter un appel.
-  const pushToken = (tokenRow as any)?.device_token ?? (tokenRow as any)?.token ?? null;
+  const pushToken = (androidTokenOk ? ((tokenRow as any)?.device_token ?? (tokenRow as any)?.token) : null) ?? null;
   const healthy = mobileRegistered && mediaEngineOk && !!pushToken && callSubscription &&
     devicePushEnabled !== false && coreServerOk;
 
@@ -220,7 +221,7 @@ Deno.serve(async (req) => {
       device_push_enabled: devicePushEnabled,
       kind: isIos ? "pushkit" : "fcm",
       token_present: !!pushToken,
-      token_environment: tokenRow?.environment ?? null,
+      token_environment: (tokenRow as any)?.environment ?? null,
       token_age_hours: tokenAgeH,
     },
     call_subscription: callSubscription,

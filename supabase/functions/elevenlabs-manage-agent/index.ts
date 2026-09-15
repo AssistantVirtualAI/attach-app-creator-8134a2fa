@@ -321,7 +321,10 @@ Deno.serve(async (req) => {
           const nm = t?.tool_config?.name ?? t?.name;
           const tid = t?.id ?? t?.tool_id;
           if (!tid || keptIds.has(tid)) continue;
-          if (!desiredNames.has(nm)) continue; // outil tiers : on n'y touche pas
+          const cfgUrl = String(t?.tool_config?.api_schema?.url ?? "");
+          const isAvaTool = desiredNames.has(nm) || cfgUrl.includes("ava-tool-executor") ||
+            cfgUrl.includes("elevenlabs-tool-handler");
+          if (!isAvaTool) continue; // outil tiers : on n'y touche pas
           const del = await elFetch(apiKey, `/convai/tools/${tid}`, { method: "DELETE" });
           if (del.ok) removed.push(String(nm));
         }

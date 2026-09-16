@@ -12561,6 +12561,54 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_task_sync_runs: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          finished_at: string
+          http_status: number | null
+          id: string
+          maestro_broker_id: string | null
+          ok: boolean
+          result_source: string | null
+          source: string
+          started_at: string
+          tasks_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string
+          http_status?: number | null
+          id?: string
+          maestro_broker_id?: string | null
+          ok?: boolean
+          result_source?: string | null
+          source?: string
+          started_at?: string
+          tasks_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string
+          http_status?: number | null
+          id?: string
+          maestro_broker_id?: string | null
+          ok?: boolean
+          result_source?: string | null
+          source?: string
+          started_at?: string
+          tasks_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_tasks_projection: {
         Row: {
           created_at: string

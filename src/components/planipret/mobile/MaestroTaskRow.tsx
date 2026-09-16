@@ -2,6 +2,27 @@ import { ChevronDown, Clock, Repeat, Sparkles } from "lucide-react";
 import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
 import { maestroTaskView, formatMaestroCreated } from "@/lib/planipret/taskMaestroView";
 
+/** Cible Maestro lisible : contrat ou client, avec son identifiant. */
+function targetLabel(task: NormalizedTask, lang: "fr" | "en"): string {
+  const kind = task.type === "contract"
+    ? (lang === "en" ? "Contract" : "Contrat")
+    : task.type === "user"
+      ? (lang === "en" ? "Client" : "Client")
+      : "";
+  const name = task.target_name ?? "";
+  const id = task.xid ? `#${task.xid}` : "";
+  const out = [kind, name, id].filter(Boolean).join(" ").trim();
+  return out || (lang === "en" ? "Not resolved" : "Non résolue");
+}
+
+/** Assignation Maestro : identifiants relus et provenance de l'assignation. */
+function assigneeLabel(task: NormalizedTask, lang: "fr" | "en"): string {
+  const ids = Array.isArray(task.assignee_ids) ? task.assignee_ids.filter(Boolean) : [];
+  if (!ids.length) return lang === "en" ? "Unconfirmed" : "Non confirmée";
+  const src = task.assignment_source ? ` (${task.assignment_source})` : "";
+  return `${ids.join(", ")}${src}`;
+}
+
 export default function MaestroTaskRow({ task, lang, actions, extra, syncedAt, expanded = true, onToggle }: {
   task: NormalizedTask;
   lang: "fr" | "en";
@@ -41,7 +62,18 @@ export default function MaestroTaskRow({ task, lang, actions, extra, syncedAt, e
             <Cell label={L("Courtier traitant", "Handling broker")} value={v.brokerName || dash} />
             <Cell label={L("Conseiller réf.", "Referring advisor")} value={v.referrerName || dash} />
           </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-1">
+            <Cell
+              label={L("Cible", "Target")}
+              value={targetLabel(task, lang)}
+            />
+            <Cell
+              label={L("Assignée à", "Assigned to")}
+              value={assigneeLabel(task, lang)}
+            />
+          </div>
           <div className="mt-1.5">
+            <Cell label={L("Statut", "Status")} value={v.statusLabel || dash} />
             <Cell label={L("Étape", "Stage")} value={v.stageLabel || dash} />
             {v.createdAt && <p className="text-[10.5px]" style={{ color: "var(--pp-text-muted)" }}>{formatMaestroCreated(v.createdAt, lang)}</p>}
             <Cell label={L("Remarques", "Remarks")} value={v.remarks || dash} />

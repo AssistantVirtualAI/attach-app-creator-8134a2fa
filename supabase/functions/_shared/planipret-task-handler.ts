@@ -552,7 +552,9 @@ export async function handleTaskRequest(
     // OAuth id). Listing with the wrong one returns an empty page even though
     // Maestro holds tasks, so try every known id until one answers.
     const ownerCandidates = [...new Set(
-      [telecomId, maestroId, profile?.maestro_telecom_user_id, profile?.maestro_broker_id]
+      (overrideBroker
+        ? [overrideBroker]
+        : [telecomId, maestroId, profile?.maestro_telecom_user_id, profile?.maestro_broker_id])
         .map((v) => String(v ?? "").trim())
         .filter(Boolean),
     )];

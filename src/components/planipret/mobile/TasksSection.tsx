@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock, ExternalLink, ShieldCheck, Loader2, History } from "lucide-react";
+import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock, CheckCircle2, ExternalLink, ShieldCheck, Loader2, History } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
 import { describeTaskDiagnostics, describeTaskSync, formatTaskDue, isTaskOpen, toTorontoLocalInput, verifyTask, maestroTaskUrl, type NormalizedTask, type TaskFilterValue, type TaskVerifyResult, taskHistory, type TaskHistoryEvent } from "@/lib/planipret/tasks";
 import MaestroTaskRow from "./MaestroTaskRow";
@@ -159,6 +159,23 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
     due_at: toTorontoLocalInput(task.due_at),
   } });
 
+  /**
+   * Traiter la tâche depuis l'app : Maestro la passe à « complété » via la
+   * même route que le portail, puis la liste est relue pour refléter l'état
+   * réellement confirmé côté Maestro.
+   */
+  const completeTask = async (task: NormalizedTask) => {
+    setBusy(true);
+    const r = await update(task.id, { status: "completed", update_status: true });
+    setBusy(false);
+    if (r?.success) {
+      toast.success(L("Tâche traitée", "Task completed"));
+      void refresh();
+    } else {
+      toast.error(r?.message ?? L("Traitement impossible", "Could not complete"));
+    }
+  };
+
   const snooze = async (task: NormalizedTask) => {
     const base = task.due_at ? new Date(task.due_at) : new Date();
     const next = new Date(base.getTime() + 24 * 3600 * 1000);
@@ -300,6 +317,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                         </IconBtn>
                         <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
                         <IconBtn label={L("Historique", "History")} onClick={() => void openHistory(task)}><History className="w-3.5 h-3.5" /></IconBtn>
+                        {!readOnly && <IconBtn label={L("Traiter (marquer terminée)", "Complete task")} onClick={() => void completeTask(task)}><CheckCircle2 className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}

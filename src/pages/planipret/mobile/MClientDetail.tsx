@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
 import ClientMaestroDetail from "@/components/planipret/clients/ClientMaestroDetail";
+import SmsDraftSheet, { type SmsDraftTarget } from "@/components/planipret/mobile/SmsDraftSheet";
 
 /** Fiche d'un client : appels, tâches, dossiers et commissions. */
 export default function MClientDetail() {
   const navigate = useNavigate();
   const { clientKey = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const [userId, setUserId] = useState<string | null>(null);
   const lang = (localStorage.getItem("pp_lang") === "en" ? "en" : "fr") as "fr" | "en";
 
@@ -21,6 +23,7 @@ export default function MClientDetail() {
     return () => { alive = false; };
   }, []);
 
+  const [smsTarget, setSmsTarget] = useState<SmsDraftTarget | null>(null);
   const { tasks, loading, lastSyncAt, setFilter } = usePlanipretTasks(userId);
   useEffect(() => { setFilter("all"); }, [setFilter]);
 
@@ -38,14 +41,17 @@ export default function MClientDetail() {
       </div>
 
       <ClientMaestroDetail
-        variant="mobile"
         clientKey={clientKey}
+        maestroClientId={searchParams.get("mid")}
         tasks={tasks}
         userIds={userId ? [userId] : []}
         lang={lang}
         lastSyncAt={lastSyncAt}
         loading={loading}
+        onDraftSms={(t) => setSmsTarget({ name: t.name, number: t.number, clientKey: t.clientKey, body: t.body })}
       />
+
+      <SmsDraftSheet target={smsTarget} onClose={() => setSmsTarget(null)} />
     </div>
   );
 }

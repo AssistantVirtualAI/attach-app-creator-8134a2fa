@@ -47,8 +47,9 @@ function makeDeps(capture: any[], apiResponse: any = { status: 200, ok: true, da
       capture.push({ path, method: init.method, body: init.body ? JSON.parse(init.body) : null });
       return apiResponse;
     },
-    listFetch: async () => ({ ok: true, tasks: [], endpoint: "/tasks", status: 200 }),
+    listFetch: async () => ({ ok: true, tasks: [{ id: 9001, users: [{ id: 387460525 }] }], endpoint: "/api/main/tasks", status: 200 }),
     resolveTelecomUserId: async (c: string | null) => c ?? "387460525",
+    resolveTaskAssigneeId: async () => "387460525",
   } as any;
 }
 

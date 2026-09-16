@@ -71,7 +71,7 @@ describe("applyAvaSuggestion", () => {
   });
 
   it("creates reminder as a confirmed Planiprêt task", async () => {
-    invoke.mockResolvedValue({ data: { success: true, message: "ok" }, error: null });
+    invoke.mockResolvedValue({ data: { success: true, read_back: true, visible_in_maestro: true, message: "ok" }, error: null });
     const r = await applyAvaSuggestion({ id: "1", label: "R", kind: "reminder", payload: { title: "Rappeler client" } }, ctx);
     expect(invoke).toHaveBeenCalledWith("ava-tool-executor", expect.objectContaining({
       body: expect.objectContaining({
@@ -88,7 +88,7 @@ describe("applyAvaSuggestion", () => {
   });
 
   it("routes maestro_action via invoke", async () => {
-    invoke.mockResolvedValue({ data: { message: "ok" }, error: null });
+    invoke.mockResolvedValue({ data: { success: true, message: "ok" }, error: null });
     const r = await applyAvaSuggestion({ id: "1", label: "M", kind: "maestro_action", payload: { action: "x" } }, ctx);
     expect(invoke).toHaveBeenCalledWith("ava-tool-executor", expect.objectContaining({
       body: { tool_name: "x", parameters: { action: "x", confirmed: true } },

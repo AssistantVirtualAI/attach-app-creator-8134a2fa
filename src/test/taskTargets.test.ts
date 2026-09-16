@@ -29,7 +29,12 @@ function makeDeps(over: Record<string, any> = {}) {
     profile: { id: "profile-1", role: "broker", maestro_broker_id: "247398", maestro_telecom_user_id: "93135" },
     token: "tok",
     apiFetch,
-    listFetch: async () => ({ ok: false, tasks: [], endpoint: null, status: 404 }),
+    listFetch: async () => ({
+      ok: true,
+      tasks: [{ id: 946400, users: [{ id: 93135 }] }],
+      endpoint: "/api/main/tasks",
+      status: 200,
+    }),
     resolveTelecomUserId: async () => "93135",
     resolveTaskAssigneeId: async () => "93135",
     listAllowedAssignees: async () => ["93135", "247398"],

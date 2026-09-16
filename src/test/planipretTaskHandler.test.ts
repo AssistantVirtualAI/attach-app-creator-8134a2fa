@@ -19,7 +19,12 @@ function makeDeps(over: Partial<TaskDeps> & { apiResponses?: any[] } = {}) {
     profile: { id: "profile-1", role: "broker", maestro_broker_id: "387460525" },
     token: "tok",
     apiFetch: apiFetch as any,
-    listFetch: async () => ({ ok: false, tasks: [], endpoint: null, status: 404 }),
+    listFetch: async () => ({
+      ok: true,
+      tasks: [{ id: 946044, users: [{ id: 93135 }], xid: 387460525, type: "user" }],
+      endpoint: "/api/main/tasks",
+      status: 200,
+    }),
     resolveTelecomUserId: async () => "387460525",
     resolveTaskAssigneeId: async () => "93135",
     ...over,
@@ -106,14 +111,14 @@ describe("planipret task handler — create", () => {
 });
 
 describe("planipret task handler — list scope", () => {
-  it("queries tasks with the Maestro broker id, not the legacy telecom id", async () => {
+  it("queries tasks with the internal Maestro telecom id", async () => {
     const listFetch = vi.fn(async () => ({ ok: true as const, tasks: [], endpoint: "/api/main/tasks", status: 200 }));
     const { deps } = makeDeps({
       listFetch,
       resolveTelecomUserId: async () => "93135",
     });
     await handleTaskRequest({ action: "list", filter: "all" }, deps);
-    expect(listFetch).toHaveBeenCalledWith("387460525", expect.any(Object));
+    expect(listFetch).toHaveBeenCalledWith("93135", expect.any(Object));
   });
 });
 
@@ -144,7 +149,8 @@ describe("planipret task handler — idempotency", () => {
       handleTaskRequest(validCreate, deps),
     ]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
-    expect([a.body.success, b.body.success]).toEqual([true, true]);
+    expect([a.body.success, b.body.success]).toEqual([true, false]);
+    expect((b.body as any).error).toBe("mutation_in_flight");
   });
 });
 
@@ -201,7 +207,10 @@ describe("planipret task handler — list & isolation", () => {
   });
 
   it("falls back to the projection when the upstream list is unavailable", async () => {
-    const { deps } = makeDeps({ admin });
+    const { deps } = makeDeps({
+      admin,
+      listFetch: async () => ({ ok: false, tasks: [], endpoint: null, status: 503 }),
+    });
     const out = await handleTaskRequest({ action: "list", filter: "all" }, deps);
     expect(out.body.source).toBe("projection");
     expect((out.body as any).tasks).toHaveLength(1);
@@ -210,7 +219,10 @@ describe("planipret task handler — list & isolation", () => {
   });
 
   it("reports tasks_unavailable when neither API nor projection has data", async () => {
-    const { deps } = makeDeps({ admin: createMockAdmin() });
+    const { deps } = makeDeps({
+      admin: createMockAdmin(),
+      listFetch: async () => ({ ok: false, tasks: [], endpoint: null, status: 503 }),
+    });
     const out = await handleTaskRequest({ action: "list" }, deps);
     expect(out.body.source).toBe("unavailable");
     expect(out.body.error).toBe("tasks_unavailable");

@@ -58,13 +58,18 @@ function SyncHistory({ userId, lang }: { userId: string | null | undefined; lang
     let alive = true;
     if (!userId) return;
     (async () => {
-      const { data } = await supabase
-        .from("planipret_task_sync_runs")
-        .select("id, ok, tasks_count, source, error, finished_at")
-        .eq("user_id", userId)
-        .order("finished_at", { ascending: false })
-        .limit(5);
-      if (alive) setRuns((data ?? []) as any);
+      try {
+        const { data } = await supabase
+          .from("planipret_task_sync_runs")
+          .select("id, ok, tasks_count, source, error, finished_at")
+          .eq("user_id", userId)
+          .order("finished_at", { ascending: false })
+          .limit(5);
+        if (alive) setRuns((data ?? []) as any);
+      } catch {
+        // L'historique est informatif : son échec ne doit jamais masquer les tâches.
+        if (alive) setRuns([]);
+      }
     })();
     return () => { alive = false; };
   }, [userId]);

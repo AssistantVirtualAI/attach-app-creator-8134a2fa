@@ -42,7 +42,13 @@ const validCreate = {
 
 describe("planipret task handler — create", () => {
   it("posts a valid payload to POST /api/main/tasks", async () => {
-    const { deps, calls } = makeDeps();
+    const listFetch = vi.fn(async () => ({
+      ok: true,
+      tasks: [{ id: 946044, users: [{ id: 93135 }], xid: 387460525, type: "user" }],
+      endpoint: "/api/main/tasks",
+      status: 200,
+    }));
+    const { deps, calls } = makeDeps({ listFetch });
     const out = await handleTaskRequest(validCreate, deps);
     expect(out.body.success).toBe(true);
     expect(out.body.task_id).toBe("946044");
@@ -55,6 +61,9 @@ describe("planipret task handler — create", () => {
     // because Maestro otherwise enables some notification defaults server-side.
     expect(payload.send_notification).toBe(0);
     expect(payload.sync_cal).toBe(0);
+    expect(listFetch).toHaveBeenCalledWith("387460525", expect.objectContaining({
+      status: "pending", type: "user", findTaskId: "946044",
+    }));
   });
 
   it("returns validation_failed (422 equivalent) when notes are missing", async () => {

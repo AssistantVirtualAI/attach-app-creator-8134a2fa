@@ -64,7 +64,7 @@ export function AgencyTab() {
         logo_login_url: data.logo_login_url || '',
         gdpr_enabled: data.gdpr_enabled || false,
         hipaa_enabled: data.hipaa_enabled || false,
-        api_key: data.api_key || '',
+        api_key: '',
       });
     }
   };

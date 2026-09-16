@@ -4,24 +4,138 @@
 
 export type AudioRoute = "earpiece" | "speaker" | "bluetooth";
 
+export interface AudioDevices {
+  route: AudioRoute;
+  bluetooth: boolean;
+  bluetoothName: string;
+  wired: boolean;
+}
+
 function bridge(): any {
   const plugins = (window as any)?.Capacitor?.Plugins;
   return plugins?.PpSipKeepAlive ?? plugins?.CapacitorSip ?? null;
 }
 
+function pjsip(): any {
+  return (window as any)?.Capacitor?.Plugins?.PpPjsip ?? null;
+}
+
 let currentRoute: AudioRoute = "earpiece";
+let devices: AudioDevices = { route: "earpiece", bluetooth: false, bluetoothName: "", wired: false };
 let reassertTimer: ReturnType<typeof setTimeout> | null = null;
 let routeGeneration = 0;
+const listeners = new Set<(d: AudioDevices) => void>();
+let bound = false;
+
+const pause = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+function emit() {
+  listeners.forEach((fn) => { try { fn({ ...devices }); } catch {} });
+}
+
+/** Subscribe to native route changes (headset plugged, Bluetooth connected…). */
+function bindNativeEvents() {
+  if (bound) return;
+  const b = bridge();
+  if (!b?.addListener) return;
+  bound = true;
+  try {
+    b.addListener("audioRouteChanged", (d: any) => {
+      devices = {
+        route: (d?.route as AudioRoute) ?? devices.route,
+        bluetooth: !!d?.bluetooth,
+        bluetoothName: d?.bluetoothName ?? "",
+        wired: !!d?.wired,
+      };
+      currentRoute = devices.route;
+      emit();
+    });
+  } catch { bound = false; }
+}
 
 export const audioRouter = {
-  async setRoute(route: AudioRoute): Promise<void> {
+  subscribe(fn: (d: AudioDevices) => void) {
+    bindNativeEvents();
+    listeners.add(fn);
+    fn({ ...devices });
+    void audioRouter.refreshDevices();
+    return () => { listeners.delete(fn); };
+  },
+
+  devices: () => ({ ...devices }),
+
+  async refreshDevices(): Promise<AudioDevices> {
+    const b = bridge();
+    if (b?.getAudioDevices) {
+      try {
+        const d = await b.getAudioDevices();
+        if (d?.ok !== false) {
+          devices = {
+            route: (d?.route as AudioRoute) ?? devices.route,
+            bluetooth: !!d?.bluetooth,
+            bluetoothName: d?.bluetoothName ?? "",
+            wired: !!d?.wired,
+          };
+          currentRoute = devices.route;
+          emit();
+        }
+      } catch {}
+    }
+    return { ...devices };
+  },
+
+  /**
+   * Ask the native owner for an audio route and return the route that iOS
+   * actually applied. A successful Capacitor callback is not proof that
+   * CallKit has accepted the override: it can restore its own route just
+   * after activation. Keeping the physical route here prevents the call UI
+   * from displaying “haut-parleur” while sound is still in the earpiece.
+   */
+  async setRoute(route: AudioRoute): Promise<AudioDevices> {
     routeGeneration += 1;
     if (reassertTimer) { clearTimeout(reassertTimer); reassertTimer = null; }
     currentRoute = route;
+    devices = { ...devices, route };
+    emit();
     const b = bridge();
+    let handled = false;
     if (b?.setAudioRoute) {
-      try { await b.setAudioRoute({ route }); return; } catch {}
+      try { await b.setAudioRoute({ route }); handled = true; } catch {}
     }
+    // PpSipKeepAlive is the single owner of the audio session. Only fall back
+    // to the PJSIP speaker toggle when that plugin is unavailable — calling
+    // both made the two modules fight (quiet/muffled loudspeaker) and mapped
+    // "bluetooth" to "earpiece".
+    if (handled) {
+      // CallKit/PJSIP may rewrite the route shortly after activation. Verify
+      // twice before using the PJSIP compatibility path, then report the
+      // actual route rather than an optimistic requested one.
+      const generation = routeGeneration;
+      let applied = await audioRouter.refreshDevices();
+      if (generation === routeGeneration && applied.route !== route) {
+        await pause(220);
+        try { await b.setAudioRoute({ route }); } catch {}
+        await pause(220);
+        applied = await audioRouter.refreshDevices();
+      }
+      if (generation === routeGeneration && applied.route !== route) {
+        const p = pjsip();
+        if (p?.setSpeaker) {
+          try { await p.setSpeaker({ enabled: route === "speaker" }); } catch {}
+          await pause(260);
+          applied = await audioRouter.refreshDevices();
+        }
+      }
+      return applied;
+    }
+    {
+      const p = pjsip();
+      if (p?.setSpeaker) {
+        try { await p.setSpeaker({ enabled: route === "speaker" }); handled = true; } catch {}
+      }
+    }
+
+    if (handled) return audioRouter.refreshDevices();
     // Web fallback: try matching sinkId on every <audio> tag.
     try {
       document.querySelectorAll("audio").forEach((el: any) => {
@@ -30,6 +144,7 @@ export const audioRouter = {
         }
       });
     } catch {}
+    return audioRouter.refreshDevices();
   },
 
   async getCurrentRoute(): Promise<AudioRoute> {
@@ -37,7 +152,7 @@ export const audioRouter = {
     if (b?.getAudioRoute) {
       try {
         const r = await b.getAudioRoute();
-        if (r?.route) { currentRoute = r.route as AudioRoute; return currentRoute; }
+        if (r?.route) { currentRoute = r.route as AudioRoute; devices = { ...devices, route: currentRoute }; return currentRoute; }
       } catch {}
     }
     return currentRoute;
@@ -48,19 +163,46 @@ export const audioRouter = {
    * to the loudspeaker; a phone call must start on the earpiece (or a connected
    * Bluetooth headset) until the user taps the speaker button.
    */
+  /**
+   * Full audio-session reset. Called when a call is answered: the ringing /
+   * media session left behind by CallKit or the WebView is half-configured and
+   * the remote party ends up hearing nothing. The native plugin deactivates and
+   * re-activates AVAudioSession in voiceChat mode, then re-applies the route.
+   */
+  async resetSession(): Promise<void> {
+    const b = bridge();
+    if (b?.resetAudioSession) {
+      try { await b.resetAudioSession(); } catch {}
+    }
+    await audioRouter.refreshDevices();
+  },
+
   async startCallAudio(): Promise<AudioRoute> {
-    const route: AudioRoute = currentRoute === "bluetooth" ? "bluetooth" : "earpiece";
+    bindNativeEvents();
+    await audioRouter.resetSession();
+    const d = await audioRouter.refreshDevices();
+    // Auto-detect: a connected Bluetooth headset always wins at call start.
+    const route: AudioRoute = d.bluetooth ? "bluetooth" : "earpiece";
     currentRoute = route;
-    await audioRouter.setRoute(route);
+    const applied = await audioRouter.setRoute(route);
     // Some stacks (CallKit / AudioFocus) re-apply their own route ~1s after the
-    // media session activates, so re-assert once.
+
+    // media session activates, so re-assert once — but never overwrite a change
+    // the user made in the meantime (tap on « haut-parleur »).
     const generation = routeGeneration;
     reassertTimer = setTimeout(() => {
       reassertTimer = null;
       if (generation !== routeGeneration) return;
-      void audioRouter.setRoute(route);
+      void audioRouter.setRoute(currentRoute);
     }, 1200);
-    return route;
+    // Second reset pass: NetSapiens/PJSIP can renegotiate media ~2.5 s after
+    // answer, which silences the far end if the session was not re-armed.
+    setTimeout(() => {
+      if (generation !== routeGeneration) return;
+      void audioRouter.resetSession().then(() => audioRouter.setRoute(currentRoute));
+    }, 2500);
+
+    return applied.route;
   },
 
   stopCallAudio(): void {

@@ -188,11 +188,14 @@ async function syncProjection(admin: any, userId: string, tasks: any[], opts: { 
   await projectionUpsert(admin, userId, tasks);
   if (!opts.full) return;
   const keep = tasks.map((t) => String(t.id)).filter(Boolean);
-  let q = admin.from("planipret_tasks_projection")
+  // An empty upstream page is almost always a transient Maestro hiccup or a
+  // wrong owner id. Never wipe a broker's whole local copy on that signal.
+  if (!keep.length) return;
+  const q = admin.from("planipret_tasks_projection")
     .update({ deleted_at: new Date().toISOString() })
     .eq("user_id", userId)
-    .is("deleted_at", null);
-  if (keep.length) q = q.not("task_id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
+    .is("deleted_at", null)
+    .not("task_id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
   await q;
 }
 

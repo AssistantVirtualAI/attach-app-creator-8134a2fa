@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       if (j?.source === "api" && count > 0) { synced++; totalTasks += count; }
       results.push({
         broker: String(p.maestro_broker_id), name: p.full_name,
-        ok: j?.success === true, source: j?.source ?? null, tasks: count,
+        ok: j?.success === true, source: j?.source ?? null, tasks: count, status: res.status, error: j?.error ?? null,
       });
     } catch (e) {
       results.push({ broker: String(p.maestro_broker_id), name: p.full_name, ok: false, error: String(e) });

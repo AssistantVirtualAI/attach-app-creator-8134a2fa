@@ -14,7 +14,11 @@ import {
   type TaskSource,
 } from "@/lib/planipret/tasks";
 
+import { readScreenCache, writeScreenCache, invalidateScreenCache } from "@/lib/planipret/screenCache";
+
 const PAGE_SIZE = 20;
+/** Fraîcheur demandée par les courtiers : une synchro tâches aux 5 minutes. */
+const TASKS_TTL_MS = 5 * 60 * 1000;
 
 const taskRequests = new Map<string, Promise<TaskListResult>>();
 
@@ -27,18 +31,31 @@ async function readTasks(
   brokerId: string | null,
   filter: TaskFilterValue,
   page: number,
-  _force: boolean,
+  force: boolean,
 ): Promise<TaskListResult> {
   const key = listKey(userId, brokerId, filter, page);
+  if (!force) {
+    // Revenir sur l'écran ne relance pas l'endpoint tant que la liste est fraîche.
+    const cached = readScreenCache<TaskListResult>(`tasks:${key}`, TASKS_TTL_MS);
+    if (cached) return cached.value;
+    const pending = taskRequests.get(key);
+    if (pending) return pending;
+  }
   const pending = taskRequests.get(key);
   if (pending) return pending;
 
   const request = listTasks({ filter, page, limit: PAGE_SIZE, broker_id: brokerId })
-    .then((result) => result)
+    .then((result) => {
+      if (result.success && result.source !== "unavailable") {
+        writeScreenCache(`tasks:${key}`, result);
+      }
+      return result;
+    })
     .finally(() => { taskRequests.delete(key); });
   taskRequests.set(key, request);
   return request;
 }
+
 
 export interface UsePlanipretTasks {
   tasks: NormalizedTask[];
@@ -161,6 +178,9 @@ export function usePlanipretTasks(
   const refresh = useCallback(async (options: { force?: boolean } = {}) => {
     if (!userId) return;
     const force = !!options.force;
+    // Une mutation locale invalide tout de suite les pages mises en cache.
+    if (force) invalidateScreenCache(`tasks:${userId}:`);
+
     const key = listKey(userId, brokerId, filter, 1);
     if (activeRefresh.current?.key === key) return activeRefresh.current.promise;
 

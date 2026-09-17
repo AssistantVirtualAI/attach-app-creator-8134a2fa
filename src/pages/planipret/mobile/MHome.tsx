@@ -25,6 +25,8 @@ import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365Connec
 import { useMs365Status } from "@/hooks/useMs365Status";
 import BriefListenButton from "@/components/planipret/mobile/BriefListenButton";
 import TasksSection from "@/components/planipret/mobile/TasksSection";
+import { readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";
+
 
 
 type Period = "day" | "week" | "month" | "shift";
@@ -116,11 +118,29 @@ export default function MHome() {
   });
   const firstName = (profile?.full_name ?? t("home.broker")).split(" ")[0];
 
-  const loadStats = async () => {
+  const statsCacheKey = `home:stats:${profile?.user_id ?? "anon"}:${period}`;
+
+  const loadStats = async (force = false) => {
     if (!profile) return;
     if (statsInFlight.current) return statsInFlight.current;
+    // Revenir sur l'accueil ne relance pas les endpoints : la vue est repeinte
+    // depuis le cache tant qu'elle a moins de 5 minutes.
+    if (!force) {
+      const cached = readScreenCache<any>(statsCacheKey, TTL.fiveMinutes);
+      if (cached) {
+        setStats(cached.value.stats);
+        setRecent(cached.value.recent ?? []);
+        setHotLeads(cached.value.hotLeads ?? []);
+        setDueReminders(cached.value.dueReminders ?? []);
+        setMeetings(cached.value.meetings ?? []);
+        setMsMeetings(cached.value.msMeetings ?? []);
+        setStatsLoading(false);
+        return;
+      }
+    }
     setStatsLoading(true);
     const request = (async () => { try {
+
     const { sinceIso, untilIso } = periodRange(period);
     const nowIso = new Date().toISOString();
     const weekEnd = new Date(); weekEnd.setDate(weekEnd.getDate() + 7);
@@ -232,7 +252,7 @@ export default function MHome() {
     }
     setMsMeetings(microsoftEvents);
 
-    setStats({
+    const nextStats = {
       calls: liveCallsInPeriod.length || callsRes.count || 0,
       missed: liveCallsInPeriod.length ? liveCallsInPeriod.filter((c: any) => nsCallDirection(c) === "missed").length : (missedRes.count ?? 0),
       sms: liveSmsThreads.length ? liveSmsThreads.reduce((sum: number, th: any) => sum + nsSmsUnread(th), 0) : (smsRes.count ?? 0),
@@ -241,11 +261,22 @@ export default function MHome() {
       hotLeads: hotCountRes.count ?? 0,
       tasks: tasksCountRes.count ?? 0,
       outbound: outboundRes.count ?? 0,
-    });
-    setRecent(liveRecent.length ? liveRecent : (recentRes.data ?? []));
+    };
+    const nextRecent = liveRecent.length ? liveRecent : (recentRes.data ?? []);
+    setStats(nextStats);
+    setRecent(nextRecent);
     setHotLeads(hotRes.data ?? []);
     setDueReminders(remRes.data ?? []);
     setMeetings(meetingsRes.data ?? []);
+    writeScreenCache(statsCacheKey, {
+      stats: nextStats,
+      recent: nextRecent,
+      hotLeads: hotRes.data ?? [],
+      dueReminders: remRes.data ?? [],
+      meetings: meetingsRes.data ?? [],
+      msMeetings: microsoftEvents,
+    });
+
     } catch (e) {
       console.error("[MHome] loadStats failed", e);
     } finally {
@@ -298,7 +329,7 @@ export default function MHome() {
   useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);
 
   useEffect(() => {
-    registerRefresh(async () => { await Promise.all([loadStats(), loadBrief(true)]); });
+    registerRefresh(async () => { await Promise.all([loadStats(true), loadBrief(true)]); });
     return () => registerRefresh(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.user_id, period]);
@@ -309,7 +340,7 @@ export default function MHome() {
     const uid = profile.user_id;
     const scheduleStatsRefresh = () => {
       if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
-      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(); }, 1200);
+      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(true); }, 1200);
     };
     const ch = supabase
       .channel(`mhome-live-${uid}`)
@@ -638,7 +669,7 @@ export default function MHome() {
                 <button
                   onClick={async () => {
                     await supabase.from("planipret_reminders").update({ status: "done" }).eq("id", r.id);
-                    loadStats();
+                    loadStats(true);
                   }}
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
                   style={{ background: "#fff", border: "1px solid var(--pp-bg-border)", color: "var(--pp-success)" }}>

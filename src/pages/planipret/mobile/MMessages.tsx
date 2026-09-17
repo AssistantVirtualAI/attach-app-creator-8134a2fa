@@ -30,6 +30,7 @@ import { useMs365Status } from "@/hooks/useMs365Status";
 import { canSendWithSmsAvailability, getSmsAvailability, type SmsAvailability } from "@/lib/planipret/smsAvailability";
 
 import DOMPurify from "dompurify";
+import { peekScreenCache, readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";
 
 const sanitizeHtml = (html?: string | null) =>
   DOMPurify.sanitize(String(html ?? ""), {
@@ -1130,8 +1131,12 @@ function TeamChat({ profile }: { profile: any }) {
 export function EmailsList({ profile, initialTo, initialName }: { profile: any; initialTo?: string; initialName?: string }) {
   const { t, lang } = useMplanipretLang();
   const PAGE_SIZE = 25;
-  const [emails, setEmails] = useState<any[] | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">("loading");
+  // Boîte de réception rafraîchie aux 5 minutes : revenir à l'onglet Courriels
+  // repeint la liste connue au lieu de relancer Microsoft Graph.
+  const emailsCacheKey = `emails:${profile?.user_id ?? profile?.ms365_email ?? "anon"}`;
+  const cachedEmails = peekScreenCache<any[]>(emailsCacheKey);
+  const [emails, setEmails] = useState<any[] | null>(cachedEmails?.value ?? null);
+  const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">(cachedEmails ? "ready" : "loading");
   const { state: ms365State, errorMessage: ms365ErrorMessage } = useMs365Status(profile);
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -1149,10 +1154,18 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const emailsInFlight = useRef(false);
 
-  const load = async () => {
+  const load = async (force = false) => {
     if (!ms365Connected(profile)) { setState("no_m365"); return; }
+    if (emailsInFlight.current) return;
+    if (!force) {
+      const fresh = readScreenCache<any[]>(emailsCacheKey, TTL.fiveMinutes);
+      if (fresh) { setEmails(fresh.value); setEmailsError(null); setState("ready"); return; }
+    }
+    emailsInFlight.current = true;
     setState((s) => (s === "ready" ? s : "loading"));
+
     // Cellular networks drop a single request often enough that one timeout
     // used to render the whole inbox as "erreur edge function".
     let data: any = null;
@@ -1166,19 +1179,23 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
       );
       data = res?.data; error = res?.error;
     } catch (e) { error = e; }
+    finally { emailsInFlight.current = false; }
     if (error || !(data as any)?.success) {
       const detail = (data as any)?.error ?? (error as any)?.message ?? "";
       console.error("[emails] load failed", detail);
       setEmailsError(String(detail).slice(0, 180) || null);
-      setState("error");
+      // Une panne réseau ne doit jamais effacer la boîte déjà affichée.
+      setState(emails && emails.length ? "ready" : "error");
       return;
     }
     setEmailsError(null);
     const list = ((data as any).emails ?? (data as any).messages ?? []) as any[];
     setEmails(list);
+    writeScreenCache(emailsCacheKey, list);
     setHasMore(Boolean((data as any).hasMore) && list.length === PAGE_SIZE);
     setState("ready");
   };
+
 
   const loadMore = async () => {
     if (loadingMore || !emails) return;
@@ -1247,7 +1264,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
         </button>
         <div className="flex items-center gap-2">
           <button
-            onClick={load}
+            onClick={() => void load(true)}
             className="text-xs flex items-center gap-1 px-2 py-1"
             style={{ color: "var(--pp-text-muted)" }}
           >
@@ -1273,7 +1290,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
           <p className="text-sm" style={{ color: "var(--pp-text-muted)" }}>{t("messages.emailsLoadFailed")}</p>
           {emailsError && <p className="mt-1 text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{emailsError}</p>}
           <button
-            onClick={load}
+            onClick={() => void load(true)}
             className="mt-3 text-xs px-3 py-1.5 rounded-full"
             style={{ border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
           >

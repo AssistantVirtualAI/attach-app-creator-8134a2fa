@@ -14,7 +14,7 @@ type Entry = { at: number; value: any[]; scope?: string | null };
 /** Maestro-scoped lists must never be reused across Maestro accounts. */
 const MAESTRO_SCOPED: Action[] = ["maestro", "maestro_clients", "maestro_brokers"];
 
-const TTL_MS = 60_000;
+const TTL_MS = 10 * 60_000; // 10 min : pas de relance à chaque ouverture de l'écran
 const LS_PREFIX = "pp:contacts:cache:v1:";
 const LS_TTL_MS = 24 * 60 * 60 * 1000; // keep stale copy up to 24h
 

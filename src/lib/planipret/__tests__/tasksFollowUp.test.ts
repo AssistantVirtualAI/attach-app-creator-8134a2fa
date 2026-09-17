@@ -28,13 +28,13 @@ describe("createClientFollowUpTask", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(invokeEdgeMock).toHaveBeenNthCalledWith(1, "planipret-task-api", { action: "client_targets", search: "Jane Doe" });
+    expect(invokeEdgeMock).toHaveBeenNthCalledWith(1, "planipret-task-api", { action: "client_targets", search: "Jane Doe" }, { timeoutMs: 10_000 });
     expect(invokeEdgeMock).toHaveBeenNthCalledWith(2, "planipret-task-api", expect.objectContaining({
       action: "create",
       xid: "288984",
       type: "contract",
       notes: "Faire un suivi",
-    }));
+    }), { timeoutMs: 10_000 });
   });
 
   it("utilise un contrat quand aucune cible user n’existe", async () => {
@@ -47,7 +47,7 @@ describe("createClientFollowUpTask", () => {
       .mockResolvedValueOnce({ data: { success: true }, error: null, unauthorized: false });
 
     await createClientFollowUpTask({ maestro_client_id: "123", notes: "Relancer" });
-    expect(invokeEdgeMock).toHaveBeenNthCalledWith(2, "planipret-task-api", expect.objectContaining({ xid: "288984", type: "contract" }));
+    expect(invokeEdgeMock).toHaveBeenNthCalledWith(2, "planipret-task-api", expect.objectContaining({ xid: "288984", type: "contract" }), { timeoutMs: 10_000 });
   });
 
   it("utilise la cible user seulement lorsqu’aucun contrat autorisé n’existe", async () => {
@@ -60,7 +60,7 @@ describe("createClientFollowUpTask", () => {
       .mockResolvedValueOnce({ data: { success: true, read_back: true, visible_in_maestro: true }, error: null, unauthorized: false });
 
     await createClientFollowUpTask({ maestro_client_id: "123", notes: "Relancer" });
-    expect(invokeEdgeMock).toHaveBeenNthCalledWith(2, "planipret-task-api", expect.objectContaining({ xid: "511", type: "user" }));
+    expect(invokeEdgeMock).toHaveBeenNthCalledWith(2, "planipret-task-api", expect.objectContaining({ xid: "511", type: "user" }), { timeoutMs: 10_000 });
   });
 
   it("refuse un id client sans cible Maestro autorisée", async () => {

@@ -163,7 +163,7 @@ export function usePlanipretTasks(
     if (!userId) return;
     const scheduleRefresh = () => {
       if (realtimeTimer.current) window.clearTimeout(realtimeTimer.current);
-      realtimeTimer.current = window.setTimeout(() => { void refresh(); }, 1200);
+      realtimeTimer.current = window.setTimeout(() => { void refresh(); }, 250);
     };
     const channel = supabase.channel(`pp-tasks:${userId}`)
       .on("broadcast", { event: "tasks" }, scheduleRefresh)

@@ -36,6 +36,7 @@ const MAvaDirectory = lazyWithRetry(() => import('@/pages/planipret/mobile/MAvaD
 const MStats = lazyWithRetry(() => import('@/pages/planipret/mobile/MStats'), 'MStats');
 const MCommissions = lazyWithRetry(() => import('@/pages/planipret/mobile/MCommissions'), 'MCommissions');
 const MTasks = lazyWithRetry(() => import('@/pages/planipret/mobile/MTasks'), 'MTasks');
+const MMaestro = lazyWithRetry(() => import('@/pages/planipret/mobile/MMaestro'), 'MMaestro');
 const MClients360 = lazyWithRetry(() => import('@/pages/planipret/mobile/MClients360'), 'MClients360');
 const MBroker360 = lazyWithRetry(() => import('@/pages/planipret/mobile/MBroker360'), 'MBroker360');
 const MClientDetail = lazyWithRetry(() => import('@/pages/planipret/mobile/MClientDetail'), 'MClientDetail');
@@ -177,6 +178,7 @@ export default function App() {
                     <Route path="stats" element={<MStats />} />
                     <Route path="commissions" element={<MCommissions />} />
                     <Route path="tasks" element={<MTasks />} />
+                    <Route path="maestro" element={<MMaestro />} />
                     <Route path="clients-360" element={<MClients360 />} />
                     <Route path="brokers-360" element={<MBroker360 />} />
                     <Route path="clients-360/:clientKey" element={<MClientDetail />} />

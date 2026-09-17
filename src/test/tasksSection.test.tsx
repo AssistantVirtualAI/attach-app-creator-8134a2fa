@@ -121,6 +121,7 @@ describe("TasksSection", () => {
     await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(2));
     expect(screen.getAllByText("Rappeler Jean")[0]).toBeInTheDocument();
     expect(screen.queryByText(/Failed to send/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Dernier état connu affiché/)).toBeInTheDocument();
   });
 
   it("opens the composer from the + button", async () => {

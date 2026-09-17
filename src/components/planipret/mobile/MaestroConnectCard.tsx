@@ -30,9 +30,14 @@ type StatusData = {
 };
 
 const EDGE_TIMEOUT_MS = 8_000;
-const STATUS_COOLDOWN_MS = 5_000;
+const STATUS_COOLDOWN_MS = 60_000;
+const STATUS_FRESH_MS = 5 * 60_000;
 const POST_AUTH_WINDOW_MS = 60_000;
 const POST_AUTH_POLL_DELAYS = [0, 2_000, 5_000];
+
+// Shared across mounts: navigating between Commissions / Tâches remounts this
+// card, and a forced status call on every mount made the app feel laggy.
+const statusCache: { data: StatusData | null; at: number } = { data: null, at: 0 };
 
 function statusFrom(data: StatusData): Status {
   if (data.status === "connected" || data.connected) return "connected";

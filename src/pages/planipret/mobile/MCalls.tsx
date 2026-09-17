@@ -862,7 +862,10 @@ function TranscriptView({
 
   if ((loading || preparing) && !has) {
     return (
+      <div className="space-y-3">
+      <TranscriptStatusBanner s={status} has={false} />
       <div className="pp-card p-4 space-y-3">
+
         <div className="flex items-center gap-2 text-xs" style={{ color: "var(--pp-text-primary)" }}>
           <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--pp-brand-accent)" }} />
           {preparing

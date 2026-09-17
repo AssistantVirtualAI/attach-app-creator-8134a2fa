@@ -36,8 +36,13 @@ function sameFile(a, b) {
   return fs.existsSync(a) && fs.existsSync(b) && read(a) === read(b);
 }
 
+function isTestSource(file) {
+  const relative = path.relative(appSrc, file);
+  return /(?:^|[\/])(?:__tests__|test|tests)(?:[\/]|$)|\.(?:test|spec)\.[cm]?[jt]sx?$|_test\.[cm]?[jt]sx?$/.test(relative);
+}
+
 function scanImports() {
-  const files = walk(appSrc).filter((file) => [".ts", ".tsx", ".js", ".jsx"].includes(path.extname(file)));
+  const files = walk(appSrc).filter((file) => [".ts", ".tsx", ".js", ".jsx"].includes(path.extname(file)) && !isTestSource(file));
   const importRe = /(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']|import\(["']([^"']+)["']\)/g;
 
   for (const file of files) {
@@ -45,6 +50,7 @@ function scanImports() {
     let match;
     while ((match = importRe.exec(source))) {
       const spec = match[1] || match[2];
+      if (/\b(?:import|export)\s+type\b/.test(match[0])) continue;
       if (!spec || !spec.startsWith(".")) continue;
       const resolved = path.resolve(path.dirname(file), spec);
       assert(resolved === appSrc || resolved.startsWith(appSrc + path.sep), `${path.relative(appDir, file)} imports outside mobile src: ${spec}`);

@@ -43,6 +43,19 @@ describe("presentCallParty", () => {
     expect(party.formattedPhone).toBe("(514) 555-4567");
   });
 
+  it("uses the resolved directory name for a known internal extension", () => {
+    const party = presentCallParty({
+      direction: "inbound",
+      fromNumber: "1037",
+      resolvedName: "Sandra Allard",
+      ownExtension: "111",
+    });
+
+    expect(party.name).toBe("Sandra Allard");
+    expect(party.phone).toBeNull();
+    expect(party.internalExtension).toBe("1037");
+  });
+
   it("does not treat a numeric caller-id-name as a person name", () => {
     const party = presentCallParty({
       direction: "inbound",

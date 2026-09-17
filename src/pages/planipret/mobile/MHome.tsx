@@ -97,6 +97,8 @@ export default function MHome() {
   const [briefAt, setBriefAt] = useState<number | null>(null);
   const [briefErr, setBriefErr] = useState<string | null>(null);
   const briefInFlight = useRef(false);
+  const statsInFlight = useRef<Promise<void> | null>(null);
+  const realtimeRefreshTimer = useRef<number | null>(null);
 
 
 
@@ -116,8 +118,9 @@ export default function MHome() {
 
   const loadStats = async () => {
     if (!profile) return;
+    if (statsInFlight.current) return statsInFlight.current;
     setStatsLoading(true);
-    try {
+    const request = (async () => { try {
     const { sinceIso, untilIso } = periodRange(period);
     const nowIso = new Date().toISOString();
     const weekEnd = new Date(); weekEnd.setDate(weekEnd.getDate() + 7);
@@ -245,7 +248,10 @@ export default function MHome() {
       console.error("[MHome] loadStats failed", e);
     } finally {
       setStatsLoading(false);
-    }
+      statsInFlight.current = null;
+    } })();
+    statsInFlight.current = request;
+    return request;
   };
 
 
@@ -299,13 +305,21 @@ export default function MHome() {
   useEffect(() => {
     if (!profile?.user_id) return;
     const uid = profile.user_id;
+    const scheduleStatsRefresh = () => {
+      if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
+      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(); }, 1200);
+    };
     const ch = supabase
       .channel(`mhome-live-${uid}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_calls", filter: `user_id=eq.${uid}` }, () => loadStats())
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_messages", filter: `user_id=eq.${uid}` }, () => loadStats())
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_voicemails", filter: `user_id=eq.${uid}` }, () => loadStats())
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_calls", filter: `user_id=eq.${uid}` }, scheduleStatsRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_messages", filter: `user_id=eq.${uid}` }, scheduleStatsRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_voicemails", filter: `user_id=eq.${uid}` }, scheduleStatsRefresh)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
+      realtimeRefreshTimer.current = null;
+      void supabase.removeChannel(ch);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.user_id, period]);
 

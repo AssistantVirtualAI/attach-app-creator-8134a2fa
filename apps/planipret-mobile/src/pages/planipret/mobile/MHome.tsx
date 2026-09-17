@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadBriefCache, saveBriefCache, isBriefFresh } from "@/lib/planipret/avaBriefCache";
 
 import { useOutletContext, useNavigate } from "react-router-dom";
@@ -15,31 +15,22 @@ import { toast } from "sonner";
 import PWAInstallBanner from "@/components/planipret/PWAInstallBanner";
 import ExtensionSyncBanner from "@/components/planipret/mobile/ExtensionSyncBanner";
 import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
+import CommissionHomeCard from "@/components/planipret/mobile/CommissionHomeCard";
+
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
-import { retryWithBackoff } from "@/lib/net/resilient";
 import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365ConnectionNotice";
 import { useMs365Status } from "@/hooks/useMs365Status";
 import BriefListenButton from "@/components/planipret/mobile/BriefListenButton";
-import CommissionHomeCard from "@/components/planipret/mobile/CommissionHomeCard";
-import TasksHomeCard from "@/components/planipret/mobile/TasksHomeCard";
+import TasksSection from "@/components/planipret/mobile/TasksSection";
+import { readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";
 
 
 
 type Period = "day" | "week" | "month" | "shift";
 const DEFAULT_PERIOD: Period = "month";
-
-// Courtiers au Québec : l'agenda Microsoft est toujours affiché en heure de Toronto.
-const PP_TZ = "America/Toronto";
-const ppDayKey = (d: Date) => {
-  const p: Record<string, string> = {};
-  for (const part of new Intl.DateTimeFormat("en-CA", {
-    timeZone: PP_TZ, year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(d)) if (part.type !== "literal") p[part.type] = part.value;
-  return `${p.year}-${p.month}-${p.day}`;
-};
 
 function periodRange(period: Period) {
   const now = new Date();
@@ -84,22 +75,6 @@ export default function MHome() {
     useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
 
-  // Native SIP registration state (PJSIP). Falls back to "rest" when the
-  // native engine isn't available — the REST click-to-call path still works.
-  const [sipStatus, setSipStatus] = useState<"registered" | "rest" | "error">("rest");
-  const [sipExtension, setSipExtension] = useState<string | null>(null);
-  useEffect(() => {
-    const handler = (e: any) => {
-      const d = e?.detail ?? {};
-      setSipStatus(d.registered ? "registered" : d.state === "failed" ? "error" : "rest");
-      setSipExtension(d.extension ?? d.username ?? null);
-    };
-    window.addEventListener("sip-registration-state", handler);
-    return () => window.removeEventListener("sip-registration-state", handler);
-  }, []);
-
-
-
   const [period, setPeriod] = useState<Period>(() => {
     try {
       const saved = localStorage.getItem("pp.mobile.period.v2") as Period | null;
@@ -118,12 +93,15 @@ export default function MHome() {
   const [msCalendarError, setMsCalendarError] = useState<string | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [brief, setBrief] = useState<any | null>(null);
+  const [briefExpanded, setBriefExpanded] = useState(false);
+
   const [briefLoading, setBriefLoading] = useState(false);
-  const [briefErr, setBriefErr] = useState<string | null>(null);
   const [briefAt, setBriefAt] = useState<number | null>(null);
+  const [briefErr, setBriefErr] = useState<string | null>(null);
   const briefInFlight = useRef(false);
   const statsInFlight = useRef<Promise<void> | null>(null);
   const realtimeRefreshTimer = useRef<number | null>(null);
+
 
 
   useMaestroPipelineToasts(profile?.user_id);
@@ -140,11 +118,29 @@ export default function MHome() {
   });
   const firstName = (profile?.full_name ?? t("home.broker")).split(" ")[0];
 
-  const loadStats = async () => {
+  const statsCacheKey = `home:stats:${profile?.user_id ?? "anon"}:${period}`;
+
+  const loadStats = async (force = false) => {
     if (!profile) return;
     if (statsInFlight.current) return statsInFlight.current;
+    // Revenir sur l'accueil ne relance pas les endpoints : la vue est repeinte
+    // depuis le cache tant qu'elle a moins de 5 minutes.
+    if (!force) {
+      const cached = readScreenCache<any>(statsCacheKey, TTL.fiveMinutes);
+      if (cached) {
+        setStats(cached.value.stats);
+        setRecent(cached.value.recent ?? []);
+        setHotLeads(cached.value.hotLeads ?? []);
+        setDueReminders(cached.value.dueReminders ?? []);
+        setMeetings(cached.value.meetings ?? []);
+        setMsMeetings(cached.value.msMeetings ?? []);
+        setStatsLoading(false);
+        return;
+      }
+    }
     setStatsLoading(true);
     const request = (async () => { try {
+
     const { sinceIso, untilIso } = periodRange(period);
     const nowIso = new Date().toISOString();
     const weekEnd = new Date(); weekEnd.setDate(weekEnd.getDate() + 7);
@@ -233,14 +229,9 @@ export default function MHome() {
       try {
         const calStart = new Date(); calStart.setDate(1); calStart.setHours(0,0,0,0);
         const calEnd = new Date(calStart); calEnd.setMonth(calEnd.getMonth() + 2);
-        // Cellular links drop the first request while the radio wakes up —
-        // retry before declaring Microsoft 365 unreachable.
-        const { data: msData, error: msError }: any = await retryWithBackoff(
-          () => supabase.functions.invoke("ms365-actions", {
-            body: { action: "list_calendar_events", payload: { start: calStart.toISOString(), end: calEnd.toISOString(), top: 200 } },
-          }),
-          { attempts: 3, timeoutMs: 12000, label: "ms365_calendar" },
-        );
+        const { data: msData, error: msError } = await supabase.functions.invoke("ms365-actions", {
+          body: { action: "list_calendar_events", payload: { start: calStart.toISOString(), end: calEnd.toISOString(), top: 200 } },
+        });
         if (msError || (msData as any)?.success === false) {
           const errMsg = (msData as any)?.error ?? msError?.message ?? t("screens.home.calendarUnavailable");
           setMsCalendarError(errMsg);
@@ -261,7 +252,7 @@ export default function MHome() {
     }
     setMsMeetings(microsoftEvents);
 
-    setStats({
+    const nextStats = {
       calls: liveCallsInPeriod.length || callsRes.count || 0,
       missed: liveCallsInPeriod.length ? liveCallsInPeriod.filter((c: any) => nsCallDirection(c) === "missed").length : (missedRes.count ?? 0),
       sms: liveSmsThreads.length ? liveSmsThreads.reduce((sum: number, th: any) => sum + nsSmsUnread(th), 0) : (smsRes.count ?? 0),
@@ -270,11 +261,22 @@ export default function MHome() {
       hotLeads: hotCountRes.count ?? 0,
       tasks: tasksCountRes.count ?? 0,
       outbound: outboundRes.count ?? 0,
-    });
-    setRecent(liveRecent.length ? liveRecent : (recentRes.data ?? []));
+    };
+    const nextRecent = liveRecent.length ? liveRecent : (recentRes.data ?? []);
+    setStats(nextStats);
+    setRecent(nextRecent);
     setHotLeads(hotRes.data ?? []);
     setDueReminders(remRes.data ?? []);
     setMeetings(meetingsRes.data ?? []);
+    writeScreenCache(statsCacheKey, {
+      stats: nextStats,
+      recent: nextRecent,
+      hotLeads: hotRes.data ?? [],
+      dueReminders: remRes.data ?? [],
+      meetings: meetingsRes.data ?? [],
+      msMeetings: microsoftEvents,
+    });
+
     } catch (e) {
       console.error("[MHome] loadStats failed", e);
     } finally {
@@ -324,17 +326,10 @@ export default function MHome() {
     saveBriefCache(profile?.user_id, period, data, lang);
   };
 
-
   useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);
-  // Regenerate the brief in the language selected in the app.
-  const firstLangRun = useRef(true);
+
   useEffect(() => {
-    if (firstLangRun.current) { firstLangRun.current = false; return; }
-    loadBrief(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
-  useEffect(() => {
-    registerRefresh(async () => { await Promise.all([loadStats(), loadBrief(true)]); });
+    registerRefresh(async () => { await Promise.all([loadStats(true), loadBrief(true)]); });
     return () => registerRefresh(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.user_id, period]);
@@ -345,7 +340,7 @@ export default function MHome() {
     const uid = profile.user_id;
     const scheduleStatsRefresh = () => {
       if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
-      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(); }, 1200);
+      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(true); }, 1200);
     };
     const ch = supabase
       .channel(`mhome-live-${uid}`)
@@ -491,7 +486,7 @@ export default function MHome() {
               </p>
               {brief.priorities?.length > 0 && (
                 <ol className="mt-3 space-y-1.5">
-                  {brief.priorities.slice(0, 5).map((p: string, i: number) => (
+                  {brief.priorities.slice(0, 3).map((p: string, i: number) => (
                     <li key={i} className="flex items-start gap-2 text-[13px]" style={{ color: "var(--pp-text-secondary)" }}>
                       <span
                         className="mt-[2px] inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold flex-shrink-0"
@@ -503,34 +498,56 @@ export default function MHome() {
                   ))}
                 </ol>
               )}
-              {brief.tips?.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {brief.tips.slice(0, 5).map((tip: any, i: number) => (
-                    <div key={i} className="rounded-xl p-2.5"
-                      style={{ background: "rgba(59,111,160,0.06)", border: "1px solid rgba(59,111,160,0.18)" }}>
-                      <p className="text-[12px] font-semibold" style={{ color: "var(--pp-brand-accent-2)", fontFamily: "Urbanist,sans-serif" }}>
-                        💡 {tip.title}
-                      </p>
-                      <p className="text-[12px] mt-0.5" style={{ color: "var(--pp-text-secondary)" }}>{tip.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
               {brief.focus && (
                 <p className="mt-3 text-[12px] font-semibold" style={{ color: "var(--pp-brand-accent-2)" }}>
                   🎯 {brief.focus}
                 </p>
               )}
-              {brief.risks?.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {brief.risks.map((r: string, i: number) => (
-                    <span key={i} className="pp-pill pp-pill-warning">⚠ {r}</span>
-                  ))}
-                </div>
+
+              {briefExpanded && (
+                <>
+                  {brief.overview && (
+                    <p className="mt-3 text-[12px] leading-relaxed" style={{ color: "var(--pp-text-secondary)" }}>
+                      {brief.overview}
+                    </p>
+                  )}
+                  {brief.tips?.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {brief.tips.slice(0, 2).map((tip: any, i: number) => (
+                        <div key={i} className="rounded-xl p-2.5"
+                          style={{ background: "rgba(59,111,160,0.06)", border: "1px solid rgba(59,111,160,0.18)" }}>
+                          <p className="text-[12px] font-semibold" style={{ color: "var(--pp-brand-accent-2)", fontFamily: "Urbanist,sans-serif" }}>
+                            💡 {tip.title}
+                          </p>
+                          <p className="text-[12px] mt-0.5" style={{ color: "var(--pp-text-secondary)" }}>{tip.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {brief.risks?.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {brief.risks.slice(0, 2).map((r: string, i: number) => (
+                        <span key={i} className="pp-pill pp-pill-warning">⚠ {r}</span>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
+
+              {(brief.overview || brief.tips?.length > 0 || brief.risks?.length > 0) && (
+                <button
+                  onClick={() => setBriefExpanded((v) => !v)}
+                  className="mt-2 text-[11px] font-semibold"
+                  style={{ color: "var(--pp-brand-accent-2)", fontFamily: "Urbanist,sans-serif" }}>
+                  {briefExpanded
+                    ? (lang === "en" ? "Show less" : "Voir moins")
+                    : (lang === "en" ? "Show more" : "Voir plus")}
+                </button>
+              )}
+
               {brief.suggestions?.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {brief.suggestions.map((s: any, i: number) => (
+                  {brief.suggestions.slice(0, 3).map((s: any, i: number) => (
                     <button key={i} onClick={() => handleSuggestion(s)}
                       className="pp-pill pp-pill-accent active:scale-95 transition">
                       {s.kind === "call" ? "📞" : s.kind === "sms" ? "💬" : s.kind === "email" ? "✉" : "⏰"} {s.label}
@@ -539,6 +556,7 @@ export default function MHome() {
                 </div>
               )}
             </>
+
           ) : (
             <p className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{t("home.preparingBrief")}</p>
           )}
@@ -590,12 +608,7 @@ export default function MHome() {
         )}
       </section>
 
-      {/* ===== COMMISSIONS (KPI + tendance 6 mois + prêteurs) ===== */}
       <CommissionHomeCard profile={profile} lang={lang} />
-
-      {/* ===== TÂCHES MAESTRO (aperçu) ===== */}
-      <TasksHomeCard profile={profile} lang={lang} />
-
 
 
       {/* ===== MICROSOFT CALENDAR (month grid + agenda) ===== */}
@@ -607,21 +620,24 @@ export default function MHome() {
         lang={lang}
       />
 
-      {/* ===== SIP STATUS + DEBUG SHORTCUT ===== */}
+      {/* ===== MY TASKS (under the Microsoft calendar) ===== */}
+      <TasksSection
+        userId={profile?.user_id ?? null}
+        lang={lang as "fr" | "en"}
+        defaultTarget={profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null}
+        onSeeAll={() => navigate("/mplanipret/tasks")}
+      />
+
+
+      {/* ===== SIP DEBUG SHORTCUT ===== */}
       <button
         type="button"
         onClick={() => navigate("/mplanipret/sip-debug")}
         className="w-full flex items-center gap-2 px-3 py-2 rounded-xl active:scale-[0.99] transition"
         style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
       >
-        <span className="w-2 h-2 rounded-full" style={{ background: sipStatus === "error" ? "#EF4444" : "#10B981" }} />
-        <span className="text-[12px] font-semibold flex-1 text-left">
-          {sipStatus === "registered"
-            ? `En ligne — Ext ${sipExtension ?? ""}`.trim()
-            : sipStatus === "error"
-              ? "Hors ligne"
-              : "Prête (REST)"}
-        </span>
+        <span className="w-2 h-2 rounded-full" style={{ background: "#10B981" }} />
+        <span className="text-[12px] font-semibold flex-1 text-left">{t("screens.home.sipDebugTitle")}</span>
         <span className="text-[10px] opacity-70">{t("screens.home.open")}</span>
       </button>
 
@@ -653,7 +669,7 @@ export default function MHome() {
                 <button
                   onClick={async () => {
                     await supabase.from("planipret_reminders").update({ status: "done" }).eq("id", r.id);
-                    loadStats();
+                    loadStats(true);
                   }}
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
                   style={{ background: "#fff", border: "1px solid var(--pp-bg-border)", color: "var(--pp-success)" }}>
@@ -665,56 +681,6 @@ export default function MHome() {
         </section>
       )}
 
-      {/* ===== RECENT CALLS ===== */}
-      <section className="pp-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold pp-heading">{t("home.recentCalls")}</h2>
-          <button onClick={() => navigate("/mplanipret/calls")}
-            className="text-[11px] flex items-center gap-0.5" style={{ color: "var(--pp-brand-accent)" }}>
-            {t("home.seeAll")} <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
-        {statsLoading ? (
-          <div className="space-y-2">{[0,1,2].map((i) => <Shimmer key={i} className="h-10" />)}</div>
-        ) : recent.length === 0 ? (
-          <p className="text-sm py-4 text-center" style={{ color: "var(--pp-text-muted)" }}>{t("home.noCalls")}</p>
-        ) : (
-          <ul className="space-y-1">
-            {recent.map((c) => {
-              const inbound = c.direction === "inbound";
-              const missed = c.direction === "missed";
-              const Icon = missed ? X : inbound ? ArrowDownLeft : ArrowUpRight;
-              const color = missed ? "var(--pp-danger)" : inbound ? "var(--pp-brand-accent)" : "var(--pp-success)";
-              const name = inbound || missed ? (c.from_name || c.from_number) : (c.to_name || c.to_number);
-              const phone = inbound || missed ? c.from_number : c.to_number;
-              return (
-                <li key={c.id}
-                  className="flex items-center gap-3 py-2.5 px-2 rounded-lg active:opacity-70"
-                  onClick={() => openDialer(phone ?? undefined)}>
-                  <span className="w-8 h-8 rounded-full flex items-center justify-center"
-                    style={{ background: "#F0F4F9", color }}>
-                    <Icon className="w-3.5 h-3.5" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
-                      {name ?? t("common.unknown")}
-                      {c.ai_summary && (
-                        <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold"
-                          style={{ background: "rgba(108,92,231,0.10)", color: "var(--pp-agent)", border: "1px solid rgba(108,92,231,0.30)", fontFamily: "Urbanist,sans-serif" }}>
-                          🤖 {t("home.ai")}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
-                      {c.started_at ? new Date(c.started_at).toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }
@@ -774,7 +740,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
     for (const e of events) {
       const dt = e.start?.dateTime ? new Date(e.start.dateTime) : null;
       if (!dt) continue;
-      const key = ppDayKey(dt);
+      const key = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
       (map[key] ||= []).push(e);
     }
     for (const k of Object.keys(map)) {
@@ -783,7 +749,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
     return map;
   }, [events]);
 
-  const dayKey = (d: Date) => ppDayKey(d);
+  const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
   const selectedEvents = eventsByDay[dayKey(selected)] ?? [];
 
   // Build 6-week grid starting from Sunday
@@ -921,11 +887,11 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
                       <div className="w-14 flex-shrink-0 text-center px-1.5 py-1 rounded-md"
                         style={{ background: "rgba(46,155,220,0.12)", color: "var(--pp-brand-accent)", fontFamily: "Urbanist,sans-serif" }}>
                         <div className="text-[11px] font-bold tabular-nums leading-none">
-                          {start ? start.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", timeZone: PP_TZ }) : "—"}
+                          {start ? start.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : "—"}
                         </div>
                         {end && (
                           <div className="text-[9px] mt-0.5 opacity-70 tabular-nums leading-none">
-                            {end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", timeZone: PP_TZ })}
+                            {end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
                           </div>
                         )}
                       </div>
@@ -991,7 +957,7 @@ function NewMeetingSheet({
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const tz = "America/Toronto";
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Toronto";
 
   const submit = async () => {
     if (!subject.trim()) { toast.error(t("screens.home.titleRequired")); return; }
@@ -1002,9 +968,8 @@ function NewMeetingSheet({
           action: "create_calendar_event",
           payload: {
             subject: subject.trim(),
-            // datetime-local déjà saisi en heure de Toronto : ne pas convertir en UTC.
-            start: { dateTime: String(start).slice(0, 16), timeZone: tz },
-            end: { dateTime: String(end).slice(0, 16), timeZone: tz },
+            start: { dateTime: new Date(start).toISOString(), timeZone: tz },
+            end: { dateTime: new Date(end).toISOString(), timeZone: tz },
             body,
             attendees: attendees.split(",").map((s) => s.trim()).filter(Boolean),
             isOnlineMeeting: teams,

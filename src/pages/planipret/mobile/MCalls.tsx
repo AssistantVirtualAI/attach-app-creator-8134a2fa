@@ -885,12 +885,16 @@ function TranscriptView({
           ))}
         </div>
       </div>
+      </div>
     );
   }
 
   if (!has) {
     return (
+      <div className="space-y-3">
+      <TranscriptStatusBanner s={status} has={false} />
       <div className="pp-card p-4 space-y-3">
+
         <div className="text-xs" style={{ color: "var(--pp-warning, #F5A623)" }}>
           ⚠️ {t("calls.transcriptUnavailable") || "Transcription non disponible."}
         </div>

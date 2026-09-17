@@ -521,6 +521,7 @@ export default function PlanipretAdminLayout() {
                   ? raw
                   : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic")
                     : key === "maestroSync" ? (lang === "en" ? "Maestro sync" : "Sync Maestro")
+                    : key === "maestroBrokers" ? (lang === "en" ? "Maestro global view" : "Vue globale Maestro")
                     : key === "contracts" ? (lang === "en" ? "Contracts" : "Contrats")
                     : key === "commissionAudit" ? (lang === "en" ? "Commission audit" : "Audit commissions")
                     : key === "brokerCommissions" ? (lang === "en" ? "Broker commissions" : "Commissions par courtier")

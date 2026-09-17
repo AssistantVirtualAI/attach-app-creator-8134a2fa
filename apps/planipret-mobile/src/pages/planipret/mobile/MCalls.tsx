@@ -19,6 +19,8 @@ import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStud
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
+import { presentCallParty } from "@/lib/planipret/callPresentation";
+
 
 
 const PRIMARY = "var(--pp-brand-accent-2)";
@@ -79,20 +81,6 @@ type Insight = {
 const isOutbound = (c: Call) => c.direction === "outbound";
 const isMissed = (c: Call) => c.direction === "missed" || c.status === "missed" || c.status === "no-answer";
 
-// Normalize NS values like "sip:15145551234@planipret.ca", "tel:+1...",
-// "anonymous", "1000@planipret.ca", or empty strings.
-function cleanNumber(v: unknown): string | null {
-  if (v == null) return null;
-  let s = String(v).trim();
-  if (!s) return null;
-  s = s.replace(/^sips?:/i, "").replace(/^tel:/i, "");
-  const at = s.indexOf("@");
-  if (at !== -1) s = s.slice(0, at);
-  s = s.replace(/^\+?1(\d{10})$/, "$1");
-  if (!s || /^(anonymous|unknown|restricted|private|unavailable)$/i.test(s)) return null;
-  return s;
-}
-
 const pick = (raw: any, keys: string[]) => {
   for (const k of keys) {
     const v = raw?.[k];
@@ -100,29 +88,27 @@ const pick = (raw: any, keys: string[]) => {
   }
   return null;
 };
-function fmtPhone(n: string | null): string | null {
-  if (!n) return null;
-  const d = n.replace(/\D/g, "");
-  if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-  if (d.length === 11 && d.startsWith("1")) return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
-  return n;
-}
-
-const otherNumber = (c: Call) => cleanNumber(isOutbound(c) ? c.to_number : c.from_number) || "";
-const otherName = (c: Call) => (isOutbound(c) ? c.to_name : c.from_name) || "";
+const callParty = (c: Call, resolvedName?: string | null) => presentCallParty({
+  direction: c.direction,
+  fromNumber: c.from_number,
+  fromName: c.from_name,
+  toNumber: c.to_number,
+  toName: c.to_name,
+  resolvedName,
+});
+const otherNumber = (c: Call) => callParty(c).phone || "";
+const otherName = (c: Call) => callParty(c).name || "";
 // Label priority: NS caller_id_name → resolved (Maestro/MS/contacts) → phone
 // number → localized "Numéro non résolu" fallback.
 const UNRESOLVED_FR = "Numéro non résolu";
 const UNRESOLVED_EN = "Unresolved number";
 function displayLabelWith(c: Call, resolved?: string | null, lang: "fr" | "en" = "fr"): string {
-  const name = otherName(c);
-  if (name) return name;
-  if (resolved) return resolved;
-  const num = fmtPhone(otherNumber(c));
-  if (num) return num;
+  const party = callParty(c, resolved);
+  if (party.name) return party.name;
+  if (party.formattedPhone) return party.formattedPhone;
   return lang === "en" ? UNRESOLVED_EN : UNRESOLVED_FR;
 }
-const displayLabel = (c: Call) => otherName(c) || fmtPhone(otherNumber(c)) || UNRESOLVED_FR;
+const displayLabel = (c: Call) => callParty(c).name || callParty(c).formattedPhone || UNRESOLVED_FR;
 
 const localizedDateTime = (iso: string, lang: "fr" | "en", todayLabel: string, yesterdayLabel: string) => {
   const d = new Date(iso);
@@ -234,6 +220,7 @@ export default function MCalls() {
         const to_number = pick(it, ["to_number", "to", "destination", "dialed_number", "dnis", "term_to_user", "term-user", "call-term-user", "orig_to_user", "orig-to-user", "call-orig-to-uri", "call-term-to-uri"]) ?? enriched?.to_number ?? null;
         const from_name = pick(it, ["from_name", "caller_id_name", "caller-id-name", "orig_from_name", "orig-name", "by_name"]) ?? enriched?.from_name ?? null;
         return {
+          ...(enriched ?? {}),
           id: enriched?.id ?? nsId ?? `ns-${i}`,
           user_id: enriched?.user_id ?? userId,
           ns_call_id: nsId,
@@ -253,8 +240,9 @@ export default function MCalls() {
           has_recording: Boolean(pick(it, ["recording_url", "ns_recording_url", "file-access-url", "call-recording-status", "recording", "record_url", "url"]) ?? enriched?.has_recording),
           transcript: enriched?.transcript ?? null,
           ai_summary: enriched?.ai_summary ?? null,
-          metadata: it,
-          ...(enriched ?? {}),
+          // Live CDR identity is authoritative. An older local row may have
+          // captured the broker extension instead of the external caller.
+          metadata: { ...(enriched?.metadata ?? {}), netSapiens: it },
         } as Call;
       });
 
@@ -676,12 +664,13 @@ function CallRow({ call, onTap, onCall, showCallBtn }: { call: Call; onTap: () =
   const out = isOutbound(call);
   const dirColor = missed ? "var(--pp-danger)" : out ? "var(--pp-success)" : "var(--pp-brand-accent)";
   const Icon = missed ? PhoneMissed : out ? PhoneOutgoing : PhoneIncoming;
-  const num = otherNumber(call);
+  const party = callParty(call);
+  const num = party.phone || "";
   const names = useCallerNames([num]);
-  const resolved = names[num];
-  const label = displayLabelWith(call, resolved, lang as "fr" | "en");
-  const numberSub = fmtPhone(num);
-  const showNumberSub = !!numberSub && numberSub !== label;
+  const partyWithName = callParty(call, names[num]);
+  const label = partyWithName.name || partyWithName.formattedPhone || (lang === "en" ? UNRESOLVED_EN : UNRESOLVED_FR);
+  const numberSub = partyWithName.formattedPhone;
+  const showNumberSub = !!numberSub && !!partyWithName.name;
   const st = statusInfo(call, lang as "fr" | "en");
   const hasAi = !!call.ai_summary;
 

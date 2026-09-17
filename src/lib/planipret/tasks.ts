@@ -197,9 +197,9 @@ export async function createClientFollowUpTask(input: {
   const userXid = String(target.user?.id ?? "").trim();
   const contractXid = String(target.contracts?.[0]?.id ?? "").trim();
   // A broker-created follow-up for a client belongs on the loan contract
-  // whenever Maestro exposes one.  Using the person target first can create a
+  // whenever Maestro exposes one. Using the person target first can create a
   // valid user task which is absent from the contract view, misleading the
-  // broker into believing no reminder was created.  Fall back to the user only
+  // broker into believing no reminder was created. Fall back to the user only
   // for a client that has no eligible contract target.
   const xid = contractXid || userXid;
   const type = contractXid ? "contract" : "user";
@@ -232,14 +232,32 @@ export const deleteTask = (task_id: string, idempotency_key?: string) =>
 
 /** Local per-user cache so the home screen paints instantly. */
 const cacheKey = (userId: string) => `pp_tasks_cache_${userId}`;
+export const TASK_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
-export function loadTaskCache(userId: string): NormalizedTask[] {
+type TaskCacheEntry = { tasks: NormalizedTask[]; at: number };
+
+function readTaskCacheEntry(userId: string): TaskCacheEntry | null {
   try {
     const raw = localStorage.getItem(cacheKey(userId));
-    if (!raw) return [];
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.tasks) ? parsed.tasks : [];
-  } catch { return []; }
+    if (!Array.isArray(parsed?.tasks)) return null;
+    return { tasks: parsed.tasks, at: Number(parsed.at) || 0 };
+  } catch { return null; }
+}
+
+export function loadTaskCache(userId: string): NormalizedTask[] {
+  return readTaskCacheEntry(userId)?.tasks ?? [];
+}
+
+export function taskCacheUpdatedAt(userId: string): number | null {
+  const at = readTaskCacheEntry(userId)?.at ?? 0;
+  return at > 0 ? at : null;
+}
+
+export function isTaskCacheFresh(userId: string, now = Date.now()): boolean {
+  const at = taskCacheUpdatedAt(userId);
+  return at !== null && now - at >= 0 && now - at < TASK_SYNC_INTERVAL_MS;
 }
 
 export function saveTaskCache(userId: string, tasks: NormalizedTask[]) {

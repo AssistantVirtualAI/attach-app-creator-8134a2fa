@@ -25,11 +25,14 @@ import { useMs365Status } from "@/hooks/useMs365Status";
 import BriefListenButton from "@/components/planipret/mobile/BriefListenButton";
 import CommissionHomeCard from "@/components/planipret/mobile/CommissionHomeCard";
 import TasksHomeCard from "@/components/planipret/mobile/TasksHomeCard";
+import { presentCallParty } from "@/lib/planipret/callPresentation";
+import { loadMHomeCache, saveMHomeCache } from "@/lib/mhomeCache";
 
 
 
 type Period = "day" | "week" | "month" | "shift";
 const DEFAULT_PERIOD: Period = "month";
+const HOME_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 // Courtiers au Québec : l'agenda Microsoft est toujours affiché en heure de Toronto.
 const PP_TZ = "America/Toronto";
@@ -140,10 +143,21 @@ export default function MHome() {
   });
   const firstName = (profile?.full_name ?? t("home.broker")).split(" ")[0];
 
-  const loadStats = async () => {
+  const loadStats = async (force = false) => {
     if (!profile) return;
     if (statsInFlight.current) return statsInFlight.current;
-    setStatsLoading(true);
+    const cached = loadMHomeCache(profile.user_id ?? profile.id, period);
+    if (cached) {
+      setStats(cached.stats);
+      setRecent(cached.recent);
+      setHotLeads(cached.hotLeads);
+      setDueReminders(cached.dueReminders);
+      setMeetings(cached.meetings);
+      setMsMeetings(cached.msMeetings);
+      setStatsLoading(false);
+    }
+    if (!force && cached && Date.now() - cached.cachedAt < HOME_SYNC_INTERVAL_MS) return;
+    if (!cached) setStatsLoading(true);
     const request = (async () => { try {
     const { sinceIso, untilIso } = periodRange(period);
     const nowIso = new Date().toISOString();
@@ -226,7 +240,7 @@ export default function MHome() {
     const liveVmItems = Array.isArray((nsVmLive.data as any)?.items) ? (nsVmLive.data as any).items : [];
     const liveVmUnread = liveVmItems.filter((v: any) => !(v.is_read ?? v.read ?? false)).length;
 
-    let microsoftEvents: any[] = [];
+    let microsoftEvents: any[] = cached?.msMeetings ?? [];
     setMsCalendarError(null);
     if (ms365Connected(profile)) {
       setMsCalendarLoading(true);
@@ -261,7 +275,7 @@ export default function MHome() {
     }
     setMsMeetings(microsoftEvents);
 
-    setStats({
+    const nextStats = {
       calls: liveCallsInPeriod.length || callsRes.count || 0,
       missed: liveCallsInPeriod.length ? liveCallsInPeriod.filter((c: any) => nsCallDirection(c) === "missed").length : (missedRes.count ?? 0),
       sms: liveSmsThreads.length ? liveSmsThreads.reduce((sum: number, th: any) => sum + nsSmsUnread(th), 0) : (smsRes.count ?? 0),
@@ -270,11 +284,24 @@ export default function MHome() {
       hotLeads: hotCountRes.count ?? 0,
       tasks: tasksCountRes.count ?? 0,
       outbound: outboundRes.count ?? 0,
+    };
+    const nextRecent = liveRecent.length ? liveRecent : (recentRes.data ?? []);
+    const nextHotLeads = hotRes.data ?? [];
+    const nextReminders = remRes.data ?? [];
+    const nextMeetings = meetingsRes.data ?? [];
+    setStats(nextStats);
+    setRecent(nextRecent);
+    setHotLeads(nextHotLeads);
+    setDueReminders(nextReminders);
+    setMeetings(nextMeetings);
+    saveMHomeCache(profile.user_id ?? profile.id, period, {
+      stats: nextStats,
+      recent: nextRecent,
+      hotLeads: nextHotLeads,
+      dueReminders: nextReminders,
+      meetings: nextMeetings,
+      msMeetings: microsoftEvents,
     });
-    setRecent(liveRecent.length ? liveRecent : (recentRes.data ?? []));
-    setHotLeads(hotRes.data ?? []);
-    setDueReminders(remRes.data ?? []);
-    setMeetings(meetingsRes.data ?? []);
     } catch (e) {
       console.error("[MHome] loadStats failed", e);
     } finally {
@@ -334,7 +361,7 @@ export default function MHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
   useEffect(() => {
-    registerRefresh(async () => { await Promise.all([loadStats(), loadBrief(true)]); });
+    registerRefresh(async () => { await Promise.all([loadStats(true), loadBrief(true)]); });
     return () => registerRefresh(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.user_id, period]);
@@ -345,7 +372,7 @@ export default function MHome() {
     const uid = profile.user_id;
     const scheduleStatsRefresh = () => {
       if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
-      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(); }, 1200);
+      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(true); }, 1200);
     };
     const ch = supabase
       .channel(`mhome-live-${uid}`)
@@ -685,8 +712,16 @@ export default function MHome() {
               const missed = c.direction === "missed";
               const Icon = missed ? X : inbound ? ArrowDownLeft : ArrowUpRight;
               const color = missed ? "var(--pp-danger)" : inbound ? "var(--pp-brand-accent)" : "var(--pp-success)";
-              const name = inbound || missed ? (c.from_name || c.from_number) : (c.to_name || c.to_number);
-              const phone = inbound || missed ? c.from_number : c.to_number;
+              const party = presentCallParty({
+                direction: c.direction,
+                fromNumber: c.from_number,
+                fromName: c.from_name,
+                toNumber: c.to_number,
+                toName: c.to_name,
+                ownExtension: profile?.ns_extension ?? profile?.extension,
+              });
+              const name = party.name || party.formattedPhone || t("common.unknown");
+              const phone = party.phone;
               return (
                 <li key={c.id}
                   className="flex items-center gap-3 py-2.5 px-2 rounded-lg active:opacity-70"
@@ -697,7 +732,7 @@ export default function MHome() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
-                      {name ?? t("common.unknown")}
+                      {name}
                       {c.ai_summary && (
                         <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold"
                           style={{ background: "rgba(108,92,231,0.10)", color: "var(--pp-agent)", border: "1px solid rgba(108,92,231,0.30)", fontFamily: "Urbanist,sans-serif" }}>
@@ -705,8 +740,8 @@ export default function MHome() {
                         </span>
                       )}
                     </p>
-                    <p className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
-                      {c.started_at ? new Date(c.started_at).toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
+                    <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>
+                      {[party.name ? party.formattedPhone : null, c.started_at ? new Date(c.started_at).toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : null].filter(Boolean).join(" · ")}
                     </p>
                   </div>
                 </li>
@@ -1090,5 +1125,3 @@ function NewMeetingSheet({
     </div>
   );
 }
-
-

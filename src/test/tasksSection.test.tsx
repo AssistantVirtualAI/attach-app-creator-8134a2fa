@@ -36,6 +36,8 @@ vi.mock("@/lib/planipret/tasks", async () => {
     deleteTask: (...a: any[]) => deleteTask(...a),
     listClientTargets: async () => [],
     loadTaskCache: () => [],
+    isTaskCacheFresh: () => false,
+    taskCacheUpdatedAt: () => null,
     saveTaskCache: () => {},
     clearTaskCache: () => {},
   };
@@ -179,7 +181,9 @@ describe("TasksSection", () => {
     render(<TasksSection userId="u1" lang="fr" />);
     (await screen.findAllByText("Rappeler Jean"))[0];
     fireEvent.click(screen.getAllByRole("tab").find((t) => /En retard/.test(t.textContent ?? ""))!);
-    await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith(expect.objectContaining({ filter: "overdue" })));
+    await waitFor(() => expect(listTasks.mock.calls.some(
+      ([opts]) => opts?.filter === "overdue",
+    )).toBe(true));
   });
 });
 

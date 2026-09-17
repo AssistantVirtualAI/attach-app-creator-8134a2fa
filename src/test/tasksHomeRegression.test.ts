@@ -4,16 +4,15 @@ import { resolve } from "node:path";
 
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
 
-describe("MHome — tasks replace the recent calls block", () => {
+describe("MHome — task and recent-call cards", () => {
   const home = read("src/pages/planipret/mobile/MHome.tsx");
 
-  it("renders the tasks section", () => {
-    expect(home).toContain("TasksSection");
+  it("renders the task home card", () => {
+    expect(home).toContain("TasksHomeCard");
   });
 
-  it("no longer renders a recent-calls block on the home screen", () => {
-    expect(home).not.toMatch(/recentCalls/);
-    expect(home).not.toMatch(/Appels récents/);
+  it("renders recent calls through the external-party presentation helper", () => {
+    expect(home).toContain("presentCallParty");
   });
 });
 

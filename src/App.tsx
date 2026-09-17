@@ -81,6 +81,7 @@ const PACommissionRegistry = lazyWithRetry(() => import("./pages/planipret/admin
 const PAMaestroScope = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroScope"));
 const PATasks = lazyWithRetry(() => import("./pages/planipret/admin/PATasks"));
 const PAMaestroTasks = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroTasks"));
+const PAMaestroBrokers = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroBrokers"));
 const PABroker360 = lazyWithRetry(() => import("./pages/planipret/admin/PABroker360"));
 const PAMaestroClients360 = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroClients360"));
 const PAMaestroClientDetail = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroClientDetail"));
@@ -754,6 +755,7 @@ const App = () => (
                   <Route path="maestro-scope" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroScope /></Suspense>} />
                   <Route path="tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PATasks /></Suspense>} />
                   <Route path="maestro-tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroTasks /></Suspense>} />
+                  <Route path="maestro-brokers" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroBrokers /></Suspense>} />
                   <Route path="broker-360" element={<Suspense fallback={<AdminPageSkeleton />}><PABroker360 /></Suspense>} />
                   <Route path="maestro-clients" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClients360 /></Suspense>} />
                   <Route path="maestro-clients/:clientKey" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClientDetail /></Suspense>} />

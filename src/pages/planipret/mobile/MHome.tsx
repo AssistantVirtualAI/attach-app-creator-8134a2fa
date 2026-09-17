@@ -252,7 +252,7 @@ export default function MHome() {
     }
     setMsMeetings(microsoftEvents);
 
-    setStats({
+    const nextStats = {
       calls: liveCallsInPeriod.length || callsRes.count || 0,
       missed: liveCallsInPeriod.length ? liveCallsInPeriod.filter((c: any) => nsCallDirection(c) === "missed").length : (missedRes.count ?? 0),
       sms: liveSmsThreads.length ? liveSmsThreads.reduce((sum: number, th: any) => sum + nsSmsUnread(th), 0) : (smsRes.count ?? 0),
@@ -261,11 +261,22 @@ export default function MHome() {
       hotLeads: hotCountRes.count ?? 0,
       tasks: tasksCountRes.count ?? 0,
       outbound: outboundRes.count ?? 0,
-    });
-    setRecent(liveRecent.length ? liveRecent : (recentRes.data ?? []));
+    };
+    const nextRecent = liveRecent.length ? liveRecent : (recentRes.data ?? []);
+    setStats(nextStats);
+    setRecent(nextRecent);
     setHotLeads(hotRes.data ?? []);
     setDueReminders(remRes.data ?? []);
     setMeetings(meetingsRes.data ?? []);
+    writeScreenCache(statsCacheKey, {
+      stats: nextStats,
+      recent: nextRecent,
+      hotLeads: hotRes.data ?? [],
+      dueReminders: remRes.data ?? [],
+      meetings: meetingsRes.data ?? [],
+      msMeetings: microsoftEvents,
+    });
+
     } catch (e) {
       console.error("[MHome] loadStats failed", e);
     } finally {

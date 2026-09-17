@@ -65,8 +65,7 @@ export default function MMaestro() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const { tasks, loading: tasksLoading, lastSyncAt, setFilter } = usePlanipretTasks(userId);
-  useEffect(() => { setFilter("all"); }, [setFilter]);
+  const { tasks, loading: tasksLoading, lastSyncAt } = usePlanipretTasks(userId, { initialFilter: "all" });
 
   /** Nom du client déjà rattaché à un numéro (via un appel). */
   const nameByPhone = useMemo(() => {

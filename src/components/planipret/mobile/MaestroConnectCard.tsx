@@ -107,15 +107,15 @@ async function invokeMaestroEdge<T>(functionName: string, body: Record<string, u
 export default function MaestroConnectCard() {
   const { lang } = useMplanipretLang();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<Status>("loading");
-  const [data, setData] = useState<StatusData>({});
+  const [status, setStatus] = useState<Status>(() => (statusCache.data ? statusFrom(statusCache.data) : "loading"));
+  const [data, setData] = useState<StatusData>(() => statusCache.data ?? {});
   const [busy, setBusy] = useState(false);
-  const [lastFetch, setLastFetch] = useState<Date | null>(null);
+  const [lastFetch, setLastFetch] = useState<Date | null>(() => (statusCache.at ? new Date(statusCache.at) : null));
   const [showDetails, setShowDetails] = useState(false);
   const pollTimers = useRef<number[]>([]);
   const authInFlight = useRef(false);
   const statusRequest = useRef<Promise<StatusData | null> | null>(null);
-  const lastStatusStartedAt = useRef(0);
+  const lastStatusStartedAt = useRef(statusCache.at);
 
   const isFr = lang === "fr";
   const L = {

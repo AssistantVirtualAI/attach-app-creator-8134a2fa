@@ -43,6 +43,7 @@ export interface UsePlanipretTasks {
 export interface UsePlanipretTasksOptions {
   /** Admin only: scope the list to another broker's Maestro id (read-only). */
   brokerId?: string | null;
+  initialFilter?: TaskFilterValue;
 }
 
 export function usePlanipretTasks(
@@ -58,12 +59,14 @@ export function usePlanipretTasks(
   const [source, setSource] = useState<TaskSource>("projection");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [filter, setFilterState] = useState<TaskFilterValue>("open");
+  const [filter, setFilterState] = useState<TaskFilterValue>(options.initialFilter ?? "open");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [counts, setCounts] = useState({ overdue: 0, today: 0, upcoming: 0, open: 0, all: 0 });
   const generation = useRef(0);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
+  const realtimeTimer = useRef<number | null>(null);
   /** Tasks created locally in the last 5 min — merged in until the server list catches up. */
   const pending = useRef<Map<string, { task: NormalizedTask; at: number }>>(new Map());
 
@@ -92,40 +95,41 @@ export function usePlanipretTasks(
 
   const refresh = useCallback(async () => {
     if (!userId) return;
-    const gen = ++generation.current;
-    setRefreshing(true);
-    const res = await listTasks({ filter, page: 1, limit: PAGE_SIZE, broker_id: brokerId });
-    if (gen !== generation.current) return; // stale identity/response
-    setRefreshing(false);
-    setLoading(false);
-    if (res.success && res.source !== "unavailable") {
-      setSource(res.source);
-      setError(null);
-      setMessage(null);
-      setPage(res.page);
-      setCounts(res.counts);
-      setTotal(res.total);
-      setHasMore(res.has_more);
-      setLastSyncAt(new Date().toISOString());
-      setTasks((current) => {
-        // A successful-but-incomplete response must not briefly erase known
-        // tasks while Maestro still reports that tasks exist.
-        const next = res.tasks.length === 0 && res.counts.all > 0 && current.length > 0
-          ? current
-          : res.tasks;
-        const merged = mergePending(next);
-        if (!brokerId) saveTaskCache(userId, merged);
-        return merged;
-      });
-    } else {
-      // Never hide visible tasks because a background refresh failed, but do
-      // tell the broker that this view is no longer a live Maestro result.
-      // An explicit unavailable source must never be rendered as an empty
-      // successful list or mistaken for a confirmed Maestro synchronisation.
-      setSource(res.source ?? "unavailable");
-      setError(res.error ?? "tasks_unavailable");
-      setMessage(res.message ?? "Liste des tâches Maestro indisponible pour le moment.");
-    }
+    if (refreshInFlight.current) return refreshInFlight.current;
+    const request = (async () => {
+      const gen = ++generation.current;
+      setRefreshing(true);
+      try {
+        const res = await listTasks({ filter, page: 1, limit: PAGE_SIZE, broker_id: brokerId });
+        if (gen !== generation.current) return;
+        setLoading(false);
+        if (res.success && res.source !== "unavailable") {
+          setSource(res.source);
+          setError(null);
+          setMessage(null);
+          setPage(res.page);
+          setCounts(res.counts);
+          setTotal(res.total);
+          setHasMore(res.has_more);
+          setLastSyncAt(new Date().toISOString());
+          setTasks((current) => {
+            const next = res.tasks.length === 0 && res.counts.all > 0 && current.length > 0 ? current : res.tasks;
+            const merged = mergePending(next);
+            if (!brokerId) saveTaskCache(userId, merged);
+            return merged;
+          });
+        } else {
+          setSource(res.source ?? "unavailable");
+          setError(res.error ?? "tasks_unavailable");
+          setMessage(res.message ?? "Liste des tâches Maestro indisponible pour le moment.");
+        }
+      } finally {
+        if (gen === generation.current) setRefreshing(false);
+        refreshInFlight.current = null;
+      }
+    })();
+    refreshInFlight.current = request;
+    return request;
   }, [userId, filter, brokerId, mergePending]);
 
   const loadMore = useCallback(async () => {
@@ -154,27 +158,23 @@ export function usePlanipretTasks(
 
   useEffect(() => { if (userId) void refresh(); }, [userId, refresh]);
 
-  // Refresh when the home screen comes back to the foreground.
-  useEffect(() => {
-    if (!userId) return;
-    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
-  }, [userId, refresh]);
-
   // Realtime: AVA (or another device) mutated a task.
   useEffect(() => {
     if (!userId) return;
+    const scheduleRefresh = () => {
+      if (realtimeTimer.current) window.clearTimeout(realtimeTimer.current);
+      realtimeTimer.current = window.setTimeout(() => { void refresh(); }, 250);
+    };
     const channel = supabase.channel(`pp-tasks:${userId}`)
-      .on("broadcast", { event: "tasks" }, () => { void refresh(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_tasks_projection" }, () => { void refresh(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_task_mutations" }, () => { void refresh(); })
+      .on("broadcast", { event: "tasks" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_tasks_projection", filter: `user_id=eq.${userId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_task_mutations", filter: `user_id=eq.${userId}` }, scheduleRefresh)
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => {
+      if (realtimeTimer.current) window.clearTimeout(realtimeTimer.current);
+      realtimeTimer.current = null;
+      void supabase.removeChannel(channel);
+    };
   }, [userId, refresh]);
 
   const create = useCallback(async (input: Record<string, unknown>) => {

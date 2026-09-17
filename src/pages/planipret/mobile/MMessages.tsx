@@ -198,6 +198,9 @@ type NsMessage = {
   read_at?: string | null;
 };
 
+const SMS_CACHE_MS = 60_000;
+const smsThreadCache = new Map<string, { threads: NsThread[]; at: number }>();
+
 const threadId = (t: any) =>
   String(t.messagesession_id ?? t["messagesession-id"] ?? t.session_id ?? t["session-id"] ?? t.thread_id ?? t["thread-id"] ?? t.conversation_id ?? t.id ?? "").trim();
 const threadPeer = (t: any) => {
@@ -300,11 +303,13 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   const { t } = useMplanipretLang();
   const [searchParams, setSearchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";
-  const [threads, setThreads] = useState<NsThread[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedThreads = profile?.user_id ? smsThreadCache.get(profile.user_id) : null;
+  const [threads, setThreads] = useState<NsThread[]>(() => cachedThreads?.threads ?? []);
+  const [loading, setLoading] = useState(() => !cachedThreads);
   const [error, setError] = useState<string | null>(null);
   const [activeThread, setActiveThread] = useState<{ id: string; number: string; body?: string; autoSend?: boolean } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const loadInFlight = useRef<Promise<void> | null>(null);
 
   const openSmsThread = (thread: { id: string; number: string; body?: string; autoSend?: boolean }, focusComposer = true) => {
     flushSync(() => {
@@ -320,11 +325,18 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
     document.querySelector<HTMLInputElement>('[data-sms-recipient-search="true"]')?.focus({ preventScroll: true });
   };
 
-  const load = async () => {
+  const load = async (force = false) => {
     if (!profile?.user_id) return;
-    setLoading(true);
+    if (loadInFlight.current) return loadInFlight.current;
+    const cached = smsThreadCache.get(profile.user_id);
+    if (!force && cached && Date.now() - cached.at < SMS_CACHE_MS) {
+      setThreads(cached.threads);
+      setLoading(false);
+      return;
+    }
+    if (!threads.length) setLoading(true);
     setError(null);
-    try {
+    const request = (async () => { try {
       const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
         body: { action: "threads" },
       });
@@ -343,17 +355,21 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
         deduped.push(th);
       }
       setThreads(deduped);
+      smsThreadCache.set(profile.user_id, { threads: deduped, at: Date.now() });
     } catch (e: any) {
       console.error("[pp-ns-sms] threads", e);
-      setError(e?.message ?? t("messages.sendFailed"));
-      toast.error(e?.message ?? t("messages.sendFailed"));
+      setError(t("messages.sendFailed"));
+      if (!threads.length) toast.error(t("messages.sendFailed"));
     } finally {
       setLoading(false);
-    }
+      loadInFlight.current = null;
+    } })();
+    loadInFlight.current = request;
+    return request;
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [profile?.user_id]);
-  useEffect(() => { registerRefresh(load); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
+  useEffect(() => { void load(false); /* eslint-disable-next-line */ }, [profile?.user_id]);
+  useEffect(() => { registerRefresh(() => load(true)); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
   useEffect(() => {
     const to = searchParams.get("to")?.trim();
     const body = searchParams.get("body")?.trim() ?? "";
@@ -389,7 +405,7 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
     <div className="h-full overflow-y-auto p-3">
       <div className="flex justify-end mb-2 gap-2">
         <button
-          onClick={load}
+          onClick={() => void load(true)}
           className="px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold"
           style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
         >
@@ -407,17 +423,17 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
         </button>
       </div>
 
-      {loading ? (
+      {loading && threads.length === 0 ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="rounded-2xl h-16 animate-pulse" style={{ background: "var(--pp-bg-surface)" }} />
           ))}
         </div>
-      ) : error ? (
+      ) : error && threads.length === 0 ? (
         <div className="rounded-2xl p-6 text-center" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
           <p className="text-sm mb-3" style={{ color: "var(--pp-danger)" }}>{error}</p>
           <button
-            onClick={load}
+            onClick={() => void load(true)}
             className="px-4 py-2 rounded-full text-xs font-semibold text-white"
             style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
           >

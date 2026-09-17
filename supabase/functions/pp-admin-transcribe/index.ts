@@ -160,15 +160,27 @@ Deno.serve(async (req) => {
       return await markPending(`Audio fetch échoué: ${(e as Error).message}`);
     }
     if (!audioRes || !audioRes.ok) return await markPending(`Audio HTTP ${audioRes?.status ?? "?"}`);
-    const audioBuf = new Uint8Array(await audioRes.arrayBuffer());
-    if (audioBuf.length < 1024) return await markPending("Fichier audio vide côté système téléphonique.");
+    // Garde mémoire : au-delà de cette taille, le worker edge est tué (503) au
+    // lieu de répondre. On répond proprement « en attente » à la place.
+    const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+    const declared = Number(audioRes.headers.get("content-length") ?? "0");
+    if (Number.isFinite(declared) && declared > MAX_AUDIO_BYTES) {
+      try { await audioRes.body?.cancel(); } catch (_) { /* ignore */ }
+      return await markPending("Enregistrement trop volumineux pour la transcription automatique.");
+    }
+    const audioBlobRaw = await audioRes.blob();
+    if (audioBlobRaw.size > MAX_AUDIO_BYTES) {
+      return await markPending("Enregistrement trop volumineux pour la transcription automatique.");
+    }
+    if (audioBlobRaw.size < 1024) return await markPending("Fichier audio vide côté système téléphonique.");
 
     // Call Lovable AI transcription
     const ct = audioRes.headers.get("content-type") ?? "audio/wav";
     const ext = ct.includes("mp3") ? "mp3" : ct.includes("mp4") ? "mp4" : ct.includes("webm") ? "webm" : "wav";
     const form = new FormData();
     form.append("model", "openai/gpt-4o-mini-transcribe");
-    form.append("file", new Blob([audioBuf], { type: ct }), `recording.${ext}`);
+    // Pas de re-copie en Uint8Array : évite de doubler l'audio en mémoire.
+    form.append("file", audioBlobRaw.type === ct ? audioBlobRaw : audioBlobRaw.slice(0, audioBlobRaw.size, ct), `recording.${ext}`);
 
     const sttRes = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
       method: "POST",

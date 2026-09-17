@@ -21,6 +21,29 @@ export const useAuth = () => {
         // sans attendre l'ouverture de l'écran téléphone. Aucun impact PJSIP :
         // seul l'objet Device NetSapiens est rafraîchi côté serveur.
         if (event === 'SIGNED_IN' && session?.user) {
+          // Persiste la session Microsoft 365 (mail/agenda) après un SSO Azure,
+          // y compris depuis le portail web. Une seule fois par session.
+          const provider = (session.user.app_metadata as any)?.provider;
+          if (session.provider_token && (provider === 'azure' || provider === 'microsoft')) {
+            try {
+              const captured = sessionStorage.getItem('pp_ms_captured');
+              if (captured !== session.access_token) {
+                void supabase.functions
+                  .invoke('ms365-store-session', {
+                    body: {
+                      provider_token: session.provider_token,
+                      provider_refresh_token: (session as any).provider_refresh_token ?? null,
+                      expires_in: 3600,
+                      email: session.user.email,
+                      display_name: (session.user.user_metadata as any)?.full_name
+                        ?? (session.user.user_metadata as any)?.name ?? null,
+                    },
+                  })
+                  .then(() => { sessionStorage.setItem('pp_ms_captured', session.access_token); })
+                  .catch(() => { /* non bloquant */ });
+              }
+            } catch { /* non bloquant */ }
+          }
           void supabase.functions
             .invoke('ns-resolve-sip-credentials', {
               body: { client_type: 'mobile', transport: 'tls', on_login: true },
@@ -167,7 +190,7 @@ export const useAuth = () => {
 
   const signInWithMicrosoft = async () => {
     try {
-      await startMicrosoftSignIn('/mplanipret/home');
+      await startMicrosoftSignIn('/post-login');
       return { error: null };
     } catch (error: any) {
       toast({

@@ -1130,8 +1130,12 @@ function TeamChat({ profile }: { profile: any }) {
 export function EmailsList({ profile, initialTo, initialName }: { profile: any; initialTo?: string; initialName?: string }) {
   const { t, lang } = useMplanipretLang();
   const PAGE_SIZE = 25;
-  const [emails, setEmails] = useState<any[] | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">("loading");
+  // Boîte de réception rafraîchie aux 5 minutes : revenir à l'onglet Courriels
+  // repeint la liste connue au lieu de relancer Microsoft Graph.
+  const emailsCacheKey = `emails:${profile?.user_id ?? profile?.ms365_email ?? "anon"}`;
+  const cachedEmails = peekScreenCache<any[]>(emailsCacheKey);
+  const [emails, setEmails] = useState<any[] | null>(cachedEmails?.value ?? null);
+  const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">(cachedEmails ? "ready" : "loading");
   const { state: ms365State, errorMessage: ms365ErrorMessage } = useMs365Status(profile);
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -1149,10 +1153,18 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const emailsInFlight = useRef(false);
 
-  const load = async () => {
+  const load = async (force = false) => {
     if (!ms365Connected(profile)) { setState("no_m365"); return; }
+    if (emailsInFlight.current) return;
+    if (!force) {
+      const fresh = readScreenCache<any[]>(emailsCacheKey, TTL.fiveMinutes);
+      if (fresh) { setEmails(fresh.value); setEmailsError(null); setState("ready"); return; }
+    }
+    emailsInFlight.current = true;
     setState((s) => (s === "ready" ? s : "loading"));
+
     // Cellular networks drop a single request often enough that one timeout
     // used to render the whole inbox as "erreur edge function".
     let data: any = null;

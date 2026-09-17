@@ -420,7 +420,7 @@ export default function MCalls() {
         table: "planipret_phone_calls",
         filter: `user_id=eq.${id}`,
       }, () => {
-        if (tab === "recordings") void loadRecordingsFromCache(true);
+        if (tab === "recordings") void loadRecordingsFromCache(true, true);
       })
       .subscribe());
     return () => { channels.forEach((channel) => { void supabase.removeChannel(channel); }); };
@@ -431,7 +431,7 @@ export default function MCalls() {
   useEffect(() => { setVisibleCount(25); }, [tab, search]);
 
   useEffect(() => {
-    registerRefresh(() => { load(); loadRecordings(); });
+    registerRefresh(() => { load(true); loadRecordings(false, true); });
     return () => registerRefresh(null);
   }, [load, loadRecordings, registerRefresh]);
 
@@ -457,7 +457,7 @@ export default function MCalls() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([load(), tab === "recordings" ? loadRecordings() : Promise.resolve()]);
+    await Promise.all([load(true), tab === "recordings" ? loadRecordings(false, true) : Promise.resolve()]);
     setTimeout(() => setRefreshing(false), 300);
   };
 
@@ -517,7 +517,7 @@ export default function MCalls() {
               {degraded.reason ? ` (${degraded.reason})` : ""}
             </span>
             <button
-              onClick={() => { setDegraded({ active: false }); load(); }}
+              onClick={() => { setDegraded({ active: false }); load(true); }}
               className="px-3 py-1 rounded-full text-xs font-medium"
               style={{ background: "var(--pp-primary)", color: "#fff" }}
             >
@@ -577,7 +577,7 @@ export default function MCalls() {
           <>
             <div className="px-4 pt-2 flex items-center justify-end">
               <button
-                onClick={() => loadRecordings()}
+                onClick={() => loadRecordings(false, true)}
                 className="text-xs flex items-center gap-1 px-2 py-1"
                 style={{ color: "var(--pp-text-muted)" }}
               >

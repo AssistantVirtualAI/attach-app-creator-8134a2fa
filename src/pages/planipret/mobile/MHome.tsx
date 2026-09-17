@@ -329,7 +329,7 @@ export default function MHome() {
   useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);
 
   useEffect(() => {
-    registerRefresh(async () => { await Promise.all([loadStats(), loadBrief(true)]); });
+    registerRefresh(async () => { await Promise.all([loadStats(true), loadBrief(true)]); });
     return () => registerRefresh(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.user_id, period]);
@@ -340,7 +340,7 @@ export default function MHome() {
     const uid = profile.user_id;
     const scheduleStatsRefresh = () => {
       if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
-      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(); }, 1200);
+      realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(true); }, 1200);
     };
     const ch = supabase
       .channel(`mhome-live-${uid}`)
@@ -669,7 +669,7 @@ export default function MHome() {
                 <button
                   onClick={async () => {
                     await supabase.from("planipret_reminders").update({ status: "done" }).eq("id", r.id);
-                    loadStats();
+                    loadStats(true);
                   }}
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
                   style={{ background: "#fff", border: "1px solid var(--pp-bg-border)", color: "var(--pp-success)" }}>

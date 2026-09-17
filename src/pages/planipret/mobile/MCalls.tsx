@@ -957,6 +957,8 @@ function TranscriptView({
 
   return (
     <div className="space-y-3">
+      <TranscriptStatusBanner s={status} has={true} />
+
       <div className="flex items-center justify-between gap-2 sticky top-0 z-10 py-1"
         style={{ background: "var(--pp-bg-base)" }}>
         <div className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>

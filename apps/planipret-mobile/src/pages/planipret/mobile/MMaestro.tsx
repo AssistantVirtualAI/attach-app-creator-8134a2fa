@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, Link2, MessageSquare, Phone, RefreshCw, CheckSquare, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
 import MaestroTaskRow from "@/components/planipret/mobile/MaestroTaskRow";
 import {
@@ -51,16 +52,34 @@ export default function MMaestro() {
     return () => { alive = false; };
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     if (!userId) return;
+    const key = `maestro:view:${userId}`;
+    if (!force) {
+      const hit = readScreenCache<any>(key, TTL.fiveMinutes);
+      if (hit) {
+        setCalls(hit.value.calls ?? []); setMessages(hit.value.messages ?? []); setClients(hit.value.clients ?? []);
+        setLoading(false);
+        return;
+      }
+    }
     setLoading(true);
-    const [cl, ms, ct] = await Promise.all([
-      fetchClientCalls([userId], 150),
-      fetchClientMessages([userId], 150),
-      fetchClientContacts([userId], { limit: 300 }),
-    ]);
-    setCalls(cl); setMessages(ms); setClients(ct);
-    setLoading(false);
+    try {
+      const [cl, ms, ct] = await Promise.all([
+        fetchClientCalls([userId], 150),
+        fetchClientMessages([userId], 150),
+        fetchClientContacts([userId], { limit: 300 }),
+      ]);
+      setCalls(cl); setMessages(ms); setClients(ct);
+      writeScreenCache(key, { calls: cl, messages: ms, clients: ct });
+    } catch (e) {
+      // Une panne ne doit jamais effacer la dernière vue connue.
+      const known = readScreenCache<any>(key, Number.MAX_SAFE_INTEGER);
+      if (known) { setCalls(known.value.calls ?? []); setMessages(known.value.messages ?? []); setClients(known.value.clients ?? []); }
+      console.warn("[MMaestro] load failed", e);
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   useEffect(() => { void load(); }, [load]);

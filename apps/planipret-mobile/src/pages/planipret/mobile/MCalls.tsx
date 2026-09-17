@@ -344,7 +344,7 @@ export default function MCalls() {
       const end = new Date().toISOString();
       const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       await supabase.functions.invoke("pp-ns-cdr", { body: { action: "sync", start, end, limit: 25 } });
-      await loadRecordingsFromCache(true);
+      await loadRecordingsFromCache(true, true);
     } catch (e) {
       console.warn("[MCalls] recordings sync failed", e);
     } finally {
@@ -352,10 +352,13 @@ export default function MCalls() {
     }
   }, [userId, loadRecordingsFromCache]);
 
-  const loadRecordings = useCallback(async (silent = false) => {
-    await loadRecordingsFromCache(silent);
-    void syncRecordingsInBackground();
-  }, [loadRecordingsFromCache, syncRecordingsInBackground]);
+  const loadRecordings = useCallback(async (silent = false, force = false) => {
+    await loadRecordingsFromCache(silent, force);
+    // Synchronisation NetSapiens seulement si le cache 5 min est périmé.
+    if (force || !readScreenCache(`calls:recordings:${userId}`, TTL.fiveMinutes)) {
+      void syncRecordingsInBackground();
+    }
+  }, [userId, loadRecordingsFromCache, syncRecordingsInBackground]);
 
   useEffect(() => { load(); }, [load]);
 

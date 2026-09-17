@@ -906,7 +906,9 @@ function TranscriptView({
           <RefreshCw className="w-3.5 h-3.5 inline mr-1" /> Réessayer
         </button>
       </div>
+      </div>
     );
+
   }
 
   const segs: Seg[] = segments && segments.length > 0

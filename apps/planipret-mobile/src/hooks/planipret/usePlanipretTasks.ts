@@ -66,7 +66,7 @@ export function usePlanipretTasks(
   const [counts, setCounts] = useState({ overdue: 0, today: 0, upcoming: 0, open: 0, all: 0 });
   const generation = useRef(0);
   const refreshInFlight = useRef<Promise<void> | null>(null);
-  const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeTimer = useRef<number | null>(null);
   /** Tasks created locally in the last 5 min — merged in until the server list catches up. */
   const pending = useRef<Map<string, { task: NormalizedTask; at: number }>>(new Map());
 

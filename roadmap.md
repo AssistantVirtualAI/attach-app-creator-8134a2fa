@@ -12,3 +12,4 @@
 - [x] Conserver les tâches et leurs détails lors d'une panne temporaire Maestro
 - [x] Ajouter la vue Maestro mobile unifiée : appels, tâches et commissions
 - [ ] Valider avec la session Maestro personnelle de Sandra : connexion, création de tâche et appel réel (bloqué : authentification/appareil requis)
+- [x] Éliminer les rafraîchissements concurrents et les écrans vides dans Messages, Tâches et Accueil

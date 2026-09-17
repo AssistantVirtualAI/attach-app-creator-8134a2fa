@@ -115,7 +115,7 @@ export default function MMaestro() {
     setBusy(null);
     if (error) { toast.error(error.message); return; }
     toast.success(L(`Appel rattaché à ${name}`, `Call attached to ${name}`));
-    void load();
+    void load(true);
   };
 
   const fmt = (iso: string | null) =>
@@ -129,7 +129,7 @@ export default function MMaestro() {
           <ChevronLeft className="w-4 h-4" />
         </button>
         <h1 className="text-base font-semibold pp-heading">Maestro</h1>
-        <button onClick={() => void load()} aria-label={L("Actualiser", "Refresh")}
+        <button onClick={() => void load(true)} aria-label={L("Actualiser", "Refresh")}
           className="ml-auto w-11 h-11 rounded-xl flex items-center justify-center" style={surface}>
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
         </button>

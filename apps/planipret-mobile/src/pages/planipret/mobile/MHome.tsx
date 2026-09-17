@@ -168,9 +168,11 @@ export default function MHome() {
       });
 
     const [nsCallsLive, nsSmsLive, nsVmLive, callsRes, missedRes, smsRes, vmRes, recentRes, hotRes, remRes, outboundRes, meetingsRes, hotCountRes, tasksCountRes] = await Promise.all([
-      settle(supabase.functions.invoke("pp-ns-cdr", { body: { action: "list", limit: 100, offset: 0 } }), { data: null, error: null } as any),
-      settle(supabase.functions.invoke("pp-ns-sms", { body: { action: "threads" } }), { data: null, error: null } as any),
-      settle(supabase.functions.invoke("pp-ns-voicemail", { body: { action: "list", folder: "inbox" } }), { data: null, error: null } as any),
+      // Dedicated screens own live PBX refreshes. Home uses the synchronized
+      // local records so returning here does not launch three heavy requests.
+      Promise.resolve({ data: null, error: null } as any),
+      Promise.resolve({ data: null, error: null } as any),
+      Promise.resolve({ data: null, error: null } as any),
       settle(applyScope(supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true }), true)
         .gte("started_at", sinceIso).lte("started_at", untilIso), { count: 0, data: null } as any),
       settle(applyScope(supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true }), true)

@@ -116,11 +116,29 @@ export default function MHome() {
   });
   const firstName = (profile?.full_name ?? t("home.broker")).split(" ")[0];
 
-  const loadStats = async () => {
+  const statsCacheKey = `home:stats:${profile?.user_id ?? "anon"}:${period}`;
+
+  const loadStats = async (force = false) => {
     if (!profile) return;
     if (statsInFlight.current) return statsInFlight.current;
+    // Revenir sur l'accueil ne relance pas les endpoints : la vue est repeinte
+    // depuis le cache tant qu'elle a moins de 5 minutes.
+    if (!force) {
+      const cached = readScreenCache<any>(statsCacheKey, TTL.fiveMinutes);
+      if (cached) {
+        setStats(cached.value.stats);
+        setRecent(cached.value.recent ?? []);
+        setHotLeads(cached.value.hotLeads ?? []);
+        setDueReminders(cached.value.dueReminders ?? []);
+        setMeetings(cached.value.meetings ?? []);
+        setMsMeetings(cached.value.msMeetings ?? []);
+        setStatsLoading(false);
+        return;
+      }
+    }
     setStatsLoading(true);
     const request = (async () => { try {
+
     const { sinceIso, untilIso } = periodRange(period);
     const nowIso = new Date().toISOString();
     const weekEnd = new Date(); weekEnd.setDate(weekEnd.getDate() + 7);

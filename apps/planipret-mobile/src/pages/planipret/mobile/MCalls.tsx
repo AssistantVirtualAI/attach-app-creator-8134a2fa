@@ -264,19 +264,26 @@ export default function MCalls() {
       );
 
       // Fallback : si NS ne renvoie rien, montrer le cache local
-      setCalls(all.length ? all : ((local ?? []) as Call[]));
+      const next = (all.length ? all : ((local ?? []) as Call[])) as Call[];
+      setCalls(next);
+      writeScreenCache(`calls:list:${userId}`, next);
 
     } catch (e: any) {
       console.error("[pp-ns-cdr] list failed", e);
-      toast.error(e?.message ?? "Échec chargement CDR");
-      let fallbackQuery: any = supabase
-        .from("planipret_phone_calls")
-        .select("*")
-        .order("started_at", { ascending: false })
-        .limit(100);
-      if (phoneCallScopeFilter) fallbackQuery = fallbackQuery.or(phoneCallScopeFilter);
-      const { data } = await fallbackQuery;
-      setCalls((data ?? []) as Call[]);
+      // Une panne ne doit jamais vider la liste déjà affichée.
+      const known = readScreenCache<Call[]>(`calls:list:${userId}`, Number.MAX_SAFE_INTEGER);
+      if (known?.value?.length) { setCalls(known.value); }
+      else {
+        toast.error(e?.message ?? "Échec chargement CDR");
+        let fallbackQuery: any = supabase
+          .from("planipret_phone_calls")
+          .select("*")
+          .order("started_at", { ascending: false })
+          .limit(100);
+        if (phoneCallScopeFilter) fallbackQuery = fallbackQuery.or(phoneCallScopeFilter);
+        const { data } = await fallbackQuery;
+        setCalls((data ?? []) as Call[]);
+      }
     } finally {
       setLoading(false);
     }

@@ -30,9 +30,14 @@ type StatusData = {
 };
 
 const EDGE_TIMEOUT_MS = 8_000;
-const STATUS_COOLDOWN_MS = 5_000;
+const STATUS_COOLDOWN_MS = 60_000;
+const STATUS_FRESH_MS = 5 * 60_000;
 const POST_AUTH_WINDOW_MS = 60_000;
 const POST_AUTH_POLL_DELAYS = [0, 2_000, 5_000];
+
+// Shared across mounts: navigating between Commissions / Tâches remounts this
+// card, and a forced status call on every mount made the app feel laggy.
+const statusCache: { data: StatusData | null; at: number } = { data: null, at: 0 };
 
 function statusFrom(data: StatusData): Status {
   if (data.status === "connected" || data.connected) return "connected";
@@ -102,15 +107,15 @@ async function invokeMaestroEdge<T>(functionName: string, body: Record<string, u
 export default function MaestroConnectCard() {
   const { lang } = useMplanipretLang();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<Status>("loading");
-  const [data, setData] = useState<StatusData>({});
+  const [status, setStatus] = useState<Status>(() => (statusCache.data ? statusFrom(statusCache.data) : "loading"));
+  const [data, setData] = useState<StatusData>(() => statusCache.data ?? {});
   const [busy, setBusy] = useState(false);
-  const [lastFetch, setLastFetch] = useState<Date | null>(null);
+  const [lastFetch, setLastFetch] = useState<Date | null>(() => (statusCache.at ? new Date(statusCache.at) : null));
   const [showDetails, setShowDetails] = useState(false);
   const pollTimers = useRef<number[]>([]);
   const authInFlight = useRef(false);
   const statusRequest = useRef<Promise<StatusData | null> | null>(null);
-  const lastStatusStartedAt = useRef(0);
+  const lastStatusStartedAt = useRef(statusCache.at);
 
   const isFr = lang === "fr";
   const L = {
@@ -147,6 +152,8 @@ export default function MaestroConnectCard() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error("maestro_session_required");
         const response = await invokeMaestroEdge<StatusData>("maestro-oauth-status", {}, session.access_token);
+        statusCache.data = response ?? {};
+        statusCache.at = Date.now();
         setData(response ?? {});
         setLastFetch(new Date());
         setStatus(statusFrom(response ?? {}));
@@ -154,6 +161,12 @@ export default function MaestroConnectCard() {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "maestro_status_unavailable";
         const normalized = /timeout|abort|failed to fetch|network|load failed/i.test(message) ? "maestro_status_timeout" : message;
+        // Keep the last known good status visible instead of flashing an error
+        // when a background refresh fails while browsing the app.
+        if (statusCache.data && (statusCache.data.connected || statusCache.data.status === "connected")) {
+          setLastFetch(new Date());
+          return null;
+        }
         setData({ error: normalized });
         setLastFetch(new Date());
         setStatus("error");
@@ -186,7 +199,8 @@ export default function MaestroConnectCard() {
   }, [clearPollTimers, load]);
 
   useEffect(() => {
-    if (readRecentPostAuthMarker()) pollStatus(); else void load(true);
+    if (readRecentPostAuthMarker()) pollStatus();
+    else if (!statusCache.data || Date.now() - statusCache.at > STATUS_FRESH_MS) void load(true);
     return clearPollTimers;
   }, [clearPollTimers, load, pollStatus]);
 
@@ -241,7 +255,7 @@ export default function MaestroConnectCard() {
           let callbackUrl: string | null = null;
           try {
             callbackUrl = typeof startNativeOAuthSession === "function" && canUseNativeAuthSession()
-              ? await startNativeOAuthSession(url, redirectUri, mustForceLogin)
+              ? await startNativeOAuthSession(url, redirectUri)
               : null;
           } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);

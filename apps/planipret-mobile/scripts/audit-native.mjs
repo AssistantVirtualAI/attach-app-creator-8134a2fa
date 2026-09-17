@@ -8,6 +8,11 @@ const appDir = path.resolve(path.dirname(__filename), "..");
 const repoRoot = path.resolve(appDir, "../..");
 const appSrc = path.join(appDir, "src");
 const rootSrc = path.join(repoRoot, "src");
+// The standalone release repository contains the mobile application directly
+// at its root. It intentionally also contains portal-only source files and
+// assets, which are not copied into Capacitor and must not be audited as if
+// they were mobile sources.
+const standaloneReleaseRepo = path.basename(appDir) === "planipret-build";
 
 const failures = [];
 
@@ -41,8 +46,30 @@ function isTestSource(file) {
   return /(?:^|[\/])(?:__tests__|test|tests)(?:[\/]|$)|\.(?:test|spec)\.[cm]?[jt]sx?$|_test\.[cm]?[jt]sx?$/.test(relative);
 }
 
+function isMobileSourceFile(file) {
+  if (!standaloneReleaseRepo) return true;
+  const relative = path.relative(appSrc, file).replaceAll(path.sep, "/");
+  return (
+    relative.startsWith("pages/planipret/mobile/")
+    || relative.startsWith("components/planipret/mobile/")
+    || relative.startsWith("lib/planipret/")
+    || relative.startsWith("locales/")
+    || [
+      "pages/planipret/PlanipretMobile.tsx",
+      "components/auth/MplanipretGuard.tsx",
+      "hooks/useMplanipretLang.ts",
+      "hooks/useMplanipretTheme.ts",
+      "hooks/useAvaNavigation.ts",
+      "hooks/usePullToRefresh.tsx",
+      "hooks/useRealtimeManager.ts",
+      "lib/routes.ts",
+      "lib/debug/navDebug.ts",
+    ].includes(relative)
+  );
+}
+
 function scanImports() {
-  const files = walk(appSrc).filter((file) => [".ts", ".tsx", ".js", ".jsx"].includes(path.extname(file)) && !isTestSource(file));
+  const files = walk(appSrc).filter((file) => [".ts", ".tsx", ".js", ".jsx"].includes(path.extname(file)) && !isTestSource(file) && isMobileSourceFile(file));
   const importRe = /(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']|import\(["']([^"']+)["']\)/g;
 
   for (const file of files) {
@@ -59,6 +86,7 @@ function scanImports() {
 }
 
 function scanAliasConfig() {
+  if (standaloneReleaseRepo) return;
   const vite = read(path.join(appDir, "vite.config.ts"));
   const tsconfig = read(path.join(appDir, "tsconfig.json"));
   assert(vite.includes("path.resolve(__dirname, './src')"), "vite.config.ts alias @ must point to ./src");
@@ -66,6 +94,7 @@ function scanAliasConfig() {
 }
 
 function scanNativeAssets() {
+  if (standaloneReleaseRepo) return;
   const assetFiles = walk(path.join(appSrc, "assets")).filter((file) => file.endsWith(".asset.json"));
   for (const file of assetFiles) {
     const json = JSON.parse(read(file));
@@ -87,6 +116,7 @@ function scanDistIfPresent() {
 }
 
 function scanParity() {
+  if (standaloneReleaseRepo) return;
   const pairs = [
     ["pages/planipret/mobile", "pages/planipret/mobile"],
     ["components/planipret/mobile", "components/planipret/mobile"],

@@ -199,7 +199,8 @@ export default function MaestroConnectCard() {
   }, [clearPollTimers, load]);
 
   useEffect(() => {
-    if (readRecentPostAuthMarker()) pollStatus(); else void load(true);
+    if (readRecentPostAuthMarker()) pollStatus();
+    else if (!statusCache.data || Date.now() - statusCache.at > STATUS_FRESH_MS) void load(true);
     return clearPollTimers;
   }, [clearPollTimers, load, pollStatus]);
 

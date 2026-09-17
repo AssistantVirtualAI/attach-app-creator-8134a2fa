@@ -103,7 +103,7 @@ export default function PAMaestroBrokers() {
   return (
     <PAPage>
       <PAPageHeader
-        icon={Users}
+        icon={<Users className="h-5 w-5" />}
         title={L("Vue globale Maestro", "Maestro global view")}
         subtitle={L(
           "Courtiers, tâches, appels et commissions agrégés des projections connues",

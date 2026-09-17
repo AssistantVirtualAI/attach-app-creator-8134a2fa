@@ -181,8 +181,6 @@ export default function MCalls() {
     return filters.join(",");
   }, [userId, profileAuthId, profileExtension]);
 
-  const callsCacheKey = userId ? `calls:list:${userId}` : "";
-  const recordingsCacheKey = userId ? `calls:recordings:${userId}` : "";
 
   const load = useCallback(async (force = false) => {
     if (!userId) return;

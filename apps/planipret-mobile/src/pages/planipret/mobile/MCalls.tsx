@@ -181,8 +181,16 @@ export default function MCalls() {
     return filters.join(",");
   }, [userId, profileAuthId, profileExtension]);
 
-  const load = useCallback(async () => {
+  const callsCacheKey = userId ? `calls:list:${userId}` : "";
+  const recordingsCacheKey = userId ? `calls:recordings:${userId}` : "";
+
+  const load = useCallback(async (force = false) => {
     if (!userId) return;
+    // Cache 5 min : revenir sur l'écran n'appelle plus les endpoints.
+    if (!force) {
+      const hit = readScreenCache<Call[]>(`calls:list:${userId}`, TTL.fiveMinutes);
+      if (hit) { setCalls(hit.value); setLoading(false); return; }
+    }
     setLoading(true);
     try {
       // 1) NS-API live CDRs via pp-ns-cdr (segmenté par extension côté serveur)

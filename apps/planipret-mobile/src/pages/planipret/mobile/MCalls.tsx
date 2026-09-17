@@ -289,8 +289,12 @@ export default function MCalls() {
     }
   }, [userId, phoneCallScopeFilter]);
 
-  const loadRecordingsFromCache = useCallback(async (silent = false) => {
+  const loadRecordingsFromCache = useCallback(async (silent = false, force = false) => {
     if (!userId) return;
+    if (!force) {
+      const hit = readScreenCache<Call[]>(`calls:recordings:${userId}`, TTL.fiveMinutes);
+      if (hit) { setRecordings(hit.value); setRecordingsLoading(false); return; }
+    }
     // Only show the spinner when we have nothing to display yet — otherwise
     // refresh silently in the background so opening the tab feels instant.
     setRecordings((prev) => {

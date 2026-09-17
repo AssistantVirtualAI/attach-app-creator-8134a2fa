@@ -463,7 +463,7 @@ async function processEvent(event: any) {
       // Persisting the call row must never block ringing the broker's phone.
       console.error("[ns-webhook] inbound call persist failed", insertCallError.message);
     }
-    if (!insertedCall) {
+    if (!insertedCall && !insertCallError) {
       console.info("[ns-webhook] inbound call already persisted; duplicate push suppressed", { call_id: callId });
       return;
     }

@@ -177,6 +177,9 @@ export function usePlanipretTasks(
   const refresh = useCallback(async (options: { force?: boolean } = {}) => {
     if (!userId) return;
     const force = !!options.force;
+    // Une mutation locale invalide tout de suite les pages mises en cache.
+    if (force) for (const k of Array.from(taskResults.keys())) if (k.startsWith(`${userId}:`)) taskResults.delete(k);
+
     const key = listKey(userId, brokerId, filter, 1);
     if (activeRefresh.current?.key === key) return activeRefresh.current.promise;
 

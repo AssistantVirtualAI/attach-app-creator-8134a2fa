@@ -14,15 +14,13 @@ import {
   type TaskSource,
 } from "@/lib/planipret/tasks";
 
+import { readScreenCache, writeScreenCache, invalidateScreenCache } from "@/lib/planipret/screenCache";
+
 const PAGE_SIZE = 20;
 /** Fraîcheur demandée par les courtiers : une synchro tâches aux 5 minutes. */
 const TASKS_TTL_MS = 5 * 60 * 1000;
 
 const taskRequests = new Map<string, Promise<TaskListResult>>();
-const taskResults = new Map<string, { at: number; value: TaskListResult }>();
-
-/** Tests uniquement : vide le cache mémoire entre deux scénarios. */
-export function __resetTaskResultCache() { taskResults.clear(); }
 
 function listKey(userId: string, brokerId: string | null, filter: TaskFilterValue, page: number) {
   return `${userId}:${brokerId ?? "self"}:${filter}:${page}`;
@@ -37,9 +35,9 @@ async function readTasks(
 ): Promise<TaskListResult> {
   const key = listKey(userId, brokerId, filter, page);
   if (!force) {
-    const cached = taskResults.get(key);
     // Revenir sur l'écran ne relance pas l'endpoint tant que la liste est fraîche.
-    if (cached && Date.now() - cached.at < TASKS_TTL_MS) return cached.value;
+    const cached = readScreenCache<TaskListResult>(`tasks:${key}`, TASKS_TTL_MS);
+    if (cached) return cached.value;
     const pending = taskRequests.get(key);
     if (pending) return pending;
   }
@@ -49,7 +47,7 @@ async function readTasks(
   const request = listTasks({ filter, page, limit: PAGE_SIZE, broker_id: brokerId })
     .then((result) => {
       if (result.success && result.source !== "unavailable") {
-        taskResults.set(key, { at: Date.now(), value: result });
+        writeScreenCache(`tasks:${key}`, result);
       }
       return result;
     })
@@ -181,7 +179,7 @@ export function usePlanipretTasks(
     if (!userId) return;
     const force = !!options.force;
     // Une mutation locale invalide tout de suite les pages mises en cache.
-    if (force) for (const k of Array.from(taskResults.keys())) if (k.startsWith(`${userId}:`)) taskResults.delete(k);
+    if (force) invalidateScreenCache(`tasks:${userId}:`);
 
     const key = listKey(userId, brokerId, filter, 1);
     if (activeRefresh.current?.key === key) return activeRefresh.current.promise;

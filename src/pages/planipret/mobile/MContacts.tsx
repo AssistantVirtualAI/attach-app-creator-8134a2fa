@@ -241,9 +241,9 @@ export default function MContacts() {
 
   useEffect(() => {
     if (tab === "favorites") return;
-    void load(tab, { limit: 120 });
-    const id = window.setTimeout(() => { void load(tab, { force: true, limit: 500, background: true }); }, 700);
-    return () => window.clearTimeout(id);
+    // Une seule lecture par onglet : la liste complète arrive du cache partagé
+    // (TTL 10 min) au lieu d'être re-téléchargée à chaque ouverture.
+    void load(tab, { limit: 500 });
   }, [tab, load]);
 
   useEffect(() => {
@@ -260,10 +260,8 @@ export default function MContacts() {
   // tab switches render from memory. Dedup + TTL handled by ppContactsCache.
   useEffect(() => {
     prefetchPpContacts(["list", "directory", "maestro_clients", "maestro_brokers"], 500);
-    const quick = window.setTimeout(() => { void load("directory", { limit: 120, background: true }); }, 250);
-    const full = window.setTimeout(() => { void load("directory", { force: true, limit: 500, background: true }); }, 1000);
-    return () => { window.clearTimeout(quick); window.clearTimeout(full); };
   }, [load]);
+
 
   // Contacts permission: show the request on the Contacts page, then trigger the
   // native prompt from an explicit tap. If denied, keep a clear recovery path.

@@ -1433,9 +1433,18 @@ function CallDetailSheet({
               aiLoading={aiLoading}
               analyzed={!!(call as any).ai_analysis_json}
               t={t}
+              status={{
+                source: (call as any).transcript_source ?? null,
+                status: (call as any).transcript_status ?? null,
+                pending: !!(call as any).transcript_pending,
+                attempts: Number((call as any).transcript_attempts ?? 0),
+                fetchedAt: (call as any).transcript_fetched_at ?? null,
+                lastAttemptAt: (call as any).transcript_last_attempt_at ?? null,
+              }}
               filenameHint={`transcript_${displayLabel(call)}_${(call.started_at || "").slice(0,10)}`}
             />
           )}
+
 
 
 

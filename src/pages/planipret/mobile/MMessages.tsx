@@ -1179,19 +1179,23 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
       );
       data = res?.data; error = res?.error;
     } catch (e) { error = e; }
+    finally { emailsInFlight.current = false; }
     if (error || !(data as any)?.success) {
       const detail = (data as any)?.error ?? (error as any)?.message ?? "";
       console.error("[emails] load failed", detail);
       setEmailsError(String(detail).slice(0, 180) || null);
-      setState("error");
+      // Une panne réseau ne doit jamais effacer la boîte déjà affichée.
+      setState(emails && emails.length ? "ready" : "error");
       return;
     }
     setEmailsError(null);
     const list = ((data as any).emails ?? (data as any).messages ?? []) as any[];
     setEmails(list);
+    writeScreenCache(emailsCacheKey, list);
     setHasMore(Boolean((data as any).hasMore) && list.length === PAGE_SIZE);
     setState("ready");
   };
+
 
   const loadMore = async () => {
     if (loadingMore || !emails) return;

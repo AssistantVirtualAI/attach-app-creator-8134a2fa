@@ -5,7 +5,7 @@ type Row = Record<string, any>;
 
 export interface MockDb { [table: string]: Row[] }
 
-interface Filter { col: string; op: "eq" | "is" | "notIn"; value: any }
+interface Filter { col: string; op: "eq" | "is" | "notIn" | "in"; value: any }
 
 class Query implements PromiseLike<{ data: any; error: any }> {
   private filters: Filter[] = [];
@@ -19,6 +19,7 @@ class Query implements PromiseLike<{ data: any; error: any }> {
   select(_cols?: string) { this.mode = "select"; return this; }
   update(patch: Row) { this.mode = "update"; this.patch = patch; return this; }
   eq(col: string, value: any) { this.filters.push({ col, op: "eq", value }); return this; }
+  in(col: string, values: any[]) { this.filters.push({ col, op: "in", value: values.map(String) }); return this; }
   is(col: string, value: any) { this.filters.push({ col, op: "is", value }); return this; }
   not(col: string, _op: string, list: string) {
     const values = list.replace(/^\(|\)$/g, "").split(",").map((s) => s.replace(/^"|"$/g, ""));
@@ -56,6 +57,7 @@ class Query implements PromiseLike<{ data: any; error: any }> {
     return this.filters.every((f) => {
       if (f.op === "eq") return row[f.col] === f.value;
       if (f.op === "is") return (row[f.col] ?? null) === f.value;
+      if (f.op === "in") return f.value.includes(String(row[f.col]));
       return !f.value.includes(String(row[f.col]));
     });
   }

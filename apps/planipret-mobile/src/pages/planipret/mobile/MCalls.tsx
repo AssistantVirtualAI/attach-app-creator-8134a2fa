@@ -323,6 +323,13 @@ export default function MCalls() {
         proxy_ns_callid: r.ns_callid ?? r.ns_orig_callid ?? r.ns_term_callid ?? r.ns_call_id ?? null,
         has_recording: !!(r.has_recording || r.recording_url || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id),
       })) as Call[]);
+      writeScreenCache(`calls:recordings:${userId}`, (local ?? []).filter((r: any) => r.has_recording || r.recording_url || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id).map((r: any) => ({
+        ...r,
+        stream_via_proxy: true,
+        proxy_call_db_id: r.id,
+        proxy_ns_callid: r.ns_callid ?? r.ns_orig_callid ?? r.ns_term_callid ?? r.ns_call_id ?? null,
+        has_recording: true,
+      })));
     } catch (e) {
       console.warn("[MCalls] recordings load failed", e);
     } finally {

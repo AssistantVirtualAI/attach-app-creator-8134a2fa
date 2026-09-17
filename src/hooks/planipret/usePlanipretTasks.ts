@@ -15,8 +15,11 @@ import {
 } from "@/lib/planipret/tasks";
 
 const PAGE_SIZE = 20;
+/** Fraîcheur demandée par les courtiers : une synchro tâches aux 5 minutes. */
+const TASKS_TTL_MS = 5 * 60 * 1000;
 
 const taskRequests = new Map<string, Promise<TaskListResult>>();
+const taskResults = new Map<string, { at: number; value: TaskListResult }>();
 
 function listKey(userId: string, brokerId: string | null, filter: TaskFilterValue, page: number) {
   return `${userId}:${brokerId ?? "self"}:${filter}:${page}`;
@@ -27,18 +30,31 @@ async function readTasks(
   brokerId: string | null,
   filter: TaskFilterValue,
   page: number,
-  _force: boolean,
+  force: boolean,
 ): Promise<TaskListResult> {
   const key = listKey(userId, brokerId, filter, page);
+  if (!force) {
+    const cached = taskResults.get(key);
+    // Revenir sur l'écran ne relance pas l'endpoint tant que la liste est fraîche.
+    if (cached && Date.now() - cached.at < TASKS_TTL_MS) return cached.value;
+    const pending = taskRequests.get(key);
+    if (pending) return pending;
+  }
   const pending = taskRequests.get(key);
   if (pending) return pending;
 
   const request = listTasks({ filter, page, limit: PAGE_SIZE, broker_id: brokerId })
-    .then((result) => result)
+    .then((result) => {
+      if (result.success && result.source !== "unavailable") {
+        taskResults.set(key, { at: Date.now(), value: result });
+      }
+      return result;
+    })
     .finally(() => { taskRequests.delete(key); });
   taskRequests.set(key, request);
   return request;
 }
+
 
 export interface UsePlanipretTasks {
   tasks: NormalizedTask[];

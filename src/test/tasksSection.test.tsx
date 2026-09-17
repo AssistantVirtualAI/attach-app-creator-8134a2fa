@@ -94,7 +94,7 @@ describe("TasksSection", () => {
     expect(await screen.findByText(/Hors ligne/)).toBeInTheDocument();
   });
 
-  it("hides technical errors when the API exposes no list", async () => {
+  it("shows a friendly unavailable state when the API exposes no list", async () => {
     listTasks.mockResolvedValue(listResult({
       source: "unavailable", tasks: [], error: "tasks_unavailable",
       message: "Liste des tâches indisponible pour le moment.",
@@ -102,24 +102,29 @@ describe("TasksSection", () => {
     }));
     render(<TasksSection userId="u1" lang="fr" />);
     await waitFor(() => expect(listTasks).toHaveBeenCalled());
-    expect(screen.queryByText(/indisponible/)).not.toBeInTheDocument();
+    expect(screen.getByText("Les tâches Maestro sont temporairement indisponibles.")).toBeInTheDocument();
+    expect(screen.queryByText("Liste des tâches indisponible pour le moment.")).not.toBeInTheDocument();
   });
 
-  it("hides transport errors and keeps the task area stable", async () => {
+  it("hides raw transport errors behind a retry state", async () => {
     listTasks.mockResolvedValue(listResult({ success: false, error: "network_error", message: "Réseau indisponible", source: "api", tasks: [] }));
     render(<TasksSection userId="u1" lang="fr" />);
     await waitFor(() => expect(listTasks).toHaveBeenCalled());
-    expect(screen.queryByText("Réessayer")).not.toBeInTheDocument();
+    expect(screen.getByText("Réessayer")).toBeInTheDocument();
     expect(screen.queryByText("Réseau indisponible")).not.toBeInTheDocument();
   });
 
   it("keeps visible tasks when a later refresh fails", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
     expect((await screen.findAllByText("Rappeler Jean"))[0]).toBeInTheDocument();
+    const firstTask = screen.getAllByRole("button", { name: /Rappeler Jean/ })[0];
+    fireEvent.click(firstTask);
+    expect(firstTask).toHaveAttribute("aria-expanded", "true");
     listTasks.mockResolvedValue(listResult({ success: false, error: "network_error", message: "Failed to send a request to the Edge Function", source: "unavailable", tasks: [] }));
     broadcastHandler?.();
     await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(2));
     expect(screen.getAllByText("Rappeler Jean")[0]).toBeInTheDocument();
+    expect(firstTask).toHaveAttribute("aria-expanded", "true");
     expect(screen.queryByText(/Failed to send/)).not.toBeInTheDocument();
     expect(screen.getByText(/Dernier état connu affiché/)).toBeInTheDocument();
   });

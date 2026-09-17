@@ -117,7 +117,7 @@ export default function MMaestro() {
         </button>
       </div>
 
-      <div className="flex gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
         {([
           { k: "calls" as Tab, label: L("Appels", "Calls"), Icon: Phone, n: calls.length },
           { k: "texts" as Tab, label: L("Textos", "Texts"), Icon: MessageSquare, n: messages.length },

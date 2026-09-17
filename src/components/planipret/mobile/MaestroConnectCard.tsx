@@ -246,7 +246,7 @@ export default function MaestroConnectCard() {
           let callbackUrl: string | null = null;
           try {
             callbackUrl = typeof startNativeOAuthSession === "function" && canUseNativeAuthSession()
-              ? await startNativeOAuthSession(url, redirectUri, mustForceLogin)
+              ? await startNativeOAuthSession(url, redirectUri)
               : null;
           } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);

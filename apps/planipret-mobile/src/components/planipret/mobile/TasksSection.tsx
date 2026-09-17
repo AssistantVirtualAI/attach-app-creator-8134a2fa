@@ -59,7 +59,10 @@ function SyncHistory({ userId, lang }: { userId: string | null | undefined; lang
     if (!userId) return;
     (async () => {
       try {
-        const { data } = await supabase
+        // The table is intentionally informational.  Some installed/OTA
+        // bundles can carry an older generated Supabase schema that predates
+        // this server-side audit table, so keep this read runtime-safe.
+        const { data } = await (supabase as any)
           .from("planipret_task_sync_runs")
           .select("id, ok, tasks_count, source, error, finished_at")
           .eq("user_id", userId)
@@ -292,6 +295,12 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
       {source === "projection" && !loading && (
         <p className="text-[11px] mb-2" style={{ color: "var(--pp-text-muted)" }}>
           {L("Hors ligne — dernier état connu.", "Offline — last known state.")}
+        </p>
+      )}
+
+      {source === "api" && !loading && (
+        <p className="text-[11px] mb-2 inline-flex items-center gap-1" style={{ color: "var(--pp-success, #16A34A)" }} data-testid="task-live-maestro-source">
+          <ShieldCheck className="w-3 h-3" /> {L("Liste relue dans Maestro", "List read back from Maestro")}
         </p>
       )}
 

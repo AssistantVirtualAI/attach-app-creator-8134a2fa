@@ -126,7 +126,7 @@ describe("TasksSection", () => {
     expect(screen.getAllByText("Rappeler Jean")[0]).toBeInTheDocument();
     expect(firstTask).toHaveAttribute("aria-expanded", "true");
     expect(screen.queryByText(/Failed to send/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Dernier état connu affiché/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Dernier état connu affiché/)).toBeInTheDocument());
   });
 
   it("opens the composer from the + button", async () => {

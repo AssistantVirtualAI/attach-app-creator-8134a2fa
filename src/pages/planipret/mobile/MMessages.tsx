@@ -181,6 +181,11 @@ type NsThread = {
   timestamp?: string;
 };
 
+const SMS_LIST_TIMEOUT_MS = 6_500;
+const SMS_LIST_CACHE_MS = 60_000;
+const smsThreadCache = new Map<string, { at: number; value: NsThread[] }>();
+const smsThreadRequests = new Map<string, Promise<NsThread[]>>();
+
 type NsMessage = {
   id?: string;
   message_id?: string;
@@ -197,9 +202,6 @@ type NsMessage = {
   sent_at?: string;
   read_at?: string | null;
 };
-
-const SMS_CACHE_MS = 60_000;
-const smsThreadCache = new Map<string, { threads: NsThread[]; at: number }>();
 
 const threadId = (t: any) =>
   String(t.messagesession_id ?? t["messagesession-id"] ?? t.session_id ?? t["session-id"] ?? t.thread_id ?? t["thread-id"] ?? t.conversation_id ?? t.id ?? "").trim();
@@ -303,13 +305,13 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   const { t } = useMplanipretLang();
   const [searchParams, setSearchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";
-  const cachedThreads = profile?.user_id ? smsThreadCache.get(profile.user_id) : null;
-  const [threads, setThreads] = useState<NsThread[]>(() => cachedThreads?.threads ?? []);
-  const [loading, setLoading] = useState(() => !cachedThreads);
+  const userId = String(profile?.user_id ?? profile?.id ?? "");
+  const initialCache = userId ? smsThreadCache.get(userId) : null;
+  const [threads, setThreads] = useState<NsThread[]>(() => initialCache?.value ?? []);
+  const [loading, setLoading] = useState(() => !initialCache?.value);
   const [error, setError] = useState<string | null>(null);
   const [activeThread, setActiveThread] = useState<{ id: string; number: string; body?: string; autoSend?: boolean } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
-  const loadInFlight = useRef<Promise<void> | null>(null);
 
   const openSmsThread = (thread: { id: string; number: string; body?: string; autoSend?: boolean }, focusComposer = true) => {
     flushSync(() => {
@@ -326,22 +328,34 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   };
 
   const load = async (force = false) => {
-    if (!profile?.user_id) return;
-    if (loadInFlight.current) return loadInFlight.current;
-    const cached = smsThreadCache.get(profile.user_id);
-    if (!force && cached && Date.now() - cached.at < SMS_CACHE_MS) {
-      setThreads(cached.threads);
+    if (!userId) {
+      setLoading(false);
+      setError(t("messages.sendFailed"));
+      return;
+    }
+    const cached = smsThreadCache.get(userId);
+    if (!force && cached && Date.now() - cached.at < SMS_LIST_CACHE_MS) {
+      setThreads(cached.value);
       setLoading(false);
       return;
     }
-    if (!threads.length) setLoading(true);
-    setError(null);
-    const request = (async () => { try {
-      const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
-        body: { action: "threads" },
+    const existing = smsThreadRequests.get(userId);
+    if (existing) {
+      try { setThreads(await existing); } finally { setLoading(false); }
+      return;
+    }
+    const hasVisibleData = threads.length > 0 || !!cached?.value.length;
+    if (!hasVisibleData) {
+      setLoading(true);
+      setError(null);
+    }
+    const request = (async () => {
+      const { data, error: err } = await ppEdgeInvoke<{ threads?: NsThread[] }>("pp-ns-sms", { action: "threads" }, {
+        retries: 1,
+        timeoutMs: SMS_LIST_TIMEOUT_MS,
       });
-      if (err) throw err;
-      const list: NsThread[] = (data as any)?.threads ?? [];
+      if (err) throw new Error(err.message);
+      const list: NsThread[] = data?.threads ?? [];
       list.sort((a, b) => +new Date(threadTime(b)) - +new Date(threadTime(a)));
       // Le PBX renvoie parfois plusieurs sessions pour le même correspondant
       // (15149522685 / +15149522685 / sessions distinctes) : on garde la plus récente.
@@ -354,22 +368,29 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
         seen.add(key);
         deduped.push(th);
       }
-      setThreads(deduped);
-      smsThreadCache.set(profile.user_id, { threads: deduped, at: Date.now() });
+      smsThreadCache.set(userId, { at: Date.now(), value: deduped });
+      return deduped;
+    })();
+    smsThreadRequests.set(userId, request);
+    try {
+      setThreads(await request);
+      setError(null);
     } catch (e: any) {
       console.error("[pp-ns-sms] threads", e);
-      setError(t("messages.sendFailed"));
-      if (!threads.length) toast.error(t("messages.sendFailed"));
+      // A refresh failure must never empty a previously usable conversations
+      // list. The user can keep opening/creating SMS threads while retrying.
+      if (!hasVisibleData) {
+        setError(e?.message ?? t("messages.sendFailed"));
+        toast.error(e?.message ?? t("messages.sendFailed"));
+      }
     } finally {
+      smsThreadRequests.delete(userId);
       setLoading(false);
-      loadInFlight.current = null;
-    } })();
-    loadInFlight.current = request;
-    return request;
+    }
   };
 
-  useEffect(() => { void load(false); /* eslint-disable-next-line */ }, [profile?.user_id]);
-  useEffect(() => { registerRefresh(() => load(true)); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [profile?.user_id]);
+  useEffect(() => { registerRefresh(load); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
   useEffect(() => {
     const to = searchParams.get("to")?.trim();
     const body = searchParams.get("body")?.trim() ?? "";
@@ -394,7 +415,7 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
           autoSend={activeThread.autoSend}
           myExt={myExt}
           userId={profile.user_id}
-          onBack={() => { setActiveThread(null); load(); }}
+          onBack={() => { setActiveThread(null); void load(); }}
           onCall={(n) => openDialer(n)}
         />
       </div>
@@ -423,13 +444,13 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
         </button>
       </div>
 
-      {loading && threads.length === 0 ? (
+      {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="rounded-2xl h-16 animate-pulse" style={{ background: "var(--pp-bg-surface)" }} />
           ))}
         </div>
-      ) : error && threads.length === 0 ? (
+      ) : error ? (
         <div className="rounded-2xl p-6 text-center" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
           <p className="text-sm mb-3" style={{ color: "var(--pp-danger)" }}>{error}</p>
           <button

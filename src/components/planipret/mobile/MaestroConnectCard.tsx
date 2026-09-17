@@ -152,6 +152,8 @@ export default function MaestroConnectCard() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error("maestro_session_required");
         const response = await invokeMaestroEdge<StatusData>("maestro-oauth-status", {}, session.access_token);
+        statusCache.data = response ?? {};
+        statusCache.at = Date.now();
         setData(response ?? {});
         setLastFetch(new Date());
         setStatus(statusFrom(response ?? {}));
@@ -159,6 +161,12 @@ export default function MaestroConnectCard() {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "maestro_status_unavailable";
         const normalized = /timeout|abort|failed to fetch|network|load failed/i.test(message) ? "maestro_status_timeout" : message;
+        // Keep the last known good status visible instead of flashing an error
+        // when a background refresh fails while browsing the app.
+        if (statusCache.data && (statusCache.data.connected || statusCache.data.status === "connected")) {
+          setLastFetch(new Date());
+          return null;
+        }
         setData({ error: normalized });
         setLastFetch(new Date());
         setStatus("error");

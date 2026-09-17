@@ -25,6 +25,8 @@ import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365Connec
 import { useMs365Status } from "@/hooks/useMs365Status";
 import BriefListenButton from "@/components/planipret/mobile/BriefListenButton";
 import TasksSection from "@/components/planipret/mobile/TasksSection";
+import { readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";
+
 
 
 type Period = "day" | "week" | "month" | "shift";

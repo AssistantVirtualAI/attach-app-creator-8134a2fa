@@ -21,6 +21,9 @@ const TASKS_TTL_MS = 5 * 60 * 1000;
 const taskRequests = new Map<string, Promise<TaskListResult>>();
 const taskResults = new Map<string, { at: number; value: TaskListResult }>();
 
+/** Tests uniquement : vide le cache mémoire entre deux scénarios. */
+export function __resetTaskResultCache() { taskResults.clear(); }
+
 function listKey(userId: string, brokerId: string | null, filter: TaskFilterValue, page: number) {
   return `${userId}:${brokerId ?? "self"}:${filter}:${page}`;
 }

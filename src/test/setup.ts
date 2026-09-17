@@ -25,8 +25,10 @@ if (!(URL as any).revokeObjectURL) {
 // Chaque test doit repartir d'un cache vide pour observer les vrais appels.
 import { beforeEach } from "vitest";
 import { invalidateScreenCache } from "@/lib/planipret/screenCache";
+import { __resetTaskResultCache } from "@/hooks/planipret/usePlanipretTasks";
 
 beforeEach(() => {
   invalidateScreenCache();
+  __resetTaskResultCache();
   try { localStorage.clear(); } catch { /* noop */ }
 });

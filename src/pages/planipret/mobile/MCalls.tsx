@@ -781,8 +781,55 @@ function EmptyState({ tab }: { tab: "recents" | "active" | "missed" }) {
 
 // ---------- Transcript view (chat bubbles + auto-fetch + Analyze CTA) ----------
 type Seg = { speaker: string; text: string; start?: number | null; end?: number | null };
+type TxStatus = {
+  source?: string | null;
+  status?: string | null;
+  pending?: boolean;
+  attempts?: number;
+  fetchedAt?: string | null;
+  lastAttemptAt?: string | null;
+};
+function TranscriptStatusBanner({ s, has }: { s?: TxStatus; has: boolean }) {
+  if (!s) return null;
+  const src = (s.source || "").toLowerCase();
+  const label = src.includes("netsapiens")
+    ? "NetSapiens"
+    : src.includes("whisper") || src.includes("stt") || src.includes("audio")
+      ? "audio_stt_fallback"
+      : has ? (s.source || "source inconnue") : "en attente";
+  const isPending = !has || s.pending || label === "en attente";
+  const fmt = (v?: string | null) => (v ? new Date(v).toLocaleString("fr-CA") : null);
+  const history = [
+    fmt(s.fetchedAt) ? `Transcrit le ${fmt(s.fetchedAt)}` : null,
+    fmt(s.lastAttemptAt) ? `Dernière tentative ${fmt(s.lastAttemptAt)}` : null,
+    s.attempts ? `${s.attempts} tentative(s)` : null,
+    s.status ? `État : ${s.status}` : null,
+  ].filter(Boolean) as string[];
+  return (
+    <div className="pp-card p-3 space-y-1">
+      <div className="flex items-center gap-2 text-[11px] font-semibold" style={{ color: "var(--pp-text-primary)" }}>
+        <span
+          className="px-2 py-0.5 rounded-full"
+          style={{
+            background: isPending ? "var(--pp-bg-elevated)" : "var(--pp-bg-surface)",
+            border: "1px solid var(--pp-bg-border-2)",
+            color: isPending ? "var(--pp-warning, #F5A623)" : "var(--pp-brand-accent)",
+          }}
+        >
+          {isPending ? "⏳ en attente" : `✅ ${label}`}
+        </span>
+        <span style={{ color: "var(--pp-text-secondary)" }}>Source de transcription</span>
+      </div>
+      {history.length > 0 && (
+        <ul className="text-[10px] space-y-0.5" style={{ color: "var(--pp-text-secondary)" }}>
+          {history.map((h) => <li key={h}>• {h}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
 function TranscriptView({
-  segments, transcript, loading, preparing = false, attempt = 0, onFetch, onAnalyze, aiLoading, analyzed, t, filenameHint,
+  segments, transcript, loading, preparing = false, attempt = 0, onFetch, onAnalyze, aiLoading, analyzed, t, filenameHint, status,
 }: {
   segments: Seg[] | null;
   transcript: string | null;
@@ -795,9 +842,11 @@ function TranscriptView({
   analyzed: boolean;
   t: (k: string) => string;
   filenameHint?: string;
+  status?: TxStatus;
 }) {
   const has = (segments && segments.length > 0) || !!(transcript && transcript.trim());
   const fetchedRef = useRef(false);
+
 
   useEffect(() => {
     if (!has && !loading && !preparing && !fetchedRef.current) {

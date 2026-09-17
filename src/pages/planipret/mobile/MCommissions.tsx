@@ -166,13 +166,37 @@ export default function MCommissions() {
     return data;
   }, []);
 
-  const load = useCallback(async () => {
+  /** Les commissions changent une fois par jour : cache journalier par filtre. */
+  const cachedCall = useCallback(async (key: string, body: Record<string, unknown>, force = false) => {
+    if (!force) {
+      const hit = readScreenCache<any>(key, TTL.daily);
+      if (hit) return hit.value;
+    }
+    const data = await call(body);
+    writeScreenCache(key, data);
+    return data;
+  }, [call]);
+
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+  const scopeKey = `${profile?.user_id ?? "anon"}`;
+
+  const load = useCallback(async (force = false) => {
     if (!allowed || !rangeReady) return;
+    const cachedSummary = readScreenCache<any>(`commissions:summary:${scopeKey}:${filtersKey}`, TTL.daily);
+    const cachedDeposits = readScreenCache<any>(`commissions:deposits:${scopeKey}:${filtersKey}`, TTL.daily);
+    // Rendu instantané depuis le cache du jour : aucun appel réseau au retour.
+    if (!force && cachedSummary && cachedDeposits) {
+      setSummary(cachedSummary.value.summary);
+      setRows(cachedDeposits.value.rows ?? []);
+      setTotal(cachedDeposits.value.pagination?.total ?? 0);
+      setPage(1); setError(null); setLoading(false);
+      return;
+    }
     setLoading(true); setError(null); setPage(1);
     try {
       const [s, d] = await Promise.all([
-        call({ action: "summary", filters }),
-        call({ action: "deposits", filters: { ...filters, page: 1, per_page: PER_PAGE } }),
+        cachedCall(`commissions:summary:${scopeKey}:${filtersKey}`, { action: "summary", filters }, force),
+        cachedCall(`commissions:deposits:${scopeKey}:${filtersKey}`, { action: "deposits", filters: { ...filters, page: 1, per_page: PER_PAGE } }, force),
       ]);
       setSummary(s.summary);
       setRows(d.rows ?? []);
@@ -183,16 +207,17 @@ export default function MCommissions() {
     } finally {
       setLoading(false);
     }
-  }, [allowed, rangeReady, filters, call]);
+  }, [allowed, rangeReady, filters, filtersKey, scopeKey, cachedCall]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     if (!allowed) return;
-    call({ action: "preference" }).then((d) => setAvaPref(d.ava_include_commissions === true)).catch(() => setAvaPref(null));
-    call({ action: "institutions" }).then((d) => setInstitutions(d.institutions ?? [])).catch(() => setInstitutions([]));
-    call({ action: "agents" }).then((d) => setAgents(d.agents ?? [])).catch(() => setAgents([]));
-  }, [allowed, call]);
+    cachedCall(`commissions:preference:${scopeKey}`, { action: "preference" }).then((d) => setAvaPref(d.ava_include_commissions === true)).catch(() => setAvaPref(null));
+    cachedCall(`commissions:institutions:${scopeKey}`, { action: "institutions" }).then((d) => setInstitutions(d.institutions ?? [])).catch(() => setInstitutions([]));
+    cachedCall(`commissions:agents:${scopeKey}`, { action: "agents" }).then((d) => setAgents(d.agents ?? [])).catch(() => setAgents([]));
+  }, [allowed, cachedCall, scopeKey]);
+
 
 
   const loadMore = async () => {

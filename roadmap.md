@@ -9,3 +9,6 @@
 - [x] Vérifier la synchro automatique des commissions par courtier
 - [x] Déployer les deux fonctions Edge demandées et confirmer l’OTA 1.4.12
 - [ ] Vérifier une transcription réelle après appel consenti de Sandra (bloqué : appel physique requis)
+- [x] Conserver les tâches et leurs détails lors d'une panne temporaire Maestro
+- [x] Ajouter la vue Maestro mobile unifiée : appels, tâches et commissions
+- [ ] Valider avec la session Maestro personnelle de Sandra : connexion, création de tâche et appel réel (bloqué : authentification/appareil requis)

@@ -304,6 +304,17 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
         </p>
       )}
 
+      {error && tasks.length > 0 && !loading && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-[11px]" role="status"
+          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-muted)" }}>
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--pp-warning)" }} />
+          <span className="flex-1">{L("Actualisation Maestro temporairement indisponible. Dernier état connu affiché.", "Maestro refresh is temporarily unavailable. Showing the last known state.")}</span>
+          <button onClick={() => void refresh()} className="min-h-[32px] px-2 font-semibold" style={{ color: "var(--pp-brand-accent)" }}>
+            {L("Réessayer", "Retry")}
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center gap-1.5 mb-3 overflow-x-auto" role="tablist" aria-label={L("Filtrer les tâches", "Filter tasks")}>
         {([
           { key: "open", label: L("Ouvertes", "Open"), count: counts.open },
@@ -334,11 +345,11 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
 
       {loading ? (
         <div className="space-y-2" aria-busy="true">{[0, 1, 2].map((i) => <Shimmer key={i} className="h-12" />)}</div>
-      ) : error ? (
+      ) : error && tasks.length === 0 ? (
         // Chargement en échec : ne jamais afficher « aucune tâche » (faux vide trompeur).
         <div className="py-4 text-center space-y-2" role="alert">
           <p className="text-sm" style={{ color: "var(--pp-text-muted)" }}>
-            {message ?? L("Chargement impossible", "Loading failed")}
+            {L("Les tâches Maestro sont temporairement indisponibles.", "Maestro tasks are temporarily unavailable.")}
           </p>
           <button onClick={() => void refresh()} className="min-h-[44px] px-4 rounded-xl text-[12px] font-semibold text-white"
             style={{ background: "var(--pp-brand-accent)" }}>

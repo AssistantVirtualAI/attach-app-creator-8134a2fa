@@ -30,6 +30,7 @@ import { useMs365Status } from "@/hooks/useMs365Status";
 import { canSendWithSmsAvailability, getSmsAvailability, type SmsAvailability } from "@/lib/planipret/smsAvailability";
 
 import DOMPurify from "dompurify";
+import { peekScreenCache, readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";
 
 const sanitizeHtml = (html?: string | null) =>
   DOMPurify.sanitize(String(html ?? ""), {
@@ -1259,7 +1260,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
         </button>
         <div className="flex items-center gap-2">
           <button
-            onClick={load}
+            onClick={() => void load(true)}
             className="text-xs flex items-center gap-1 px-2 py-1"
             style={{ color: "var(--pp-text-muted)" }}
           >
@@ -1285,7 +1286,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
           <p className="text-sm" style={{ color: "var(--pp-text-muted)" }}>{t("messages.emailsLoadFailed")}</p>
           {emailsError && <p className="mt-1 text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{emailsError}</p>}
           <button
-            onClick={load}
+            onClick={() => void load(true)}
             className="mt-3 text-xs px-3 py-1.5 rounded-full"
             style={{ border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
           >

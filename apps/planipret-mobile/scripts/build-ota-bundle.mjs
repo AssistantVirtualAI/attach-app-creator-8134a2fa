@@ -22,6 +22,19 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
+function walk(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = resolve(dir, entry.name);
+    return entry.isDirectory() ? walk(fullPath) : [fullPath];
+  });
+}
+
+const builtFiles = walk(DIST);
+if (builtFiles.some((file) => file.includes("capgo-updater-shim"))) {
+  console.error("✗ paquet OTA invalide — le moteur de mise à jour a été remplacé par son shim web.");
+  process.exit(1);
+}
+
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
 const version = (process.argv[2] || pkg.version || "").trim();
 if (!/^\d+\.\d+\.\d+$/.test(version)) {

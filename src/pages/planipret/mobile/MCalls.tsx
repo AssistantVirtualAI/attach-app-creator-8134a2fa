@@ -20,7 +20,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
 import { presentCallParty } from "@/lib/planipret/callPresentation";
-import { readScreenCache, writeScreenCache, invalidateScreenCache, TTL } from "@/lib/planipret/screenCache";
+import { peekScreenCache, readScreenCache, writeScreenCache, invalidateScreenCache, TTL } from "@/lib/planipret/screenCache";
 
 
 
@@ -332,6 +332,8 @@ export default function MCalls() {
       writeScreenCache(`calls:recordings:${userId}`, next);
     } catch (e) {
       console.warn("[MCalls] recordings load failed", e);
+      const stale = peekScreenCache<Call[]>(`calls:recordings:${userId}`);
+      if (stale) setRecordings((current) => current.length ? current : stale.value);
     } finally {
       setRecordingsLoading(false);
     }

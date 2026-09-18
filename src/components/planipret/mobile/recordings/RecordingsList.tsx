@@ -55,6 +55,9 @@ export type RecordingCall = {
   proxy_ns_callid?: string | null;
   analyzed_at?: string | null;
   transcript_source?: string | null;
+  save_consent?: string | null;
+  recording_storage_path?: string | null;
+  recording_cached_at?: string | null;
 };
 
 const fmtDate = (iso: string) => {
@@ -166,6 +169,7 @@ export default function RecordingsList({
   );
   const autoPipelineDoneRef = useRef<Set<string>>(new Set());
   const autoCrmSyncDoneRef = useRef<Set<string>>(new Set());
+  const audioPreloadDoneRef = useRef<Set<string>>(new Set());
   const maestroUnavailableRef = useRef(false);
   const audioBlobCacheRef = useRef<Map<string, string>>(new Map());
   const [audioStatus, setAudioStatus] = useState<Record<string, AudioStatus>>({});
@@ -199,7 +203,12 @@ export default function RecordingsList({
   // Résout d'abord l'audio de TOUS les appels, indépendamment des longues
   // transcriptions. Deux travailleurs évitent de surcharger le réseau mobile.
   useEffect(() => {
-    const queue = withRec.filter((c) => hasResolvableAudio(c) && !isVoicemailCall(c));
+    const queue = withRec.filter((c) =>
+      c.save_consent === "approved" &&
+      hasResolvableAudio(c) &&
+      !isVoicemailCall(c) &&
+      !audioPreloadDoneRef.current.has(c.id)
+    );
     if (!queue.length) return;
     const controller = new AbortController();
     let cancelled = false;
@@ -207,7 +216,8 @@ export default function RecordingsList({
       for (let index = offset; index < queue.length; index += 2) {
         const call = queue[index];
         if (cancelled) return;
-        if (call.stream_via_proxy === false && call.recording_url) {
+        audioPreloadDoneRef.current.add(call.id);
+        if (call.recording_storage_path && call.recording_url) {
           setStatus(call.id, "uploaded");
           continue;
         }
@@ -221,6 +231,7 @@ export default function RecordingsList({
         } catch (e: any) {
           if (!cancelled) {
             setStatus(call.id, "error");
+            audioPreloadDoneRef.current.delete(call.id);
             console.warn("[RecordingsList] audio preload failed", otherLabel(call), e?.message);
           }
         }
@@ -228,7 +239,7 @@ export default function RecordingsList({
     };
     void Promise.all([worker(0), worker(1)]);
     return () => { cancelled = true; controller.abort(); };
-  }, [withRec, onUpdated]);
+  }, [withRec]);
 
   // Background preload: audio URL + transcript + AI for the 5 most recent recordings.
   // Runs one-by-one so the recordings screen stays responsive.

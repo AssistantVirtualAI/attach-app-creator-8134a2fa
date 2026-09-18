@@ -105,13 +105,13 @@ export default function MailPanel({ lang }: { lang: Lang }) {
             <button key={e.id} onClick={() => void openEmail(e.id)} className="w-full text-left px-4 py-3.5"
               style={{ borderTop: "1px solid var(--pp-bg-border)", background: e.isRead ? "transparent" : "var(--pp-bg-surface)" }}>
               <div className="flex items-center justify-between gap-3">
-                <span className="truncate" style={{ fontSize: 14, fontWeight: e.isRead ? 600 : 800, color: "var(--pp-text-primary)" }}>
+                <span className="truncate" style={{ fontSize: 15, fontWeight: e.isRead ? 700 : 800, color: "var(--pp-text-primary)" }}>
                   {e.from?.emailAddress?.name || e.from?.emailAddress?.address || e.toRecipients?.[0]?.emailAddress?.address || "—"}
                 </span>
                  <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--pp-text-secondary)" }}>{fmtDateTime(e.receivedDateTime ?? e.sentDateTime, lang)}</span>
               </div>
-              <div className="truncate mt-0.5" style={{ fontSize: 13.5, fontWeight: e.isRead ? 500 : 700, color: "var(--pp-text-primary)" }}>{e.subject || "(no subject)"}</div>
-              <div className="line-clamp-2 mt-0.5" style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--pp-text-secondary)" }}>{e.bodyPreview}</div>
+              <div className="truncate mt-1" style={{ fontSize: 14, fontWeight: e.isRead ? 600 : 700, color: "var(--pp-text-primary)" }}>{e.subject || "(no subject)"}</div>
+              <div className="line-clamp-2 mt-1" style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.55, color: "var(--pp-text-secondary)" }}>{e.bodyPreview}</div>
             </button>
           ))
         )}
@@ -164,7 +164,7 @@ export default function MailPanel({ lang }: { lang: Lang }) {
                  <div className="mt-4 rounded-lg overflow-hidden" style={{ background: "var(--pp-email-paper)", border: "1px solid var(--pp-bg-border)" }}>
                   {detail.body?.contentType === "html"
                     ? <EmailBodyFrame html={sanitizeHtml(detail.body?.content)} />
-                    : <div className="p-4 whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.6, color: "var(--pp-text-primary)" }}>{detail.body?.content ?? detail.bodyPreview ?? ""}</div>}
+                    : <div className="p-4 whitespace-pre-wrap" style={{ fontSize: 16, fontWeight: 500, lineHeight: 1.65, color: "var(--pp-text-primary)" }}>{detail.body?.content ?? detail.bodyPreview ?? ""}</div>}
                 </div>
               </>
             )}

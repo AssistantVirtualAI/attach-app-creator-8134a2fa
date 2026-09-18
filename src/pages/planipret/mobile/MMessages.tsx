@@ -29,6 +29,7 @@ import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365Connec
 import { useMs365Status } from "@/hooks/useMs365Status";
 import { canSendWithSmsAvailability, getSmsAvailability, type SmsAvailability } from "@/lib/planipret/smsAvailability";
 import { getSmsSubmission, type SmsSubmission } from "@/lib/planipret/smsSendGuard";
+import { emailBodyCache } from "@/lib/planipret/persistentMediaCache";
 
 import DOMPurify from "dompurify";
 

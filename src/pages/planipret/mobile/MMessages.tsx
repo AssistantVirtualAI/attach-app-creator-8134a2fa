@@ -1249,6 +1249,37 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, loadingMore, emails?.length]);
 
+  // Préchargement du contenu complet des courriels récents, comme pour les
+  // enregistrements d'appels : ouverture instantanée et lecture hors ligne.
+  // Un seul téléchargement à la fois pour ne pas saturer le réseau mobile.
+  const bodyPrefetchDoneRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!emails || emails.length === 0) return;
+    const queue = emails
+      .slice(0, 20)
+      .map((e: any) => String(e?.id ?? ""))
+      .filter((id) => id && !bodyPrefetchDoneRef.current.has(id) && !emailBodyCache.has(id));
+    if (!queue.length) return;
+    let cancelled = false;
+    (async () => {
+      for (const id of queue) {
+        if (cancelled) return;
+        bodyPrefetchDoneRef.current.add(id);
+        try {
+          const { data } = await supabase.functions.invoke("ms365-actions", {
+            body: { action: "read_email_detail", payload: { message_id: id } },
+          });
+          if ((data as any)?.success) emailBodyCache.set(id, (data as any).email);
+          else bodyPrefetchDoneRef.current.delete(id);
+        } catch {
+          bodyPrefetchDoneRef.current.delete(id);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [emails]);
+
+
   return (
     <div className="relative flex flex-col overflow-y-auto p-3" style={{ height: "calc(100dvh - 242px)", minHeight: 400 }}>
       <div className="flex items-center justify-between mb-2">

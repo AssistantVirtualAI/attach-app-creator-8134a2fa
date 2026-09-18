@@ -1434,13 +1434,21 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
     let cancelled = false;
     (async () => {
       if (!email?.id) return;
-      setLoadingDetail(true);
+      const cached = emailBodyCache.get(String(email.id));
+      if (cached && !cancelled) {
+        setDetail(cached);
+        setFlagged(cached?.flag?.flagStatus === "flagged");
+      }
+      setLoadingDetail(!cached);
       const { data } = await supabase.functions.invoke("ms365-actions", {
         body: { action: "read_email_detail", payload: { message_id: email.id } },
       });
-      if (!cancelled && (data as any)?.success) {
-        setDetail((data as any).email);
-        setFlagged((data as any).email?.flag?.flagStatus === "flagged");
+      if ((data as any)?.success) {
+        emailBodyCache.set(String(email.id), (data as any).email);
+        if (!cancelled) {
+          setDetail((data as any).email);
+          setFlagged((data as any).email?.flag?.flagStatus === "flagged");
+        }
       }
       if (!cancelled) setLoadingDetail(false);
       // Mark as read on open (fire-and-forget). Also mutate the incoming

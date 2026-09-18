@@ -1424,7 +1424,7 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
   const toList = Array.isArray(merged.toRecipients) ? merged.toRecipients : [];
   const ccList = Array.isArray(merged.ccRecipients) ? merged.ccRecipients : [];
   const bodyHtml: string = merged?.body?.content ?? "";
-  const bodyType: string = merged?.body?.contentType ?? "text";
+  const bodyType: string = String(merged?.body?.contentType ?? "text").toLowerCase();
 
   useEffect(() => {
     let cancelled = false;

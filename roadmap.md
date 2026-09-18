@@ -15,3 +15,5 @@
 - [x] Éliminer les rafraîchissements concurrents et les écrans vides dans Messages, Tâches et Accueil
 - [x] Synchroniser dans l’app autonome les noms des postes internes et l’ouverture plein écran du portail
 - [x] Publier le nouveau lecteur de courriels lisible sur le portail et l’app mobile
+- [x] Corriger le paquet mobile qui désactivait accidentellement son propre mécanisme de mise à jour
+- [ ] Soumettre le build natif corrigé aux boutiques (requis pour débloquer les appareils sur 1.4.22–1.4.24)

@@ -196,6 +196,40 @@ export default function RecordingsList({
   const setStatus = (id: string, s: AudioStatus) =>
     setAudioStatus((prev) => (prev[id] === s ? prev : { ...prev, [id]: s }));
 
+  // Résout d'abord l'audio de TOUS les appels, indépendamment des longues
+  // transcriptions. Deux travailleurs évitent de surcharger le réseau mobile.
+  useEffect(() => {
+    const queue = withRec.filter((c) => hasResolvableAudio(c) && !isVoicemailCall(c));
+    if (!queue.length) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    const worker = async (offset: number) => {
+      for (let index = offset; index < queue.length; index += 2) {
+        const call = queue[index];
+        if (cancelled) return;
+        if (call.stream_via_proxy === false && call.recording_url) {
+          setStatus(call.id, "uploaded");
+          continue;
+        }
+        setStatus(call.id, "uploading");
+        try {
+          const url = await fetchAudioUrl(call, { signal: controller.signal });
+          if (cancelled) return;
+          audioBlobCacheRef.current.set(call.id, url);
+          setStatus(call.id, "uploaded");
+          onUpdated({ ...call, recording_url: url, has_recording: true, stream_via_proxy: false });
+        } catch (e: any) {
+          if (!cancelled) {
+            setStatus(call.id, "error");
+            console.warn("[RecordingsList] audio preload failed", otherLabel(call), e?.message);
+          }
+        }
+      }
+    };
+    void Promise.all([worker(0), worker(1)]);
+    return () => { cancelled = true; controller.abort(); };
+  }, [withRec, onUpdated]);
+
   // Background preload: audio URL + transcript + AI for the 5 most recent recordings.
   // Runs one-by-one so the recordings screen stays responsive.
   useEffect(() => {
@@ -265,27 +299,7 @@ export default function RecordingsList({
         if (cancelled) break;
         const who = otherLabel(call);
 
-        // 1) Audio : cache signé côté serveur, silencieux.
-        const alreadyResolved = !!call.recording_url && (call.stream_via_proxy === false || /^(blob:|data:|https?:)/i.test(String(call.recording_url)));
-        if (!audioBlobCacheRef.current.has(call.id) && !alreadyResolved) {
-          setStatus(call.id, "uploading");
-          try {
-            const url = await fetchAudioUrl(call, { signal: controller.signal });
-            if (cancelled) break;
-            audioBlobCacheRef.current.set(call.id, url);
-            setStatus(call.id, "uploaded");
-            onUpdated({ ...call, recording_url: url, has_recording: true, stream_via_proxy: false });
-          } catch (e: any) {
-            if (!cancelled) {
-              setStatus(call.id, "error");
-              console.warn("[RecordingsList] auto-upload failed", who, e?.message);
-            }
-          }
-        } else if (alreadyResolved || audioBlobCacheRef.current.has(call.id)) {
-          setStatus(call.id, "uploaded");
-        }
-
-        // 2) Transcript + 3) IA — pipeline complet, indépendant de l'audio.
+        // Transcript + IA — pipeline indépendant du préchargement audio.
         if (!autoPipelineDoneRef.current.has(call.id) && (!call.transcript || !call.ai_summary)) {
           autoPipelineDoneRef.current.add(call.id);
           try {

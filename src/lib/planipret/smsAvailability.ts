@@ -53,7 +53,9 @@ export async function getSmsAvailability(force = false): Promise<SmsAvailability
   if (!force && inflight) return inflight;
   const request = (async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-sms", { body: { action: "sms-numbers" } });
+      // Bounded, retrying transport: in the mobile WebView a hanging preflight
+      // used to leave the composer permanently blocked ("texto ne part pas").
+      const { data, error } = await ppEdgeInvoke("pp-ns-sms", { action: "sms-numbers" }, { timeoutMs: 8_000, retries: 1 });
       if (error) throw error;
       const result = smsAvailabilityFromPayload(data);
       cached = result;

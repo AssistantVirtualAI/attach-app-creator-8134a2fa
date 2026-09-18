@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 
 export type SmsAvailability = {
   state: "ready" | "unavailable" | "error";

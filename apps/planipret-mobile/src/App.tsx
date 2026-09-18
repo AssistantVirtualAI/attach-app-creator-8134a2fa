@@ -48,6 +48,7 @@ const MConnections = lazyWithRetry(() => import('@/pages/planipret/mobile/MConne
 const MMaestroSync = lazyWithRetry(() => import('@/pages/planipret/mobile/MMaestroSync'), 'MMaestroSync');
 const Ms365Callback = lazyWithRetry(() => import('@/pages/planipret/Ms365Callback'), 'Ms365Callback');
 const MaestroCallback = lazyWithRetry(() => import('@/pages/planipret/MaestroCallback'), 'MaestroCallback');
+const PortalHandoff = lazyWithRetry(() => import('@/pages/planipret/PortalHandoff'), 'PortalHandoff');
 const MMs365Diagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MMs365Diagnostics'), 'MMs365Diagnostics');
 const MStyleDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MStyleDiagnostics'), 'MStyleDiagnostics');
 const MDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MDiagnostics'), 'MDiagnostics');
@@ -161,6 +162,7 @@ export default function App() {
                   <Route path="/auth/ms365/callback" element={<Ms365Callback />} />
                   <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />
                   <Route path="/auth/maestro/callback" element={<MaestroCallback />} />
+                  <Route path="/planipret/portal-handoff" element={<PortalHandoff />} />
                   <Route
                     path="/mplanipret"
                     element={<MplanipretGuard><PlanipretMobile /></MplanipretGuard>}

@@ -66,6 +66,19 @@ export function buildEmailBodySrcDoc(html: string) {
   (function () {
     var lastHeight = 0;
     var frame = 0;
+    function enforceReadablePaper() {
+      document.documentElement.style.setProperty("background", "#ffffff", "important");
+      document.body.style.setProperty("background", "#ffffff", "important");
+      document.body.querySelectorAll("*").forEach(function (el) {
+        el.style.setProperty("color", "#0b1220", "important");
+        el.style.setProperty("-webkit-text-fill-color", "#0b1220", "important");
+        el.style.setProperty("text-shadow", "none", "important");
+      });
+      document.body.querySelectorAll("a").forEach(function (el) {
+        el.style.setProperty("color", "#075985", "important");
+        el.style.setProperty("-webkit-text-fill-color", "#075985", "important");
+      });
+    }
     function report() {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(function () {
@@ -79,6 +92,7 @@ export function buildEmailBodySrcDoc(html: string) {
       }
       });
     }
+    enforceReadablePaper();
     window.addEventListener("load", report);
     setTimeout(report, 50);
     setTimeout(report, 400);
@@ -87,7 +101,10 @@ export function buildEmailBodySrcDoc(html: string) {
       img.addEventListener("load", report, { once: true });
       img.addEventListener("error", report, { once: true });
     });
-    var mo = new MutationObserver(report);
+    var mo = new MutationObserver(function () {
+      enforceReadablePaper();
+      report();
+    });
     mo.observe(document.body, { childList: true, subtree: true });
   })();
 <\/script>

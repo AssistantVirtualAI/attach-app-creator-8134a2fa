@@ -162,7 +162,7 @@ export default function MailPanel({ lang }: { lang: Lang }) {
                 </div>
 
                  <div className="mt-4 rounded-lg overflow-hidden" style={{ background: "var(--pp-email-paper)", border: "1px solid var(--pp-bg-border)" }}>
-                  {detail.body?.contentType === "html"
+                  {String(detail.body?.contentType ?? "").toLowerCase() === "html"
                     ? <EmailBodyFrame html={sanitizeHtml(detail.body?.content)} />
                     : <div className="p-4 whitespace-pre-wrap" style={{ fontSize: 16, fontWeight: 500, lineHeight: 1.65, color: "var(--pp-text-primary)" }}>{detail.body?.content ?? detail.bodyPreview ?? ""}</div>}
                 </div>

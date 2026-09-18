@@ -747,14 +747,14 @@ export default function MHome() {
               const phone = party.phone;
               return (
                 <li key={c.id}
-                  className="flex items-center gap-3 py-2.5 px-2 rounded-lg active:opacity-70"
+                  className="flex items-center gap-3 py-3 px-2 rounded-lg active:opacity-70"
                   onClick={() => openDialer(phone ?? undefined)}>
-                  <span className="w-8 h-8 rounded-full flex items-center justify-center"
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
                     style={{ background: "#F0F4F9", color }}>
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className="w-4 h-4" />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
+                    <p className="text-base font-bold leading-5 truncate flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
                       {name}
                       {c.ai_summary && (
                         <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold"
@@ -763,8 +763,8 @@ export default function MHome() {
                         </span>
                       )}
                     </p>
-                    <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>
-                      {[party.name ? party.formattedPhone : null, c.started_at ? new Date(c.started_at).toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : null].filter(Boolean).join(" · ")}
+                    <p className="text-[13px] font-medium leading-5 truncate" style={{ color: "var(--pp-text-secondary)" }}>
+                      {[party.formattedPhone, c.started_at ? new Date(c.started_at).toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : null].filter(Boolean).join(" · ")}
                     </p>
                   </div>
                 </li>

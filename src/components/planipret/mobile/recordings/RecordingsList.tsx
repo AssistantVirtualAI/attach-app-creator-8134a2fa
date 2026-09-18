@@ -3,6 +3,7 @@ import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
+import { recordingAudioCache } from "@/lib/planipret/persistentMediaCache";
 import {
   Play, Pause, Clock, Download, RotateCcw, RotateCw, Sparkles, FileText, Bot,
   Loader2, Search, Copy, Check, ChevronDown, Link2, User, Flame, Snowflake, Thermometer, ListChecks,
@@ -203,12 +204,25 @@ export default function RecordingsList({
   // Résout d'abord l'audio de TOUS les appels, indépendamment des longues
   // transcriptions. Deux travailleurs évitent de surcharger le réseau mobile.
   useEffect(() => {
-    const queue = withRec.filter((c) =>
+    const eligible = withRec.filter((c) =>
       c.save_consent === "approved" &&
       hasResolvableAudio(c) &&
-      !isVoicemailCall(c) &&
-      !audioPreloadDoneRef.current.has(c.id)
+      !isVoicemailCall(c)
     );
+    // 1) Réhydratation immédiate depuis le cache persistant (survit au
+    //    redémarrage de l'app) : l'enregistrement est jouable sans réseau.
+    for (const call of eligible) {
+      if (audioPreloadDoneRef.current.has(call.id)) continue;
+      const cachedUrl = recordingAudioCache.get(call.id);
+      if (!cachedUrl) continue;
+      audioPreloadDoneRef.current.add(call.id);
+      audioBlobCacheRef.current.set(call.id, cachedUrl);
+      setStatus(call.id, "uploaded");
+      if (call.recording_url !== cachedUrl) {
+        onUpdated({ ...call, recording_url: cachedUrl, has_recording: true, stream_via_proxy: false });
+      }
+    }
+    const queue = eligible.filter((c) => !audioPreloadDoneRef.current.has(c.id));
     if (!queue.length) return;
     const controller = new AbortController();
     let cancelled = false;
@@ -222,6 +236,7 @@ export default function RecordingsList({
           const url = await fetchAudioUrl(call, { signal: controller.signal });
           if (cancelled) return;
           audioBlobCacheRef.current.set(call.id, url);
+          recordingAudioCache.set(call.id, url);
           setStatus(call.id, "uploaded");
           onUpdated({ ...call, recording_url: url, has_recording: true, stream_via_proxy: false });
         } catch (e: any) {
@@ -465,6 +480,7 @@ export default function RecordingsList({
       const prev = audioBlobCacheRef.current.get(call.id);
       if (prev?.startsWith("blob:")) { try { URL.revokeObjectURL(prev); } catch {} }
       audioBlobCacheRef.current.set(call.id, url);
+      recordingAudioCache.set(call.id, url);
       setStatus(call.id, "uploaded");
       onUpdated({ ...call, recording_url: url, has_recording: true, stream_via_proxy: false });
     } catch (e: any) {

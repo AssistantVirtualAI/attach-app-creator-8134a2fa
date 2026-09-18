@@ -29,6 +29,7 @@ import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365Connec
 import { useMs365Status } from "@/hooks/useMs365Status";
 import { canSendWithSmsAvailability, getSmsAvailability, type SmsAvailability } from "@/lib/planipret/smsAvailability";
 import { getSmsSubmission, type SmsSubmission } from "@/lib/planipret/smsSendGuard";
+import { emailBodyCache } from "@/lib/planipret/persistentMediaCache";
 
 import DOMPurify from "dompurify";
 
@@ -1248,6 +1249,37 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, loadingMore, emails?.length]);
 
+  // Préchargement du contenu complet des courriels récents, comme pour les
+  // enregistrements d'appels : ouverture instantanée et lecture hors ligne.
+  // Un seul téléchargement à la fois pour ne pas saturer le réseau mobile.
+  const bodyPrefetchDoneRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!emails || emails.length === 0) return;
+    const queue = emails
+      .slice(0, 20)
+      .map((e: any) => String(e?.id ?? ""))
+      .filter((id) => id && !bodyPrefetchDoneRef.current.has(id) && !emailBodyCache.has(id));
+    if (!queue.length) return;
+    let cancelled = false;
+    (async () => {
+      for (const id of queue) {
+        if (cancelled) return;
+        bodyPrefetchDoneRef.current.add(id);
+        try {
+          const { data } = await supabase.functions.invoke("ms365-actions", {
+            body: { action: "read_email_detail", payload: { message_id: id } },
+          });
+          if ((data as any)?.success) emailBodyCache.set(id, (data as any).email);
+          else bodyPrefetchDoneRef.current.delete(id);
+        } catch {
+          bodyPrefetchDoneRef.current.delete(id);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [emails]);
+
+
   return (
     <div className="relative flex flex-col overflow-y-auto p-3" style={{ height: "calc(100dvh - 242px)", minHeight: 400 }}>
       <div className="flex items-center justify-between mb-2">
@@ -1407,7 +1439,9 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
 }) {
   const { t } = useMplanipretLang();
   const safeArea = useSafeAreaInsets();
-  const [detail, setDetail] = useState<any | null>(null);
+  // Corps déjà téléchargé (préchargement ou lecture antérieure) : affichage
+  // instantané, y compris après un redémarrage de l'app.
+  const [detail, setDetail] = useState<any | null>(() => (email?.id ? emailBodyCache.get(String(email.id)) : null));
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [sumOpen, setSumOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -1431,13 +1465,21 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
     let cancelled = false;
     (async () => {
       if (!email?.id) return;
-      setLoadingDetail(true);
+      const cached = emailBodyCache.get(String(email.id));
+      if (cached && !cancelled) {
+        setDetail(cached);
+        setFlagged(cached?.flag?.flagStatus === "flagged");
+      }
+      setLoadingDetail(!cached);
       const { data } = await supabase.functions.invoke("ms365-actions", {
         body: { action: "read_email_detail", payload: { message_id: email.id } },
       });
-      if (!cancelled && (data as any)?.success) {
-        setDetail((data as any).email);
-        setFlagged((data as any).email?.flag?.flagStatus === "flagged");
+      if ((data as any)?.success) {
+        emailBodyCache.set(String(email.id), (data as any).email);
+        if (!cancelled) {
+          setDetail((data as any).email);
+          setFlagged((data as any).email?.flag?.flagStatus === "flagged");
+        }
       }
       if (!cancelled) setLoadingDetail(false);
       // Mark as read on open (fire-and-forget). Also mutate the incoming

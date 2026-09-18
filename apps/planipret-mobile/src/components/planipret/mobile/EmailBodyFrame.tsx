@@ -123,6 +123,7 @@ export default function EmailBodyFrame({ html }: { html: string }) {
   useEffect(() => {
     function onMsg(e: MessageEvent) {
       const d: any = e.data;
+      if (e.source !== ref.current?.contentWindow) return;
       if (!d || d.__ppEmailFrame !== true) return;
       if (typeof d.height === "number") {
         setHeight(Math.min(6000, Math.max(120, Math.ceil(d.height) + 8)));

@@ -197,9 +197,9 @@ Deno.serve(async (req) => {
       if (me?.organization_id) {
         const { data } = await admin
           .from("planipret_profiles")
-          .select("full_name, email, avatar_url, extension")
+          .select("full_name, email, avatar_url, extension, ns_extension")
           .eq("organization_id", me.organization_id)
-          .or(`phone.eq.${normalized},extension.eq.${normalized.replace(/^\+1/, "")}`)
+          .or(`phone.eq.${normalized},extension.eq.${normalized.replace(/^\+1/, "")},ns_extension.eq.${normalized.replace(/^\+1/, "")}`)
           .limit(1)
           .maybeSingle();
         if (data) {

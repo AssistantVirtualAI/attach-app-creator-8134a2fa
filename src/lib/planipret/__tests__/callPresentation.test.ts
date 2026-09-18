@@ -67,4 +67,17 @@ describe("presentCallParty", () => {
     expect(party.name).toBeNull();
     expect(party.formattedPhone).toBe("(514) 555-7890");
   });
+
+  it("recovers the public caller number when a reversed CDR puts it on the other side", () => {
+    const party = presentCallParty({
+      direction: "inbound",
+      fromNumber: "1136",
+      toNumber: "+15145557890",
+      ownExtension: "1136",
+    });
+
+    expect(party.phone).toBe("15145557890");
+    expect(party.formattedPhone).toBe("(514) 555-7890");
+    expect(party.internalExtension).toBe("1136");
+  });
 });

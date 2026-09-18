@@ -1408,7 +1408,9 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
 }) {
   const { t } = useMplanipretLang();
   const safeArea = useSafeAreaInsets();
-  const [detail, setDetail] = useState<any | null>(null);
+  // Corps déjà téléchargé (préchargement ou lecture antérieure) : affichage
+  // instantané, y compris après un redémarrage de l'app.
+  const [detail, setDetail] = useState<any | null>(() => (email?.id ? emailBodyCache.get(String(email.id)) : null));
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [sumOpen, setSumOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);

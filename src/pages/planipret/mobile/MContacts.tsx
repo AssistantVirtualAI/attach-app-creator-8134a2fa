@@ -964,11 +964,30 @@ function ContactDetailSheet({
     if (!maestroId) { toast.error("Client Maestro requis pour créer une tâche"); return; }
     setCreatingTask(true);
     try {
-      const data = await createClientFollowUpTask({
+      const notes = `${t("contacts.followUp") || "Suivi"} — ${name}`;
+      let data = await createClientFollowUpTask({
         maestro_client_id: maestroId,
         client_name: name,
-        notes: `${t("contacts.followUp") || "Suivi"} — ${name}`,
+        notes,
       });
+      // Device/directory contacts carry no Maestro id: resolve the client by
+      // phone through the broker's cached Maestro directory, then retry once.
+      if ((data as any)?.success !== true && bestPhone &&
+          ["task_target_not_found", "maestro_client_id_required"].includes(String((data as any)?.error))) {
+        try {
+          const { data: lookup } = await supabase.functions.invoke("maestro-client-lookup", {
+            body: { phone: bestPhone },
+          });
+          const resolvedId = (lookup as any)?.client_id;
+          if ((lookup as any)?.found && resolvedId && String(resolvedId) !== String(maestroId)) {
+            data = await createClientFollowUpTask({
+              maestro_client_id: String(resolvedId),
+              client_name: (lookup as any)?.name || name,
+              notes,
+            });
+          }
+        } catch { /* fall through to the original error */ }
+      }
       if ((data as any)?.success !== true) throw new Error((data as any)?.message || (data as any)?.error || "task_failed");
       toast.success((data as any)?.message || t("contacts.taskCreated") || "Tâche créée et confirmée dans Maestro");
     } catch (e: any) {

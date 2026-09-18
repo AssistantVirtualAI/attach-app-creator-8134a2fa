@@ -3,6 +3,7 @@ import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
+import { recordingAudioCache } from "@/lib/planipret/persistentMediaCache";
 import {
   Play, Pause, Clock, Download, RotateCcw, RotateCw, Sparkles, FileText, Bot,
   Loader2, Search, Copy, Check, ChevronDown, Link2, User, Flame, Snowflake, Thermometer, ListChecks,

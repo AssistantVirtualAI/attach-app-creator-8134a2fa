@@ -92,10 +92,21 @@ function meaningfulName(value: unknown, ownExtension?: unknown): string | null {
  */
 export function presentCallParty(input: CallPartyInput): CallParty {
   const outbound = String(input.direction ?? "").toLowerCase() === "outbound";
-  const rawNumber = outbound ? input.toNumber : input.fromNumber;
-  const rawName = outbound ? input.toName : input.fromName;
-  const phone = publicPhone(rawNumber, input.ownExtension);
-  const directName = meaningfulName(rawName, input.ownExtension);
+  const preferredNumber = outbound ? input.toNumber : input.fromNumber;
+  const alternateNumber = outbound ? input.fromNumber : input.toNumber;
+  const preferredName = outbound ? input.toName : input.fromName;
+  const alternateName = outbound ? input.fromName : input.toName;
+  // Some NetSapiens CDR variants reverse the orig/term endpoints. Prefer the
+  // directional peer, but recover the public endpoint from the opposite side
+  // when the preferred value is empty or only the broker's internal extension.
+  const preferredPhone = publicPhone(preferredNumber, input.ownExtension);
+  const alternatePhone = publicPhone(alternateNumber, input.ownExtension);
+  const phone = preferredPhone ?? alternatePhone;
+  const rawNumber = preferredPhone || isInternalExtension(preferredNumber, input.ownExtension)
+    ? preferredNumber
+    : alternateNumber;
+  const directName = meaningfulName(preferredName, input.ownExtension)
+    ?? (!preferredPhone && alternatePhone ? meaningfulName(alternateName, input.ownExtension) : null);
   const resolvedName = meaningfulName(input.resolvedName, input.ownExtension);
   const endpoint = normalizeCallEndpoint(rawNumber);
 

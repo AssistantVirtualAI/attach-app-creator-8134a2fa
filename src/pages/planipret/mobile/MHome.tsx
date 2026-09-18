@@ -26,6 +26,7 @@ import BriefListenButton from "@/components/planipret/mobile/BriefListenButton";
 import CommissionHomeCard from "@/components/planipret/mobile/CommissionHomeCard";
 import TasksHomeCard from "@/components/planipret/mobile/TasksHomeCard";
 import { presentCallParty } from "@/lib/planipret/callPresentation";
+import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { loadMHomeCache, saveMHomeCache } from "@/lib/mhomeCache";
 
 
@@ -113,6 +114,11 @@ export default function MHome() {
 
   const [stats, setStats] = useState({ calls: 0, missed: 0, sms: 0, voicemails: 0, meetings: 0, hotLeads: 0, tasks: 0, outbound: 0 });
   const [recent, setRecent] = useState<any[]>([]);
+  const recentLookupKeys = useMemo(() => recent.map((call) => {
+    const outbound = String(call?.direction ?? "").toLowerCase() === "outbound";
+    return String((outbound ? call?.to_number : call?.from_number) ?? (outbound ? call?.from_number : call?.to_number) ?? "").trim();
+  }).filter(Boolean), [recent]);
+  const recentCallerNames = useCallerNames(recentLookupKeys);
   const [hotLeads, setHotLeads] = useState<any[]>([]);
   const [dueReminders, setDueReminders] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
@@ -719,6 +725,7 @@ export default function MHome() {
                 toNumber: c.to_number,
                 toName: c.to_name,
                 ownExtension: profile?.ns_extension ?? profile?.extension,
+                resolvedName: recentCallerNames[String((c.direction === "outbound" ? c.to_number : c.from_number) ?? (c.direction === "outbound" ? c.from_number : c.to_number) ?? "").trim()],
               });
               const name = party.name || party.formattedPhone || t("common.unknown");
               const phone = party.phone;

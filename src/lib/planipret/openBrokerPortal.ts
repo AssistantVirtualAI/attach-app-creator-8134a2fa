@@ -37,9 +37,15 @@ export async function openBrokerPortal(path?: string): Promise<OpenPortalResult>
     }
 
     if (Capacitor.isNativePlatform()) {
-      // Navigateur système (in-app browser) : garde l'app mobile en arrière-plan.
+      // iOS rend parfois la présentation « popover » comme une feuille blanche.
+      // Une vue plein écran garantit que le portail et sa redirection de session
+      // disposent d'une vraie surface de navigation.
       const { Browser } = await import("@capacitor/browser");
-      await Browser.open({ url: out.url, presentationStyle: "popover" });
+      await Browser.open({
+        url: out.url,
+        presentationStyle: "fullscreen",
+        windowName: "_system",
+      });
     } else {
       window.open(out.url, "_blank", "noopener,noreferrer");
     }

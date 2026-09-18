@@ -31,7 +31,10 @@ export default function PortalHandoff() {
       const params = fragmentParams.has("th") ? fragmentParams : queryParams;
       const tokenHash = params.get("th") ?? "";
       const email = params.get("em") ?? "";
-      const to = params.get("to") ?? "/planipret/broker/overview";
+      const requestedTarget = params.get("to") ?? "/planipret/broker/overview";
+      const to = /^\/planipret\/(admin|broker)(\/|$)/.test(requestedTarget)
+        ? requestedTarget
+        : "/planipret/broker/overview";
 
       // Le fragment est effacé immédiatement : le jeton ne doit pas rester
       // dans l'historique du navigateur.
@@ -46,7 +49,7 @@ export default function PortalHandoff() {
         // Déjà connecté dans ce navigateur : on entre directement.
         if (await hasSession()) {
           try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch { /* ignore */ }
-          navigate(to.startsWith("/planipret/") ? to : "/planipret/broker/overview", { replace: true });
+           window.location.replace(to);
           return;
         }
         setError("Lien incomplet ou expiré. Relancez l'ouverture depuis l'application mobile.");
@@ -79,7 +82,9 @@ export default function PortalHandoff() {
 
 
       try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch { /* ignore */ }
-      navigate(to.startsWith("/planipret/") ? to : "/planipret/broker/overview", { replace: true });
+      // Full navigation avoids a blank stale shell when iOS resumes the
+      // external browser after the one-time session exchange.
+      window.location.replace(to);
     })();
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, []);

@@ -217,10 +217,6 @@ export default function RecordingsList({
         const call = queue[index];
         if (cancelled) return;
         audioPreloadDoneRef.current.add(call.id);
-        if (call.recording_storage_path && call.recording_url) {
-          setStatus(call.id, "uploaded");
-          continue;
-        }
         setStatus(call.id, "uploading");
         try {
           const url = await fetchAudioUrl(call, { signal: controller.signal });

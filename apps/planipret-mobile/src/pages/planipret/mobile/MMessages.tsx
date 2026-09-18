@@ -1595,18 +1595,18 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
           className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
           style={{ WebkitOverflowScrolling: "touch", minHeight: 0, overflowX: "hidden", maxWidth: "100vw" }}
         >
-          <div>
-            <p className="text-base font-semibold" style={{ color: "var(--pp-text-primary)" }}>{subject}</p>
-            <p className="text-xs mt-1" style={{ color: "var(--pp-text-muted)" }}>
+          <div className="rounded-xl p-3.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
+            <p className="text-xl leading-7 font-extrabold" style={{ color: "var(--pp-text-primary)" }}>{subject}</p>
+            <p className="text-sm font-semibold leading-5 mt-2" style={{ color: "var(--pp-text-primary)" }}>
               {t("messages.from")} <span style={{ color: "var(--pp-text-secondary)" }}>{from}</span> {fromAddr && `<${fromAddr}>`}
             </p>
             {toList.length > 0 && (
-              <p className="text-xs mt-0.5" style={{ color: "var(--pp-text-muted)" }}>
+              <p className="text-[13px] font-medium leading-5 mt-1" style={{ color: "var(--pp-text-primary)" }}>
                 À: {toList.map((r: any) => r?.emailAddress?.address).filter(Boolean).join(", ")}
               </p>
             )}
             {ccList.length > 0 && (
-              <p className="text-xs mt-0.5" style={{ color: "var(--pp-text-muted)" }}>
+              <p className="text-[13px] font-medium leading-5 mt-1" style={{ color: "var(--pp-text-primary)" }}>
                 Cc: {ccList.map((r: any) => r?.emailAddress?.address).filter(Boolean).join(", ")}
               </p>
             )}
@@ -1625,15 +1625,15 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
           {analysis && (<AvaProposedActionsCard analysis={analysis} onDismiss={() => setAnalysis(null)} />)}
 
           <div
-            className="rounded-xl p-3 text-sm"
-            style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+            className="rounded-xl overflow-hidden text-base font-medium leading-7"
+            style={{ background: "var(--pp-email-paper)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
           >
             {loadingDetail && !detail ? (
               <div className="text-center py-6"><Loader2 className="w-4 h-4 animate-spin mx-auto" /></div>
             ) : bodyType === "html" && bodyHtml ? (
               <EmailBodyFrame html={bodyHtml} />
             ) : (
-              <div className="whitespace-pre-wrap break-words">{bodyHtml || merged.bodyPreview || t("messages.previewUnavailable")}</div>
+              <div className="whitespace-pre-wrap break-words p-4">{bodyHtml || merged.bodyPreview || t("messages.previewUnavailable")}</div>
             )}
 
           </div>

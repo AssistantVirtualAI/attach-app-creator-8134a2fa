@@ -956,7 +956,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
         inputRef={inputRef}
         autoFocus
         text={text} setText={setText} onSend={send} sending={sending}
-        disabled={!canSendWithSmsAvailability(smsAvailability)}
+        disabled={!!smsAvailability && !canSendWithSmsAvailability(smsAvailability)}
         leftAction={
           <button onClick={() => setTplOpen(true)} className="p-2 rounded-full" style={{ color: "var(--pp-brand-accent)" }} title={t("messages.templates")}>
             <Zap className="w-5 h-5" />

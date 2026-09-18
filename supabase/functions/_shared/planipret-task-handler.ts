@@ -1096,11 +1096,10 @@ export async function handleTaskRequest(
               await (deps.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))))(retryDelays[attempt]);
             }
             const upstream = await deps.listFetch(String(listAssigneeId), {
-              // Maestro documents newly created tasks as pending. Request that
-              // concrete status and the known task type rather than the legacy
-              // pseudo-value `all`, which can return an empty page on some
-              // Maestro tenants.
-              status: "pending",
+              // Only the documented statuses are queried (`pending`, `open`,
+              // `complete`) — never the legacy pseudo-value `all`, which can
+              // return an empty page on some Maestro tenants.
+              status: null,
               type: readBackType,
               from: null,
               to: null,

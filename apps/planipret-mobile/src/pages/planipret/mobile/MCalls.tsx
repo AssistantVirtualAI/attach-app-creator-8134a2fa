@@ -351,9 +351,11 @@ export default function MCalls() {
   }, [userId, loadRecordingsFromCache]);
 
   const loadRecordings = useCallback(async (silent = false, force = false) => {
+    const hadFreshCache = !!readScreenCache(`calls:recordings:${userId}`, TTL.fiveMinutes);
     await loadRecordingsFromCache(silent, force);
     // Synchronisation NetSapiens seulement si le cache 5 min est périmé.
-    if (force || !readScreenCache(`calls:recordings:${userId}`, TTL.fiveMinutes)) {
+    // Vérifier la fraîcheur avant la lecture, car celle-ci écrit le cache.
+    if (force || !hadFreshCache) {
       void syncRecordingsInBackground();
     }
   }, [userId, loadRecordingsFromCache, syncRecordingsInBackground]);
@@ -586,7 +588,11 @@ export default function MCalls() {
               calls={recordings as any}
               loading={recordingsLoading}
               userId={userId}
-              onUpdated={(c) => setRecordings((prev) => prev.map((p) => (p.id === c.id ? { ...p, ...c } as any : p)))}
+              onUpdated={(c) => setRecordings((prev) => {
+                const next = prev.map((p) => (p.id === c.id ? { ...p, ...c } as any : p));
+                writeScreenCache(`calls:recordings:${userId}`, next);
+                return next;
+              })}
             />
           </>
         ) : tab === "voicemails" ? (

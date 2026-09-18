@@ -62,7 +62,7 @@ describe("planipret task handler — create", () => {
     expect(payload.send_notification).toBe(0);
     expect(payload.sync_cal).toBe(0);
     expect(listFetch).toHaveBeenCalledWith("93135", expect.objectContaining({
-      status: "pending", type: "user", findTaskId: "946044",
+      status: null, type: "user", findTaskId: "946044",
     }));
   });
 
@@ -88,7 +88,33 @@ describe("planipret task handler — create", () => {
     expect(out.body).toMatchObject({ success: true, read_back: true, visible_in_maestro: true });
     expect(listFetch).toHaveBeenCalledTimes(2);
     expect(listFetch).toHaveBeenNthCalledWith(1, "93135", expect.objectContaining({ findTaskId: "946044" }));
-    expect(wait).toHaveBeenCalledWith(500);
+    expect(wait).toHaveBeenCalledWith(800);
+  });
+
+  it("reads every documented status so an immediately-open task is confirmed", async () => {
+    const listFetch = vi.fn(async (_assignee: string, options: any) => {
+      // The Task API adapter receives no fixed status and is therefore required
+      // to query pending, open and complete rather than the undocumented `all`.
+      expect(options).toMatchObject({ status: null, type: "user", findTaskId: "946044" });
+      return {
+        ok: true,
+        tasks: [{
+          referral_option_id: 946044,
+          type: "user",
+          xid: 387460525,
+          delegate_users_id: 93135,
+          status: "open",
+        }],
+        endpoint: "/api/main/tasks",
+        status: 200,
+      };
+    });
+    const { deps } = makeDeps({ listFetch });
+
+    const out = await handleTaskRequest(validCreate, deps);
+
+    expect(out.body).toMatchObject({ success: true, read_back: true, visible_in_maestro: true });
+    expect((out.body as any).diagnostics.returned_assignees).toContain("93135");
   });
 
   it("returns validation_failed (422 equivalent) when notes are missing", async () => {

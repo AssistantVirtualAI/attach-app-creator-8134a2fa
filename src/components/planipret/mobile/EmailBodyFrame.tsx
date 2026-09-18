@@ -20,11 +20,12 @@ export function buildEmailBodySrcDoc(html: string) {
     margin: 0;
     padding: 0;
     background: #ffffff !important;
-    color: #172033 !important;
-    -webkit-text-fill-color: #172033 !important;
+    color: #0b1220 !important;
+    -webkit-text-fill-color: #0b1220 !important;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-    font-size: 15px;
-    line-height: 1.6;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.65;
     word-wrap: break-word;
     overflow-wrap: anywhere;
     -webkit-text-size-adjust: 100%;
@@ -34,14 +35,16 @@ export function buildEmailBodySrcDoc(html: string) {
      The reader deliberately wins those colors to preserve contrast on its
      neutral paper surface in both application themes. */
   body, body * {
-    color: #172033 !important;
-    -webkit-text-fill-color: #172033 !important;
+    color: #0b1220 !important;
+    -webkit-text-fill-color: #0b1220 !important;
     text-shadow: none !important;
   }
   * { max-width: 100% !important; box-sizing: border-box; }
   img, video, iframe { max-width: 100% !important; height: auto !important; display: inline-block; }
   table { width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; }
   td, th { word-break: break-word; overflow-wrap: anywhere; }
+  p, div, li, td, th { font-size: max(16px, 1em) !important; line-height: 1.65 !important; }
+  h1, h2, h3, h4, h5, h6, strong, b { font-weight: 700 !important; }
   pre, code { white-space: pre-wrap; word-break: break-word; }
   blockquote {
     margin: 8px 0;
@@ -80,8 +83,12 @@ export function buildEmailBodySrcDoc(html: string) {
     setTimeout(report, 50);
     setTimeout(report, 400);
     setTimeout(report, 1200);
-    var ro = new ResizeObserver(report);
-    ro.observe(document.body);
+    document.querySelectorAll("img").forEach(function (img) {
+      img.addEventListener("load", report, { once: true });
+      img.addEventListener("error", report, { once: true });
+    });
+    var mo = new MutationObserver(report);
+    mo.observe(document.body, { childList: true, subtree: true });
   })();
 <\/script>
 </body></html>`;
@@ -99,6 +106,7 @@ export default function EmailBodyFrame({ html }: { html: string }) {
   useEffect(() => {
     function onMsg(e: MessageEvent) {
       const d: any = e.data;
+      if (e.source !== ref.current?.contentWindow) return;
       if (!d || d.__ppEmailFrame !== true) return;
       if (typeof d.height === "number") {
         setHeight(Math.min(6000, Math.max(120, Math.ceil(d.height) + 8)));
@@ -112,7 +120,7 @@ export default function EmailBodyFrame({ html }: { html: string }) {
     <iframe
       ref={ref}
       title="email-body"
-      sandbox="allow-same-origin allow-popups"
+      sandbox="allow-scripts allow-popups"
       srcDoc={srcDoc}
       style={{
         width: "100%",

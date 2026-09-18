@@ -1322,18 +1322,18 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
                     }}
                   >
                     <div className="flex items-start justify-between gap-3 mb-1.5">
-                      <p className={`${unread ? "font-bold" : "font-semibold"} text-[15px] leading-5 truncate flex items-center gap-1.5`} style={{ color: "var(--pp-text-primary)" }}>
+                      <p className={`${unread ? "font-extrabold" : "font-bold"} text-base leading-5 truncate flex items-center gap-1.5`} style={{ color: "var(--pp-text-primary)" }}>
                         {unread && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--pp-brand-accent)" }} aria-label="Non lu" />}
                         {from}
                         {e.hasAttachments && <Paperclip className="w-3 h-3" style={{ color: "var(--pp-text-muted)" }} />}
                         {flagged && <Flag className="w-3 h-3" style={{ color: "#f59e0b", fill: "#f59e0b" }} />}
                       </p>
-                      <span className="text-[11px] font-medium shrink-0" style={{ color: "var(--pp-text-secondary)" }}>
+                      <span className="text-xs font-semibold shrink-0" style={{ color: "var(--pp-text-primary)" }}>
                         {received ? fmtTime(received, lang, t) : ""}
                       </span>
                     </div>
-                    <p className={`${unread ? "font-semibold" : "font-medium"} text-[13px] leading-5 truncate mb-0.5`} style={{ color: "var(--pp-text-primary)" }}>{subject}</p>
-                    <p className="text-xs leading-[1.45] line-clamp-2" style={{ color: "var(--pp-text-secondary)" }}>{preview}</p>
+                    <p className={`${unread ? "font-bold" : "font-semibold"} text-sm leading-5 truncate mb-1`} style={{ color: "var(--pp-text-primary)" }}>{subject}</p>
+                    <p className="text-[13px] font-medium leading-5 line-clamp-2" style={{ color: "var(--pp-text-secondary)" }}>{preview}</p>
                   </button>
                 </li>
               );
@@ -1597,17 +1597,17 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
           style={{ WebkitOverflowScrolling: "touch", minHeight: 0, overflowX: "hidden", maxWidth: "100vw" }}
         >
           <div className="rounded-xl p-3.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
-            <p className="text-lg leading-6 font-bold" style={{ color: "var(--pp-text-primary)" }}>{subject}</p>
-            <p className="text-[13px] leading-5 mt-2" style={{ color: "var(--pp-text-secondary)" }}>
+            <p className="text-xl leading-7 font-extrabold" style={{ color: "var(--pp-text-primary)" }}>{subject}</p>
+            <p className="text-sm font-semibold leading-5 mt-2" style={{ color: "var(--pp-text-primary)" }}>
               {t("messages.from")} <span style={{ color: "var(--pp-text-secondary)" }}>{from}</span> {fromAddr && `<${fromAddr}>`}
             </p>
             {toList.length > 0 && (
-               <p className="text-xs leading-5 mt-0.5" style={{ color: "var(--pp-text-secondary)" }}>
+               <p className="text-[13px] font-medium leading-5 mt-1" style={{ color: "var(--pp-text-primary)" }}>
                 À: {toList.map((r: any) => r?.emailAddress?.address).filter(Boolean).join(", ")}
               </p>
             )}
             {ccList.length > 0 && (
-               <p className="text-xs leading-5 mt-0.5" style={{ color: "var(--pp-text-secondary)" }}>
+               <p className="text-[13px] font-medium leading-5 mt-1" style={{ color: "var(--pp-text-primary)" }}>
                 Cc: {ccList.map((r: any) => r?.emailAddress?.address).filter(Boolean).join(", ")}
               </p>
             )}
@@ -1626,7 +1626,7 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
           {analysis && (<AvaProposedActionsCard analysis={analysis} onDismiss={() => setAnalysis(null)} />)}
 
           <div
-            className="rounded-xl overflow-hidden text-[15px] leading-6"
+            className="rounded-xl overflow-hidden text-base font-medium leading-7"
             style={{ background: "var(--pp-email-paper)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
           >
             {loadingDetail && !detail ? (

@@ -455,6 +455,28 @@ export default function MCalls() {
 
   const missedCount = useMemo(() => calls.filter(isMissed).length, [calls]);
 
+  // Appels enregistrés localement qui n'ont pas encore de CDR NetSapiens :
+  // ils restent visibles et peuvent être resynchronisés à la demande.
+  const unsynced = useMemo(
+    () => calls.filter((c) => !c.ns_call_id && !String(c.id ?? "").startsWith("ns-")),
+    [calls],
+  );
+  const [resyncing, setResyncing] = useState(false);
+  const resyncUnsynced = useCallback(async () => {
+    if (resyncing) return;
+    setResyncing(true);
+    try {
+      const end = new Date().toISOString();
+      const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      await supabase.functions.invoke("pp-ns-cdr", { body: { action: "sync", start, end, limit: 50 } });
+      await load(true);
+    } catch (e: any) {
+      toast.error(lang === "en" ? "Resync failed" : "Échec de la resynchronisation", { description: e?.message });
+    } finally {
+      setResyncing(false);
+    }
+  }, [resyncing, load, lang]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const base = tab === "missed" ? calls.filter(isMissed) : calls;

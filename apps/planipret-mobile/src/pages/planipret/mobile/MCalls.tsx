@@ -20,7 +20,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
 import { presentCallParty } from "@/lib/planipret/callPresentation";
-import { readScreenCache, writeScreenCache, invalidateScreenCache, TTL } from "@/lib/planipret/screenCache";
+import { peekScreenCache, readScreenCache, writeScreenCache, invalidateScreenCache, TTL } from "@/lib/planipret/screenCache";
 
 
 
@@ -66,6 +66,9 @@ type Call = {
   ai_client_insights?: any;
   ai_tasks?: any;
   pipeline_state?: any;
+  save_consent?: string | null;
+  recording_storage_path?: string | null;
+  recording_cached_at?: string | null;
 };
 
 type Insight = {
@@ -300,36 +303,37 @@ export default function MCalls() {
       return prev;
     });
     try {
-      const end = new Date().toISOString();
-      const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      let localQuery: any = supabase
-        .from("planipret_phone_calls")
-        .select("*")
-        .not("to_number", "ilike", "%vmail%")
-        .not("to_number", "ilike", "%voicemail%")
-        .not("to_number", "ilike", "%vm@%")
-        .gte("started_at", start)
-        .lte("started_at", end)
-        .order("started_at", { ascending: false })
-        .limit(50);
-      if (phoneCallScopeFilter) localQuery = localQuery.or(phoneCallScopeFilter);
-      const { data: local } = await localQuery;
-      setRecordings((local ?? []).filter((r: any) => r.has_recording || r.recording_url || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id).map((r: any) => ({
+      const pageSize = 200;
+      const local: any[] = [];
+      for (let from = 0; ; from += pageSize) {
+        let localQuery: any = supabase
+          .from("planipret_phone_calls")
+          .select("*")
+          .eq("save_consent", "approved")
+          .not("to_number", "ilike", "%vmail%")
+          .not("to_number", "ilike", "%voicemail%")
+          .not("to_number", "ilike", "%vm@%")
+          .order("started_at", { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (phoneCallScopeFilter) localQuery = localQuery.or(phoneCallScopeFilter);
+        const { data, error } = await localQuery;
+        if (error) throw error;
+        local.push(...(data ?? []));
+        if (!data || data.length < pageSize) break;
+      }
+      const next = local.filter((r: any) => r.has_recording || r.recording_url || r.recording_storage_path || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id).map((r: any) => ({
         ...r,
         stream_via_proxy: true,
         proxy_call_db_id: r.id,
         proxy_ns_callid: r.ns_callid ?? r.ns_orig_callid ?? r.ns_term_callid ?? r.ns_call_id ?? null,
-        has_recording: !!(r.has_recording || r.recording_url || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id),
-      })) as Call[]);
-      writeScreenCache(`calls:recordings:${userId}`, (local ?? []).filter((r: any) => r.has_recording || r.recording_url || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id).map((r: any) => ({
-        ...r,
-        stream_via_proxy: true,
-        proxy_call_db_id: r.id,
-        proxy_ns_callid: r.ns_callid ?? r.ns_orig_callid ?? r.ns_term_callid ?? r.ns_call_id ?? null,
-        has_recording: true,
-      })));
+        has_recording: !!(r.has_recording || r.recording_url || r.recording_storage_path || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id),
+      })) as Call[];
+      setRecordings(next);
+      writeScreenCache(`calls:recordings:${userId}`, next);
     } catch (e) {
       console.warn("[MCalls] recordings load failed", e);
+      const stale = peekScreenCache<Call[]>(`calls:recordings:${userId}`);
+      if (stale) setRecordings((current) => current.length ? current : stale.value);
     } finally {
       setRecordingsLoading(false);
     }
@@ -359,6 +363,14 @@ export default function MCalls() {
       void syncRecordingsInBackground();
     }
   }, [userId, loadRecordingsFromCache, syncRecordingsInBackground]);
+
+  const updateRecording = useCallback((updated: Call) => {
+    setRecordings((prev) => {
+      const next = prev.map((current) => current.id === updated.id ? { ...current, ...updated } : current);
+      if (userId) writeScreenCache(`calls:recordings:${userId}`, next);
+      return next;
+    });
+  }, [userId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -588,11 +600,7 @@ export default function MCalls() {
               calls={recordings as any}
               loading={recordingsLoading}
               userId={userId}
-              onUpdated={(c) => setRecordings((prev) => {
-                const next = prev.map((p) => (p.id === c.id ? { ...p, ...c } as any : p));
-                writeScreenCache(`calls:recordings:${userId}`, next);
-                return next;
-              })}
+              onUpdated={updateRecording as any}
             />
           </>
         ) : tab === "voicemails" ? (

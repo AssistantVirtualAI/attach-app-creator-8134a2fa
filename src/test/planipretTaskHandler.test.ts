@@ -61,9 +61,34 @@ describe("planipret task handler — create", () => {
     // because Maestro otherwise enables some notification defaults server-side.
     expect(payload.send_notification).toBe(0);
     expect(payload.sync_cal).toBe(0);
-    expect(listFetch).toHaveBeenCalledWith("387460525", expect.objectContaining({
+    expect(listFetch).toHaveBeenCalledWith("93135", expect.objectContaining({
       status: "pending", type: "user", findTaskId: "946044",
     }));
+  });
+
+  it("retries the documented list with the sent assignee while Maestro indexes a new task", async () => {
+    const listFetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        tasks: [{ id: 111, users: [{ id: 93135 }], xid: 123, type: "user" }],
+        endpoint: "/api/main/tasks",
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        tasks: [{ id: 946044, users: [{ id: 93135 }], xid: 387460525, type: "user" }],
+        endpoint: "/api/main/tasks",
+        status: 200,
+      });
+    const wait = vi.fn(async () => undefined);
+    const { deps } = makeDeps({ listFetch, wait });
+
+    const out = await handleTaskRequest(validCreate, deps);
+
+    expect(out.body).toMatchObject({ success: true, read_back: true, visible_in_maestro: true });
+    expect(listFetch).toHaveBeenCalledTimes(2);
+    expect(listFetch).toHaveBeenNthCalledWith(1, "93135", expect.objectContaining({ findTaskId: "946044" }));
+    expect(wait).toHaveBeenCalledWith(500);
   });
 
   it("returns validation_failed (422 equivalent) when notes are missing", async () => {

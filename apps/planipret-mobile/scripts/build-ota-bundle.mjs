@@ -9,7 +9,7 @@
 // (SIP, CallKit, permissions, plugins) exige une soumission aux stores.
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,7 +23,7 @@ if (!existsSync(DIST)) {
 }
 
 function walk(dir) {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = resolve(dir, entry.name);
     return entry.isDirectory() ? walk(fullPath) : [fullPath];
   });

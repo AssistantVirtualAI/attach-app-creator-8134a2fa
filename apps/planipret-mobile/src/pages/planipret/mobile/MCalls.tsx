@@ -1246,6 +1246,7 @@ function CallDetailSheet({
   const peerNumber = (call.direction === "outbound" ? call.to_number : call.from_number) ?? "";
   const _resolvedNames = useCallerNames([peerNumber]);
   const _callerLabel = displayLabelWith(call, _resolvedNames[peerNumber], lang as "fr" | "en");
+  const recordingCanResolve = !!(call.recording_url || call.has_recording || call.ns_callid || call.ns_call_id);
 
   // Load insight
   useEffect(() => {
@@ -1576,10 +1577,16 @@ function CallDetailSheet({
 
           {/* ===== TAB AUDIO ===== */}
           {activeTab === "audio" && (
-            <CallRecordingPlayer
-              callId={call.id}
-              duration={call.duration_seconds ?? 0}
-            />
+            recordingCanResolve ? (
+              <CallRecordingPlayer
+                callId={call.id}
+                duration={call.duration_seconds ?? 0}
+              />
+            ) : (
+              <div className="pp-card p-4 text-xs" style={{ color: "var(--pp-text-secondary)" }}>
+                {lang === "en" ? "Recording is waiting for call synchronization." : "L’enregistrement attend la synchronisation de l’appel."}
+              </div>
+            )
           )}
 
           {/* ===== TAB TRANSCRIPT ===== */}

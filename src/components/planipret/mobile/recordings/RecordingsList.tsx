@@ -762,7 +762,7 @@ function RecordingSection({ call, onUpdated }: { call: RecordingCall; onUpdated:
   const audioErrorRetryRef = useRef(false);
   const playableUrl = localUrl ?? (!!call.recording_url && (/^(blob:|data:)/i.test(String(call.recording_url)) || call.stream_via_proxy === false) ? call.recording_url : null);
 
-  const fetchRec = async (opts: { play?: boolean } = {}) => {
+  const fetchRec = async (opts: { play?: boolean; silent?: boolean } = {}) => {
     setLoading(true);
     try {
       const url = await fetchAudioUrl(call);
@@ -772,7 +772,7 @@ function RecordingSection({ call, onUpdated }: { call: RecordingCall; onUpdated:
       playAfterLoadRef.current = !!opts.play;
       setLocalUrl(url);
       onUpdated({ ...call, recording_url: url, has_recording: true, stream_via_proxy: false });
-      toast.success("Enregistrement chargé");
+      if (!opts.silent) toast.success("Enregistrement chargé");
     } catch (e: any) {
       // Fallback : maestro-recording
       try {
@@ -786,9 +786,9 @@ function RecordingSection({ call, onUpdated }: { call: RecordingCall; onUpdated:
         playAfterLoadRef.current = !!opts.play;
         setLocalUrl(url);
         onUpdated({ ...call, recording_url: url, stream_via_proxy: false });
-        toast.success("Enregistrement chargé");
+        if (!opts.silent) toast.success("Enregistrement chargé");
       } catch {
-        toast.error("Enregistrement indisponible", { description: e?.message });
+        if (!opts.silent) toast.error("Enregistrement indisponible", { description: e?.message });
       }
     } finally {
       setLoading(false);
@@ -844,9 +844,7 @@ function RecordingSection({ call, onUpdated }: { call: RecordingCall; onUpdated:
               setPlaying(false);
               if (!audioErrorRetryRef.current) {
                 audioErrorRetryRef.current = true;
-                void fetchRec({ play: true });
-              } else {
-                toast.error("Audio non disponible");
+                void fetchRec({ play: true, silent: true });
               }
             }}
             onPlay={() => setPlaying(true)}

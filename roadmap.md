@@ -18,3 +18,6 @@
 - [x] Corriger le paquet mobile qui désactivait accidentellement son propre mécanisme de mise à jour
 - [ ] Soumettre le build natif corrigé aux boutiques (requis pour débloquer les appareils sur 1.4.22–1.4.24)
 - [x] Précharger tous les enregistrements mobiles et conserver leurs liens dans le cache résilient
+- [x] Corriger le routage des appels internes vers les postes mobiles suffixés M/W/X
+- [x] Ne plus traiter un appel local non synchronisé comme un enregistrement définitivement indisponible
+- [ ] Valider la sonnerie réelle du poste 1037 après enregistrement de son jeton d’appel iPhone (bloqué : nouvelle build native/appareil requis)

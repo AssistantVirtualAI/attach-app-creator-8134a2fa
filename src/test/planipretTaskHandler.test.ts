@@ -61,8 +61,10 @@ describe("planipret task handler — create", () => {
     // because Maestro otherwise enables some notification defaults server-side.
     expect(payload.send_notification).toBe(0);
     expect(payload.sync_cal).toBe(0);
+    // The initial documented list intentionally leaves `status` absent so a
+    // newly indexed task is not missed when Maestro assigns it open/complete.
     expect(listFetch).toHaveBeenCalledWith("93135", expect.objectContaining({
-      status: "pending", type: "user", findTaskId: "946044",
+      status: null, type: "user", findTaskId: "946044",
     }));
   });
 

@@ -57,6 +57,7 @@
   --pp-text-primary: #E8EDF5;
   --pp-text-secondary: #8FA8C0;
   --pp-text-muted: #4A7FA5;
+  --pp-email-paper: #FFFFFF;
   --pp-text-faint: #2A4A6A;
   color: var(--pp-text-primary);
   font-family: 'DM Sans', system-ui, sans-serif;
@@ -594,6 +595,7 @@
   --pp-text-primary: #0F1B3D;
   --pp-text-secondary: #324867;
   --pp-text-muted: #5A6B85;
+  --pp-email-paper: #FFFFFF;
   --pp-text-faint: #94A3B8;
   /* Shadows */
   --pp-shadow-sm: 0 1px 2px rgba(15,27,61,0.04), 0 1px 1px rgba(15,27,61,0.03);
@@ -1031,6 +1033,7 @@
   --pp-text-primary: #E8EDF5;
   --pp-text-secondary: #B7C2D6;
   --pp-text-muted: #8C99B0;
+  --pp-email-paper: #FFFFFF;
   --pp-text-faint: #5A6B85;
   --pp-shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
   --pp-shadow-md: 0 10px 28px -14px rgba(0,0,0,0.55);

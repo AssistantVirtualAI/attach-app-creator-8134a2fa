@@ -12,30 +12,30 @@ export function buildEmailBodySrcDoc(html: string) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<meta name="color-scheme" content="dark" />
+<meta name="color-scheme" content="light" />
 <base target="_blank" />
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   html, body {
     margin: 0;
     padding: 0;
-    background: transparent !important;
-    color: #e8eef8 !important;
-    -webkit-text-fill-color: #e8eef8 !important;
+    background: #ffffff !important;
+    color: #172033 !important;
+    -webkit-text-fill-color: #172033 !important;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-    font-size: 14px;
-    line-height: 1.45;
+    font-size: 15px;
+    line-height: 1.6;
     word-wrap: break-word;
     overflow-wrap: anywhere;
     -webkit-text-size-adjust: 100%;
   }
-  body { padding: 4px 2px 12px; }
+  body { padding: 14px 12px 18px; }
   /* External HTML often includes inline color:#000 or legacy color attributes.
-     The e-mail reader deliberately wins those colors to preserve contrast on
-     Planiprêt's dark background. */
+     The reader deliberately wins those colors to preserve contrast on its
+     neutral paper surface in both application themes. */
   body, body * {
-    color: #e8eef8 !important;
-    -webkit-text-fill-color: #e8eef8 !important;
+    color: #172033 !important;
+    -webkit-text-fill-color: #172033 !important;
     text-shadow: none !important;
   }
   * { max-width: 100% !important; box-sizing: border-box; }
@@ -46,13 +46,13 @@ export function buildEmailBodySrcDoc(html: string) {
   blockquote {
     margin: 8px 0;
     padding-left: 8px;
-    border-left: 2px solid rgba(155,127,232,0.55);
-    color: #dbe7f7 !important;
-    -webkit-text-fill-color: #dbe7f7 !important;
+    border-left: 3px solid #cbd5e1;
+    color: #475569 !important;
+    -webkit-text-fill-color: #475569 !important;
   }
   a {
-    color: #a78bfa !important;
-    -webkit-text-fill-color: #a78bfa !important;
+    color: #075985 !important;
+    -webkit-text-fill-color: #075985 !important;
     text-decoration: underline;
     word-break: break-all;
   }
@@ -61,12 +61,20 @@ export function buildEmailBodySrcDoc(html: string) {
 <body>${html}
 <script>
   (function () {
+    var lastHeight = 0;
+    var frame = 0;
     function report() {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(function () {
       var h = Math.max(
         document.documentElement.scrollHeight,
         document.body ? document.body.scrollHeight : 0
       );
-      parent.postMessage({ __ppEmailFrame: true, height: h }, "*");
+      if (Math.abs(h - lastHeight) > 1) {
+        lastHeight = h;
+        parent.postMessage({ __ppEmailFrame: true, height: h }, "*");
+      }
+      });
     }
     window.addEventListener("load", report);
     setTimeout(report, 50);
@@ -109,7 +117,8 @@ export default function EmailBodyFrame({ html }: { html: string }) {
       style={{
         width: "100%",
         border: "0",
-        background: "transparent",
+        background: "#ffffff",
+        borderRadius: 8,
         height,
         display: "block",
       }}

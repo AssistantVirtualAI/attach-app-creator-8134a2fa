@@ -14,4 +14,4 @@
 - [ ] Valider avec la session Maestro personnelle de Sandra : connexion, création de tâche et appel réel (bloqué : authentification/appareil requis)
 - [x] Éliminer les rafraîchissements concurrents et les écrans vides dans Messages, Tâches et Accueil
 - [x] Synchroniser dans l’app autonome les noms des postes internes et l’ouverture plein écran du portail
-- [ ] Publier le nouveau lecteur de courriels lisible sur le portail et l’app mobile
+- [x] Publier le nouveau lecteur de courriels lisible sur le portail et l’app mobile

@@ -5,6 +5,7 @@ import { Mail, X, Loader2, Reply, ReplyAll, Forward, Archive, Trash2, MailOpen, 
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 import ComposeEmailDialog, { type ComposeInit } from "./ComposeEmailDialog";
+import EmailBodyFrame from "@/components/planipret/mobile/EmailBodyFrame";
 
 import DOMPurify from "dompurify";
 
@@ -101,16 +102,16 @@ export default function MailPanel({ lang }: { lang: Lang }) {
           <PPEmptyState icon={<Mail className="w-5 h-5" />} title={en ? "No emails" : "Aucun courriel"} />
         ) : (
           filtered.map((e) => (
-            <button key={e.id} onClick={() => void openEmail(e.id)} className="w-full text-left px-4 py-2.5"
-              style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+            <button key={e.id} onClick={() => void openEmail(e.id)} className="w-full text-left px-4 py-3.5"
+              style={{ borderTop: "1px solid var(--pp-bg-border)", background: e.isRead ? "transparent" : "var(--pp-bg-surface)" }}>
               <div className="flex items-center justify-between gap-3">
-                <span className="truncate" style={{ fontSize: 13, fontWeight: e.isRead ? 500 : 700, color: "var(--pp-text-primary)" }}>
+                <span className="truncate" style={{ fontSize: 14, fontWeight: e.isRead ? 600 : 800, color: "var(--pp-text-primary)" }}>
                   {e.from?.emailAddress?.name || e.from?.emailAddress?.address || e.toRecipients?.[0]?.emailAddress?.address || "—"}
                 </span>
-                <span style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{fmtDateTime(e.receivedDateTime ?? e.sentDateTime, lang)}</span>
+                 <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--pp-text-secondary)" }}>{fmtDateTime(e.receivedDateTime ?? e.sentDateTime, lang)}</span>
               </div>
-              <div className="truncate" style={{ fontSize: 12.5, color: "var(--pp-text-secondary)" }}>{e.subject || "(no subject)"}</div>
-              <div className="truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{e.bodyPreview}</div>
+              <div className="truncate mt-0.5" style={{ fontSize: 13.5, fontWeight: e.isRead ? 500 : 700, color: "var(--pp-text-primary)" }}>{e.subject || "(no subject)"}</div>
+              <div className="line-clamp-2 mt-0.5" style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--pp-text-secondary)" }}>{e.bodyPreview}</div>
             </button>
           ))
         )}
@@ -160,10 +161,10 @@ export default function MailPanel({ lang }: { lang: Lang }) {
                     onClick={() => void act("delete_email", { message_id: detail.id }, en ? "Deleted" : "Supprimé")} />
                 </div>
 
-                <div className="mt-4" style={{ fontSize: 13, color: "var(--pp-text-secondary)", whiteSpace: "pre-wrap" }}>
+                 <div className="mt-4 rounded-lg overflow-hidden" style={{ background: "var(--pp-email-paper)", border: "1px solid var(--pp-bg-border)" }}>
                   {detail.body?.contentType === "html"
-                    ? <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(detail.body?.content) }} />
-                    : (detail.body?.content ?? detail.bodyPreview ?? "")}
+                    ? <EmailBodyFrame html={sanitizeHtml(detail.body?.content)} />
+                    : <div className="p-4 whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.6, color: "var(--pp-text-primary)" }}>{detail.body?.content ?? detail.bodyPreview ?? ""}</div>}
                 </div>
               </>
             )}

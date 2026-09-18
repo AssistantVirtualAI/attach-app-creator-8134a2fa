@@ -84,7 +84,12 @@ export function clearSmsAvailabilityCache() {
   cached = null;
 }
 
-/** A send UI must never optimistic-send while DID preflight is unavailable. */
+/**
+ * The server (pp-ns-sms) is authoritative: it refuses to send unless the
+ * broker owns a verified SMS DID. The client preflight is only an early hint,
+ * so a failed/unreachable check must not block texting — only a confirmed
+ * "unavailable" (no DID assigned) does.
+ */
 export function canSendWithSmsAvailability(availability: Pick<SmsAvailability, "state"> | null | undefined) {
-  return availability?.state === "ready";
+  return availability?.state === "ready" || availability?.state === "error";
 }

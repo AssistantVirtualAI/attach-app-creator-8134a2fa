@@ -115,9 +115,16 @@ export default function MHome() {
   const [stats, setStats] = useState({ calls: 0, missed: 0, sms: 0, voicemails: 0, meetings: 0, hotLeads: 0, tasks: 0, outbound: 0 });
   const [recent, setRecent] = useState<any[]>([]);
   const recentLookupKeys = useMemo(() => recent.map((call) => {
-    const outbound = String(call?.direction ?? "").toLowerCase() === "outbound";
-    return String((outbound ? call?.to_number : call?.from_number) ?? (outbound ? call?.from_number : call?.to_number) ?? "").trim();
-  }).filter(Boolean), [recent]);
+    const party = presentCallParty({
+      direction: call?.direction,
+      fromNumber: call?.from_number,
+      fromName: call?.from_name,
+      toNumber: call?.to_number,
+      toName: call?.to_name,
+      ownExtension: profile?.ns_extension ?? profile?.extension,
+    });
+    return party.phone ?? party.internalExtension ?? "";
+  }).filter(Boolean), [recent, profile?.ns_extension, profile?.extension]);
   const recentCallerNames = useCallerNames(recentLookupKeys);
   const [hotLeads, setHotLeads] = useState<any[]>([]);
   const [dueReminders, setDueReminders] = useState<any[]>([]);
@@ -718,6 +725,15 @@ export default function MHome() {
               const missed = c.direction === "missed";
               const Icon = missed ? X : inbound ? ArrowDownLeft : ArrowUpRight;
               const color = missed ? "var(--pp-danger)" : inbound ? "var(--pp-brand-accent)" : "var(--pp-success)";
+              const unresolvedParty = presentCallParty({
+                direction: c.direction,
+                fromNumber: c.from_number,
+                fromName: c.from_name,
+                toNumber: c.to_number,
+                toName: c.to_name,
+                ownExtension: profile?.ns_extension ?? profile?.extension,
+              });
+              const lookupKey = unresolvedParty.phone ?? unresolvedParty.internalExtension ?? "";
               const party = presentCallParty({
                 direction: c.direction,
                 fromNumber: c.from_number,
@@ -725,7 +741,7 @@ export default function MHome() {
                 toNumber: c.to_number,
                 toName: c.to_name,
                 ownExtension: profile?.ns_extension ?? profile?.extension,
-                resolvedName: recentCallerNames[String((c.direction === "outbound" ? c.to_number : c.from_number) ?? (c.direction === "outbound" ? c.from_number : c.to_number) ?? "").trim()],
+                resolvedName: recentCallerNames[lookupKey],
               });
               const name = party.name || party.formattedPhone || t("common.unknown");
               const phone = party.phone;

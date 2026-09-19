@@ -33,9 +33,10 @@ function requestValue<T>(request: IDBRequest<T>): Promise<T | null> {
 }
 
 async function prune(db: IDBDatabase) {
+  const readTx = db.transaction(STORE_NAME, "readonly");
+  const entries = (await requestValue(readTx.objectStore(STORE_NAME).getAll()) as RecordingEntry[] | null) ?? [];
   const tx = db.transaction(STORE_NAME, "readwrite");
   const store = tx.objectStore(STORE_NAME);
-  const entries = (await requestValue(store.getAll()) as RecordingEntry[] | null) ?? [];
   const now = Date.now();
   const valid = entries.filter((entry) => {
     if (now - entry.createdAt <= TTL_MS) return true;

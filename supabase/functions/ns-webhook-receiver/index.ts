@@ -117,7 +117,9 @@ async function processEvent(event: any) {
 
   // The `call` model fires on every state change — only the first ringing
   // event for a given SIP Call-ID may trigger a VoIP push.
-  if (type === "call.inbound" && !shouldProcessCall(nsCallKey(data))) {
+  // An internal call shares one SIP Call-ID between the caller leg and the
+  // callee leg, so the key must also carry the ringing extension.
+  if (type === "call.inbound" && !shouldProcessCall(`${nsCallKey(data)}:${data?.extension ?? data?.to_number ?? ""}`)) {
     console.log("[ns-webhook] duplicate call event ignored", { call_id: nsCallKey(data) });
     return;
   }

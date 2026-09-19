@@ -39,6 +39,10 @@ export function buildEmailBodySrcDoc(html: string) {
     -webkit-text-fill-color: #0b1220 !important;
     text-shadow: none !important;
   }
+  body *:not(img):not(video):not(svg):not(svg *) {
+    background-color: transparent !important;
+    background-image: none !important;
+  }
   * { max-width: 100% !important; box-sizing: border-box; }
   img, video, iframe { max-width: 100% !important; height: auto !important; display: inline-block; }
   table { width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; }
@@ -73,6 +77,10 @@ export function buildEmailBodySrcDoc(html: string) {
         el.style.setProperty("color", "#0b1220", "important");
         el.style.setProperty("-webkit-text-fill-color", "#0b1220", "important");
         el.style.setProperty("text-shadow", "none", "important");
+        if (!["IMG", "VIDEO", "SVG", "PATH"].includes(el.tagName)) {
+          el.style.setProperty("background-color", "transparent", "important");
+          el.style.setProperty("background-image", "none", "important");
+        }
       });
       document.body.querySelectorAll("a").forEach(function (el) {
         el.style.setProperty("color", "#075985", "important");

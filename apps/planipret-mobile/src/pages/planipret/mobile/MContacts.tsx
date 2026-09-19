@@ -961,12 +961,25 @@ function ContactDetailSheet({
   }, [maestroId, phone, maestroKind]);
 
   const createTask = async () => {
-    if (!maestroId) { toast.error("Client Maestro requis pour créer une tâche"); return; }
+    if (!maestroId && !bestPhone) { toast.error("Un numéro ou un client Maestro est requis pour créer une tâche"); return; }
     setCreatingTask(true);
     try {
       const notes = `${t("contacts.followUp") || "Suivi"} — ${name}`;
+      let resolvedMaestroId = maestroKind === "client" && maestroId ? String(maestroId) : "";
+      let resolvedName = name;
+      if (!resolvedMaestroId && bestPhone) {
+        const { data: lookup, error } = await supabase.functions.invoke("maestro-client-lookup", {
+          body: { phone: bestPhone },
+        });
+        if (error) throw error;
+        if ((lookup as any)?.found && (lookup as any)?.client_id) {
+          resolvedMaestroId = String((lookup as any).client_id);
+          resolvedName = (lookup as any)?.name || name;
+        }
+      }
+      if (!resolvedMaestroId) throw new Error("Ce contact n’est pas associé à un client Maestro.");
       let data = await createClientFollowUpTask({
-        maestro_client_id: maestroId,
+        maestro_client_id: resolvedMaestroId,
         client_name: name,
         notes,
       });
@@ -979,10 +992,10 @@ function ContactDetailSheet({
             body: { phone: bestPhone },
           });
           const resolvedId = (lookup as any)?.client_id;
-          if ((lookup as any)?.found && resolvedId && String(resolvedId) !== String(maestroId)) {
+          if ((lookup as any)?.found && resolvedId && String(resolvedId) !== resolvedMaestroId) {
             data = await createClientFollowUpTask({
               maestro_client_id: String(resolvedId),
-              client_name: (lookup as any)?.name || name,
+              client_name: (lookup as any)?.name || resolvedName,
               notes,
             });
           }
@@ -1066,7 +1079,7 @@ function ContactDetailSheet({
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
           <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!smsTarget} />
           <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={openEmail} disabled={!email} />
-          <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={createTask} disabled={creatingTask || !maestroId} />
+          <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={createTask} disabled={creatingTask || (!maestroId && !bestPhone)} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={openAppt} disabled={!maestroId} />
         </div>
 

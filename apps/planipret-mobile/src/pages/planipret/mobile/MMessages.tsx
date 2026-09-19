@@ -1253,26 +1253,35 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
   // enregistrements d'appels : ouverture instantanée et lecture hors ligne.
   // Un seul téléchargement à la fois pour ne pas saturer le réseau mobile.
   const bodyPrefetchDoneRef = useRef<Set<string>>(new Set());
+  const bodyCacheKey = (id: string) => cacheIdentity && id ? `${cacheIdentity}:${id}` : "";
+  useEffect(() => {
+    // A device can legitimately change broker accounts. Never reuse the
+    // prefetch markers from the preceding identity in that case.
+    bodyPrefetchDoneRef.current.clear();
+  }, [cacheIdentity]);
   useEffect(() => {
     if (!emails || emails.length === 0) return;
     const queue = emails
       .slice(0, 20)
-      .map((e: any) => String(e?.id ?? ""))
-      .filter((id) => id && !bodyPrefetchDoneRef.current.has(id) && !emailBodyCache.has(id));
+      .map((e: any) => {
+        const id = String(e?.id ?? "");
+        return { id, key: bodyCacheKey(id) };
+      })
+      .filter(({ id, key }) => id && key && !bodyPrefetchDoneRef.current.has(key) && !emailBodyCache.has(key));
     if (!queue.length) return;
     let cancelled = false;
     (async () => {
-      for (const id of queue) {
+      for (const { id, key } of queue) {
         if (cancelled) return;
-        bodyPrefetchDoneRef.current.add(id);
+        bodyPrefetchDoneRef.current.add(key);
         try {
           const { data } = await supabase.functions.invoke("ms365-actions", {
             body: { action: "read_email_detail", payload: { message_id: id } },
           });
-          if ((data as any)?.success) emailBodyCache.set(id, (data as any).email);
-          else bodyPrefetchDoneRef.current.delete(id);
+          if ((data as any)?.success) emailBodyCache.set(key, (data as any).email);
+          else bodyPrefetchDoneRef.current.delete(key);
         } catch {
-          bodyPrefetchDoneRef.current.delete(id);
+          bodyPrefetchDoneRef.current.delete(key);
         }
       }
     })();
@@ -1401,6 +1410,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
       {active && createPortal(
         <EmailDetailSheet
           email={active}
+          cacheIdentity={cacheIdentity}
           onClose={() => setActive(null)}
           onCompose={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
           onChanged={() => load()}
@@ -1430,8 +1440,9 @@ type ComposeInit = {
   body?: string;
 };
 
-function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRemove }: {
+function EmailDetailSheet({ email, cacheIdentity, onClose, onCompose, onChanged, onOptimisticRemove }: {
   email: any;
+  cacheIdentity: string;
   onClose: () => void;
   onCompose: (init: ComposeInit) => void;
   onChanged: () => void;
@@ -1439,9 +1450,13 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
 }) {
   const { t } = useMplanipretLang();
   const safeArea = useSafeAreaInsets();
+  const bodyCacheKey = (id: string) => cacheIdentity && id ? `${cacheIdentity}:${id}` : "";
   // Corps déjà téléchargé (préchargement ou lecture antérieure) : affichage
   // instantané, y compris après un redémarrage de l'app.
-  const [detail, setDetail] = useState<any | null>(() => (email?.id ? emailBodyCache.get(String(email.id)) : null));
+  const [detail, setDetail] = useState<any | null>(() => {
+    const key = bodyCacheKey(String(email?.id ?? ""));
+    return key ? emailBodyCache.get(key) : null;
+  });
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [sumOpen, setSumOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -1465,7 +1480,8 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
     let cancelled = false;
     (async () => {
       if (!email?.id) return;
-      const cached = emailBodyCache.get(String(email.id));
+      const key = bodyCacheKey(String(email.id));
+      const cached = key ? emailBodyCache.get(key) : null;
       if (cached && !cancelled) {
         setDetail(cached);
         setFlagged(cached?.flag?.flagStatus === "flagged");
@@ -1475,7 +1491,7 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
         body: { action: "read_email_detail", payload: { message_id: email.id } },
       });
       if ((data as any)?.success) {
-        emailBodyCache.set(String(email.id), (data as any).email);
+        if (key) emailBodyCache.set(key, (data as any).email);
         if (!cancelled) {
           setDetail((data as any).email);
           setFlagged((data as any).email?.flag?.flagStatus === "flagged");

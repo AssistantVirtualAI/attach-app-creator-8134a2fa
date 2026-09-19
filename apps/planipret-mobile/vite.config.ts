@@ -19,6 +19,12 @@ function readCapacitorVersion(): string {
 
 const capacitorVersion = readCapacitorVersion();
 const mobilePackage = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
+// The OTA plugin exists only in native builds. Keep a compile-time shim for
+// CI, portal previews and fresh worktrees before the mobile dependencies are
+// installed; the runtime updater already fails safely when no plugin exists.
+const hasCapgoUpdater = fs.existsSync(
+  path.resolve(__dirname, 'node_modules/@capgo/capacitor-updater/package.json'),
+);
 
 export default defineConfig({
   plugins: [react()],
@@ -33,6 +39,9 @@ export default defineConfig({
       // WebRTC transport, but the mobile app uses WebSocket transport only.
       // Drops ~1.17 MB from the bundle. See src/lib/livekit-shim.ts.
       'livekit-client': path.resolve(__dirname, './src/lib/livekit-shim.ts'),
+      ...(hasCapgoUpdater
+        ? {}
+        : { '@capgo/capacitor-updater': path.resolve(__dirname, './src/lib/capgo-updater-shim.ts') }),
     },
   },
   build: {

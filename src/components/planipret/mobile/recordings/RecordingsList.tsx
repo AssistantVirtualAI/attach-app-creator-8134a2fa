@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
 import { recordingAudioCache } from "@/lib/planipret/persistentMediaCache";
+import { getCachedRecordingUrl, persistRecordingUrl } from "@/lib/planipret/persistentRecordingCache";
 import {
   Play, Pause, Clock, Download, RotateCcw, RotateCw, Sparkles, FileText, Bot,
   Loader2, Search, Copy, Check, ChevronDown, Link2, User, Flame, Snowflake, Thermometer, ListChecks,
@@ -214,7 +215,16 @@ export default function RecordingsList({
     for (const call of eligible) {
       if (audioPreloadDoneRef.current.has(call.id)) continue;
       const cachedUrl = recordingAudioCache.get(call.id);
-      if (!cachedUrl) continue;
+      if (!cachedUrl) {
+        void getCachedRecordingUrl(call.id).then((durableUrl) => {
+          if (!durableUrl || cancelled) return;
+          audioPreloadDoneRef.current.add(call.id);
+          audioBlobCacheRef.current.set(call.id, durableUrl);
+          setStatus(call.id, "uploaded");
+          onUpdated({ ...call, recording_url: durableUrl, has_recording: true, stream_via_proxy: false });
+        });
+        continue;
+      }
       audioPreloadDoneRef.current.add(call.id);
       audioBlobCacheRef.current.set(call.id, cachedUrl);
       setStatus(call.id, "uploaded");
@@ -233,7 +243,8 @@ export default function RecordingsList({
         audioPreloadDoneRef.current.add(call.id);
         setStatus(call.id, "uploading");
         try {
-          const url = await fetchAudioUrl(call, { signal: controller.signal });
+          const remoteUrl = await fetchAudioUrl(call, { signal: controller.signal });
+          const url = await persistRecordingUrl(call.id, remoteUrl, controller.signal);
           if (cancelled) return;
           audioBlobCacheRef.current.set(call.id, url);
           recordingAudioCache.set(call.id, url);
@@ -476,7 +487,8 @@ export default function RecordingsList({
   const retryAudio = async (call: RecordingCall) => {
     setStatus(call.id, "uploading");
     try {
-      const url = await fetchAudioUrl(call, { retries: 3 });
+      const remoteUrl = await fetchAudioUrl(call, { retries: 3 });
+      const url = await persistRecordingUrl(call.id, remoteUrl);
       const prev = audioBlobCacheRef.current.get(call.id);
       if (prev?.startsWith("blob:")) { try { URL.revokeObjectURL(prev); } catch {} }
       audioBlobCacheRef.current.set(call.id, url);
@@ -765,7 +777,9 @@ function RecordingSection({ call, onUpdated }: { call: RecordingCall; onUpdated:
   const fetchRec = async (opts: { play?: boolean; silent?: boolean } = {}) => {
     setLoading(true);
     try {
-      const url = await fetchAudioUrl(call);
+      const cachedUrl = await getCachedRecordingUrl(call.id);
+      const remoteUrl = cachedUrl ?? await fetchAudioUrl(call);
+      const url = cachedUrl ?? await persistRecordingUrl(call.id, remoteUrl);
       if (localObjectUrlRef.current?.startsWith("blob:")) URL.revokeObjectURL(localObjectUrlRef.current);
       localObjectUrlRef.current = url;
       audioErrorRetryRef.current = false;

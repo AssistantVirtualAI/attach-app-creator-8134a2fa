@@ -20,4 +20,10 @@ describe("EmailBodyFrame", () => {
     expect(document).toContain("color: #075985 !important");
     expect(document).toContain("text-decoration: underline");
   });
+
+  it("neutralise les fonds sombres imposés par les courriels", () => {
+    const document = buildEmailBodySrcDoc('<div style="background:#06152d;color:#000">Lisible</div>');
+    expect(document).toContain("background-color: transparent !important");
+    expect(document).toContain('style.setProperty("background-color", "transparent", "important")');
+  });
 });

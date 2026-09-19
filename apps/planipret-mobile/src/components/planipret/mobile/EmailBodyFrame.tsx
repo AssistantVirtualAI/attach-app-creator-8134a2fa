@@ -32,12 +32,16 @@ export function buildEmailBodySrcDoc(html: string) {
   }
   body { padding: 14px 12px 18px; }
   /* External HTML often includes inline color:#000 or legacy color attributes.
-     The e-mail reader deliberately wins those colors to preserve contrast on
-     the neutral paper background. */
+     The reader deliberately wins those colors to preserve contrast on its
+     neutral paper surface in both application themes. */
   body, body * {
     color: #0b1220 !important;
     -webkit-text-fill-color: #0b1220 !important;
     text-shadow: none !important;
+  }
+  body *:not(img):not(video):not(svg):not(svg *) {
+    background-color: transparent !important;
+    background-image: none !important;
   }
   * { max-width: 100% !important; box-sizing: border-box; }
   img, video, iframe { max-width: 100% !important; height: auto !important; display: inline-block; }
@@ -73,6 +77,10 @@ export function buildEmailBodySrcDoc(html: string) {
         el.style.setProperty("color", "#0b1220", "important");
         el.style.setProperty("-webkit-text-fill-color", "#0b1220", "important");
         el.style.setProperty("text-shadow", "none", "important");
+        if (!["IMG", "VIDEO", "SVG", "PATH"].includes(el.tagName)) {
+          el.style.setProperty("background-color", "transparent", "important");
+          el.style.setProperty("background-image", "none", "important");
+        }
       });
       document.body.querySelectorAll("a").forEach(function (el) {
         el.style.setProperty("color", "#075985", "important");
@@ -82,14 +90,14 @@ export function buildEmailBodySrcDoc(html: string) {
     function report() {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(function () {
-        var h = Math.max(
-          document.documentElement.scrollHeight,
-          document.body ? document.body.scrollHeight : 0
-        );
-        if (Math.abs(h - lastHeight) > 1) {
-          lastHeight = h;
-          parent.postMessage({ __ppEmailFrame: true, height: h }, "*");
-        }
+      var h = Math.max(
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0
+      );
+      if (Math.abs(h - lastHeight) > 1) {
+        lastHeight = h;
+        parent.postMessage({ __ppEmailFrame: true, height: h }, "*");
+      }
       });
     }
     enforceReadablePaper();

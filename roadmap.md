@@ -21,3 +21,9 @@
 - [x] Corriger le routage des appels internes vers les postes mobiles suffixés M/W/X
 - [x] Ne plus traiter un appel local non synchronisé comme un enregistrement définitivement indisponible
 - [ ] Valider la sonnerie réelle du poste 1037 après enregistrement de son jeton d’appel iPhone (bloqué : nouvelle build native/appareil requis)
+
+- [ ] Vérifier et corriger l’affichage des noms/numéros des appels internes et contacts sur l’accueil
+- [ ] Vérifier et corriger le rendu visuel des courriels dans le portail et l’app mobile
+- [ ] Vérifier et corriger la création de tâche depuis une fiche contact
+- [ ] Vérifier et corriger la lecture et le cache persistant des enregistrements
+- [ ] Produire un rapport de corrections et de tests

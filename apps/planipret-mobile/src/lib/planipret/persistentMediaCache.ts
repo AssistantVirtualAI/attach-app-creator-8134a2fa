@@ -128,7 +128,7 @@ export const emailBodyCache = createPersistentCache<any>({
  */
 export const recordingAudioCache = createPersistentCache<string>({
   namespace: "recording-audio",
-  ttlMs: 25 * 60 * 1000,
+  ttlMs: 14 * 60 * 1000,
   maxEntries: 300,
   maxBytes: 300_000,
 });

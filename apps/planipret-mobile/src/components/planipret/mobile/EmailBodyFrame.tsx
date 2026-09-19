@@ -32,8 +32,8 @@ export function buildEmailBodySrcDoc(html: string) {
   }
   body { padding: 14px 12px 18px; }
   /* External HTML often includes inline color:#000 or legacy color attributes.
-     The e-mail reader deliberately wins those colors to preserve contrast on
-     the neutral paper background. */
+     The reader deliberately wins those colors to preserve contrast on its
+     neutral paper surface in both application themes. */
   body, body * {
     color: #0b1220 !important;
     -webkit-text-fill-color: #0b1220 !important;
@@ -90,14 +90,14 @@ export function buildEmailBodySrcDoc(html: string) {
     function report() {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(function () {
-        var h = Math.max(
-          document.documentElement.scrollHeight,
-          document.body ? document.body.scrollHeight : 0
-        );
-        if (Math.abs(h - lastHeight) > 1) {
-          lastHeight = h;
-          parent.postMessage({ __ppEmailFrame: true, height: h }, "*");
-        }
+      var h = Math.max(
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0
+      );
+      if (Math.abs(h - lastHeight) > 1) {
+        lastHeight = h;
+        parent.postMessage({ __ppEmailFrame: true, height: h }, "*");
+      }
       });
     }
     enforceReadablePaper();

@@ -570,16 +570,27 @@ export async function handleTaskRequest(
     // A broker can carry two numeric identities (directory/telecom id and CRM
     // OAuth id). Listing with the wrong one returns an empty page even though
     // Maestro holds tasks, so try every known id until one answers.
+    // A task created from Contacts is assigned with the INTERNAL Maestro
+    // directory id (`resolveTaskAssigneeId`). Listing without that id queries a
+    // different namespace, so a freshly created task is reported as created but
+    // never shows up in the task list. Always include it here.
+    const internalAssigneeId = overrideBroker
+      ? null
+      : await withDeadline(
+          Promise.resolve(deps.resolveTaskAssigneeId?.()).catch(() => null),
+          5000,
+          null,
+        );
     const ownerCandidates = [...new Set(
       (overrideBroker
         ? [overrideBroker]
-        : [telecomId, maestroId, profile?.maestro_telecom_user_id, profile?.maestro_broker_id])
+        : [internalAssigneeId, telecomId, maestroId, profile?.maestro_telecom_user_id, profile?.maestro_broker_id])
         .map((v) => String(v ?? "").trim())
         .filter(Boolean),
     )];
     const assigneeIds = overrideBroker
       ? [maestroId, telecomId]
-      : [maestroId, telecomId, profile?.maestro_telecom_user_id, profile?.maestro_broker_id];
+      : [internalAssigneeId, maestroId, telecomId, profile?.maestro_telecom_user_id, profile?.maestro_broker_id];
 
     let upstream: UpstreamList = { ok: false, tasks: [], endpoint: null, status: 0 };
     let all: any[] = [];

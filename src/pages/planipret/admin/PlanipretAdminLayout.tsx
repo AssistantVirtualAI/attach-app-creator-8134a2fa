@@ -24,6 +24,7 @@ import HighReadabilityToggle from "@/components/planipret/broker/HighReadability
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
+import { usePlanipretFavicon } from "@/hooks/usePlanipretFavicon";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
@@ -212,6 +213,7 @@ const initials = (n?: string) =>
   (n ?? "A").split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "A";
 
 export default function PlanipretAdminLayout() {
+  usePlanipretFavicon();
   const { lang, setLang, t: tt } = useMplanipretLang();
   const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const navigate = useNavigate();

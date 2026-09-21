@@ -106,6 +106,7 @@ export default function PortalTasks({ lang }: { lang: "fr" | "en" }) {
         defaultTarget={ownBrokerId || null}
         brokerId={viewingOther ? scope : null}
         readOnly={viewingOther}
+        showMobileOrigin
       />
     </div>
   );

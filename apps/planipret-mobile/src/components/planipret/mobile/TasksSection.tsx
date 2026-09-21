@@ -3,6 +3,7 @@ import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat,
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
 import { describeTaskDiagnostics, describeTaskSync, formatTaskDue, isTaskOpen, toTorontoLocalInput, verifyTask, maestroTaskUrl, type NormalizedTask, type TaskFilterValue, type TaskVerifyResult, taskHistory, type TaskHistoryEvent } from "@/lib/planipret/tasks";
 import MaestroTaskRow from "./MaestroTaskRow";
+import { taskLifecycleBadge, isMobileCreatedTask, taskCreatedAt, formatTaskTimestamp } from "@/lib/planipret/taskLifecycle";
 import TaskComposerSheet, { type TaskComposerValue } from "./TaskComposerSheet";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +17,8 @@ interface Props {
   brokerId?: string | null;
   /** Hide every mutation (used when viewing another broker's tasks). */
   readOnly?: boolean;
+  /** Portail : bloc de suivi des tâches créées depuis l'app mobile. */
+  showMobileOrigin?: boolean;
 }
 
 function SyncChip({ task, lang }: { task: NormalizedTask; lang: "fr" | "en" }) {
@@ -106,7 +109,53 @@ function SyncHistory({ userId, lang }: { userId: string | null | undefined; lang
   );
 }
 
-export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, brokerId, readOnly }: Props) {
+/** Suivi portail : tâches créées depuis l'app mobile, avec statut et dates. */
+function MobileOriginTasks({ tasks, lang }: { tasks: NormalizedTask[]; lang: "fr" | "en" }) {
+  const L = (fr: string, en: string) => (lang === "en" ? en : fr);
+  const rows = useMemo(() => {
+    const list = tasks.filter(isMobileCreatedTask);
+    return list
+      .slice()
+      .sort((a, b) => String(taskCreatedAt(b) ?? b.due_at ?? "").localeCompare(String(taskCreatedAt(a) ?? a.due_at ?? "")))
+      .slice(0, 10);
+  }, [tasks]);
+
+  if (!rows.length) return null;
+
+  return (
+    <div className="mb-3 rounded-xl p-2.5" data-testid="mobile-origin-tasks"
+      style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
+      <p className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: "var(--pp-text-muted)", fontWeight: 700 }}>
+        {L("Créées depuis l'app mobile", "Created from the mobile app")} · {rows.length}
+      </p>
+      <ul className="space-y-1">
+        {rows.map((t) => {
+          const badge = taskLifecycleBadge(t, lang);
+          return (
+            <li key={`mob-${t.id}`} className="flex items-start gap-2 text-[11px]" data-testid={`mobile-origin-task-${t.id}`}>
+              <span className="shrink-0 inline-flex items-center gap-1 text-[9.5px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5"
+                title={badge.detail} style={{ background: badge.background, color: badge.color }}>
+                <span aria-hidden className="w-1.5 h-1.5 rounded-full" style={{ background: badge.color }} />
+                {badge.label}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium" style={{ color: "var(--pp-text-primary)" }}>
+                  {t.target_name || t.notes || `#${t.id}`}
+                </span>
+                <span className="block" style={{ color: "var(--pp-text-muted)" }}>
+                  {L("Créée", "Created")} {formatTaskTimestamp(taskCreatedAt(t), lang)}
+                  {" · "}{L("Échéance", "Due")} {formatTaskDue(t.due_at, lang)}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, brokerId, readOnly, showMobileOrigin }: Props) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
   const { tasks, buckets, counts, openCount, filter, setFilter, hasMore, loadMore, loadingMore, total, loading, refreshing, lastSyncAt, source, error, message, refresh, create, update, remove } = usePlanipretTasks(userId, { brokerId });
   const [composer, setComposer] = useState<null | { initial?: any }>(null);
@@ -291,6 +340,8 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
       )}
 
       <SyncHistory userId={userId} lang={lang} />
+
+      {showMobileOrigin && !loading && <MobileOriginTasks tasks={tasks} lang={lang} />}
 
       {source === "projection" && !loading && (
         <p className="text-[11px] mb-2" style={{ color: "var(--pp-text-muted)" }}>

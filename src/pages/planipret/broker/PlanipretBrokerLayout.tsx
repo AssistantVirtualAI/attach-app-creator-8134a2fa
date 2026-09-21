@@ -16,6 +16,7 @@ import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import HighReadabilityToggle from "@/components/planipret/broker/HighReadabilityToggle";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
+import { usePlanipretFavicon } from "@/hooks/usePlanipretFavicon";
 
 export type BrokerCtx = { userId: string; authUserId: string; profile: any; softphone?: ReturnType<typeof useMplanipretSoftphone> };
 
@@ -39,6 +40,7 @@ function initials(name?: string | null) {
 }
 
 export default function PlanipretBrokerLayout() {
+  usePlanipretFavicon();
   const navigate = useNavigate();
   const location = useLocation();
   const { lang } = useMplanipretLang();

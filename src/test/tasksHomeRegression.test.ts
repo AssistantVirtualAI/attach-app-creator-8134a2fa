@@ -11,6 +11,13 @@ describe("MHome — task and recent-call cards", () => {
     expect(home).toContain("TasksHomeCard");
   });
 
+  it("uses the same Maestro client title on the home card and full task list", () => {
+    const card = read("src/components/planipret/mobile/TasksHomeCard.tsx");
+    expect(card).toContain("maestroTaskView(task");
+    expect(card).toContain("view.clientName");
+    expect(card).not.toContain("{task.notes || task.description");
+  });
+
   it("renders recent calls through the external-party presentation helper", () => {
     expect(home).toContain("presentCallParty");
   });

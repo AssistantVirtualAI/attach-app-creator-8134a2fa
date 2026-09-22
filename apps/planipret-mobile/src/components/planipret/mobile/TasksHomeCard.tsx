@@ -1,10 +1,10 @@
 // Aperçu des tâches Maestro sur l'accueil mobile : compteurs et 3 prochaines
 // échéances. Réservé aux courtiers et administrateurs.
 import { useNavigate } from "react-router-dom";
-import { CheckSquare, ChevronRight, AlertCircle, Clock } from "lucide-react";
+import { CheckSquare, ChevronRight } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
-import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
-import { maestroTaskView } from "@/lib/planipret/taskMaestroView";
+import type { NormalizedTask } from "@/lib/planipret/tasks";
+import MaestroTaskRow from "./MaestroTaskRow";
 
 export default function TasksHomeCard({ profile, lang }: { profile: any; lang?: string }) {
   const fr = lang !== "en";
@@ -51,27 +51,17 @@ export default function TasksHomeCard({ profile, lang }: { profile: any; lang?: 
           {next.length > 0 ? (
             <div className="mt-3 space-y-1.5">
               {next.map((task) => {
-                const view = maestroTaskView(task, fr ? "fr" : "en");
-                const detail = view.remarks || view.stageLabel || task.description || task.notes;
+                const overdue = buckets.overdue.some((t) => t.id === task.id);
                 return (
-                  <button key={task.id} onClick={() => navigate("/mplanipret/tasks")}
-                    className="w-full text-left flex items-center gap-2 rounded-xl px-2.5 py-2"
-                    style={{ minHeight: 52, background: "rgba(155,127,232,0.06)", border: "1px solid var(--pp-bg-border)" }}>
-                    {buckets.overdue.some((t) => t.id === task.id)
-                      ? <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-danger, #D2445E)" }} />
-                      : <Clock className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-text-muted)" }} />}
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[12.5px] truncate font-semibold" style={{ color: "var(--pp-text-primary)" }}>
-                        {view.clientName}
-                      </span>
-                      {detail && detail !== view.clientName && (
-                        <span className="block text-[10.5px] truncate" style={{ color: "var(--pp-text-muted)" }}>{detail}</span>
-                      )}
-                    </span>
-                    <span className="text-[10.5px] shrink-0" style={{ color: "var(--pp-text-muted)" }}>
-                      {formatTaskDue(task.due_at, fr ? "fr" : "en")}
-                    </span>
-                  </button>
+                  <div key={task.id} className="pp-task-card"
+                    style={{ "--pp-task-accent": overdue ? "var(--pp-danger)" : "var(--pp-brand-accent)" } as React.CSSProperties}>
+                    <MaestroTaskRow
+                      task={task}
+                      lang={fr ? "fr" : "en"}
+                      expanded={false}
+                      onToggle={() => navigate("/mplanipret/tasks")}
+                    />
+                  </div>
                 );
               })}
             </div>

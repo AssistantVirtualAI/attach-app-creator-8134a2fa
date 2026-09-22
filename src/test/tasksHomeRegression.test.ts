@@ -11,11 +11,12 @@ describe("MHome — task and recent-call cards", () => {
     expect(home).toContain("TasksHomeCard");
   });
 
-  it("uses the same Maestro client title on the home card and full task list", () => {
+  it("uses the exact same Maestro task row on the home card and full task list", () => {
     const card = read("src/components/planipret/mobile/TasksHomeCard.tsx");
-    expect(card).toContain("maestroTaskView(task");
-    expect(card).toContain("view.clientName");
-    expect(card).not.toContain("{task.notes || task.description");
+    const list = read("src/components/planipret/mobile/TasksSection.tsx");
+    expect(card).toContain("<MaestroTaskRow");
+    expect(list).toContain("<MaestroTaskRow");
+    expect(card).toContain("expanded={false}");
   });
 
   it("renders recent calls through the external-party presentation helper", () => {

@@ -858,7 +858,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
   const monthLabel = cursor.toLocaleDateString(locale, { month: "long", year: "numeric" });
 
   return (
-    <section className="pp-card p-4">
+    <section id="pp-meetings-calendar" className="pp-card p-4 scroll-mt-3">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold flex items-center gap-1.5 pp-heading">
           <Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />

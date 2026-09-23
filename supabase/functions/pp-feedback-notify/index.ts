@@ -20,8 +20,9 @@ Deno.serve(async (req) => {
   const userClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
   });
-  const { data: ud } = await userClient.auth.getUser();
-  if (!ud?.user) return json({ error: "not_authenticated" }, 401);
+  const internal = (req.headers.get("Authorization") ?? "") === `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  const { data: ud } = internal ? { data: null as any } : await userClient.auth.getUser();
+  if (!internal && !ud?.user) return json({ error: "not_authenticated" }, 401);
 
   const body = await req.json().catch(() => ({}));
   const id = typeof body?.report_id === "string" && /^[0-9a-f-]{36}$/i.test(body.report_id) ? body.report_id : null;
@@ -29,7 +30,9 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: r } = await admin.from("pp_feedback_reports").select("*").eq("id", id).maybeSingle();
-  if (!r || r.reporter_id !== ud.user.id) return json({ error: "not_found" }, 404);
+  if (!r || (!internal && r.reporter_id !== ud.user.id)) return json({ error: "not_found" }, 404);
+  let email = ud?.user?.email as string | undefined;
+  if (!email) { const { data: au } = await admin.auth.admin.getUserById(r.reporter_id); email = au?.user?.email ?? undefined; }
 
   const key = Deno.env.get("RESEND_API_KEY");
   const to = (Deno.env.get("PP_FEEDBACK_EMAIL") || Deno.env.get("ADMIN_NOTIFICATION_EMAIL") || "")
@@ -41,10 +44,10 @@ Deno.serve(async (req) => {
     const { data } = await admin.storage.from("pp-feedback-screenshots").createSignedUrl(p, 60 * 60 * 24 * 7);
     if (data?.signedUrl) shots.push(data.signedUrl);
   }
-  const src = r.source === "mobile" ? "App mobile" : "Portail courtier";
+  const src = r.source === "mobile" ? "App mobile" : r.source === "ava_chat" ? "AVA chat" : r.source === "ava_voice" ? "AVA vocal" : "Portail courtier";
   const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#ffffff;color:#1A2540;max-width:620px;margin:auto;padding:24px">
 <h2 style="color:#1A4A8A;margin:0 0 8px">Nouveau feedback — ${esc(r.title)}</h2>
-<p style="color:#6B7280;font-size:13px;margin:0 0 16px">${esc(r.reporter_name || ud.user.email)} · ${esc(ud.user.email)} · ${src} · Gravité : <b>${esc(SEV[r.severity] ?? r.severity)}</b>${r.page ? ` · Page : ${esc(r.page)}` : ""}</p>
+<p style="color:#6B7280;font-size:13px;margin:0 0 16px">${esc(r.reporter_name || email)} · ${esc(email)} · ${src} · Gravité : <b>${esc(SEV[r.severity] ?? r.severity)}</b>${r.page ? ` · Page : ${esc(r.page)}` : ""}</p>
 <div style="white-space:pre-wrap;background:#F1F7FE;border-radius:10px;padding:14px;font-size:14px">${esc(r.description || "(aucune description)")}</div>
 ${shots.length ? `<h3 style="color:#1A4A8A;margin-top:20px">Captures (${shots.length})</h3>${shots.map((u, i) =>
   `<a href="${esc(u)}"><img src="${esc(u)}" alt="Capture ${i + 1}" style="max-width:100%;border:1px solid #E5E7EB;border-radius:8px;margin:6px 0"/></a>`).join("")}
@@ -55,7 +58,7 @@ ${shots.length ? `<h3 style="color:#1A4A8A;margin-top:20px">Captures (${shots.le
   const send = (from: string) => fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to, reply_to: ud.user.email, subject: `[Feedback ${src}] ${r.title}`, html }),
+    body: JSON.stringify({ from, to, ...(email ? { reply_to: email } : {}), subject: `[Feedback ${src}] ${r.title}`, html }),
   });
   let res = await send("Planiprêt Feedback <noreply@ava-telecom.ca>");
   if (!res.ok) res = await send("Planiprêt Feedback <onboarding@resend.dev>");

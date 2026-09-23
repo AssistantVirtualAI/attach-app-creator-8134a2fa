@@ -356,6 +356,34 @@ function ownerIds(ctx: Ctx): string[] {
 
 // ─── tool implementations ───────────────────────────────────────────────
 const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
+  // ===== FEEDBACK (chat + voice) =====
+  async submit_feedback(ctx, p) {
+    const title = String(p?.title ?? "").trim().slice(0, 200);
+    if (!title) return { success: false, error: "title_required" };
+    const sev = ["low", "normal", "high", "blocker"].includes(String(p?.severity)) ? String(p.severity) : "normal";
+    const source = p?.source === "ava_voice" ? "ava_voice" : "ava_chat";
+    const shot = String(p?.screenshot_path ?? "");
+    const screenshots = shot && shot.startsWith(`${ctx.userId}/`) && !shot.includes("..") ? [shot] : [];
+    const { data, error } = await ctx.admin.from("pp_feedback_reports").insert({
+      reporter_id: ctx.userId,
+      reporter_name: (ctx.profile as any)?.full_name ?? (ctx.profile as any)?.email ?? null,
+      title, description: p?.description ? String(p.description).slice(0, 5000) : null,
+      page: p?.page ? String(p.page).slice(0, 200) : null, severity: sev, source, screenshots,
+    }).select("id").single();
+    if (error) return { success: false, error: error.message };
+    try {
+      await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-feedback-notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ report_id: data.id }),
+      });
+    } catch (e) { console.warn("[submit_feedback] notify failed", e); }
+    return {
+      success: true, report_id: data.id, screenshot_attached: screenshots.length > 0,
+      message: screenshots.length ? "Feedback envoyé à l'équipe Planiprêt avec la capture d'écran." : "Feedback envoyé à l'équipe Planiprêt.",
+    };
+  },
+
   // ===== TELEPHONY =====
   async make_call(ctx, p) {
     let to_number = firstText(p?.to_number, p?.to, p?.destination, p?.number, p?.phone_number, p?.phone);

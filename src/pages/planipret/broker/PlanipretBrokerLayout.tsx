@@ -3,7 +3,7 @@ import { signOutMicrosoft } from "@/lib/ms365AuthLogin";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, TrendingUp, Settings, LogOut, Mail, ShieldAlert, Users, Sun, Moon, CheckSquare,
+  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, TrendingUp, Settings, LogOut, Mail, ShieldAlert, Users, Sun, Moon, CheckSquare, Bug,
 } from "lucide-react";
 import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
@@ -31,6 +31,7 @@ const NAV = [
   { to: "/planipret/broker/maestro-clients", Icon: Users, fr: "Clients Maestro", en: "Maestro clients" },
   { to: "/planipret/broker/tasks", Icon: CheckSquare, fr: "Tâches", en: "Tasks" },
   
+  { to: "/planipret/broker/feedback",   Icon: Bug,             fr: "Feedback",       en: "Feedback" },
   { to: "/planipret/broker/settings",   Icon: Settings,        fr: "Réglages",       en: "Settings" },
 ];
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock, CheckCircle2, ExternalLink, ShieldCheck, Loader2, History } from "lucide-react";
+import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock, ExternalLink, ShieldCheck, Loader2, History } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
 import { describeTaskDiagnostics, describeTaskSync, formatTaskDue, isTaskOpen, toTorontoLocalInput, verifyTask, maestroTaskUrl, type NormalizedTask, type TaskFilterValue, type TaskVerifyResult, taskHistory, type TaskHistoryEvent } from "@/lib/planipret/tasks";
 import MaestroTaskRow from "./MaestroTaskRow";
@@ -227,10 +227,8 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
           notes: v.notes,
           description: v.description,
           users_id: v.users_id,
-          status: v.status,
           xid: v.target,
           type: v.target_type,
-          update_status: v.update_status,
           ...(v.recurrence
             ? {
                 is_recurring: true,
@@ -249,6 +247,11 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
       const warn = describeTaskDiagnostics(r?.diagnostics, lang);
       setDiagnostic(warn ? { text: warn, correlationId: r?.correlation_id } : null);
       if (warn) toast.warning(L("Réponse Maestro incohérente", "Inconsistent Maestro response"), { description: warn });
+    } else if (r?.pending_confirmation) {
+      setFieldErrors(null);
+      toast.warning(L("Action en attente de confirmation Maestro", "Action awaiting Maestro confirmation"), {
+        description: r?.message ?? L("Aucune confirmation n’est affichée tant que Maestro n’a pas relu la tâche.", "No confirmation is shown until Maestro reads the task back."),
+      });
     } else {
       setFieldErrors(r?.fields && typeof r.fields === "object" ? r.fields : null);
       toast.error(r?.message ?? L("Échec de l'enregistrement", "Save failed"));
@@ -260,6 +263,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
     setConfirmDelete(null);
     const r = await remove(task.id);
     if (r?.success) toast.success(L("Tâche supprimée", "Task deleted"));
+    else if (r?.pending_confirmation) toast.warning(L("Suppression en attente de confirmation Maestro", "Deletion awaiting Maestro confirmation"), { description: r?.message });
     else toast.error(r?.message ?? L("Suppression impossible", "Delete failed"));
   };
 
@@ -272,28 +276,12 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
     due_at: toTorontoLocalInput(task.due_at),
   } });
 
-  /**
-   * Traiter la tâche depuis l'app : Maestro la passe à « complété » via la
-   * même route que le portail, puis la liste est relue pour refléter l'état
-   * réellement confirmé côté Maestro.
-   */
-  const completeTask = async (task: NormalizedTask) => {
-    setBusy(true);
-    const r = await update(task.id, { status: "completed", update_status: true });
-    setBusy(false);
-    if (r?.success) {
-      toast.success(L("Tâche traitée", "Task completed"));
-      void refresh();
-    } else {
-      toast.error(r?.message ?? L("Traitement impossible", "Could not complete"));
-    }
-  };
-
   const snooze = async (task: NormalizedTask) => {
     const base = task.due_at ? new Date(task.due_at) : new Date();
     const next = new Date(base.getTime() + 24 * 3600 * 1000);
     const r = await update(task.id, { date: next.toISOString() });
     if (r?.success) toast.success(L("Reportée à demain", "Moved to tomorrow"));
+    else if (r?.pending_confirmation) toast.warning(L("Report en attente de confirmation Maestro", "Snooze awaiting Maestro confirmation"), { description: r?.message });
     else toast.error(r?.message ?? L("Report impossible", "Snooze failed"));
   };
 
@@ -451,7 +439,6 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                         </IconBtn>
                         <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
                         <IconBtn label={L("Historique", "History")} onClick={() => void openHistory(task)}><History className="w-3.5 h-3.5" /></IconBtn>
-                        {!readOnly && <IconBtn label={L("Traiter (marquer terminée)", "Complete task")} onClick={() => void completeTask(task)}><CheckCircle2 className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}

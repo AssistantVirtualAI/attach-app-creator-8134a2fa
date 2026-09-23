@@ -213,6 +213,9 @@ verify_jwt = false
 [functions.maestro-oauth-state-info]
 verify_jwt = false
 
+[functions.maestro-oauth-callback]
+verify_jwt = true
+
 # --- Planiprêt Mobile 1.4.9 — politique JWT ---
 # Ces fonctions exigent un porteur JWT valide au niveau de la passerelle
 # (utilisateur authentifié OU vrai bearer SUPABASE_SERVICE_ROLE_KEY pour les

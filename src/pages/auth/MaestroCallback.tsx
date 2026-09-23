@@ -17,8 +17,6 @@ export default function MaestroCallback() {
   const ran = useRef(false);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [message, setMessage] = useState<string>("Traitement de l'autorisation Maestro…");
-  const [details, setDetails] = useState<Record<string, string>>({});
-  const [deepLink, setDeepLink] = useState<string | null>(null);
 
   useEffect(() => {
     if (ran.current) return;
@@ -27,12 +25,17 @@ export default function MaestroCallback() {
     const code = params.get("code");
     const state = params.get("state");
     const error = params.get("error");
-    const errorDesc = params.get("error_description");
+    // OAuth codes and state values are one-time credentials. Read them once
+    // from the initial route, then remove the callback URL from browser history
+    // and local storage before any asynchronous exchange can occur.
+    try {
+      localStorage.removeItem("pp_maestro_callback_url");
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch { /* storage/history unavailable */ }
 
     if (error) {
       setStatus("error");
-      setMessage(errorDesc || error);
-      setDetails({ error, state: state ?? "—" });
+      setMessage("L’autorisation Maestro a été annulée ou refusée. Réessayez lorsque vous êtes prêt.");
       return;
     }
     if (!code) {
@@ -63,7 +66,6 @@ export default function MaestroCallback() {
               const deepLink = `planipret://auth/maestro/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
               setStatus("ok");
               setMessage("Retour à l'application Planiprêt…");
-              setDeepLink(deepLink);
               inflightCodes.delete(code);
               window.location.href = deepLink;
               return;
@@ -78,7 +80,7 @@ export default function MaestroCallback() {
         });
         if (fnErr || !(data as any)?.success) {
           setStatus("error");
-          setMessage((data as any)?.error ?? fnErr?.message ?? "Échec de l'échange du code.");
+          setMessage("La connexion Maestro n’a pas pu être confirmée. Réessayez sans fermer l’application.");
           return;
         }
         completedCodes.add(code);
@@ -121,16 +123,6 @@ export default function MaestroCallback() {
           </div>
         </div>
         <p style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.9 }}>{message}</p>
-        {deepLink && (
-          <a href={deepLink} style={{ display: "inline-block", marginTop: 16, padding: "10px 16px", borderRadius: 10, background: "#2563eb", color: "#fff", fontSize: 14, textDecoration: "none" }}>
-            Ouvrir l'application Planiprêt
-          </a>
-        )}
-        {status === "error" && Object.keys(details).length > 0 && (
-          <pre style={{ marginTop: 16, padding: 12, background: "#0b1220", border: "1px solid #1f2a44", borderRadius: 8, fontSize: 11, overflow: "auto" }}>
-            {JSON.stringify(details, null, 2)}
-          </pre>
-        )}
       </div>
     </div>
   );

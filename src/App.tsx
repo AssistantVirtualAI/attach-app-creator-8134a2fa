@@ -540,7 +540,6 @@ function NativeDeepLinkBridge() {
             .catch(() => {});
           navigate(`/auth/microsoft/callback${url.search}`, { replace: true });
         } else if (isMaestroCallback) {
-          localStorage.setItem('pp_maestro_callback_url', rawUrl);
           import('@capacitor/browser')
             .then(({ Browser }) => Browser.close().catch(() => {}))
             .catch(() => {});

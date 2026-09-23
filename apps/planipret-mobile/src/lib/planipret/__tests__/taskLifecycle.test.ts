@@ -5,8 +5,12 @@ const t = (o: any) => ({ id: "1", notes: "", description: null, due_at: null, st
 
 describe("task lifecycle", () => {
   it("créée sans assignation confirmée", () => expect(taskLifecycleStage(t({}))).toBe("created"));
-  it("confirmée avec assignation relue", () => expect(taskLifecycleStage(t({ assignee_ids: ["7"] }))).toBe("confirmed"));
-  it("clôturée quand terminée", () => expect(taskLifecycleStage(t({ status: "completed", assignee_ids: ["7"] }))).toBe("closed"));
+  it("reste en attente avec une assignation non relue", () => expect(taskLifecycleStage(t({ assignee_ids: ["7"] }))).toBe("created"));
+  it("confirmée seulement avec assignation et preuve de relecture", () => expect(taskLifecycleStage(t({ assignee_ids: ["7"], maestro_read_back: true }))).toBe("confirmed"));
+  it("ne présente une clôture qu’après relecture", () => {
+    expect(taskLifecycleStage(t({ status: "completed", assignee_ids: ["7"] }))).toBe("created");
+    expect(taskLifecycleStage(t({ status: "completed", assignee_ids: ["7"], maestro_read_back: true }))).toBe("closed");
+  });
   it("origine mobile", () => {
     const task = t({ raw: { source: "mobile_manual", created_at: "2026-09-20T12:00:00Z" } });
     expect(taskOrigin(task)).toBe("mobile");

@@ -15,10 +15,18 @@ export type TaskLifecycleStage = "created" | "confirmed" | "closed";
 const DONE = new Set(["done", "completed", "complete", "closed", "termine", "terminé", "3", "4"]);
 
 export function taskLifecycleStage(task: NormalizedTask): TaskLifecycleStage {
-  if (DONE.has(String(task?.status ?? "").toLowerCase())) return "closed";
+  // A task id and an assignment returned from a cache, projection, POST or PUT
+  // receipt are not proof that Maestro currently stores that state. Only a
+  // documented GET read-back may receive the confirmed/closed wording.
+  const raw = (task as any)?.raw ?? {};
+  const readBack = (task as any)?.maestro_read_back === true
+    || raw?.maestro_read_back === true
+    || raw?.read_back === true
+    || raw?.visible_in_maestro === true;
+  if (DONE.has(String(task?.status ?? "").toLowerCase())) return readBack ? "closed" : "created";
   const hasId = Boolean(String(task?.id ?? "").trim());
   const assigned = Array.isArray(task?.assignee_ids) && task.assignee_ids.filter(Boolean).length > 0;
-  return hasId && assigned ? "confirmed" : "created";
+  return hasId && assigned && readBack ? "confirmed" : "created";
 }
 
 export interface TaskLifecycleBadge {
@@ -57,7 +65,7 @@ export function describeTaskLifecycle(stage: TaskLifecycleStage, lang: "fr" | "e
     label: en ? "Created" : "Créée",
     color: "var(--pp-warning, #B45309)",
     background: "rgba(245,158,11,0.14)",
-    detail: en ? "Created — Maestro has not confirmed the assignment yet" : "Créée — assignation pas encore confirmée par Maestro",
+      detail: en ? "Waiting for a Maestro API read-back" : "En attente d’une relecture par l’API Maestro",
   };
 }
 

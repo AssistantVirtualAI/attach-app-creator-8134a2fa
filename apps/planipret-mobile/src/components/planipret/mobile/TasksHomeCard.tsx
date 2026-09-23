@@ -10,12 +10,14 @@ export default function TasksHomeCard({ profile, lang }: { profile: any; lang?: 
   const fr = lang !== "en";
   const navigate = useNavigate();
   const role = String(profile?.role ?? "");
-  const allowed = role === "broker" || role === "admin";
-  const { buckets, counts, openCount, loading, error } = usePlanipretTasks(allowed ? profile?.user_id : null);
+  const allowed = ["broker", "admin", "planipret_admin", "super_admin"].includes(role);
+  const userId = profile?.user_id ?? profile?.id ?? null;
+  const { buckets, counts, openCount, loading, error, refresh } = usePlanipretTasks(allowed ? userId : null);
 
-  if (!allowed || error) return null;
+  if (!allowed) return null;
 
   const next: NormalizedTask[] = [...buckets.overdue, ...buckets.today, ...buckets.upcoming].slice(0, 3);
+  const remaining = Math.max(0, openCount - next.length);
 
   return (
     <section className="pp-card p-4 animate-fade-in" data-testid="tasks-home-card">
@@ -34,6 +36,18 @@ export default function TasksHomeCard({ profile, lang }: { profile: any; lang?: 
         <div className="mt-3 h-16 rounded-xl animate-pulse" style={{ background: "rgba(59,111,160,0.08)" }} />
       ) : (
         <>
+          {error && (
+            <div className="mt-3 rounded-xl px-3 py-2 text-[11px]" role="status"
+              style={{ background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.25)", color: "var(--pp-text-primary)" }}>
+              <span>{next.length
+                ? (fr ? "Actualisation Maestro indisponible. Dernier état connu affiché." : "Maestro refresh unavailable. Showing the last known state.")
+                : (fr ? "Les tâches Maestro sont temporairement indisponibles." : "Maestro tasks are temporarily unavailable.")}</span>
+              <button type="button" onClick={() => void refresh({ force: true })} className="ml-2 font-semibold"
+                style={{ color: "var(--pp-brand-accent)" }}>
+                {fr ? "Réessayer" : "Retry"}
+              </button>
+            </div>
+          )}
           <div className="mt-3 grid grid-cols-3 gap-2">
             {[
               { l: fr ? "En retard" : "Overdue", v: counts.overdue, c: "var(--pp-danger, #D2445E)" },
@@ -64,9 +78,16 @@ export default function TasksHomeCard({ profile, lang }: { profile: any; lang?: 
                   </div>
                 );
               })}
+              {remaining > 0 && (
+                <button type="button" onClick={() => navigate("/mplanipret/tasks")}
+                  className="w-full text-left text-[11px] font-semibold px-1 py-1"
+                  style={{ color: "var(--pp-brand-accent)" }}>
+                  {fr ? `Voir ${remaining} autre${remaining > 1 ? "s" : ""} tâche${remaining > 1 ? "s" : ""}` : `See ${remaining} more task${remaining > 1 ? "s" : ""}`}
+                </button>
+              )}
             </div>
           ) : (
-            <p className="mt-3 text-[11.5px]" style={{ color: "var(--pp-text-muted)" }}>
+            !error && <p className="mt-3 text-[11.5px]" style={{ color: "var(--pp-text-muted)" }}>
               {fr ? "Aucune tâche ouverte." : "No open task."}
             </p>
           )}

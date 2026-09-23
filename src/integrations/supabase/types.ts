@@ -12920,6 +12920,89 @@ export type Database = {
         }
         Relationships: []
       }
+      pp_feedback_comments: {
+        Row: {
+          author_id: string
+          author_name: string | null
+          body: string
+          created_at: string
+          id: string
+          report_id: string
+        }
+        Insert: {
+          author_id?: string
+          author_name?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          report_id: string
+        }
+        Update: {
+          author_id?: string
+          author_name?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pp_feedback_comments_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "pp_feedback_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pp_feedback_reports: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          page: string | null
+          reporter_id: string
+          reporter_name: string | null
+          resolved_at: string | null
+          screenshots: Json
+          severity: string
+          source: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          page?: string | null
+          reporter_id?: string
+          reporter_name?: string | null
+          resolved_at?: string | null
+          screenshots?: Json
+          severity?: string
+          source?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          page?: string | null
+          reporter_id?: string
+          reporter_name?: string | null
+          resolved_at?: string | null
+          screenshots?: Json
+          severity?: string
+          source?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

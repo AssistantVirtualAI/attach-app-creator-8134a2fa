@@ -2,9 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  Bug, ChevronDown, ChevronRight, ImagePlus, Loader2, MessageSquare, Plus, RefreshCw, Search, Send, Trash2, X,
+  Bug, Camera as CameraIcon, ChevronDown, ChevronRight, ImagePlus, Loader2, MessageSquare, Plus, RefreshCw, Search, Send, Trash2, X,
 } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { Capacitor } from "@capacitor/core";
+import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/camera";
+
+const isNative = () => { try { return Capacitor.isNativePlatform(); } catch { return false; } };
+async function webPathToFile(webPath: string, i: number): Promise<File> {
+  const blob = await (await fetch(webPath)).blob();
+  const ext = (blob.type.split("/")[1] || "jpeg").replace("jpeg", "jpg");
+  return new File([blob], `photo-${Date.now()}-${i}.${ext}`, { type: blob.type || "image/jpeg" });
+}
 
 type Status = "new" | "in_progress" | "waiting" | "resolved";
 type Severity = "low" | "normal" | "high" | "blocker";
@@ -158,6 +167,35 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
     if (imgs.length) { setFiles((p) => [...p, ...imgs].slice(0, 6)); toast.success(t("Capture ajoutée", "Screenshot added")); }
   };
 
+  const ensurePerm = async (kind: "photos" | "camera") => {
+    const cur = await CapCamera.checkPermissions();
+    if (cur[kind] === "granted" || cur[kind] === "limited") return true;
+    const req = await CapCamera.requestPermissions({ permissions: [kind] });
+    if (req[kind] === "granted" || req[kind] === "limited") return true;
+    toast.error(kind === "photos"
+      ? t("Accès aux photos refusé. Autorise-le dans Réglages > Planiprêt > Photos.", "Photo access denied. Allow it in Settings > Planiprêt > Photos.")
+      : t("Accès à la caméra refusé. Autorise-le dans Réglages > Planiprêt.", "Camera access denied. Allow it in Settings > Planiprêt."));
+    return false;
+  };
+  const pickPhotos = async () => {
+    if (!isNative()) { fileRef.current?.click(); return; }
+    try {
+      if (Capacitor.getPlatform() === "ios" && !(await ensurePerm("photos"))) return;
+      const res = await CapCamera.pickImages({ quality: 80, limit: Math.max(1, 6 - files.length) });
+      const out = await Promise.all(res.photos.map((ph, i) => webPathToFile(ph.webPath, i)));
+      setFiles((p) => [...p, ...out].slice(0, 6));
+    } catch (e: any) {
+      if (!/cancel/i.test(e?.message ?? "")) fileRef.current?.click();
+    }
+  };
+  const takePhoto = async () => {
+    try {
+      if (!(await ensurePerm("camera"))) return;
+      const ph = await CapCamera.getPhoto({ quality: 80, resultType: CameraResultType.Uri, source: CameraSource.Camera });
+      if (ph.webPath) { const f = await webPathToFile(ph.webPath, 0); setFiles((p) => [...p, f].slice(0, 6)); }
+    } catch (e: any) { if (!/cancel/i.test(e?.message ?? "")) toast.error(e?.message ?? "Camera"); }
+  };
+
   const submit = async () => {
     if (!me) return;
     if (!title.trim()) { toast.error(t("Ajoute un titre", "Add a title")); return; }
@@ -170,11 +208,12 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
         if (error) throw error;
         paths.push(path);
       }
-      const { error } = await db.from("pp_feedback_reports").insert({
+      const { data: ins, error } = await db.from("pp_feedback_reports").insert({
         reporter_id: me.id, reporter_name: me.name, title: title.trim(), description: desc.trim() || null,
         page: page.trim() || null, severity, source, screenshots: paths,
-      });
+      }).select("id").single();
       if (error) throw error;
+      if (ins?.id) void supabase.functions.invoke("pp-feedback-notify", { body: { report_id: ins.id } }).catch(() => {});
       toast.success(t("Signalement envoyé", "Report sent"));
       setTitle(""); setDesc(""); setPage(""); setSeverity("normal"); setFiles([]); setOpen(false);
       void load();
@@ -257,10 +296,16 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
             <select style={{ ...inputStyle, width: "auto" }} value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
               {SEVERITY_ORDER.map((s) => <option key={s} value={s}>{t("Gravité", "Severity")} : {SEVERITY_META[s][en ? "en" : "fr"]}</option>)}
             </select>
-            <button onClick={() => fileRef.current?.click()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+            <button onClick={() => void pickPhotos()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
               style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
-              <ImagePlus size={15} /> {t("Captures", "Screenshots")}
+              <ImagePlus size={15} /> {isNative() ? t("Photos", "Photos") : t("Captures", "Screenshots")} ({files.length}/6)
             </button>
+            {isNative() && (
+              <button onClick={() => void takePhoto()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+                style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
+                <CameraIcon size={15} /> {t("Caméra", "Camera")}
+              </button>
+            )}
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
             <button onClick={submit} disabled={submitting} className="ml-auto flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: accent }}>
               {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} {t("Envoyer", "Send")}

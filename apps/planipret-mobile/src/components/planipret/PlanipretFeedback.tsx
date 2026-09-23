@@ -378,7 +378,7 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
                     </div>
                     <div className="mt-1 text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
                       {r.reporter_name || "—"} · {new Date(r.created_at).toLocaleString(en ? "en-CA" : "fr-CA")}
-                      {` · ${r.source === "mobile" ? t("App mobile", "Mobile app") : t("Portail", "Portal")}`}
+                      {` · ${r.source === "mobile" ? t("App mobile", "Mobile app") : r.source === "ava_chat" ? t("AVA chat", "AVA chat") : r.source === "ava_voice" ? t("AVA vocal", "AVA voice") : t("Portail", "Portal")}`}
                       {r.page ? ` · ${r.page}` : ""}
                       {counts[r.id] ? ` · ${counts[r.id]} message(s)` : ""}
                     </div>

@@ -2,7 +2,7 @@
 // Replaces the legacy VoiceAgent.tsx with rich state visualization, live
 // transcript, tool execution notifications and confirmation modal.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { captureAndUploadScreenshot, lastPageBeforeAva } from "@/lib/planipret/avaFeedback";
+import { lastPageBeforeAva } from "@/lib/planipret/avaFeedback";
 import { useNavigate } from "react-router-dom";
 import { Conversation } from "@elevenlabs/client";
 import { supabase } from "@/integrations/supabase/client";
@@ -194,14 +194,19 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
 
   const handleTool = useCallback(async (toolName: string, params: any) => {
     if (toolName === "submit_feedback") {
-      // Capture the page behind the AVA overlay before the confirmation card.
+      // Feedback needs a server-issued confirmation token. AVA does not capture
+      // the screen automatically because it may contain client information.
       const p = { ...(params ?? {}) };
       if (!p.page) p.page = lastPageBeforeAva();
-      if (p.include_screenshot !== false) {
-        const shot = await captureAndUploadScreenshot();
-        if (shot) p.screenshot_path = shot;
-      }
       p.source = "ava_voice";
+      const { data, error } = await supabase.functions.invoke("ava-tool-executor", {
+        body: { tool_name: "submit_feedback", parameters: p, session_id: sessionId },
+      });
+      if (error || !(data as any)?.feedback_confirmation_token) {
+        return { success: false, error: (data as any)?.error ?? error?.message ?? "feedback_confirmation_unavailable" };
+      }
+      p.feedback_confirmation_token = (data as any).feedback_confirmation_token;
+      p.idempotency_key = (data as any).idempotency_key;
       params = p;
     }
     // Route client-only tools locally (no confirm gate, no server call).
@@ -619,7 +624,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
     }
   };
 
-  const confirmAction = (ok: boolean) => {
+  const confirmAction = (ok: boolean, patched: Record<string, any> = {}) => {
     if (!pending) return;
     if (!ok) {
       pending.resolve({ success: false, error: "user_cancelled" });
@@ -649,7 +654,11 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
         .catch((error) => resolve({ success: false, error: String(error) }));
       return;
     }
-    callServerTool(tool, { ...params, confirmed: true }).then(resolve);
+    if (tool === "submit_feedback") {
+      callServerTool(tool, { ...params, ...patched }).then(resolve);
+      return;
+    }
+    callServerTool(tool, { ...params, ...patched, confirmed: true }).then(resolve);
   };
 
   // ─── render ────────────────────────────────────────────────────
@@ -801,10 +810,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
           toolLabel={toolLabel}
           onCancel={() => confirmAction(false)}
           onConfirm={(patchedParams) => {
-            // Overwrite params with patched (tz + confirmed) then execute
-            const p = pending;
-            setPending(null);
-            callServerTool(p.tool, { ...p.params, ...patchedParams }).then(p.resolve);
+            confirmAction(true, patchedParams);
           }}
         />
       )}
@@ -894,6 +900,7 @@ export function CalendarAwareConfirm({
   onConfirm: (patched: Record<string, any>) => void;
 }) {
   const isCalendar = CALENDAR_TOOLS.has(pending.tool);
+  const isFeedback = pending.tool === "submit_feedback";
   const initialTz = pending.params?.timezone
     ?? Intl.DateTimeFormat().resolvedOptions().timeZone
     ?? "America/Toronto";
@@ -905,6 +912,10 @@ export function CalendarAwareConfirm({
   const tzValid = isValidIANATimezone(effectiveTz);
 
   const reformulation = useMemo(() => {
+    if (isFeedback) {
+      const p = pending.params ?? {};
+      return `Enregistrer le signalement « ${String(p.title ?? "Sans titre")} » · gravité ${String(p.severity ?? "normal")} · page ${String(p.page ?? "Application Planiprêt")}. Aucune capture n'est jointe automatiquement. Confirmer ?`;
+    }
     if (!isCalendar) return null;
     const p = pending.params ?? {};
     const startRaw = p.new_start ?? p.start;
@@ -922,7 +933,11 @@ export function CalendarAwareConfirm({
       const label = pending.tool === "move_calendar_event" ? "Déplacer" : "Créer";
       return `${label} le meeting « ${subj} » au ${fmt.format(startAt)} (${effectiveTz}). Je confirme ?`;
     } catch { return `Action calendrier: ${pending.tool}.`; }
-  }, [pending, effectiveTz, isCalendar]);
+  }, [pending, effectiveTz, isCalendar, isFeedback]);
+  const previewParams = useMemo(() => {
+    const { feedback_confirmation_token: _feedbackToken, idempotency_key: _idempotencyKey, ...safe } = pending.params ?? {};
+    return { ...safe, timezone: isCalendar ? effectiveTz : safe.timezone };
+  }, [pending.params, effectiveTz, isCalendar]);
 
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center px-6 bg-black/40">
@@ -969,7 +984,7 @@ export function CalendarAwareConfirm({
               <div className="font-semibold mb-1">{toolLabel(pending.tool)}</div>
               {reformulation && <div className="text-[12px]" style={{ color: "#B4C6D8" }}>{reformulation}</div>}
               <pre className="text-[10px] mt-2 opacity-60 whitespace-pre-wrap">
-                {JSON.stringify({ ...pending.params, timezone: isCalendar ? effectiveTz : pending.params?.timezone }, null, 2).slice(0, 300)}
+                {JSON.stringify(previewParams, null, 2).slice(0, 300)}
               </pre>
             </div>
             <div className="grid grid-cols-2 gap-2">

@@ -28,12 +28,15 @@ const STATUS_META: Record<Status, { fr: string; en: string; fg: string; bg: stri
 };
 const STATUS_ORDER: Status[] = ["new", "in_progress", "waiting", "resolved"];
 const SEVERITY_META: Record<Severity, { fr: string; en: string; color: string }> = {
-  low:     { fr: "Mineur",   en: "Minor",   color: "#64748B" },
+  low:     { fr: "Mineur",   en: "Minor",  color: "#64748B" },
   normal:  { fr: "Normal",   en: "Normal",  color: "#2E9BDC" },
   high:    { fr: "Élevé",    en: "High",    color: "#EA580C" },
   blocker: { fr: "Bloquant", en: "Blocker", color: "#DC2626" },
 };
 const SEVERITY_ORDER: Severity[] = ["low", "normal", "high", "blocker"];
+const MAX_ATTACHMENTS = 6;
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const SAFE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 interface Report {
   id: string; reporter_id: string; reporter_name: string | null; title: string; description: string | null;
@@ -93,6 +96,8 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const submitLockRef = useRef(false);
+  const titleRef = useRef<HTMLInputElement>(null);
   const threadRef = useRef<string | null>(null);
   threadRef.current = openThread;
 
@@ -158,13 +163,13 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
-    const arr = Array.from(list).filter((f) => f.size <= 20 * 1024 * 1024);
-    if (arr.length !== list.length) toast.error(t("Certains fichiers dépassent 20 Mo", "Some files exceed 20 MB"));
-    setFiles((p) => [...p, ...arr].slice(0, 6));
+    const arr = Array.from(list).filter((f) => SAFE_IMAGE_TYPES.has(f.type) && f.size <= MAX_FILE_BYTES);
+    if (arr.length !== list.length) toast.error(t("Utilise des images JPG, PNG ou WebP de 5 Mo maximum", "Use JPG, PNG, or WebP images up to 5 MB"));
+    setFiles((p) => [...p, ...arr].slice(0, MAX_ATTACHMENTS));
   };
   const onPaste = (e: React.ClipboardEvent) => {
-    const imgs = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
-    if (imgs.length) { setFiles((p) => [...p, ...imgs].slice(0, 6)); toast.success(t("Capture ajoutée", "Screenshot added")); }
+    const imgs = Array.from(e.clipboardData.files).filter((f) => SAFE_IMAGE_TYPES.has(f.type) && f.size <= MAX_FILE_BYTES);
+    if (imgs.length) { setFiles((p) => [...p, ...imgs].slice(0, MAX_ATTACHMENTS)); toast.success(t("Capture ajoutée", "Screenshot added")); }
   };
 
   const ensurePerm = async (kind: "photos" | "camera") => {
@@ -181,9 +186,9 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
     if (!isNative()) { fileRef.current?.click(); return; }
     try {
       if (Capacitor.getPlatform() === "ios" && !(await ensurePerm("photos"))) return;
-      const res = await CapCamera.pickImages({ quality: 80, limit: Math.max(1, 6 - files.length) });
+      const res = await CapCamera.pickImages({ quality: 80, limit: Math.max(1, MAX_ATTACHMENTS - files.length) });
       const out = await Promise.all(res.photos.map((ph, i) => webPathToFile(ph.webPath, i)));
-      setFiles((p) => [...p, ...out].slice(0, 6));
+      setFiles((p) => [...p, ...out].filter((f) => SAFE_IMAGE_TYPES.has(f.type) && f.size <= MAX_FILE_BYTES).slice(0, MAX_ATTACHMENTS));
     } catch (e: any) {
       if (!/cancel/i.test(e?.message ?? "")) fileRef.current?.click();
     }
@@ -192,13 +197,25 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
     try {
       if (!(await ensurePerm("camera"))) return;
       const ph = await CapCamera.getPhoto({ quality: 80, resultType: CameraResultType.Uri, source: CameraSource.Camera });
-      if (ph.webPath) { const f = await webPathToFile(ph.webPath, 0); setFiles((p) => [...p, f].slice(0, 6)); }
+      if (ph.webPath) { const f = await webPathToFile(ph.webPath, 0); if (SAFE_IMAGE_TYPES.has(f.type) && f.size <= MAX_FILE_BYTES) setFiles((p) => [...p, f].slice(0, MAX_ATTACHMENTS)); }
     } catch (e: any) { if (!/cancel/i.test(e?.message ?? "")) toast.error(e?.message ?? "Camera"); }
   };
 
   const submit = async () => {
-    if (!me) return;
-    if (!title.trim()) { toast.error(t("Ajoute un titre", "Add a title")); return; }
+    if (!me || submitting || submitLockRef.current) return;
+    const normalizedTitle = title.trim();
+    const normalizedDescription = desc.trim();
+    const normalizedPage = page.trim();
+    if (!normalizedTitle) {
+      toast.error(t("Ajoute un titre", "Add a title"));
+      titleRef.current?.focus();
+      return;
+    }
+    if (normalizedTitle.length > 200 || normalizedDescription.length > 5000 || normalizedPage.length > 200) {
+      toast.error(t("Le feedback dépasse la longueur permise", "Feedback exceeds the permitted length"));
+      return;
+    }
+    submitLockRef.current = true;
     setSubmitting(true);
     try {
       const paths: string[] = [];
@@ -208,18 +225,25 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
         if (error) throw error;
         paths.push(path);
       }
+      const idempotencyKey = `${me.id}:${source}:${crypto.randomUUID()}`;
       const { data: ins, error } = await db.from("pp_feedback_reports").insert({
-        reporter_id: me.id, reporter_name: me.name, title: title.trim(), description: desc.trim() || null,
-        page: page.trim() || null, severity, source, screenshots: paths,
+        reporter_id: me.id, reporter_name: me.name, title: normalizedTitle, description: normalizedDescription || null,
+        page: normalizedPage || null, severity, source, screenshots: paths, idempotency_key: idempotencyKey,
       }).select("id").single();
       if (error) throw error;
-      if (ins?.id) void supabase.functions.invoke("pp-feedback-notify", { body: { report_id: ins.id } }).catch(() => {});
-      toast.success(t("Signalement envoyé", "Report sent"));
+      let notificationStatus = "pending";
+      if (ins?.id) {
+        const { data: notification, error: notificationError } = await supabase.functions.invoke("pp-feedback-notify", { body: { report_id: ins.id } });
+        if (notificationError) notificationStatus = "failed";
+        else notificationStatus = String((notification as any)?.notification_status ?? "pending");
+      }
+      if (notificationStatus === "sent") toast.success(t("Signalement enregistré et équipe avisée", "Report recorded and team notified"));
+      else toast.success(t("Signalement enregistré; avis à l’équipe en attente", "Report recorded; team notification pending"));
       setTitle(""); setDesc(""); setPage(""); setSeverity("normal"); setFiles([]); setOpen(false);
       void load();
     } catch (e: any) {
       toast.error(e?.message ?? t("Échec de l'envoi", "Send failed"));
-    } finally { setSubmitting(false); }
+    } finally { submitLockRef.current = false; setSubmitting(false); }
   };
 
   const setStatus = async (r: Report, status: Status) => {
@@ -284,30 +308,39 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
       </div>
 
       {open && (
-        <div className="p-4" style={card} onPaste={onPaste}>
+        <form className="p-4" style={card} onPaste={onPaste} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
           <div className="grid gap-3 md:grid-cols-2">
-            <input style={inputStyle} placeholder={t("Titre du problème", "Issue title")} value={title} onChange={(e) => setTitle(e.target.value)} />
-            <input style={inputStyle} placeholder={t("Page / section (ex. Tâches)", "Page / section (e.g. Tasks)")} value={page} onChange={(e) => setPage(e.target.value)} />
+            <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--pp-text-secondary)" }}>
+              {t("Titre du problème", "Issue title")}
+              <input ref={titleRef} style={inputStyle} aria-invalid={!title.trim()} maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--pp-text-secondary)" }}>
+              {t("Page / section (ex. Tâches)", "Page / section (e.g. Tasks)")}
+              <input style={inputStyle} maxLength={200} value={page} onChange={(e) => setPage(e.target.value)} />
+            </label>
           </div>
-          <textarea style={{ ...inputStyle, marginTop: 12, minHeight: 100 }}
-            placeholder={t("Décris le problème : ce que tu faisais, ce qui s'est passé.", "Describe what you were doing and what happened.")}
-            value={desc} onChange={(e) => setDesc(e.target.value)} />
+          <label className="mt-3 flex flex-col gap-1 text-xs" style={{ color: "var(--pp-text-secondary)" }}>
+            {t("Description", "Description")}
+            <textarea style={{ ...inputStyle, minHeight: 100 }} maxLength={5000}
+              placeholder={t("Décris le problème : ce que tu faisais, ce qui s'est passé.", "Describe what you were doing and what happened.")}
+              value={desc} onChange={(e) => setDesc(e.target.value)} />
+          </label>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <select style={{ ...inputStyle, width: "auto" }} value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
+            <select aria-label={t("Gravité", "Severity")} style={{ ...inputStyle, width: "auto" }} value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
               {SEVERITY_ORDER.map((s) => <option key={s} value={s}>{t("Gravité", "Severity")} : {SEVERITY_META[s][en ? "en" : "fr"]}</option>)}
             </select>
-            <button onClick={() => void pickPhotos()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+            <button type="button" onClick={() => void pickPhotos()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
               style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
-              <ImagePlus size={15} /> {isNative() ? t("Photos", "Photos") : t("Captures", "Screenshots")} ({files.length}/6)
+              <ImagePlus size={15} /> {isNative() ? t("Photos", "Photos") : t("Captures", "Screenshots")} ({files.length}/{MAX_ATTACHMENTS})
             </button>
             {isNative() && (
-              <button onClick={() => void takePhoto()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+              <button type="button" onClick={() => void takePhoto()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
                 style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
                 <CameraIcon size={15} /> {t("Caméra", "Camera")}
               </button>
             )}
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-            <button onClick={submit} disabled={submitting} className="ml-auto flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: accent }}>
+            <button type="submit" disabled={submitting} className="ml-auto flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: accent }}>
               {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} {t("Envoyer", "Send")}
             </button>
           </div>
@@ -316,7 +349,7 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
               {files.map((f, i) => (
                 <div key={i} className="relative">
                   <img src={URL.createObjectURL(f)} alt="" className="h-20 w-28 rounded-lg object-cover" />
-                  <button onClick={() => setFiles((p) => p.filter((_, j) => j !== i))}
+                  <button type="button" aria-label={t("Retirer la capture", "Remove screenshot")} onClick={() => setFiles((p) => p.filter((_, j) => j !== i))}
                     className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full text-white" style={{ background: "#DC2626" }}>
                     <X size={11} />
                   </button>
@@ -324,13 +357,13 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
               ))}
             </div>
           )}
-        </div>
+        </form>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: "var(--pp-text-muted)" }} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Rechercher", "Search")}
+          <input aria-label={t("Rechercher les signalements", "Search reports")} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Rechercher", "Search")}
             style={{ ...inputStyle, width: 200, padding: "6px 8px 6px 26px", fontSize: 12 }} />
         </div>
         <button onClick={() => setFStatus("all")} className="rounded-lg px-2.5 py-1.5 text-xs" style={chip(fStatus === "all")}>
@@ -364,7 +397,7 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <button onClick={() => setCollapsed((c) => ({ ...c, [r.id]: !isCollapsed }))}
+                      <button aria-label={isCollapsed ? t("Développer le signalement", "Expand report") : t("Réduire le signalement", "Collapse report")} aria-expanded={!isCollapsed} onClick={() => setCollapsed((c) => ({ ...c, [r.id]: !isCollapsed }))}
                         className="grid h-6 w-6 place-items-center rounded-md" style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-muted)" }}>
                         {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                       </button>
@@ -425,7 +458,7 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
                       )}
                     </div>
                     <div className="mt-2 flex gap-2">
-                      <input style={inputStyle} value={draft} placeholder={t("Écrire un message…", "Write a message…")}
+                      <input aria-label={t("Ajouter un commentaire", "Add a comment")} style={inputStyle} value={draft} placeholder={t("Écrire un message…", "Write a message…")}
                         onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void sendComment(r.id); }} />
                       <button onClick={() => void sendComment(r.id)} disabled={sending} className="grid h-9 w-10 shrink-0 place-items-center rounded-lg text-white disabled:opacity-60" style={{ background: accent }}>
                         {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}

@@ -178,12 +178,11 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
     mk("list_task_targets", "Cibles de tâche valides (task_targets de l'API Clients) : id utilisateur du client et ids de contrats. À utiliser AVANT create_task pour obtenir le bon xid.", {
       search: { type: "string", description: "Nom ou courriel du client (optionnel)" },
     }),
-    mk("submit_feedback", "Envoie un signalement (bug, problème, idée) à l'équipe Planiprêt au nom du courtier. L'app joint automatiquement une capture de l'écran concerné. Reformule le titre et la description, demande la gravité si elle n'est pas claire, puis demande TOUJOURS confirmation avant d'appeler.", {
+    mk("submit_feedback", "Enregistre un signalement (bug, problème, idée) pour l'équipe Planiprêt au nom du courtier. Reformule le titre, le résumé, la gravité et la page; demande TOUJOURS confirmation explicite. N’annonce pas que l’équipe a été avisée avant le résultat du tool. AVA ne joint jamais de capture automatiquement.", {
       title: { type: "string", description: "Titre court du problème (obligatoire)" },
       description: { type: "string", description: "Ce que le courtier faisait et ce qui s'est passé" },
       page: { type: "string", description: "Page ou section concernée (ex. Tâches, Contacts)" },
       severity: { type: "string", description: "low, normal (défaut), high ou blocker" },
-      include_screenshot: { type: "boolean", description: "Joindre une capture de l'écran (défaut: true)" },
     }, ["title"]),
     mk("create_task", "Crée une tâche Planiprêt. Sans cible, la tâche vise et s'auto-assigne au courtier connecté. Résume et demande TOUJOURS confirmation avant d'appeler.", {
       target: { type: "string", description: "xid Planiprêt (optionnel pour une tâche personnelle) : id utilisateur si target_type=user, id de contrat si target_type=contract" },

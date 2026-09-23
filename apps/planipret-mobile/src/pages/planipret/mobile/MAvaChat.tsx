@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
-import { captureAndUploadScreenshot, lastPageBeforeAva } from "@/lib/planipret/avaFeedback";
+import { lastPageBeforeAva } from "@/lib/planipret/avaFeedback";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
@@ -157,7 +157,10 @@ export default function MAvaChat() {
           : parsedReply.text;
       const replyId = `a-${Date.now()}`;
       setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, suggestions: parsedReply.suggestions, pagination: d.pagination ?? undefined, created_at: new Date().toISOString() }]);
-      if (immediate) setPendingConfirm(immediate);
+      if (immediate) {
+        if (immediate.kind === "feedback") void runSuggestion(immediate);
+        else setPendingConfirm(immediate);
+      }
       if (speakReplies) speak(replyId, replyText);
     } catch (e: any) {
       toast.error(e?.message ?? t("avaChat.chatError"));
@@ -168,7 +171,33 @@ export default function MAvaChat() {
     const action = String(suggestion.payload?.action ?? "");
     const needsConfirm = suggestion.kind === "call" || suggestion.kind === "sms" || suggestion.kind === "feedback" || MUTATING_ACTIONS.has(action);
     if (needsConfirm && !opts.skipConfirm) {
-      setPendingConfirm(suggestion);
+      let proposed = suggestion;
+      if (suggestion.kind === "feedback") {
+        const pl = suggestion.payload ?? {};
+        const { data, error } = await supabase.functions.invoke("ava-tool-executor", {
+          body: {
+            tool_name: "submit_feedback",
+            parameters: {
+              title: pl.title, description: pl.description, severity: pl.severity,
+              page: pl.page || lastPageBeforeAva(), source: "ava_chat",
+            },
+            session_id: sessionId,
+          },
+        });
+        if (error || !(data as any)?.feedback_confirmation_token) {
+          throw new Error((data as any)?.error ?? error?.message ?? "feedback_confirmation_unavailable");
+        }
+        proposed = {
+          ...suggestion,
+          payload: {
+            ...pl,
+            page: pl.page || lastPageBeforeAva(),
+            feedback_confirmation_token: (data as any).feedback_confirmation_token,
+            idempotency_key: (data as any).idempotency_key,
+          },
+        };
+      }
+      setPendingConfirm(proposed);
       setMessages((m) => [...m, {
         id: `confirm-${Date.now()}`,
         role: "assistant",
@@ -197,14 +226,14 @@ export default function MAvaChat() {
 
       if (suggestion.kind === "feedback") {
         const pl = suggestion.payload ?? {};
-        const shot = pl.include_screenshot === false ? null : await captureAndUploadScreenshot();
         const { data, error } = await supabase.functions.invoke("ava-tool-executor", {
           body: {
             tool_name: "submit_feedback",
             parameters: {
               title: pl.title, description: pl.description, severity: pl.severity,
               page: pl.page || lastPageBeforeAva(), source: "ava_chat",
-              ...(shot ? { screenshot_path: shot } : {}), confirmed: true,
+              feedback_confirmation_token: pl.feedback_confirmation_token,
+              idempotency_key: pl.idempotency_key,
             },
             session_id: sessionId,
           },

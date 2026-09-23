@@ -2809,7 +2809,10 @@ function patchIosInfoPlist() {
     ["NSSpeechRecognitionUsageDescription", "Planipret transcribes your recorded calls when you enable transcription."],
   ];
   for (const [key, value] of REQUIRED_PLIST_STRINGS) {
-    if (!xml.includes(`<key>${key}</key>`)) {
+    const existing = new RegExp(`<key>${key}</key>\\s*<string>[\\s\\S]*?<\\/string>`);
+    if (existing.test(xml)) {
+      xml = xml.replace(existing, `<key>${key}</key>\n\t<string>${value}</string>`);
+    } else {
       xml = xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, `\n\t<key>${key}</key>\n\t<string>${value}</string>\n</dict>\n</plist>\n`);
     }
   }

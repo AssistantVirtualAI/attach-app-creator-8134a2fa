@@ -2,6 +2,7 @@
 // Replaces the legacy VoiceAgent.tsx with rich state visualization, live
 // transcript, tool execution notifications and confirmation modal.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { captureAndUploadScreenshot, lastPageBeforeAva } from "@/lib/planipret/avaFeedback";
 import { useNavigate } from "react-router-dom";
 import { Conversation } from "@elevenlabs/client";
 import { supabase } from "@/integrations/supabase/client";
@@ -82,6 +83,7 @@ const TOOL_ICONS: Record<string, any> = {
 };
 
 const CONFIRM_REQUIRED = new Set([
+  "submit_feedback",
   "make_call", "hangup_call", "send_sms", "send_email",
   "create_task", "update_task", "delete_task", "create_appointment",
   "create_client", "update_client", "generate_voicemail_greeting",
@@ -191,6 +193,17 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
   }), [navigate, onClose]);
 
   const handleTool = useCallback(async (toolName: string, params: any) => {
+    if (toolName === "submit_feedback") {
+      // Capture the page behind the AVA overlay before the confirmation card.
+      const p = { ...(params ?? {}) };
+      if (!p.page) p.page = lastPageBeforeAva();
+      if (p.include_screenshot !== false) {
+        const shot = await captureAndUploadScreenshot();
+        if (shot) p.screenshot_path = shot;
+      }
+      p.source = "ava_voice";
+      params = p;
+    }
     // Route client-only tools locally (no confirm gate, no server call).
     if (CLIENT_ONLY[toolName]) {
       showToolNotif(toolLabel(toolName));
@@ -236,6 +249,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
       "get_daily_briefing", "get_my_stats", "get_performance_report",
       "explain_feature", "get_integration_status",
       "push_call_summary", "push_client_note", "push_communication_log",
+      "submit_feedback",
     ];
     const map: Record<string, (p: any) => Promise<any>> = {};
     for (const t of TOOL_NAMES) map[t] = (p: any) => Promise.resolve(handleTool(t, p));
@@ -650,7 +664,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
   }
 
   return (
-    <div className="absolute inset-0 z-[60] flex flex-col" style={{ background: "rgba(4,11,22,0.97)", backdropFilter: "blur(20px)", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
+    <div data-html2canvas-ignore="true" className="absolute inset-0 z-[60] flex flex-col" style={{ background: "rgba(4,11,22,0.97)", backdropFilter: "blur(20px)", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ marginTop: 8 }}>
         <div className="flex items-center gap-2">

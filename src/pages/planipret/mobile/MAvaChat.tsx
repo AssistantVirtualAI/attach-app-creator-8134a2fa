@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
+import { captureAndUploadScreenshot, lastPageBeforeAva } from "@/lib/planipret/avaFeedback";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
@@ -147,7 +148,7 @@ export default function MAvaChat() {
       const parsedReply = parseAvaReply(String(d.reply ?? "…"), Array.isArray(d.suggestions) ? d.suggestions : []);
       const immediate = parsedReply.suggestions.find((s) => {
         const action = String(s.payload?.action ?? "");
-        return s.kind === "call" || s.kind === "sms" || MUTATING_ACTIONS.has(action);
+        return s.kind === "call" || s.kind === "sms" || s.kind === "feedback" || MUTATING_ACTIONS.has(action);
       });
       const replyText = immediate?.kind === "call"
         ? t("avaChat.callConfirmPrompt").replace("{number}", String(immediate.payload?.number ?? immediate.payload?.to ?? immediate.payload?.phone ?? t("avaChat.thisNumber")))
@@ -165,7 +166,7 @@ export default function MAvaChat() {
 
   const runSuggestion = async (suggestion: AvaSuggestion, opts: { skipConfirm?: boolean } = {}) => {
     const action = String(suggestion.payload?.action ?? "");
-    const needsConfirm = suggestion.kind === "call" || suggestion.kind === "sms" || MUTATING_ACTIONS.has(action);
+    const needsConfirm = suggestion.kind === "call" || suggestion.kind === "sms" || suggestion.kind === "feedback" || MUTATING_ACTIONS.has(action);
     if (needsConfirm && !opts.skipConfirm) {
       setPendingConfirm(suggestion);
       setMessages((m) => [...m, {
@@ -191,6 +192,26 @@ export default function MAvaChat() {
         else window.dispatchEvent(new CustomEvent("ava:open-dialer", { detail: { number, autoDial: true } }));
         setMessages((m) => [...m, { id: `dial-${Date.now()}`, role: "assistant", message: t("avaChat.dialerOpening").replace("{number}", number), created_at: new Date().toISOString() }]);
         toast.success(t("avaChat.callInProgress"));
+        return;
+      }
+
+      if (suggestion.kind === "feedback") {
+        const pl = suggestion.payload ?? {};
+        const shot = pl.include_screenshot === false ? null : await captureAndUploadScreenshot();
+        const { data, error } = await supabase.functions.invoke("ava-tool-executor", {
+          body: {
+            tool_name: "submit_feedback",
+            parameters: {
+              title: pl.title, description: pl.description, severity: pl.severity,
+              page: pl.page || lastPageBeforeAva(), source: "ava_chat",
+              ...(shot ? { screenshot_path: shot } : {}), confirmed: true,
+            },
+            session_id: sessionId,
+          },
+        });
+        if (error || (data as any)?.success === false) throw new Error((data as any)?.error ?? error?.message ?? "feedback_failed");
+        setMessages((m) => [...m, { id: `fb-${Date.now()}`, role: "assistant", message: (data as any)?.message ?? "Feedback envoyé à l'équipe Planiprêt.", created_at: new Date().toISOString() }]);
+        toast.success("Feedback envoyé");
         return;
       }
 
@@ -604,7 +625,7 @@ function parseAvaReply(raw: string, suggestions: AvaSuggestion[]): { text: strin
       for (const item of parsed) {
         if (!item || typeof item !== "object") continue;
         const kind = String((item as any).kind ?? "");
-        if (!["call", "sms", "email", "reminder", "maestro_action", "ms365_action", "open_voice", "open_coach"].includes(kind)) continue;
+        if (!["call", "sms", "email", "reminder", "maestro_action", "ms365_action", "open_voice", "open_coach", "feedback"].includes(kind)) continue;
         found.push({
           id: String((item as any).id ?? `${kind}-${Date.now()}-${found.length}`),
           label: String((item as any).label ?? (kind === "call" ? "Appeler" : kind === "sms" ? "Texto" : "Action")),

@@ -31,6 +31,7 @@ export const AVA_SENSITIVE_TOOLS = new Set<string>([
   "push_call_summary",
   "push_client_note",
   "push_communication_log",
+  "submit_feedback",
 ]);
 
 export const isSensitiveAvaTool = (tool: string) => AVA_SENSITIVE_TOOLS.has(String(tool));

@@ -306,7 +306,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
           <span className="pp-eyebrow" aria-label={L("Tâches ouvertes", "Open tasks")}>{openCount}</span>
         </h2>
         <div className="flex items-center gap-1">
-          <button onClick={() => void refresh()} aria-label={L("Rafraîchir", "Refresh")}
+          <button onClick={() => void refresh({ force: true })} aria-label={L("Rafraîchir", "Refresh")}
             className="w-11 h-11 flex items-center justify-center" style={{ color: "var(--pp-text-muted)" }}>
             <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
           </button>
@@ -360,7 +360,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-muted)" }}>
           <AlertCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--pp-warning)" }} />
           <span className="flex-1">{L("Actualisation Maestro temporairement indisponible. Dernier état connu affiché.", "Maestro refresh is temporarily unavailable. Showing the last known state.")}</span>
-          <button onClick={() => void refresh()} className="min-h-[32px] px-2 font-semibold" style={{ color: "var(--pp-brand-accent)" }}>
+          <button onClick={() => void refresh({ force: true })} className="min-h-[32px] px-2 font-semibold" style={{ color: "var(--pp-brand-accent)" }}>
             {L("Réessayer", "Retry")}
           </button>
         </div>
@@ -402,7 +402,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
           <p className="text-sm" style={{ color: "var(--pp-text-muted)" }}>
             {L("Les tâches Maestro sont temporairement indisponibles.", "Maestro tasks are temporarily unavailable.")}
           </p>
-          <button onClick={() => void refresh()} className="min-h-[44px] px-4 rounded-xl text-[12px] font-semibold text-white"
+          <button onClick={() => void refresh({ force: true })} className="min-h-[44px] px-4 rounded-xl text-[12px] font-semibold text-white"
             style={{ background: "var(--pp-brand-accent)" }}>
             {L("Réessayer", "Retry")}
           </button>

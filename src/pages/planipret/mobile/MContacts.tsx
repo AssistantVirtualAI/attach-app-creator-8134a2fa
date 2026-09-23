@@ -961,11 +961,12 @@ function ContactDetailSheet({
     return () => { cancel = true; };
   }, [maestroId, phone, maestroKind]);
 
-  const createTask = async () => {
+  // Tâche: ouvre le composeur complet (type rapide/personnalisé, date, options)
+  // pré-rempli avec la cible Maestro du contact, comme depuis la page Tâches.
+  const openTaskComposer = async () => {
     if (!maestroId && !bestPhone) { toast.error("Un numéro ou un client Maestro est requis pour créer une tâche"); return; }
     setCreatingTask(true);
     try {
-      const notes = `${t("contacts.followUp") || "Suivi"} — ${name}`;
       let resolvedMaestroId = maestroKind === "client" && maestroId ? String(maestroId) : "";
       let resolvedName = name;
       if (!resolvedMaestroId && bestPhone) {
@@ -979,35 +980,40 @@ function ContactDetailSheet({
         }
       }
       if (!resolvedMaestroId) throw new Error("Ce contact n’est pas associé à un client Maestro.");
-      let data = await createClientFollowUpTask({
-        maestro_client_id: resolvedMaestroId,
-        client_name: name,
-        notes,
-      });
-      // Device/directory contacts carry no Maestro id: resolve the client by
-      // phone through the broker's cached Maestro directory, then retry once.
-      if ((data as any)?.success !== true && bestPhone &&
-          ["task_target_not_found", "maestro_client_id_required"].includes(String((data as any)?.error))) {
-        try {
-          const { data: lookup } = await supabase.functions.invoke("maestro-client-lookup", {
-            body: { phone: bestPhone },
-          });
-          const resolvedId = (lookup as any)?.client_id;
-          if ((lookup as any)?.found && resolvedId && String(resolvedId) !== resolvedMaestroId) {
-            data = await createClientFollowUpTask({
-              maestro_client_id: String(resolvedId),
-              client_name: (lookup as any)?.name || resolvedName,
-              notes,
-            });
-          }
-        } catch { /* fall through to the original error */ }
+      // Maestro rule: a task only lands on the Tasks page when its xid comes
+      // from the Client List API `task_targets` metadata (contract preferred).
+      let targets = await listClientTargets(resolvedName);
+      let target = targets.find((row) => String(row.client_id) === resolvedMaestroId);
+      if (!target) {
+        targets = await listClientTargets();
+        target = targets.find((row) => String(row.client_id) === resolvedMaestroId);
       }
-      if ((data as any)?.success !== true) throw new Error((data as any)?.message || (data as any)?.error || "task_failed");
-      toast.success((data as any)?.message || t("contacts.taskCreated") || "Tâche créée et confirmée dans Maestro");
+      const contractXid = String(target?.contracts?.[0]?.id ?? "").trim();
+      const userXid = String(target?.user?.id ?? "").trim();
+      const xid = contractXid || userXid;
+      if (!xid) throw new Error("Aucune cible de tâche Maestro n'est disponible pour ce client.");
+      setTaskComposer({
+        target: xid,
+        target_type: contractXid ? "contract" : "user",
+        target_name: resolvedName,
+        notes: `${t("contacts.followUp") || "Suivi"} — ${resolvedName}`,
+      });
     } catch (e: any) {
       toast.error(t("contacts.taskCreateFailed") || "Échec création tâche", { description: e?.message });
     } finally {
       setCreatingTask(false);
+    }
+  };
+
+  const submitTask = async (v: TaskComposerValue) => {
+    setCreatingTask(true);
+    const r = await apiCreateTask({ ...(v as any), source: "mobile_manual" });
+    setCreatingTask(false);
+    if (r?.success) {
+      toast.success(r?.message ?? t("contacts.taskCreated") ?? "Tâche créée et confirmée dans Maestro");
+      setTaskComposer(null);
+    } else {
+      toast.error(r?.message ?? (t("contacts.taskCreateFailed") || "Échec création tâche"));
     }
   };
 

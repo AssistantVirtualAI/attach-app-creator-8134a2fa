@@ -14,6 +14,7 @@ import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { toast } from "sonner";
 import PWAInstallBanner from "@/components/planipret/PWAInstallBanner";
 import ExtensionSyncBanner from "@/components/planipret/mobile/ExtensionSyncBanner";
+import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
@@ -417,6 +418,7 @@ export default function MHome() {
       <PWAInstallBanner />
       <PermissionBanners />
       <ExtensionSyncBanner profile={profile} reloadProfile={reloadProfile} />
+      <MaestroConnectCard />
 
       {/* ===== HEADER ===== */}
       <header className="min-w-0">

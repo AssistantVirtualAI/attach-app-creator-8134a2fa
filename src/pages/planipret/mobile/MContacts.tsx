@@ -885,6 +885,7 @@ function ContactDetailSheet({
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creatingTask, setCreatingTask] = useState(false);
+  const [taskComposer, setTaskComposer] = useState<{ target: string; target_type: "user" | "contract"; target_name: string; notes: string } | null>(null);
   const [summarizeOpen, setSummarizeOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
@@ -1086,7 +1087,7 @@ function ContactDetailSheet({
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
           <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!smsTarget} />
           <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={openEmail} disabled={!email} />
-          <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={createTask} disabled={creatingTask || (!maestroId && !bestPhone)} />
+          <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={openTaskComposer} disabled={creatingTask || (!maestroId && !bestPhone)} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={openAppt} disabled={!maestroId} />
         </div>
 

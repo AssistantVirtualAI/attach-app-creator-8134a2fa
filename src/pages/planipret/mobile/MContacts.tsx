@@ -1195,6 +1195,15 @@ function ContactDetailSheet({
           onClose={() => setApptOpen(false)}
         />
       )}
+
+      <TaskComposerSheet
+        open={taskComposer !== null}
+        lang={lang === "en" ? "en" : "fr"}
+        busy={creatingTask}
+        initial={taskComposer ?? undefined}
+        onClose={() => setTaskComposer(null)}
+        onSubmit={submitTask}
+      />
     </div>
   );
 }

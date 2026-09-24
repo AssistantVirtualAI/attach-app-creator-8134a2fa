@@ -277,7 +277,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
   } });
 
   const completeTask = async (task: NormalizedTask) => {
-    const r = await update(task.id, { status: "completed", update_status: true } as any);
+    const r = await update(task.id, { status: "complete" } as any);
     if (r?.success) toast.success(L("Tâche terminée", "Task completed"));
     else if (r?.pending_confirmation) toast.warning(L("Clôture en attente de confirmation Maestro", "Completion awaiting Maestro confirmation"), { description: r?.message });
     else toast.error(r?.message ?? L("Clôture impossible", "Could not complete task"));

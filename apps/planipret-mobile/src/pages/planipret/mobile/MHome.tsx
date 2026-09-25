@@ -382,8 +382,8 @@ export default function MHome() {
 
   // Realtime: refresh KPIs when new calls / messages / voicemails land for this broker.
   useEffect(() => {
-    if (!profile?.user_id) return;
-    const uid = profile.user_id;
+    if (!profile?.id && !profile?.user_id) return;
+    const uid = profile.id ?? profile.user_id;
     const scheduleStatsRefresh = () => {
       if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
       realtimeRefreshTimer.current = window.setTimeout(() => { void loadStats(true); }, 1200);

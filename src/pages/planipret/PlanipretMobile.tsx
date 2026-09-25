@@ -1322,10 +1322,31 @@ function Frame({ children, forceDark = false }: { children: React.ReactNode; for
     lockHeight(true);
     const onResize = () => lockHeight(false);
     const onOrientation = () => window.setTimeout(() => lockHeight(true), 350);
-    window.addEventListener("resize", onResize);
+    // iOS keeps the page scrolled after the keyboard or an external browser
+    // (Maestro OAuth) closes, pushing the top header out of view.
+    const resetScroll = () => {
+      if (isTyping()) return;
+      if (window.scrollY || document.documentElement.scrollTop || document.body.scrollTop) window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
+      const frame = document.getElementById("pp-mobile-frame");
+      if (frame) frame.scrollTop = 0;
+      frame?.querySelectorAll<HTMLElement>(".overflow-hidden").forEach((el) => { if (el.scrollTop) el.scrollTop = 0; });
+    };
+    const onFocusOut = () => window.setTimeout(() => { lockHeight(true); resetScroll(); }, 120);
+    const onVisible = () => { if (document.visibilityState === "visible") window.setTimeout(() => { lockHeight(true); resetScroll(); }, 200); };
+    const onResizeAll = () => { onResize(); resetScroll(); };
+    window.addEventListener("resize", onResizeAll);
     window.addEventListener("orientationchange", onOrientation);
+    window.addEventListener("focusout", onFocusOut);
+    window.addEventListener("pageshow", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    window.visualViewport?.addEventListener("resize", onResizeAll);
     return () => {
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("focusout", onFocusOut);
+      window.removeEventListener("pageshow", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.visualViewport?.removeEventListener("resize", onResizeAll);
+      window.removeEventListener("resize", onResizeAll);
       window.removeEventListener("orientationchange", onOrientation);
     };
   }, []);

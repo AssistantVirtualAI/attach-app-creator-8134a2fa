@@ -1129,11 +1129,11 @@ export default function PlanipretMobile() {
   return (
     <Frame>
       <AiConsentHost />
-      <div className="h-full flex flex-col relative overflow-hidden" style={{ background: "var(--pp-bg-base)" }}>
+      <div data-pp-pinned="true" className="h-full flex flex-col relative overflow-hidden" style={{ background: "var(--pp-bg-base)" }}>
 
         {/* Top brand header — AVA (left) · Planiprêt (center) · Settings (right) */}
         <header
-          className="relative flex items-center px-4 pp-mobile-header"
+          className="relative shrink-0 flex items-center px-4 pp-mobile-header"
           style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)", paddingBottom: 6 }}
         >
 
@@ -1337,11 +1337,24 @@ function Frame({ children, forceDark = false }: { children: React.ReactNode; for
     const onResizeAll = () => { onResize(); resetScroll(); };
     window.addEventListener("resize", onResizeAll);
     window.addEventListener("orientationchange", onOrientation);
+    // scrollIntoView() also scrolls overflow-hidden ancestors (the frame and
+    // the header column), which hides the top bar until a reload. Pin them.
+    const onAnyScroll = (e: Event) => {
+      const el = e.target as HTMLElement | Document;
+      if (el === document || el === document.documentElement || el === document.body) {
+        if (!isTyping() && window.scrollY) window.scrollTo(0, 0);
+        return;
+      }
+      const node = el as HTMLElement;
+      if (node.scrollTop && (node.id === "pp-mobile-frame" || node.dataset?.ppPinned === "true" || (node.classList?.contains("overflow-hidden") && node.closest("#pp-mobile-frame")))) node.scrollTop = 0;
+    };
+    document.addEventListener("scroll", onAnyScroll, true);
     window.addEventListener("focusout", onFocusOut);
     window.addEventListener("pageshow", onVisible);
     document.addEventListener("visibilitychange", onVisible);
     window.visualViewport?.addEventListener("resize", onResizeAll);
     return () => {
+      document.removeEventListener("scroll", onAnyScroll, true);
       window.removeEventListener("focusout", onFocusOut);
       window.removeEventListener("pageshow", onVisible);
       document.removeEventListener("visibilitychange", onVisible);

@@ -494,7 +494,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
 export default function PlanipretMobile() {
   const navigate = useNavigate();
   const location = useLocation();
-  useEffect(() => { rememberPageForAva(location.pathname); }, [location.pathname]);
+  useEffect(() => { rememberPageForAva(location.pathname); rememberLastRoute(location.pathname); }, [location.pathname]);
   const { t, lang, setLang } = useMplanipretLang();
   // Onglets pilotés à distance depuis le portail admin (aucun rebuild requis).
   const { isEnabled: isFeatureEnabled } = useRemoteConfig();

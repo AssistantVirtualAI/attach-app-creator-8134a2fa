@@ -491,9 +491,11 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                       expanded={expandedTaskId === task.id}
                       onToggle={() => setExpandedTaskId((id) => id === task.id ? null : task.id)}
                       syncedAt={(task as any)?.raw?.updated_at ?? lastSyncAt}
-                      actions={<span style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
-                        <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
-                        {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
+                       actions={<span style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
+                          {!readOnly && <ActionBtn onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /> {L("Modifier", "Edit")}</ActionBtn>}
+                        </div>
                       </span>}
                     />
                   </li>
@@ -618,6 +620,20 @@ function TaskStatusChip({ lang, source, state }: { lang: "fr" | "en"; source: st
       style={{ background: bg, color }}>
       {label}
     </span>
+  );
+}
+
+function ActionBtn({ onClick, children, danger }: { onClick: () => void; children: React.ReactNode; danger?: boolean }) {
+  return (
+    <button onClick={onClick}
+      className="flex-1 min-h-[40px] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 active:opacity-70"
+      style={{
+        background: "var(--pp-bg-surface)",
+        border: `1px solid ${danger ? "var(--pp-danger)" : "var(--pp-bg-border)"}`,
+        color: danger ? "var(--pp-danger)" : "var(--pp-text-primary)",
+      }}>
+      {children}
+    </button>
   );
 }
 

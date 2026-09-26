@@ -1,8 +1,9 @@
 // Shared header for secondary mobile pages: Back, title, optional subtitle
 // and refresh, always in the same place.
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronLeft, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
+import { MOBILE_HOME_ROUTE, previousMobileRoute } from "@/lib/planipret/lastRoute";
 
 const surface = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)" } as const;
 
@@ -17,10 +18,16 @@ export default function MobilePageHeader({
   lang?: "fr" | "en";
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const en = (lang ?? (localStorage.getItem("pp_lang") === "en" ? "en" : "fr")) === "en";
+  const goBack = () => {
+    // Never trust browser history on a cold native start/deep link: it can lead
+    // outside the app or back to an OAuth callback rather than to Planiprêt.
+    navigate(previousMobileRoute(location.pathname) ?? MOBILE_HOME_ROUTE, { replace: true });
+  };
   return (
     <div className="flex items-center gap-2" data-testid="mobile-page-header">
-      <button onClick={() => navigate(-1)} aria-label={en ? "Back" : "Retour"}
+      <button onClick={goBack} aria-label={en ? "Back" : "Retour"}
         className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center" style={surface}>
         <ChevronLeft className="w-4 h-4" />
       </button>

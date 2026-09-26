@@ -50,7 +50,7 @@ export interface TaskDeps {
   /** Documented GET /api/main/tasks read-back. */
   listFetch: (
     telecomId: string,
-    opts: { status?: string | null; from?: string | null; to?: string | null; type?: "user" | "contract" | null; findTaskId?: string | null },
+    opts: { status?: string | null; from?: string | null; to?: string | null; type?: "user" | "contract" | null; findTaskId?: string | null; scopeOnly?: boolean },
   ) => Promise<UpstreamList>;
   /**
    * Client List API (`GET /users/{telecomId}/clients`). Each row may carry a
@@ -414,6 +414,56 @@ async function resolveAllowedAssignees(deps: any, profile: any): Promise<string[
     if (s) ids.add(s);
   } catch { /* optional */ }
   return [...ids];
+}
+
+/**
+ * A client-provided task id is never authority to mutate. Before PUT or DELETE,
+ * prove that the task is returned by a documented Maestro list filter for the
+ * current broker. `scopeOnly` disables the unfiltered list fallback, so a task
+ * owned by another broker cannot become mutable simply because its id is known.
+ */
+async function findTaskInCallerScope(
+  deps: TaskDeps,
+  profile: any,
+  taskId: string,
+): Promise<{ task: NormalizedTask; endpoint: string | null } | null> {
+  const maestroId = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
+  const internalAssigneeId = await withDeadline(
+    Promise.resolve(deps.resolveTaskAssigneeId?.()).catch(() => null),
+    5000,
+    null,
+  );
+  let telecomId: string | null = null;
+  try { telecomId = await deps.resolveTelecomUserId(maestroId); } catch { /* fail closed below */ }
+  const candidates = [...new Set([
+    internalAssigneeId,
+    telecomId,
+    maestroId,
+    profile?.maestro_telecom_user_id,
+  ].map((value) => String(value ?? "").trim()).filter(Boolean))];
+
+  for (const candidate of candidates) {
+    try {
+      const upstream = await deps.listFetch(candidate, {
+        status: null, type: null, from: null, to: null, findTaskId: taskId, scopeOnly: true,
+      });
+      if (!upstream.ok) continue;
+      const found = (upstream.tasks ?? []).map((item: any) => normalizeTask(item))
+        .find((item: NormalizedTask) => String(item.id) === taskId);
+      if (found) return { task: found, endpoint: upstream.endpoint };
+    } catch { /* continue with another documented scoped identity */ }
+  }
+  return null;
+}
+
+function taskScopeDeniedBody(taskId: string, correlation_id: string) {
+  return {
+    success: false,
+    error: "task_not_in_broker_scope",
+    task_id: taskId,
+    message: "Cette tâche n’est pas dans votre périmètre Maestro ou ce périmètre ne peut pas être confirmé. Aucune modification n’a été envoyée.",
+    correlation_id,
+  };
 }
 
 export interface TargetValidation {
@@ -1215,6 +1265,11 @@ export async function handleTaskRequest(
     const taskId = String(body?.task_id ?? "").trim();
     const built = buildUpdateBody(taskId, body?.changes ?? {});
     if (!built.ok) return { status: 200, body: { success: false, ...built, correlation_id } };
+    const scopedTask = await findTaskInCallerScope(deps, profile, taskId);
+    if (!scopedTask) {
+      await audit(admin, { action: "task_update_denied", user_id: userId, task_id: taskId, source, session_id: sessionId, correlation_id, result: "task_out_of_scope" });
+      return { status: 200, body: taskScopeDeniedBody(taskId, correlation_id) };
+    }
     if (built.payload.users_id !== undefined && built.payload.users_id !== null) {
       const allowedIds = await resolveAllowedAssignees(deps, profile);
       const check = assertAssigneeAllowed(built.payload.users_id, allowedIds);
@@ -1302,6 +1357,11 @@ export async function handleTaskRequest(
     if (!canDeleteTask(role)) {
       await audit(admin, { action: "task_delete_denied", user_id: userId, task_id: taskId, source, session_id: sessionId, correlation_id, result: "role_forbidden" });
       return { status: 200, body: { success: false, error: "role_forbidden", message: "Ton rôle ne permet pas de supprimer une tâche.", correlation_id } };
+    }
+    const scopedTask = await findTaskInCallerScope(deps, profile, taskId);
+    if (!scopedTask) {
+      await audit(admin, { action: "task_delete_denied", user_id: userId, task_id: taskId, source, session_id: sessionId, correlation_id, result: "task_out_of_scope" });
+      return { status: 200, body: taskScopeDeniedBody(taskId, correlation_id) };
     }
     const key = String(body?.idempotency_key ?? idempotencyKey(["delete", userId, taskId]));
     const out = await withIdempotency(admin, userId, key, "delete", async () => {

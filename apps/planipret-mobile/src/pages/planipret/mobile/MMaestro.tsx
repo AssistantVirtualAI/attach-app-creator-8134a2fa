@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import MobilePageHeader from "@/components/planipret/mobile/MobilePageHeader";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
-import { ChevronLeft, Link2, MessageSquare, Phone, RefreshCw, CheckSquare, Wallet } from "lucide-react";
+import { Link2, MessageSquare, Phone, CheckSquare, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";

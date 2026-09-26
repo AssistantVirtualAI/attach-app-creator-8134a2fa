@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import MobilePageHeader from "@/components/planipret/mobile/MobilePageHeader";
-import { useOutletContext, useNavigate } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";
-import { ArrowLeft, Phone, TrendingUp, Award, Flame, Sparkles } from "lucide-react";
+import { Phone, TrendingUp, Award, Flame, Sparkles } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Legend } from "recharts";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import CoachOverlay from "@/components/planipret/ava/CoachOverlay";
@@ -23,7 +23,6 @@ const DANGER = "#E84C4C";
 export default function MStats() {
   const { t, lang } = useMplanipretLang();
   const { profile, openDialer, openAva } = useOutletContext<PlanipretMobileContext>();
-  const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("week");
   const [calls, setCalls] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);

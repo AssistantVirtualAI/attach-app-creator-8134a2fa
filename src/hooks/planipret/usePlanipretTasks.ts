@@ -360,7 +360,7 @@ export function usePlanipretTasks(
       // The server may have accepted the PUT while the Maestro read-back is
       // still pending. Refresh the list for visibility, but never patch the UI
       // optimistically or turn that into a confirmation claim.
-      if (result?.pending_confirmation) void refresh({ force: true });
+      if (result?.pending_confirmation) [0, 2000, 5000, 10000, 20000].forEach((ms) => setTimeout(() => void refresh({ force: true }), ms));
       return result;
     }
 
@@ -394,7 +394,7 @@ export function usePlanipretTasks(
     if (!result?.success) {
       setTasks(previous);
       if (userId) saveTaskCache(userId, previous);
-      if (result?.pending_confirmation) void refresh({ force: true });
+      if (result?.pending_confirmation) [0, 2000, 5000, 10000, 20000].forEach((ms) => setTimeout(() => void refresh({ force: true }), ms));
     } else void refresh({ force: true });
     return result;
   }, [tasks, refresh, userId]);

@@ -76,6 +76,12 @@ const queryClient = new QueryClient({
   },
 });
 
+// Cold start: reopen the last page the broker was on instead of always Home.
+function LastRouteRedirect() {
+  const target = lastRememberedRoute() ?? "/mplanipret";
+  return <Navigate to={target} replace />;
+}
+
 function NativeDeepLinkBridge() {
   const navigate = useNavigate();
 

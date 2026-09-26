@@ -95,7 +95,7 @@ export default function CommissionHomeCard({ profile, lang }: { profile: any; la
     return ((state.total - state.prevTotal) / state.prevTotal) * 100;
   }, [state]);
 
-  if (!allowed || failed) return null;
+  if (!allowed) return null;
 
   const open = (params?: Record<string, string>) => {
     const qp = new URLSearchParams({ period: "month", ...(params ?? {}) });
@@ -129,7 +129,16 @@ export default function CommissionHomeCard({ profile, lang }: { profile: any; la
           <ChevronRight className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} />
         </button>
 
-        {!state ? (
+        {failed ? (
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <p className="text-[12px]" style={{ color: "var(--pp-text-muted)" }}>
+              {fr ? "Commissions Maestro indisponibles. Reconnectez Maestro ou réessayez." : "Maestro commissions unavailable. Reconnect Maestro or retry."}
+            </p>
+            <button onClick={() => navigate("/mplanipret/maestro")} className="text-[12px] font-semibold shrink-0" style={{ color: "var(--pp-brand-accent)" }}>
+              {fr ? "Reconnecter" : "Reconnect"}
+            </button>
+          </div>
+        ) : !state ? (
           <div className="mt-3 space-y-2">
             <div className="h-7 w-40 rounded-lg animate-pulse" style={{ background: "rgba(59,111,160,0.12)" }} />
             <div className="h-14 w-full rounded-lg animate-pulse" style={{ background: "rgba(59,111,160,0.08)" }} />

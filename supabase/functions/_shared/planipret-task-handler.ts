@@ -197,15 +197,15 @@ function updateReadBackMatches(task: NormalizedTask, payload: Record<string, unk
 async function loadProjection(admin: any, userId: string) {
   // Open tasks first: large accounts hold thousands of old completed tasks
   // that would otherwise fill the page and hide every open one.
-  const base = () => admin
+  const base = (asc = true) => admin
     .from("planipret_tasks_projection")
     .select("payload")
     .eq("user_id", userId)
     .is("deleted_at", null)
-    .order("due_at", { ascending: true });
+    .order("due_at", { ascending: asc });
   const [{ data: open }, { data: done }] = await Promise.all([
     base().neq("status", "complete").limit(500),
-    base().eq("status", "complete").order("due_at", { ascending: false }).limit(100),
+    base(false).eq("status", "complete").limit(100),
   ]);
   return [...(open ?? []), ...(done ?? [])].map((r: any) => normalizeTask(r.payload));
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import MobilePageHeader from "@/components/planipret/mobile/MobilePageHeader";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { readScreenCache, writeScreenCache, TTL } from "@/lib/planipret/screenCache";
@@ -112,13 +113,10 @@ export default function MStats() {
 
   return (
     <div className="p-4">
-      <header className="flex items-center gap-2 mb-4">
-        <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-slate-100"><ArrowLeft className="w-5 h-5" /></button>
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: "var(--pp-text-primary)" }}>{t("stats.title")}</h1>
-          <p className="text-xs text-slate-400">{profile?.full_name ?? ""} · {new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { month: "long", year: "numeric" })}</p>
-        </div>
-      </header>
+      <div className="mb-4">
+        <MobilePageHeader title={t("stats.title")}
+          subtitle={`${profile?.full_name ?? ""} · ${new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { month: "long", year: "numeric" })}`} />
+      </div>
 
       <div className="flex gap-1.5 mb-4 bg-slate-100 rounded-full p-1 text-xs">
         {(["week", "month", "quarter"] as Period[]).map((p) => (

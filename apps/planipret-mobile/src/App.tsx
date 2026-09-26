@@ -151,7 +151,7 @@ export default function App() {
               <LazyRouteBoundary>
                 <NativeDeepLinkBridge />
                 <Routes>
-                  <Route path="/" element={<Navigate to="/mplanipret" replace />} />
+                  <Route path="/" element={<LastRouteRedirect />} />
                   <Route path="/login" element={<Navigate to="/mplanipret" replace />} />
                   <Route path="/auth/ms365/callback" element={<Ms365Callback />} />
                   <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />

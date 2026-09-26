@@ -1330,7 +1330,7 @@ function Frame({ children, forceDark = false }: { children: React.ReactNode; for
       document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
       const frame = document.getElementById("pp-mobile-frame");
       if (frame) frame.scrollTop = 0;
-      frame?.querySelectorAll<HTMLElement>(".overflow-hidden").forEach((el) => { if (el.scrollTop) el.scrollTop = 0; });
+      frame?.querySelectorAll<HTMLElement>('[data-pp-pinned="true"]').forEach((el) => { if (el.scrollTop) el.scrollTop = 0; });
     };
     const onFocusOut = () => window.setTimeout(() => { lockHeight(true); resetScroll(); }, 120);
     const onVisible = () => { if (document.visibilityState === "visible") window.setTimeout(() => { lockHeight(true); resetScroll(); }, 200); };
@@ -1346,7 +1346,7 @@ function Frame({ children, forceDark = false }: { children: React.ReactNode; for
         return;
       }
       const node = el as HTMLElement;
-      if (node.scrollTop && (node.id === "pp-mobile-frame" || node.dataset?.ppPinned === "true" || (node.classList?.contains("overflow-hidden") && node.closest("#pp-mobile-frame")))) node.scrollTop = 0;
+      if (node.scrollTop && (node.id === "pp-mobile-frame" || node.dataset?.ppPinned === "true")) node.scrollTop = 0;
     };
     document.addEventListener("scroll", onAnyScroll, true);
     window.addEventListener("focusout", onFocusOut);

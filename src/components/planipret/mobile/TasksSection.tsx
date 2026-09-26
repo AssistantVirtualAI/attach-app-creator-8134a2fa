@@ -249,9 +249,8 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
       if (warn) toast.warning(L("Réponse Maestro incohérente", "Inconsistent Maestro response"), { description: warn });
     } else if (r?.pending_confirmation) {
       setFieldErrors(null);
-      toast.warning(L("Action en attente de confirmation Maestro", "Action awaiting Maestro confirmation"), {
-        description: r?.message ?? L("Aucune confirmation n’est affichée tant que Maestro n’a pas relu la tâche.", "No confirmation is shown until Maestro reads the task back."),
-      });
+      toast.message(L("Envoyé à Maestro — la liste se met à jour", "Sent to Maestro — list updating"));
+      setComposer(null);
     } else {
       setFieldErrors(r?.fields && typeof r.fields === "object" ? r.fields : null);
       toast.error(r?.message ?? L("Échec de l'enregistrement", "Save failed"));
@@ -263,7 +262,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
     setConfirmDelete(null);
     const r = await remove(task.id);
     if (r?.success) toast.success(L("Tâche supprimée", "Task deleted"));
-    else if (r?.pending_confirmation) toast.warning(L("Suppression en attente de confirmation Maestro", "Deletion awaiting Maestro confirmation"), { description: r?.message });
+    else if (r?.pending_confirmation) { /* list refreshes live */ }
     else toast.error(r?.message ?? L("Suppression impossible", "Delete failed"));
   };
 
@@ -279,7 +278,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
   const completeTask = async (task: NormalizedTask) => {
     const r = await update(task.id, { status: "complete" } as any);
     if (r?.success) toast.success(L("Tâche terminée", "Task completed"));
-    else if (r?.pending_confirmation) toast.warning(L("Clôture en attente de confirmation Maestro", "Completion awaiting Maestro confirmation"), { description: r?.message });
+    else if (r?.pending_confirmation) { /* list refreshes live */ }
     else toast.error(r?.message ?? L("Clôture impossible", "Could not complete task"));
   };
 
@@ -288,7 +287,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
     const next = new Date(base.getTime() + 24 * 3600 * 1000);
     const r = await update(task.id, { date: next.toISOString() });
     if (r?.success) toast.success(L("Reportée à demain", "Moved to tomorrow"));
-    else if (r?.pending_confirmation) toast.warning(L("Report en attente de confirmation Maestro", "Snooze awaiting Maestro confirmation"), { description: r?.message });
+    else if (r?.pending_confirmation) { /* list refreshes live */ }
     else toast.error(r?.message ?? L("Report impossible", "Snooze failed"));
   };
 

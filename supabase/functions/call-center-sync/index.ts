@@ -20,7 +20,14 @@ function env(n: string) {
 }
 
 async function pbx(path: string, method = "GET", body?: any) {
-  const url = `${env("FUSIONPBX_API_URL").replace(/\/$/, "")}${path}`;
+  // The configured endpoint may be either the host root or the FusionPBX
+  // `/app/api` root. API paths below already include that segment.
+  const baseUrl = env("FUSIONPBX_API_URL")
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/app\/api$/i, "");
+  const normalizedPath = `/${path.replace(/^\/+/, "")}`;
+  const url = `${baseUrl}${normalizedPath}`;
   const auth = "Basic " + btoa(`${env("FUSIONPBX_USERNAME")}:${env("FUSIONPBX_API_KEY")}`);
   const res = await fetch(url, {
     method,

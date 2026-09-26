@@ -437,18 +437,33 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                           <SyncChip task={task} lang={lang} />
                         </div>
                       }
-                      actions={<span className="contents" style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
-                        <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>
-                          {verif[task.id] === "loading"
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : <ShieldCheck className="w-3.5 h-3.5" />}
-                        </IconBtn>
-                        <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
-                        <IconBtn label={L("Historique", "History")} onClick={() => void openHistory(task)}><History className="w-3.5 h-3.5" /></IconBtn>
-                        {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
-                        {!readOnly && <IconBtn label={L("Traiter (marquer terminée)", "Mark done")} onClick={() => void completeTask(task)}><CheckCircle2 className="w-3.5 h-3.5" /></IconBtn>}
-                        {!readOnly && <IconBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /></IconBtn>}
-                        {!readOnly && <IconBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}
+                       actions={<span className="contents" style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
+                        {!readOnly && (
+                          <div className="mt-2 space-y-2">
+                            <button
+                              onClick={() => void completeTask(task)}
+                              className="w-full min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 active:opacity-80"
+                              style={{ background: "var(--pp-success, #16A34A)", color: "#fff" }}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              {L("Marquer terminée", "Mark as done")}
+                            </button>
+                            <div className="flex gap-2">
+                              <ActionBtn onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /> {L("Reporter +24 h", "Snooze +24 h")}</ActionBtn>
+                              <ActionBtn onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /> {L("Modifier", "Edit")}</ActionBtn>
+                              <ActionBtn danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /> {L("Supprimer", "Delete")}</ActionBtn>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1 mt-1">
+                          <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>
+                            {verif[task.id] === "loading"
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <ShieldCheck className="w-3.5 h-3.5" />}
+                          </IconBtn>
+                          <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
+                          <IconBtn label={L("Historique", "History")} onClick={() => void openHistory(task)}><History className="w-3.5 h-3.5" /></IconBtn>
+                        </div>
                       </span>}
                     />
                   </li>

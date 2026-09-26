@@ -6,6 +6,16 @@ import "@fontsource/urbanist/600.css";
 import "@fontsource/epilogue/400.css";
 import App from "./App.tsx";
 import { Capacitor } from "@capacitor/core";
+// Benign browser notice from layout observers; never surface it as an app error.
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (e) => {
+    if (typeof e.message === "string" && e.message.includes("ResizeObserver loop")) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  }, true);
+}
+
 
 // Render React immediately for the fastest first paint.
 ReactDOM.createRoot(document.getElementById("root")!).render(

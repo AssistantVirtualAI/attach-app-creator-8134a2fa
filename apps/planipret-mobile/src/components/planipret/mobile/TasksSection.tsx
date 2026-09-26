@@ -437,18 +437,33 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                           <SyncChip task={task} lang={lang} />
                         </div>
                       }
-                      actions={<span className="contents" style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
-                        <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>
-                          {verif[task.id] === "loading"
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : <ShieldCheck className="w-3.5 h-3.5" />}
-                        </IconBtn>
-                        <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
-                        <IconBtn label={L("Historique", "History")} onClick={() => void openHistory(task)}><History className="w-3.5 h-3.5" /></IconBtn>
-                        {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
-                        {!readOnly && <IconBtn label={L("Traiter (marquer terminée)", "Mark done")} onClick={() => void completeTask(task)}><CheckCircle2 className="w-3.5 h-3.5" /></IconBtn>}
-                        {!readOnly && <IconBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /></IconBtn>}
-                        {!readOnly && <IconBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}
+                       actions={<span className="contents" style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
+                        {!readOnly && (
+                          <div className="mt-2 space-y-2">
+                            <button
+                              onClick={() => void completeTask(task)}
+                              className="w-full min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 active:opacity-80"
+                              style={{ background: "var(--pp-success, #16A34A)", color: "#fff" }}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              {L("Marquer terminée", "Mark as done")}
+                            </button>
+                            <div className="flex gap-2">
+                              <ActionBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /> {L("Reporter +24 h", "Snooze +24 h")}</ActionBtn>
+                              <ActionBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /> {L("Modifier", "Edit")}</ActionBtn>
+                              <ActionBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /> {L("Supprimer", "Delete")}</ActionBtn>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1 mt-1">
+                          <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>
+                            {verif[task.id] === "loading"
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <ShieldCheck className="w-3.5 h-3.5" />}
+                          </IconBtn>
+                          <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
+                          <IconBtn label={L("Historique", "History")} onClick={() => void openHistory(task)}><History className="w-3.5 h-3.5" /></IconBtn>
+                        </div>
                       </span>}
                     />
                   </li>
@@ -476,9 +491,11 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                       expanded={expandedTaskId === task.id}
                       onToggle={() => setExpandedTaskId((id) => id === task.id ? null : task.id)}
                       syncedAt={(task as any)?.raw?.updated_at ?? lastSyncAt}
-                      actions={<span style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
-                        <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
-                        {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
+                       actions={<span style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
+                          {!readOnly && <ActionBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /> {L("Modifier", "Edit")}</ActionBtn>}
+                        </div>
                       </span>}
                     />
                   </li>
@@ -603,6 +620,20 @@ function TaskStatusChip({ lang, source, state }: { lang: "fr" | "en"; source: st
       style={{ background: bg, color }}>
       {label}
     </span>
+  );
+}
+
+function ActionBtn({ label, onClick, children, danger }: { label: string; onClick: () => void; children: React.ReactNode; danger?: boolean }) {
+  return (
+    <button onClick={onClick} aria-label={label} title={label}
+      className="flex-1 min-h-[40px] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 active:opacity-70"
+      style={{
+        background: "var(--pp-bg-surface)",
+        border: `1px solid ${danger ? "var(--pp-danger)" : "var(--pp-bg-border)"}`,
+        color: danger ? "var(--pp-danger)" : "var(--pp-text-primary)",
+      }}>
+      {children}
+    </button>
   );
 }
 

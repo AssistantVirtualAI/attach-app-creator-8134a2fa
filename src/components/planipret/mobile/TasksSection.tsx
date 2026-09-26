@@ -449,9 +449,9 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                               {L("Marquer terminée", "Mark as done")}
                             </button>
                             <div className="flex gap-2">
-                              <ActionBtn onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /> {L("Reporter +24 h", "Snooze +24 h")}</ActionBtn>
-                              <ActionBtn onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /> {L("Modifier", "Edit")}</ActionBtn>
-                              <ActionBtn danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /> {L("Supprimer", "Delete")}</ActionBtn>
+                              <ActionBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /> {L("Reporter +24 h", "Snooze +24 h")}</ActionBtn>
+                              <ActionBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /> {L("Modifier", "Edit")}</ActionBtn>
+                              <ActionBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /> {L("Supprimer", "Delete")}</ActionBtn>
                             </div>
                           </div>
                         )}
@@ -494,7 +494,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                        actions={<span style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
-                          {!readOnly && <ActionBtn onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /> {L("Modifier", "Edit")}</ActionBtn>}
+                          {!readOnly && <ActionBtn label={L("Modifier", "Edit")} onClick={() => openEdit(task)}><Pencil className="w-3.5 h-3.5" /> {L("Modifier", "Edit")}</ActionBtn>}
                         </div>
                       </span>}
                     />
@@ -623,9 +623,9 @@ function TaskStatusChip({ lang, source, state }: { lang: "fr" | "en"; source: st
   );
 }
 
-function ActionBtn({ onClick, children, danger }: { onClick: () => void; children: React.ReactNode; danger?: boolean }) {
+function ActionBtn({ label, onClick, children, danger }: { label: string; onClick: () => void; children: React.ReactNode; danger?: boolean }) {
   return (
-    <button onClick={onClick}
+    <button onClick={onClick} aria-label={label} title={label}
       className="flex-1 min-h-[40px] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 active:opacity-70"
       style={{
         background: "var(--pp-bg-surface)",

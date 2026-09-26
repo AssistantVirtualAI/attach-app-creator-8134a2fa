@@ -311,3 +311,6 @@ verify_jwt = true
 
 [functions.maestro-cdr]
 verify_jwt = true
+
+[functions.call-center-sync]
+verify_jwt = true

@@ -40,6 +40,7 @@ import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
 import { useRemoteConfig } from "@/hooks/useRemoteConfig";
 import { rememberPageForAva } from "@/lib/planipret/avaFeedback";
+import { rememberLastRoute } from "@/lib/planipret/lastRoute";
 
 import { retryWithBackoff, adaptiveTimeout } from "@/lib/net/resilient";
 
@@ -494,7 +495,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
 export default function PlanipretMobile() {
   const navigate = useNavigate();
   const location = useLocation();
-  useEffect(() => { rememberPageForAva(location.pathname); }, [location.pathname]);
+  useEffect(() => { rememberPageForAva(location.pathname); rememberLastRoute(location.pathname); }, [location.pathname]);
   const { t, lang, setLang } = useMplanipretLang();
   // Onglets pilotés à distance depuis le portail admin (aucun rebuild requis).
   const { isEnabled: isFeatureEnabled } = useRemoteConfig();

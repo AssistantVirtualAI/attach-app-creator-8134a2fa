@@ -120,6 +120,17 @@ async function targetAgentExists(admin: AdminClient, organizationId: string, ext
   return Boolean(data);
 }
 
+async function callBelongsToOrganization(admin: AdminClient, organizationId: string, callUuid: string) {
+  if (!callIdPattern.test(callUuid)) return false;
+  const { data } = await admin
+    .from("pbx_call_records")
+    .select("pbx_uuid")
+    .eq("organization_id", organizationId)
+    .eq("pbx_uuid", callUuid)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -235,7 +246,8 @@ Deno.serve(async (req) => {
         if (!(monitorType === "listen" || monitorType === "whisper" || monitorType === "barge")) return json({ error: "Invalid monitor type" }, 422);
         const callUuid = asString(body.call_uuid ?? body.callId);
         const agentExtension = asString(body.agent_extension);
-        if (!callIdPattern.test(callUuid) || !(await targetAgentExists(admin, actor.organizationId, agentExtension))) {
+        if (!(await callBelongsToOrganization(admin, actor.organizationId, callUuid))
+          || !(await targetAgentExists(admin, actor.organizationId, agentExtension))) {
           return json({ error: "Valid active call and agent required" }, 422);
         }
         const domain = env("FUSIONPBX_DOMAIN_UUID");
@@ -277,7 +289,7 @@ Deno.serve(async (req) => {
       case "transfer-call": {
         if (!actorIsAdmin(actor)) return json({ error: "Administrator access required" }, 403);
         const callUuid = asString(body.call_uuid ?? body.callId);
-        if (!callIdPattern.test(callUuid)) return json({ error: "Valid call required" }, 422);
+        if (!(await callBelongsToOrganization(admin, actor.organizationId, callUuid))) return json({ error: "Valid call required" }, 422);
         const destination = action === "transfer-call" ? asString(body.destination) : "";
         if (action === "transfer-call" && !destinationPattern.test(destination)) return json({ error: "Valid destination required" }, 422);
         const command = action === "force-answer" ? `uuid_answer ${callUuid}` : `uuid_transfer ${callUuid} ${destination}`;

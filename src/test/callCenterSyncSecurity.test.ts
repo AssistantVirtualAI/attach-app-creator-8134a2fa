@@ -27,6 +27,13 @@ describe("call-center-sync security", () => {
     expect(source).toContain("actorIsAdmin(actor)");
   });
 
+  it("requires every supervised call to be owned by the operator organization", () => {
+    expect(source).toContain("async function callBelongsToOrganization");
+    expect(source).toContain('.from("pbx_call_records")');
+    expect(source).toContain('.eq("organization_id", organizationId)');
+    expect(source).toContain("await callBelongsToOrganization(admin, actor.organizationId, callUuid)");
+  });
+
   it("keeps the Edge JWT gate and does not request photo-library write access", () => {
     expect(config).toMatch(/\[functions\.call-center-sync\]\s*\nverify_jwt\s*=\s*true/);
     expect(iosSnippet).not.toContain("NSPhotoLibraryAddUsageDescription");

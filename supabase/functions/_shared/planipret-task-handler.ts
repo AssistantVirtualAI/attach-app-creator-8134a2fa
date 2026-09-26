@@ -195,14 +195,19 @@ function updateReadBackMatches(task: NormalizedTask, payload: Record<string, unk
 }
 
 async function loadProjection(admin: any, userId: string) {
-  const { data } = await admin
+  // Open tasks first: large accounts hold thousands of old completed tasks
+  // that would otherwise fill the page and hide every open one.
+  const base = (asc = true) => admin
     .from("planipret_tasks_projection")
     .select("payload")
     .eq("user_id", userId)
     .is("deleted_at", null)
-    .order("due_at", { ascending: true })
-    .limit(200);
-  return (data ?? []).map((r: any) => normalizeTask(r.payload));
+    .order("due_at", { ascending: asc });
+  const [{ data: open }, { data: done }] = await Promise.all([
+    base().neq("status", "complete").limit(500),
+    base(false).eq("status", "complete").limit(100),
+  ]);
+  return [...(open ?? []), ...(done ?? [])].map((r: any) => normalizeTask(r.payload));
 }
 
 /** Admin only: every broker's mirrored tasks (deduped by task id). */
@@ -639,15 +644,19 @@ export async function handleTaskRequest(
       // Never write another broker's tasks into the caller's local projection.
       // When an admin inspects a broker, mirror them under THAT broker's own
       // local user id so the admin task board reflects the real Maestro data.
+      // Large accounts (4 000+ tasks) exceeded the edge CPU budget when the
+      // whole list was diffed and mirrored inline. The hourly sweeper owns the
+      // full mirror; the interactive list only refreshes open tasks (capped).
+      const openOnly = all.filter((t: any) => String(t?.status ?? "").toLowerCase() !== "complete").slice(0, 500);
       if (!overrideBroker) {
-        await syncProjection(admin, userId, all, { full: Boolean(upstream.complete) && !from && !to });
+        await syncProjection(admin, userId, openOnly, { full: false }).catch(() => {});
       } else {
         try {
           const { data: owner } = await admin
             .from("planipret_profiles").select("user_id")
             .eq("maestro_broker_id", overrideBroker).not("user_id", "is", null).limit(1);
           const ownerId = owner?.[0]?.user_id ? String(owner[0].user_id) : null;
-          if (ownerId) await syncProjection(admin, ownerId, all, { full: Boolean(upstream.complete) && !from && !to });
+          if (ownerId) await syncProjection(admin, ownerId, openOnly, { full: false });
         } catch { /* mirroring is best effort */ }
       }
     } else if (overrideBroker) {

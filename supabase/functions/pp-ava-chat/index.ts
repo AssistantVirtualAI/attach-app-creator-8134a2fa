@@ -422,14 +422,47 @@ Deno.serve(async (req) => {
           });
         }
 
+        // Rendu des dossiers (contrats) réels — aucune donnée inventée.
+        const fmtContracts = (rows: any[]) => rows.slice(0, 10).map((c: any, i: number) => {
+          const money = typeof c?.loan_amount === "number"
+            ? new Intl.NumberFormat(lang === "fr" ? "fr-CA" : "en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(c.loan_amount)
+            : null;
+          const bits = [
+            c?.financial_institution,
+            money,
+            c?.rate && `${c.rate}%`,
+            c?.status ?? c?.status_of_transaction,
+            c?.date_closing && `${L("clôture", "closing")} ${String(c.date_closing).slice(0, 10)}`,
+          ].filter(Boolean).join(" · ");
+          return `${i + 1}. ${c?.number ?? c?.id ?? "?"}${bits ? ` — ${bits}` : ""}`;
+        }).join("\n");
+
+        if (action === "client_contracts") {
+          const rows: any[] = d.contracts ?? [];
+          return json({
+            reply: rows.length
+              ? `${L("Dossiers Maestro", "Maestro files")} (${rows.length}):\n${fmtContracts(rows)}`
+              : L("Aucun dossier Maestro pour ce client.", "No Maestro file for this client."),
+            result: d, suggestions: [],
+          });
+        }
+
         if (action === "client_profile" || action === "broker_profile") {
           const p = d.profile ?? d.data ?? d;
           const name = p?.name ?? p?.full_name ?? [p?.first_name, p?.last_name].filter(Boolean).join(" ");
+          const contracts: any[] = Array.isArray(d.contracts) ? d.contracts : [];
           const lines = [
             name && `${L("Nom", "Name")}: ${name}`,
             p?.email && `${L("Courriel", "Email")}: ${p.email}`,
             (p?.phone ?? p?.mobile) && `${L("Téléphone", "Phone")}: ${p.phone ?? p.mobile}`,
+            p?.work_phone && `${L("Bureau", "Work")}: ${p.work_phone}`,
+            p?.address && `${L("Adresse", "Address")}: ${typeof p.address === "string" ? p.address : (p.address_line ?? "")}`,
             p?.status && `${L("Statut", "Status")}: ${p.status}`,
+            contracts.length
+              ? `\n${L("Dossiers", "Files")} (${contracts.length}):\n${fmtContracts(contracts)}`
+              : (action === "client_profile" && !d.contracts_error
+                  ? L("Aucun dossier Maestro actif.", "No active Maestro file.")
+                  : null),
           ].filter(Boolean).join("\n");
           return json({ reply: lines || L("Profil Maestro récupéré.", "Maestro profile loaded."), result: d, suggestions: [] });
         }

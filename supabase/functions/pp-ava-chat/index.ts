@@ -32,7 +32,7 @@ const COMMISSION_ACTIONS = new Set(["summary", "deposits", "agents", "institutio
 const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "create_teams_chat", "send_teams_message", "reply_teams_message"]);
 const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "list_teams_chats", "create_teams_chat", "send_teams_message", "reply_teams_message", "search_contact"]);
 const MAESTRO_READ_ACTIONS = new Set(["list_clients", "client_profile", "client_contracts", "list_brokers", "broker_profile", "list_contacts"]);
-const MAESTRO_ACTIONS = new Set([...MAESTRO_READ_ACTIONS, "create_task", "create_event"]);
+const MAESTRO_ACTIONS = new Set([...MAESTRO_READ_ACTIONS, "create_task", "create_event", "complete_task", "reschedule_task"]);
 
 const MAESTRO_PAGE_SIZE = 10;
 
@@ -423,8 +423,20 @@ Deno.serve(async (req) => {
             : action === "create_task" && (d.pending_confirmation === true || err === "maestro_readback_unconfirmed")
               ? L("Maestro a reçu la demande de rappel, mais elle n’est pas encore visible dans sa liste officielle. Le rappel n’est pas déclaré créé. Actualise Maestro puis réessaie si nécessaire.",
                   "Maestro received the reminder request, but it is not yet visible in its official list. The reminder is not reported as created. Refresh Maestro and retry if needed.")
+            : (action === "complete_task" || action === "reschedule_task") && d.message
+              ? String(d.message)
             : `${L("Action Maestro échouée", "Maestro action failed")}: ${err}`;
           return json({ reply, result: d, suggestions: [] });
+        }
+
+        if (action === "complete_task") {
+          const done = d.completed === true || d.read_back === true;
+          return json({ reply: done
+            ? L(`Tâche terminée dans Maestro : ${d.task_label ?? d.task_id}.`, `Task completed in Maestro: ${d.task_label ?? d.task_id}.`)
+            : L("Maestro a reçu la fermeture, mais la tâche n'est pas encore confirmée fermée.", "Maestro received the request but the task is not confirmed closed yet."), result: d, suggestions: [] });
+        }
+        if (action === "reschedule_task") {
+          return json({ reply: L(`Tâche reportée au ${d.new_due_at} : ${d.task_label ?? d.task_id}.`, `Task moved to ${d.new_due_at}: ${d.task_label ?? d.task_id}.`), result: d, suggestions: [] });
         }
 
         if (isList) {
@@ -778,7 +790,7 @@ SMS non lus: ${smsUnread ?? 0}`;
     : "LANGUAGE: ALWAYS answer 100% in English (including suggestion labels and titles), even if the underlying data or these instructions are in French. Never reply in French."}
  Réponds court et actionnable. Tu peux proposer jusqu'à 4 suggestions (kind: call/sms/email/reminder/maestro_action/ms365_action/open_voice/open_coach).
  Pour 'call' mets payload.number. Pour 'sms' mets payload.number et payload.message. Si le numéro n’est pas disponible mais qu’un seul contact est clairement identifié, mets payload.contact_name et payload.message; ne mets jamais un nom dans payload.number. S’il y a plusieurs contacts ou plusieurs numéros possibles, demande lequel avant de proposer l’envoi. Pour 'email' préfère ms365_action avec payload.action='send_email'. Pour 'reminder' payload.title/due_at. Pour 'maestro_action' payload.action et payload.* requis.
- MAESTRO CLIENTS/COURTIERS: tu peux consulter la liste des clients et des courtiers du courtier, leurs profils détaillés et leurs dossiers hypothécaires. Utilise kind='maestro_action' avec payload.action parmi: list_clients (payload.search, payload.offset pour pagination, payload.limit), client_profile (payload.client_id OU payload.client_name — retourne aussi les dossiers/contrats du client), client_contracts (payload.client_id OU payload.client_name — statut, institution, montant, taux, dates), list_brokers (payload.search, payload.offset pour pagination), broker_profile (payload.broker_id). Ne demande jamais l'ID Maestro à l'utilisateur: donne le nom, le courriel ou le téléphone. Ne jamais inventer un montant, un taux, un statut ou une date: n'affiche que ce que Maestro retourne. Si la section "Clients Maestro" ou "Courtiers Maestro" apparaît dans [Contexte], réponds directement avec ces données (nom, téléphone, courriel) sans redemander.
+ MAESTRO CLIENTS/COURTIERS: tu peux consulter la liste des clients et des courtiers du courtier, leurs profils détaillés et leurs dossiers hypothécaires. Utilise kind='maestro_action' avec payload.action parmi: list_clients (payload.search, payload.offset pour pagination, payload.limit), client_profile (payload.client_id OU payload.client_name — retourne aussi les dossiers/contrats du client), client_contracts (payload.client_id OU payload.client_name — statut, institution, montant, taux, dates), list_brokers (payload.search, payload.offset pour pagination), broker_profile (payload.broker_id). Ne demande jamais l'ID Maestro à l'utilisateur: donne le nom, le courriel ou le téléphone. Ne jamais inventer un montant, un taux, un statut ou une date: n'affiche que ce que Maestro retourne. TÂCHES: pour terminer une tâche, maestro_action payload.action='complete_task' avec payload.task_id OU payload.search (titre ou nom du client); pour reporter, payload.action='reschedule_task' avec payload.task_id OU payload.search et payload.due_at (YYYY-MM-DD HH:mm:ss, heure de Toronto). Ne dis jamais « terminée » avant le résultat. Si la section "Clients Maestro" ou "Courtiers Maestro" apparaît dans [Contexte], réponds directement avec ces données (nom, téléphone, courriel) sans redemander.
  RECHERCHE CLIENT — ORDRE OBLIGATOIRE: « trouver/chercher/find/fetch/show ce client » signifie afficher son profil Maestro vérifié, pas communiquer avec lui. Affiche d'abord le profil et ses dossiers disponibles, sans bouton d'appel, SMS ou courriel. Propose une communication uniquement si la demande actuelle contient explicitement appeler, envoyer un SMS ou envoyer un courriel.
 
  COMMISSIONS: pour toute question sur les commissions, dépôts, prêteurs ou volume, utilise kind='commission_action' avec payload.action parmi: summary, deposits, agents (admin), institutions, et payload.filters (period, date_from, date_to, commission_type, financial_inst_id). Réponds avec des montants agrégés; ne divulgue jamais de noms de clients complets. Propose kind='open_commissions' pour ouvrir la page détaillée.

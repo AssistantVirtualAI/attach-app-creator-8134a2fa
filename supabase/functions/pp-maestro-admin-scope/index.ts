@@ -79,6 +79,27 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Probe EVERY Planiprêt admin's Maestro token (e.g. Gilles, Marc) to find one
+  // with firm-wide read access. Never returns tokens — only per-admin results.
+  let adminProbes: any = null;
+  if (body?.probe_admins === true) {
+    const { data: admins } = await admin
+      .from("planipret_profiles")
+      .select("user_id, full_name")
+      .eq("role", "admin")
+      .eq("maestro_connected", true);
+    adminProbes = [];
+    for (const a of admins ?? []) {
+      const t = await getUserMaestroAccessToken(admin, a.user_id).catch(() => null);
+      if (!t) {
+        adminProbes.push({ name: a.full_name, ok: false, message: "no_token" });
+        continue;
+      }
+      const p = await probeWith(t);
+      adminProbes.push({ name: a.full_name, ...p });
+    }
+  }
+
   // Broker connection coverage, so the page can explain what the scope unlocks.
   const { count: total } = await admin
     .from("planipret_profiles").select("user_id", { count: "exact", head: true });

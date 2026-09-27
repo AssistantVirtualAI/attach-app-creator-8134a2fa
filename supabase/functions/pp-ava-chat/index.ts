@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
       if (kind === "commission_action") {
         const action = String(payload.action ?? "summary");
         if (!COMMISSION_ACTIONS.has(action)) {
-          return json({ reply: L("Action de commissions inconnue.", "Unknown commission action."), suggestions: [] }, 400);
+          return json({ reply: L("Cette action de commissions n'est plus disponible. Reformule ta demande.", "This commission action is no longer available. Please rephrase."), suggestions: [] }, 200);
         }
         const exec = await invokeFunction("planipret-commission-reports", authHeader, {
           action,

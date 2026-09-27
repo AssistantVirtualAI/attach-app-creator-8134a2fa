@@ -116,10 +116,10 @@ export default function MAvaChat() {
 
   const startNew = () => { setSessionId(null); setMessages([]); };
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (override?: string) => {
+    const text = (typeof override === "string" ? override : input).trim();
     if (!text || busy) return;
-    setBusy(true); setInput("");
+    setBusy(true); if (typeof override !== "string") setInput("");
     const optimistic: Msg = { id: `tmp-${Date.now()}`, role: "user", message: text, created_at: new Date().toISOString() };
     setMessages((m) => [...m, optimistic]);
     try {

@@ -50,6 +50,9 @@ Deno.serve(async (req) => {
       per_page: 100,
     } as any);
     const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
+    // The agents report lists brokers — the fastest firm-wide access signal.
+    const ra = await commissionGet(`/api/main/commissions/reports/agents`, token, cid);
+    const agentRows = Array.isArray(ra.data?.data) ? ra.data.data : (Array.isArray(ra.data) ? ra.data : []);
     return {
       status: r.status,
       ok: r.ok,
@@ -59,6 +62,12 @@ Deno.serve(async (req) => {
       distinct_agents: Array.isArray(r.data?.data)
         ? Array.from(new Set(r.data.data.map((x: any) => String(x?.agent_name ?? "")).filter(Boolean))).slice(0, 10)
         : [],
+      agents_endpoint: {
+        status: ra.status,
+        ok: ra.ok,
+        count: agentRows.length,
+        sample: agentRows.slice(0, 5).map((x: any) => String(x?.name ?? x?.agent_name ?? x?.full_name ?? "")).filter(Boolean),
+      },
     };
   };
 

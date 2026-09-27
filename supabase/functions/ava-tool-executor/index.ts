@@ -185,6 +185,32 @@ async function taskApi(ctx: Ctx, body: Record<string, unknown>): Promise<ToolRes
   return data;
 }
 
+/** Resolve a task by id or by free text (task notes / client name) among open tasks. */
+async function resolveTaskRef(ctx: Ctx, p: any): Promise<{ task_id?: string; label?: string; result: ToolResult }> {
+  const id = String(p?.task_id ?? p?.id ?? "").trim();
+  if (id && /^\d+$/.test(id)) return { task_id: id, result: { success: true } };
+  const q = String(p?.search ?? p?.query ?? (id || "")).trim().toLowerCase();
+  if (!q) return { result: { success: false, error: "clarification_needed", message: "Quelle tâche ? Donne son titre ou le nom du client." } };
+  const list: any = await taskApi(ctx, { action: "list", status: "pending", filter: "open", page: 1, limit: 200 });
+  const tasks: any[] = Array.isArray(list?.tasks) ? list.tasks : [];
+  const norm = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const words = norm(q).split(/\s+/).filter((w) => w.length > 1);
+  const matches = tasks.filter((t) => {
+    const hay = norm([t?.notes, t?.title, t?.description, t?.client_name, t?.target_name, t?.target?.name].join(" "));
+    return words.length > 0 && words.every((w) => hay.includes(w));
+  });
+  const label = (t: any) => String(t?.notes ?? t?.title ?? t?.description ?? `#${t?.id}`).slice(0, 80);
+  if (matches.length === 1) return { task_id: String(matches[0].id), label: label(matches[0]), result: { success: true } };
+  if (!matches.length) return { result: { success: false, error: "task_not_found", message: "Aucune tâche ouverte ne correspond. Précise le titre ou le nom du client." } };
+  return {
+    result: {
+      success: false, error: "multiple_tasks", needs_clarification: true,
+      message: "Plusieurs tâches correspondent. Laquelle ?",
+      candidates: matches.slice(0, 8).map((t) => ({ task_id: String(t.id), label: label(t), due_at: t?.due_at ?? null })),
+    },
+  };
+}
+
 
 // ─── helpers ────────────────────────────────────────────────────────────
 async function msAction(ctx: Ctx, action: string, payload: any) {
@@ -939,6 +965,24 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const r = await taskApi(ctx, { action: "update", task_id: String(p.task_id), changes });
     if ((r as any)?.success) await broadcastTasks(ctx, "updated", String(p.task_id));
     return r;
+  },
+
+  async complete_task(ctx, p) {
+    const found = await resolveTaskRef(ctx, p);
+    if (!found.task_id) return found.result;
+    const r: any = await taskApi(ctx, { action: "complete", task_id: found.task_id });
+    if (r?.success) await broadcastTasks(ctx, "completed", found.task_id);
+    return { ...r, task_id: found.task_id, task_label: found.label ?? null };
+  },
+
+  async reschedule_task(ctx, p) {
+    const due = String(p?.due_at ?? p?.date ?? "").trim();
+    if (!due) return { success: false, error: "clarification_needed", message: "À quelle date et heure veux-tu reporter la tâche ?" };
+    const found = await resolveTaskRef(ctx, p);
+    if (!found.task_id) return found.result;
+    const r: any = await taskApi(ctx, { action: "update", task_id: found.task_id, changes: { date: due } });
+    if (r?.success) await broadcastTasks(ctx, "updated", found.task_id);
+    return { ...r, task_id: found.task_id, task_label: found.label ?? null, new_due_at: due };
   },
 
   async delete_task(ctx, p) {

@@ -506,8 +506,19 @@ Deno.serve(async (req) => {
         return j({ success: true, maestro_broker_id: String(mid) });
       }
 
-
-
+      // Dossiers (contrats) documentés d'un client — lecture seule.
+      case "client_contracts": {
+        const cid = String(payload.client_id ?? "").trim();
+        if (!cid) return j({ success: false, error: "client_id required" }, 400);
+        const c = await clientContracts(admin, authenticatedUserId, cid)
+          .catch(() => ({ contracts: null as any[] | null, error: "contracts_unavailable" }));
+        return j({
+          success: !!c.contracts,
+          contracts: c.contracts ?? [],
+          count: c.contracts?.length ?? 0,
+          error: c.error,
+        });
+      }
 
       case "list_clients":
       case "client_profile":

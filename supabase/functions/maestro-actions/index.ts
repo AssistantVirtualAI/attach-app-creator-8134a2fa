@@ -584,6 +584,51 @@ Deno.serve(async (req) => {
           totalFromResponse = d?.total_count ?? d?.total;
         }
 
+        // Maestro's own ?search= is unreliable (full names, emails, phones).
+        // Fall back to an unfiltered fetch + local token match so the assistant
+        // can always resolve a client by name, email, phone or numeric id.
+        const term = String(payload.search ?? "").trim();
+        if (term) {
+          const norm = (v: unknown) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const digits = (v: unknown) => String(v ?? "").replace(/\D+/g, "");
+          const tokens = norm(term).split(/[\s,]+/).filter((t) => t.length >= 2);
+          const termDigits = digits(term);
+          const haystack = (c: any) => norm([
+            c.name, c.full_name, c.first_name, c.last_name, c.email, c.email_address,
+            c.phone, c.mobile, c.id, c.client_id,
+          ].filter(Boolean).join(" "));
+          const matches = (c: any) => {
+            const h = haystack(c);
+            if (termDigits.length >= 7 && digits([c.phone, c.mobile].join(" ")).includes(termDigits)) return true;
+            if (/^\d+$/.test(term) && (String(c.id ?? "") === term || String(c.client_id ?? "") === term)) return true;
+            return tokens.length > 0 && tokens.every((t) => h.includes(t));
+          };
+          let filtered = all.filter(matches);
+          if (!filtered.length) {
+            const rAll = await maestroTelecomFetch(
+              tCfg,
+              action === "list_clients" ? `/users/${telecomUserId}/clients` : `/users/${telecomUserId}/brokers`,
+              { method: "GET", timeoutMs: 15000 },
+            );
+            if (rAll.ok) {
+              const dAll: any = rAll.data;
+              const rawAll = Array.isArray(dAll) ? dAll : (dAll?.clients ?? dAll?.brokers ?? dAll?.data ?? dAll?.results ?? []);
+              const everything: any[] = Array.isArray(rawAll) ? rawAll : [];
+              filtered = everything.filter(matches);
+              // Looser fallback: any single token matches.
+              if (!filtered.length && tokens.length) {
+                filtered = everything.filter((c) => tokens.some((t) => haystack(c).includes(t)));
+              }
+            }
+          }
+          if (filtered.length) {
+            all = filtered;
+            totalFromResponse = filtered.length;
+          }
+        }
+
+
+
         const offset = Number(payload.offset ?? 0);
         const limit = Number(payload.limit ?? 25);
         const total = totalFromResponse ?? all.length;

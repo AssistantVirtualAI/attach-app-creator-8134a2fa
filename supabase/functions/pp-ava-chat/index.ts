@@ -555,7 +555,7 @@ Deno.serve(async (req) => {
           const isBroker = /\bcourtiers?\b|\bbrokers?\b/i.test(userMessage);
           const r = await invokeFunction("maestro-actions", authHeader, {
             action: isBroker ? "list_brokers" : "list_clients",
-            payload: { search: tokens.names[0], limit: 25 },
+            payload: { search: tokens.emails[0] ?? tokens.names.slice(0, 3).join(" "), limit: 25 },
           });
           if (r.ok && (r.data as any)?.success) {
             const list = (r.data as any).clients ?? (r.data as any).brokers ?? [];

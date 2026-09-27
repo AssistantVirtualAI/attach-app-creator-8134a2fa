@@ -106,6 +106,53 @@ function wantsContactLookup(text: string) {
     || wantsSendEmail(text);
 }
 
+function wantsExplicitCommunication(text: string) {
+  return /\b(appelle|appeler|call|dial|texte|texter|text|sms)\b/i.test(text)
+    || /\b(envoie|envoyer|send|write|écris|ecris)\b.{0,24}\b(courriel|email|mail|message)\b/i.test(text)
+    || /\b(courriel|email|mail)\b.{0,16}\b(lui|him|her|them|à|to)\b/i.test(text);
+}
+
+function wantsCustomerProfile(text: string) {
+  if (wantsExplicitCommunication(text)) return false;
+  return /\b(find|fetch|search|show|get|give|locate|look\s*up|open|trouve|trouver|cherche|chercher|recherche|montre|affiche|donne|ouvre|localise)\b/i.test(text)
+    && /\b(client|customer|profil|profile|fiche|coordonn[ée]es|details?|détails?|address|adresse)\b/i.test(text);
+}
+
+function formatMaestroProfile(data: any, lang: "fr" | "en") {
+  const L = (fr: string, en: string) => (lang === "fr" ? fr : en);
+  const p = data?.profile ?? data?.data ?? data ?? {};
+  const name = p?.name ?? p?.full_name ?? [p?.first_name, p?.last_name].filter(Boolean).join(" ");
+  const address = typeof p?.address === "string"
+    ? p.address
+    : [p?.address_line, p?.city, p?.province, p?.postal_code].filter(Boolean).join(", ");
+  const contracts: any[] = Array.isArray(data?.contracts) ? data.contracts : [];
+  const money = (amount: unknown) => typeof amount === "number"
+    ? new Intl.NumberFormat(lang === "fr" ? "fr-CA" : "en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(amount)
+    : null;
+  const contractLines = contracts.slice(0, 10).map((c: any, index: number) => {
+    const details = [
+      c?.financial_institution,
+      money(c?.loan_amount),
+      c?.rate != null ? `${c.rate}%` : null,
+      c?.status ?? c?.status_of_transaction,
+      c?.date_closing ? `${L("clôture", "closing")} ${String(c.date_closing).slice(0, 10)}` : null,
+    ].filter(Boolean).join(" · ");
+    return `${index + 1}. ${c?.number ?? c?.id ?? "?"}${details ? ` — ${details}` : ""}`;
+  });
+  const lines = [
+    name && `${L("Nom", "Name")}: ${name}`,
+    p?.email && `${L("Courriel", "Email")}: ${p.email}`,
+    (p?.phone ?? p?.mobile ?? p?.cell_phone) && `${L("Téléphone", "Phone")}: ${p.phone ?? p.mobile ?? p.cell_phone}`,
+    p?.work_phone && `${L("Bureau", "Work")}: ${p.work_phone}`,
+    address && `${L("Adresse", "Address")}: ${address}`,
+    p?.status && `${L("Statut", "Status")}: ${p.status}`,
+    contracts.length
+      ? `\n${L("Dossiers", "Files")} (${contracts.length}):\n${contractLines.join("\n")}`
+      : (!data?.contracts_error ? L("Aucun dossier Maestro actif.", "No active Maestro file.") : null),
+  ].filter(Boolean);
+  return lines.join("\n") || L("Profil Maestro récupéré.", "Maestro profile loaded.");
+}
+
 function extractNameTokens(text: string): { emails: string[]; names: string[] } {
   const emails = Array.from(text.matchAll(/[\w.+-]+@[\w.-]+\.\w+/g)).map(m => m[0]);
   const quoted = Array.from(text.matchAll(/["“']([^"”']{2,60})["”']/g)).map(m => m[1]);
@@ -609,6 +656,73 @@ Deno.serve(async (req) => {
             if (list.length) break;
           }
           if (r?.ok && (r.data as any)?.success) {
+            if (!isBroker && wantsCustomerProfile(userMessage)) {
+              const normalize = (value: unknown) => String(value ?? "")
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+                .replace(/[^a-z0-9]+/g, " ").trim();
+              const exactMatches = usedTerm
+                ? list.filter((client: any) => {
+                    const names = [
+                      client?.name,
+                      client?.full_name,
+                      [client?.first_name, client?.last_name].filter(Boolean).join(" "),
+                    ].map(normalize).filter(Boolean);
+                    return names.includes(normalize(usedTerm));
+                  })
+                : [];
+              if (exactMatches.length === 1) list = exactMatches;
+              if (exactMatches.length > 1) {
+                const detailedProfiles = await Promise.all(exactMatches.slice(0, 5).map(async (client: any) => {
+                  const clientId = client?.id ?? client?.client_id;
+                  if (!clientId) return { profile: client, contracts: [] };
+                  const detail = await invokeFunction("maestro-actions", authHeader, {
+                    action: "client_profile",
+                    payload: { client_id: clientId, with_contracts: true },
+                  });
+                  return detail.ok && detail.data?.success
+                    ? detail.data
+                    : { success: true, profile: client, contracts: [], profile_unavailable: true };
+                }));
+                return json({
+                  reply: `${L("Plusieurs profils Maestro correspondent :", "Several Maestro profiles match:")}\n\n${detailedProfiles.map((item, index) => `${index + 1}. ${formatMaestroProfile(item, lang)}`).join("\n\n")}`,
+                  result: { success: true, profiles: detailedProfiles },
+                  suggestions: [],
+                });
+              }
+              if (list.length === 1) {
+                const clientId = list[0]?.id ?? list[0]?.client_id;
+                if (clientId) {
+                  const detail = await invokeFunction("maestro-actions", authHeader, {
+                    action: "client_profile",
+                    payload: { client_id: clientId, with_contracts: true },
+                  });
+                  if (detail.ok && detail.data?.success) {
+                    return json({
+                      reply: formatMaestroProfile(detail.data, lang),
+                      result: detail.data,
+                      suggestions: [],
+                    });
+                  }
+                }
+                return json({
+                  reply: formatMaestroProfile({ profile: list[0], contracts: [] }, lang),
+                  result: { success: true, profile: list[0], profile_unavailable: true },
+                  suggestions: [],
+                });
+              }
+              if (list.length > 1) {
+                return json({
+                  reply: `${L("Plusieurs clients correspondent. Choisis le bon client :", "Several customers match. Choose the correct customer:")}\n${fmtMaestroList(list, lang)}`,
+                  result: r.data,
+                  suggestions: [],
+                });
+              }
+              return json({
+                reply: L("Je n’ai trouvé aucun client correspondant dans Maestro.", "I couldn't find a matching customer in Maestro."),
+                result: r.data,
+                suggestions: [],
+              });
+            }
             dataBlocks.push(list.length
               ? `${isBroker ? "Courtiers" : "Clients"} Maestro (recherche « ${usedTerm} »): ${JSON.stringify(list).slice(0, 3000)}. Ces données sont réelles: affiche-les directement.`
               : `${isBroker ? "Courtiers" : "Clients"} Maestro: aucun résultat pour ${JSON.stringify(candidates)}.`);
@@ -665,6 +779,7 @@ SMS non lus: ${smsUnread ?? 0}`;
  Réponds court et actionnable. Tu peux proposer jusqu'à 4 suggestions (kind: call/sms/email/reminder/maestro_action/ms365_action/open_voice/open_coach).
  Pour 'call' mets payload.number. Pour 'sms' mets payload.number et payload.message. Si le numéro n’est pas disponible mais qu’un seul contact est clairement identifié, mets payload.contact_name et payload.message; ne mets jamais un nom dans payload.number. S’il y a plusieurs contacts ou plusieurs numéros possibles, demande lequel avant de proposer l’envoi. Pour 'email' préfère ms365_action avec payload.action='send_email'. Pour 'reminder' payload.title/due_at. Pour 'maestro_action' payload.action et payload.* requis.
  MAESTRO CLIENTS/COURTIERS: tu peux consulter la liste des clients et des courtiers du courtier, leurs profils détaillés et leurs dossiers hypothécaires. Utilise kind='maestro_action' avec payload.action parmi: list_clients (payload.search, payload.offset pour pagination, payload.limit), client_profile (payload.client_id OU payload.client_name — retourne aussi les dossiers/contrats du client), client_contracts (payload.client_id OU payload.client_name — statut, institution, montant, taux, dates), list_brokers (payload.search, payload.offset pour pagination), broker_profile (payload.broker_id). Ne demande jamais l'ID Maestro à l'utilisateur: donne le nom, le courriel ou le téléphone. Ne jamais inventer un montant, un taux, un statut ou une date: n'affiche que ce que Maestro retourne. Si la section "Clients Maestro" ou "Courtiers Maestro" apparaît dans [Contexte], réponds directement avec ces données (nom, téléphone, courriel) sans redemander.
+ RECHERCHE CLIENT — ORDRE OBLIGATOIRE: « trouver/chercher/find/fetch/show ce client » signifie afficher son profil Maestro vérifié, pas communiquer avec lui. Affiche d'abord le profil et ses dossiers disponibles, sans bouton d'appel, SMS ou courriel. Propose une communication uniquement si la demande actuelle contient explicitement appeler, envoyer un SMS ou envoyer un courriel.
 
  COMMISSIONS: pour toute question sur les commissions, dépôts, prêteurs ou volume, utilise kind='commission_action' avec payload.action parmi: summary, deposits, agents (admin), institutions, et payload.filters (period, date_from, date_to, commission_type, financial_inst_id). Réponds avec des montants agrégés; ne divulgue jamais de noms de clients complets. Propose kind='open_commissions' pour ouvrir la page détaillée.
  Pour Microsoft utilise kind='ms365_action' et payload.action parmi: read_emails, read_email_detail, list_calendar_events, send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, search_contact.

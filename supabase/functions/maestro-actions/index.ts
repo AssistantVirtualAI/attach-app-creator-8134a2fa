@@ -619,7 +619,7 @@ Deno.serve(async (req) => {
           let contracts: any[] | null = null;
           let contracts_error: string | null = null;
           if (wantContracts && cid) {
-            const c = await clientContracts(admin, callerId, cid).catch(() => ({ contracts: null, error: "contracts_unavailable" }));
+            const c = await clientContracts(admin, callerId ?? authenticatedUserId, cid).catch(() => ({ contracts: null, error: "contracts_unavailable" }));
             contracts = c.contracts;
             contracts_error = c.error;
           }

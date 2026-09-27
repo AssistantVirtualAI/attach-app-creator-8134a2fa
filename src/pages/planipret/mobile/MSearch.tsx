@@ -347,7 +347,7 @@ export default function MSearch() {
           {show("emails") && (
             <Group icon={<Mail className="w-4 h-4" />} title={t("searchPage.emails")} count={data.emails.length}>
               {data.emails.map((e: any, i: number) => (
-                <button key={i} type="button" onClick={() => navigate(e.id ? `/mplanipret/emails?id=${encodeURIComponent(e.id)}` : "/mplanipret/emails")}
+                <button key={i} type="button" onClick={() => { const url = e.webLink ?? e.web_link; if (url) window.open(url, "_blank", "noopener"); }}
                   className="w-full text-left p-3 bg-white rounded-lg text-sm">
                   <div className="font-medium truncate">{e.subject ?? t("searchPage.noSubject")}</div>
                   <div className="text-xs text-slate-400 truncate">{emailSender(e)}</div>

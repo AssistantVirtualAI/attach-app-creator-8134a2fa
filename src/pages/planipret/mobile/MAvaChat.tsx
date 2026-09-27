@@ -206,6 +206,12 @@ export default function MAvaChat() {
       }]);
       return;
     }
+    // Chips without a real tool (e.g. « Fournir plus de détails ») are just
+    // follow-up prompts: send the label as a normal message.
+    if (!action && suggestion.kind !== "call" && suggestion.kind !== "sms" && !isPagerSuggestion(suggestion)) {
+      await send(suggestion.label);
+      return;
+    }
     await executeConfirmedAction(suggestion);
   };
 

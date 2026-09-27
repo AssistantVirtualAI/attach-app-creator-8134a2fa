@@ -724,6 +724,27 @@ export async function handleTaskRequest(
       }
     }
 
+    // A task closed from one device is tombstoned (deleted_at) only after a
+    // confirmed Maestro read-back. Some Maestro filters keep returning the
+    // soft-closed task as pending, which re-opened it on the other device.
+    // Honour recent confirmed tombstones so portal and app stay in sync.
+    if (upstream.ok && all.length && !overrideBroker) {
+      try {
+        const since = new Date(nowFn().getTime() - 30 * 86400_000).toISOString();
+        const { data: closed } = await admin
+          .from("planipret_tasks_projection")
+          .select("task_id")
+          .eq("user_id", userId)
+          .not("deleted_at", "is", null)
+          .gte("deleted_at", since)
+          .in("task_id", all.map((t: any) => String(t.id)).slice(0, 1000));
+        const gone = new Set((closed ?? []).map((r: any) => String(r.task_id)));
+        if (gone.size) all = all.filter((t: any) => !gone.has(String(t.id)));
+      } catch { /* best effort */ }
+    }
+
+
+
     let src: "api" | "projection" | "unavailable";
     if (upstream.ok) {
       src = "api";

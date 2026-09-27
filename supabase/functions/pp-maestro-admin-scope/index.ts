@@ -44,10 +44,10 @@ Deno.serve(async (req) => {
   const probeWith = async (token: string) => {
     const year = new Date().getFullYear();
     const qs = buildDepositQuery({
-      date_from: `${year - 1}-01-01 00:00:00`,
+      date_from: `2022-01-01 00:00:00`,
       date_to: `${year}-12-31 23:59:59`,
       page: 1,
-      per_page: 50,
+      per_page: 100,
     } as any);
     const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
     return {

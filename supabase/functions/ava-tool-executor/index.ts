@@ -764,10 +764,38 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     }
     const r = await maestroActions(ctx, "client_profile", { client_id: cid });
     return r?.success
-      ? { success: true, profile: r.profile ?? r.raw ?? r.data ?? null }
+      ? {
+          success: true,
+          client_id: cid,
+          profile: r.profile ?? r.raw ?? r.data ?? null,
+          contracts: r.contracts ?? [],
+          contracts_count: (r.contracts ?? []).length,
+          contracts_error: r.contracts_error ?? null,
+        }
       : searchHit
         ? { success: true, profile: searchHit, source: "broker_directory", profile_unavailable: true }
         : { success: false, error: r?.error ?? "maestro_client_profile_failed" };
+  },
+
+  /** Dossiers hypothécaires (contrats) documentés d'un client Maestro. */
+  async get_client_contracts(ctx, p) {
+    let cid = firstText(p?.client_id, p?.id);
+    if (cid && !/^\d+$/.test(cid)) cid = "";
+    if (!cid) {
+      const q = firstText(p?.client_id, p?.query, p?.client_name, p?.name, p?.email, p?.phone);
+      if (!q) return { success: false, error: "client_id_or_query_required" };
+      const found: any = await (TOOLS as any).search_client(ctx, { query: q });
+      const list = found?.clients ?? [];
+      if (!list.length) return { success: false, error: "client_not_found", message: `Aucun client Maestro pour ${q}` };
+      if (list.length > 1) return { success: true, multiple: true, clients: list, message: "Plusieurs clients correspondent; demande lequel." };
+      const resolved = firstText(list[0]?.client_id, list[0]?.maestro_client_id, list[0]?.id);
+      cid = resolved && /^\d+$/.test(resolved) ? resolved : "";
+      if (!cid) return { success: false, error: "client_id_unavailable", message: "Ce client n'a pas de numéro de dossier Maestro exploitable." };
+    }
+    const r = await maestroActions(ctx, "client_contracts", { client_id: cid });
+    return r?.success
+      ? { success: true, client_id: cid, contracts: r.contracts ?? [], count: r.count ?? (r.contracts ?? []).length }
+      : { success: false, error: r?.error ?? "maestro_contracts_failed" };
   },
 
   async get_client_history(ctx, p) {

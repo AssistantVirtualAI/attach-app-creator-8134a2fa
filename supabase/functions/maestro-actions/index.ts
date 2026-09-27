@@ -3,6 +3,57 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMaestroTelecomConfig, isMaestroTelecomConfigured, maestroTelecomFetch } from "../_shared/maestro-telecom.ts";
 import { linkBrokerIdByEmail, loadBrokerDirectory, findByEmail, resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
 import { getMaestroOAuthEnv, getUserMaestroAccessToken, fetchMaestroUserProfile, extractMaestroBrokerId } from "../_shared/maestro-oauth.ts";
+import { listContracts } from "../_shared/maestro-scribe.ts";
+
+/**
+ * Documented contract payload (GET /api/main/contracts) reduced to the fields
+ * a broker actually asks about. Read-only: no contract is ever written here.
+ */
+function normalizeContract(raw: any) {
+  if (!raw || typeof raw !== "object") return null;
+  const fi = raw.financial_institution ?? raw.financialInstitution ?? null;
+  const num = (v: unknown) => {
+    if (v == null || v === "") return null;
+    const n = Number(String(v).replace(/[^0-9.\-]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    id: String(raw.id ?? raw.contract_id ?? "") || null,
+    number: raw.number ?? raw.contract_number ?? null,
+    status: raw.status ?? null,
+    status_of_transaction: raw.status_of_transaction ?? null,
+    application_type: raw.application_type ?? null,
+    application_purpose: raw.application_purpose ?? null,
+    mortgage_type: raw.mortgage_type ?? null,
+    loan_amount: num(raw.loan_amt ?? raw.loan_amount),
+    rate: raw.rate ?? null,
+    term: raw.term ?? null,
+    amortization: raw.amortization ?? null,
+    date_closing: raw.date_closing ?? null,
+    date_maturity: raw.date_maturity ?? null,
+    financial_institution: typeof fi === "object" ? (fi?.name ?? fi?.label ?? null) : (fi ?? null),
+    property_address: raw.property_address ?? raw.address ?? null,
+    clients: Array.isArray(raw.clients)
+      ? raw.clients.map((c: any) => ({
+          id: String(c?.id ?? ""),
+          name: c?.name ?? [c?.first_name, c?.last_name].filter(Boolean).join(" ") || null,
+          email: c?.email ?? null,
+        }))
+      : [],
+  };
+}
+
+/** Contracts of one Maestro client, read with the broker's own OAuth token. */
+async function clientContracts(admin: any, callerId: string | null, clientId: string) {
+  if (!callerId) return { contracts: null as any[] | null, error: "auth_required" };
+  const token = await getUserMaestroAccessToken(admin, callerId).catch(() => null);
+  if (!token) return { contracts: null as any[] | null, error: "maestro_oauth_required" };
+  const res = await listContracts({} as any, { client_id: clientId, per_page: 25 }, { token });
+  if (!res.ok) return { contracts: null as any[] | null, error: res.error ?? `HTTP ${res.status}` };
+  const d: any = res.data;
+  const rows: any[] = Array.isArray(d) ? d : (d?.data ?? d?.contracts ?? d?.results ?? []);
+  return { contracts: rows.map(normalizeContract).filter(Boolean) as any[], error: null as string | null };
+}
 
 
 async function getMaestroConfig(admin: any) {

@@ -36,7 +36,7 @@ function normalizeContract(raw: any) {
     clients: Array.isArray(raw.clients)
       ? raw.clients.map((c: any) => ({
           id: String(c?.id ?? ""),
-          name: c?.name ?? [c?.first_name, c?.last_name].filter(Boolean).join(" ") || null,
+          name: c?.name ?? ([c?.first_name, c?.last_name].filter(Boolean).join(" ") || null),
           email: c?.email ?? null,
         }))
       : [],

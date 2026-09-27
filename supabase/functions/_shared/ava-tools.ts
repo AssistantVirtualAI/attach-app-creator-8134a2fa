@@ -160,7 +160,8 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 
     // Maestro CRM
     mk("search_client", "Cherche un client dans Maestro CRM.", { query: { type: "string", description: "Nom, téléphone ou email" } }, ["query"]),
-    mk("get_client_profile", "Profil complet d'un client Maestro. Donne client_id OU query (nom, courriel ou téléphone) — jamais demander l'ID à l'utilisateur.", { client_id: { type: "string", description: "ID du client (optionnel)" }, query: { type: "string", description: "Nom, courriel ou téléphone si l'ID est inconnu" } }),
+    mk("get_client_profile", "Profil complet d'un client Maestro (coordonnées, adresse, téléphones, courriels ET dossiers/contrats hypothécaires). Donne client_id OU query (nom, courriel ou téléphone) — jamais demander l'ID à l'utilisateur.", { client_id: { type: "string", description: "ID du client (optionnel)" }, query: { type: "string", description: "Nom, courriel ou téléphone si l'ID est inconnu" } }),
+    mk("get_client_contracts", "Dossiers hypothécaires (contrats) d'un client Maestro : statut, institution, montant du prêt, taux, dates de clôture et d'échéance. Donne client_id OU query.", { client_id: { type: "string", description: "ID du client (optionnel)" }, query: { type: "string", description: "Nom, courriel ou téléphone si l'ID est inconnu" } }),
     mk("get_client_history", "Historique des communications client.", {
       client_id: { type: "string", description: "ID du client" },
       limit: { type: "number", description: "Nombre d'entrées (défaut: 20)" },

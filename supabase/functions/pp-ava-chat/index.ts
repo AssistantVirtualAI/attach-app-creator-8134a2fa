@@ -657,6 +657,20 @@ Deno.serve(async (req) => {
           }
           if (r?.ok && (r.data as any)?.success) {
             if (!isBroker && wantsCustomerProfile(userMessage)) {
+              const normalize = (value: unknown) => String(value ?? "")
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+                .replace(/[^a-z0-9]+/g, " ").trim();
+              const exactMatches = usedTerm
+                ? list.filter((client: any) => {
+                    const names = [
+                      client?.name,
+                      client?.full_name,
+                      [client?.first_name, client?.last_name].filter(Boolean).join(" "),
+                    ].map(normalize).filter(Boolean);
+                    return names.includes(normalize(usedTerm));
+                  })
+                : [];
+              if (exactMatches.length === 1) list = exactMatches;
               if (list.length === 1) {
                 const clientId = list[0]?.id ?? list[0]?.client_id;
                 if (clientId) {

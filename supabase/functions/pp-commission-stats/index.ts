@@ -57,13 +57,13 @@ function breakdown(
   const list = keys.map((k) => {
     const c = { [field]: k } as Record<string, string>;
     const kr = (grouped.get(k) ?? []) as typeof rows;
-    const cyVolume = periodVolume(kr, w, c);
-    const cyDeals = periodDeals(kr, w, c);
+    const cyVolume = periodVolume(rows, w, c);
+    const cyDeals = periodDeals(rows, w, c);
     const cyCommission = kr
       .filter((r) => r.date_trans && r.date_trans >= w.start && r.date_trans <= w.end && !isInsurance(r) && (r[field] ?? "") === k)
       .reduce((s, r) => s + Number(r.amount ?? 0), 0);
-    const pyVolume = periodVolume(kr, wPy, c);
-    const pyDeals = periodDeals(kr, wPy, c);
+    const pyVolume = periodVolume(rows, wPy, c);
+    const pyDeals = periodDeals(rows, wPy, c);
     const pyCommission = kr
       .filter((r) => r.date_trans && r.date_trans >= wPy.start && r.date_trans <= wPy.end && !isInsurance(r) && (r[field] ?? "") === k)
       .reduce((s, r) => s + Number(r.amount ?? 0), 0);
@@ -325,7 +325,7 @@ Deno.serve(async (req) => {
       const bRows = byBroker.get(name) ?? [];
       const idRow = bRows[0] as any;
       const cells = yearsWithData.map((y) => {
-        const m = metrics(bRows, yearWindow(y), { broker: name });
+        const m = metrics(scopedAll, yearWindow(y), { broker: name });
         return { year: y, volume: m.volume, deals: m.deals, commission: m.commission, bps: m.bps, avgDeal: m.avgDeal };
       });
       return {

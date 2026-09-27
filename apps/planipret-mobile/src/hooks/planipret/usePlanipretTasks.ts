@@ -359,8 +359,9 @@ export function usePlanipretTasks(
     };
     const result = await apiUpdate(taskId, changes);
     if (!result?.success) {
-      // A write can be accepted while Maestro's authoritative list is still
-      // catching up. Do not render the proposed value as confirmed.
+      // The server may have accepted the PUT while the Maestro read-back is
+      // still pending. Refresh the list for visibility, but never patch the UI
+      // optimistically or turn that into a confirmation claim.
       if (result?.pending_confirmation) [0, 2000, 5000, 10000, 20000].forEach((ms) => setTimeout(() => void refresh({ force: true }), ms));
       return result;
     }

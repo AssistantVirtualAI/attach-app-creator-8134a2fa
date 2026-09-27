@@ -300,7 +300,7 @@ Deno.serve(async (req) => {
       if (kind === "maestro_action") {
         const action = String(payload.action ?? "");
         if (!MAESTRO_ACTIONS.has(action)) {
-          return json({ reply: L("Action Maestro inconnue.", "Unknown Maestro action."), suggestions: [] }, 400);
+          return json({ reply: L("Je ne peux pas exécuter cette action directement. Reformule ta demande et je m'en occupe.", "I can't run this action directly. Rephrase your request and I'll take care of it."), suggestions: [] }, 200);
         }
         if (!MAESTRO_READ_ACTIONS.has(action) && body?.approved !== true) {
           return json({ reply: L("Cette action Maestro nécessite votre confirmation.", "This Maestro action requires your confirmation."), suggestions: [confirmAction] });

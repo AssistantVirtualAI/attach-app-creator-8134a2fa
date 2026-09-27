@@ -400,7 +400,7 @@ Deno.serve(async (req) => {
       }
       if (kind === "call") {
         const to = String(payload.number ?? payload.to ?? "");
-        if (!to) return json({ reply: L("Numéro d'appel manquant.", "Missing phone number."), suggestions: [] }, 400);
+        if (!to) return json({ reply: L("Je n'ai pas trouvé de numéro à appeler. Précise le numéro ou le client.", "I couldn't find a number to call. Specify the number or the client."), suggestions: [] }, 200);
         return json({
           reply: L("Confirme l'appel dans l'application mobile.", "Confirm the call in the mobile app."),
           result: { success: false, error: "client_confirmation_required" }, suggestions: [],

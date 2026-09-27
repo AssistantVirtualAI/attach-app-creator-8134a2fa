@@ -41,17 +41,16 @@ Deno.serve(async (req) => {
   const tok = await getMaestroAdminAccessToken();
   const cid = crypto.randomUUID().slice(0, 8);
 
-  let probe: any = null;
-  if (wantProbe && tok.token) {
+  const probeWith = async (token: string) => {
     const year = new Date().getFullYear();
     const qs = buildDepositQuery({
       date_from: `${year - 1}-01-01 00:00:00`,
       date_to: `${year}-12-31 23:59:59`,
       page: 1,
-      per_page: 5,
+      per_page: 50,
     } as any);
-    const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, tok.token, cid);
-    probe = {
+    const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
+    return {
       status: r.status,
       ok: r.ok,
       rows: Array.isArray(r.data?.data) ? r.data.data.length : 0,
@@ -61,6 +60,23 @@ Deno.serve(async (req) => {
         ? Array.from(new Set(r.data.data.map((x: any) => String(x?.agent_name ?? "")).filter(Boolean))).slice(0, 10)
         : [],
     };
+  };
+
+  let probe: any = null;
+  if (wantProbe && tok.token) {
+    probe = await probeWith(tok.token);
+  }
+
+  // Probe with the calling admin's OWN Maestro OAuth token: if an admin's
+  // token can read firm-wide deposits, no dedicated admin credential is needed.
+  let ownProbe: any = null;
+  if (body?.probe_own === true) {
+    const ownToken = await getUserMaestroAccessToken(admin, user.id).catch(() => null);
+    if (!ownToken) {
+      ownProbe = { ok: false, message: "no_own_maestro_token" };
+    } else {
+      ownProbe = await probeWith(ownToken);
+    }
   }
 
   // Broker connection coverage, so the page can explain what the scope unlocks.

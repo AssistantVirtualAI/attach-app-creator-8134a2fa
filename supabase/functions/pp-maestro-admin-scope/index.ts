@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
     env,
     probe,
     own_probe: ownProbe,
+    admin_probes: adminProbes,
     brokers: { total: total ?? 0, connected: connected ?? 0 },
   });
 });

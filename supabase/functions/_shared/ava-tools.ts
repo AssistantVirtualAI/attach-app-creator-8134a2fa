@@ -160,7 +160,8 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 
     // Maestro CRM
     mk("search_client", "Cherche un client dans Maestro CRM.", { query: { type: "string", description: "Nom, téléphone ou email" } }, ["query"]),
-    mk("get_client_profile", "Profil complet d'un client Maestro. Donne client_id OU query (nom, courriel ou téléphone) — jamais demander l'ID à l'utilisateur.", { client_id: { type: "string", description: "ID du client (optionnel)" }, query: { type: "string", description: "Nom, courriel ou téléphone si l'ID est inconnu" } }),
+    mk("get_client_profile", "Profil complet d'un client Maestro (coordonnées, adresse, téléphones, courriels ET dossiers/contrats hypothécaires). Donne client_id OU query (nom, courriel ou téléphone) — jamais demander l'ID à l'utilisateur.", { client_id: { type: "string", description: "ID du client (optionnel)" }, query: { type: "string", description: "Nom, courriel ou téléphone si l'ID est inconnu" } }),
+    mk("get_client_contracts", "Dossiers hypothécaires (contrats) d'un client Maestro : statut, institution, montant du prêt, taux, dates de clôture et d'échéance. Donne client_id OU query.", { client_id: { type: "string", description: "ID du client (optionnel)" }, query: { type: "string", description: "Nom, courriel ou téléphone si l'ID est inconnu" } }),
     mk("get_client_history", "Historique des communications client.", {
       client_id: { type: "string", description: "ID du client" },
       limit: { type: "number", description: "Nombre d'entrées (défaut: 20)" },
@@ -464,7 +465,7 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 export const EXPECTED_TOOL_NAMES = [
   "make_call", "get_active_calls", "hangup_call", "get_call_history", "get_recording", "get_transcript", "send_sms", "get_voicemails",
   "analyze_call", "get_hot_leads", "get_coaching_summary",
-  "search_client", "get_client_profile", "get_client_history", "list_tasks", "get_task", "list_task_targets", "create_task", "update_task", "delete_task", "submit_feedback", "create_appointment", "get_pending_tasks", "get_upcoming_appointments", "create_client",
+  "search_client", "get_client_profile", "get_client_contracts", "get_client_history", "list_tasks", "get_task", "list_task_targets", "create_task", "update_task", "delete_task", "submit_feedback", "create_appointment", "get_pending_tasks", "get_upcoming_appointments", "create_client",
   "list_my_clients", "get_maestro_client_profile", "list_my_brokers", "get_maestro_broker_profile",
   "get_commission_summary", "get_commission_by_lender", "compare_commission_periods", "list_commission_deposits", "list_financial_institutions", "get_commission_deposits", "get_commission_agents", "get_financial_institutions", "open_commission_report",
   "read_emails", "send_email", "search_contact", "propose_email_reply", "summarize_inbox", "update_calendar_event", "delete_calendar_event", "get_calendar_today", "get_calendar_week", "get_upcoming_meetings", "search_ms365_contacts", "find_contact", "search_directory", "list_company_directory",

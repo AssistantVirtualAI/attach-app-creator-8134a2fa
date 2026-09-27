@@ -31,7 +31,7 @@ const COMMISSION_ACTIONS = new Set(["summary", "deposits", "agents", "institutio
 
 const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "create_teams_chat", "send_teams_message", "reply_teams_message"]);
 const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "list_teams_chats", "create_teams_chat", "send_teams_message", "reply_teams_message", "search_contact"]);
-const MAESTRO_READ_ACTIONS = new Set(["list_clients", "client_profile", "list_brokers", "broker_profile", "list_contacts"]);
+const MAESTRO_READ_ACTIONS = new Set(["list_clients", "client_profile", "client_contracts", "list_brokers", "broker_profile", "list_contacts"]);
 const MAESTRO_ACTIONS = new Set([...MAESTRO_READ_ACTIONS, "create_task", "create_event"]);
 
 const MAESTRO_PAGE_SIZE = 10;
@@ -309,6 +309,9 @@ Deno.serve(async (req) => {
           view_client: "client_profile", open_client_profile: "client_profile", show_client_profile: "client_profile",
           search_client: "list_clients", search_clients: "list_clients", find_client: "list_clients",
           get_clients: "list_clients", lookup_client: "list_clients",
+          get_client_contracts: "client_contracts", client_deals: "client_contracts",
+          list_client_contracts: "client_contracts", dossiers_client: "client_contracts",
+          get_contracts: "client_contracts", contracts: "client_contracts",
         };
         action = ALIASES[action] ?? action;
         const clientName = String(
@@ -320,17 +323,19 @@ Deno.serve(async (req) => {
         // instead of being refused.
         if (!MAESTRO_ACTIONS.has(action)) {
           console.log("pp-ava-chat maestro unknown action", rawAction, Object.keys(payload));
-          action = payload.client_id
-            ? "client_profile"
-            : /profile|fiche|card|open|show|view|info|detail/.test(action) && clientName
+          action = /contract|dossier|deal|hypoth|mortgage/.test(action)
+            ? "client_contracts"
+            : payload.client_id
               ? "client_profile"
-              : /broker|courtier/.test(action)
-                ? "list_brokers"
-                : "list_clients";
+              : /profile|fiche|card|open|show|view|info|detail/.test(action) && clientName
+                ? "client_profile"
+                : /broker|courtier/.test(action)
+                  ? "list_brokers"
+                  : "list_clients";
         }
         if (action === "list_clients" && !payload.search && clientName) payload.search = clientName;
-        // Profile requested without an id: resolve by name first.
-        if (action === "client_profile" && !payload.client_id && clientName) {
+        // Profile/contracts requested without an id: resolve by name first.
+        if ((action === "client_profile" || action === "client_contracts") && !payload.client_id && clientName) {
           const found = await invokeFunction("maestro-actions", authHeader, { action: "list_clients", payload: { search: clientName, offset: 0, page_size: 5 } });
           const rows: any[] = found.data?.clients ?? found.data?.data ?? [];
           if (rows.length === 1 && (rows[0]?.id ?? rows[0]?.client_id)) {
@@ -417,14 +422,47 @@ Deno.serve(async (req) => {
           });
         }
 
+        // Rendu des dossiers (contrats) réels — aucune donnée inventée.
+        const fmtContracts = (rows: any[]) => rows.slice(0, 10).map((c: any, i: number) => {
+          const money = typeof c?.loan_amount === "number"
+            ? new Intl.NumberFormat(lang === "fr" ? "fr-CA" : "en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(c.loan_amount)
+            : null;
+          const bits = [
+            c?.financial_institution,
+            money,
+            c?.rate && `${c.rate}%`,
+            c?.status ?? c?.status_of_transaction,
+            c?.date_closing && `${L("clôture", "closing")} ${String(c.date_closing).slice(0, 10)}`,
+          ].filter(Boolean).join(" · ");
+          return `${i + 1}. ${c?.number ?? c?.id ?? "?"}${bits ? ` — ${bits}` : ""}`;
+        }).join("\n");
+
+        if (action === "client_contracts") {
+          const rows: any[] = d.contracts ?? [];
+          return json({
+            reply: rows.length
+              ? `${L("Dossiers Maestro", "Maestro files")} (${rows.length}):\n${fmtContracts(rows)}`
+              : L("Aucun dossier Maestro pour ce client.", "No Maestro file for this client."),
+            result: d, suggestions: [],
+          });
+        }
+
         if (action === "client_profile" || action === "broker_profile") {
           const p = d.profile ?? d.data ?? d;
           const name = p?.name ?? p?.full_name ?? [p?.first_name, p?.last_name].filter(Boolean).join(" ");
+          const contracts: any[] = Array.isArray(d.contracts) ? d.contracts : [];
           const lines = [
             name && `${L("Nom", "Name")}: ${name}`,
             p?.email && `${L("Courriel", "Email")}: ${p.email}`,
             (p?.phone ?? p?.mobile) && `${L("Téléphone", "Phone")}: ${p.phone ?? p.mobile}`,
+            p?.work_phone && `${L("Bureau", "Work")}: ${p.work_phone}`,
+            p?.address && `${L("Adresse", "Address")}: ${typeof p.address === "string" ? p.address : (p.address_line ?? "")}`,
             p?.status && `${L("Statut", "Status")}: ${p.status}`,
+            contracts.length
+              ? `\n${L("Dossiers", "Files")} (${contracts.length}):\n${fmtContracts(contracts)}`
+              : (action === "client_profile" && !d.contracts_error
+                  ? L("Aucun dossier Maestro actif.", "No active Maestro file.")
+                  : null),
           ].filter(Boolean).join("\n");
           return json({ reply: lines || L("Profil Maestro récupéré.", "Maestro profile loaded."), result: d, suggestions: [] });
         }
@@ -612,7 +650,7 @@ SMS non lus: ${smsUnread ?? 0}`;
     : "LANGUAGE: ALWAYS answer 100% in English (including suggestion labels and titles), even if the underlying data or these instructions are in French. Never reply in French."}
  Réponds court et actionnable. Tu peux proposer jusqu'à 4 suggestions (kind: call/sms/email/reminder/maestro_action/ms365_action/open_voice/open_coach).
  Pour 'call' mets payload.number. Pour 'sms' mets payload.number et payload.message. Si le numéro n’est pas disponible mais qu’un seul contact est clairement identifié, mets payload.contact_name et payload.message; ne mets jamais un nom dans payload.number. S’il y a plusieurs contacts ou plusieurs numéros possibles, demande lequel avant de proposer l’envoi. Pour 'email' préfère ms365_action avec payload.action='send_email'. Pour 'reminder' payload.title/due_at. Pour 'maestro_action' payload.action et payload.* requis.
- MAESTRO CLIENTS/COURTIERS: tu peux consulter la liste des clients et des courtiers du courtier ainsi que leurs profils détaillés. Utilise kind='maestro_action' avec payload.action parmi: list_clients (payload.search, payload.offset pour pagination, payload.limit), client_profile (payload.client_id), list_brokers (payload.search, payload.offset pour pagination), broker_profile (payload.broker_id). Si la section "Clients Maestro" ou "Courtiers Maestro" apparaît dans [Contexte], réponds directement avec ces données (nom, téléphone, courriel) sans redemander.
+ MAESTRO CLIENTS/COURTIERS: tu peux consulter la liste des clients et des courtiers du courtier, leurs profils détaillés et leurs dossiers hypothécaires. Utilise kind='maestro_action' avec payload.action parmi: list_clients (payload.search, payload.offset pour pagination, payload.limit), client_profile (payload.client_id OU payload.client_name — retourne aussi les dossiers/contrats du client), client_contracts (payload.client_id OU payload.client_name — statut, institution, montant, taux, dates), list_brokers (payload.search, payload.offset pour pagination), broker_profile (payload.broker_id). Ne demande jamais l'ID Maestro à l'utilisateur: donne le nom, le courriel ou le téléphone. Ne jamais inventer un montant, un taux, un statut ou une date: n'affiche que ce que Maestro retourne. Si la section "Clients Maestro" ou "Courtiers Maestro" apparaît dans [Contexte], réponds directement avec ces données (nom, téléphone, courriel) sans redemander.
 
  COMMISSIONS: pour toute question sur les commissions, dépôts, prêteurs ou volume, utilise kind='commission_action' avec payload.action parmi: summary, deposits, agents (admin), institutions, et payload.filters (period, date_from, date_to, commission_type, financial_inst_id). Réponds avec des montants agrégés; ne divulgue jamais de noms de clients complets. Propose kind='open_commissions' pour ouvrir la page détaillée.
  Pour Microsoft utilise kind='ms365_action' et payload.action parmi: read_emails, read_email_detail, list_calendar_events, send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, search_contact.

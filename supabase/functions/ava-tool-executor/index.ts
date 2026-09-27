@@ -741,22 +741,33 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async get_client_profile(ctx, p) {
     let cid = firstText(p?.client_id, p?.id);
+    let searchHit: any = null;
+    // Maestro profile routes only accept the numeric Maestro client number.
+    // Older chat/tool calls sometimes put a name or email in `client_id`.
+    const suppliedLookup = cid && !/^\d+$/.test(cid) ? cid : "";
+    if (suppliedLookup) cid = "";
     if (!cid) {
       // Le bot vocal donne souvent un nom, courriel ou téléphone au lieu d'un ID.
-      const q = firstText(p?.query, p?.client_name, p?.name, p?.email, p?.phone, p?.phone_number);
+      const q = firstText(suppliedLookup, p?.query, p?.client_name, p?.name, p?.email, p?.phone, p?.phone_number);
       if (!q) return { success: false, error: "client_id_or_query_required" };
       const found: any = await (TOOLS as any).search_client(ctx, { query: q });
       const list = found?.clients ?? [];
       if (!list.length) return { success: false, error: "client_not_found", message: `Aucun client Maestro pour ${q}` };
       if (list.length > 1) return { success: true, multiple: true, clients: list, message: "Plusieurs clients correspondent; demande lequel." };
-      const hit = list[0];
-      cid = String(hit?.maestro_client_id ?? hit?.id ?? hit?.client_id ?? "");
-      if (!cid) return { success: true, profile: hit, source: "search" };
+      searchHit = list[0];
+      const resolvedId = firstText(searchHit?.client_id, searchHit?.maestro_client_id, searchHit?.id);
+      cid = resolvedId && /^\d+$/.test(resolvedId) ? resolvedId : "";
+      // Some broker directories expose the contact details but not the numeric
+      // profile key. Return those real directory details instead of calling a
+      // profile URL with an email/name and surfacing a misleading HTTP 404.
+      if (!cid) return { success: true, profile: searchHit, source: "broker_directory" };
     }
     const r = await maestroActions(ctx, "client_profile", { client_id: cid });
     return r?.success
       ? { success: true, profile: r.profile ?? r.raw ?? r.data ?? null }
-      : { success: false, error: r?.error ?? "maestro_client_profile_failed" };
+      : searchHit
+        ? { success: true, profile: searchHit, source: "broker_directory", profile_unavailable: true }
+        : { success: false, error: r?.error ?? "maestro_client_profile_failed" };
   },
 
   async get_client_history(ctx, p) {

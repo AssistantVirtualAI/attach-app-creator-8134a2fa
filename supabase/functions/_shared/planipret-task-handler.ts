@@ -577,7 +577,17 @@ export async function handleTaskRequest(
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const { admin, userId, profile, token } = deps;
   const nowFn = deps.now ?? (() => new Date());
-  const action = String(body?.action ?? "list");
+  let action = String(body?.action ?? "list");
+  // Legacy clients send update { status: "complete" }, which Maestro ignores.
+  // Route it to the real completion path so the task actually closes.
+  {
+    const ch = body?.changes ?? {};
+    const st = String(ch?.status ?? "").toLowerCase();
+    if (action === "update" && ["complete", "completed", "done"].includes(st) && Object.keys(ch).length === 1) {
+      action = "complete";
+      body = { ...body, action: "complete", idempotency_key: undefined };
+    }
+  }
   const source = String(body?.source ?? "app");
   const sessionId = body?.session_id ?? null;
   const correlation_id = String(body?.correlation_id ?? newCorrelationId());

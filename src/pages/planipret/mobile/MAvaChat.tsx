@@ -609,7 +609,7 @@ export default function MAvaChat() {
           style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-agent)" }}
         />
         <button
-          onClick={send}
+          onClick={() => void send()}
           disabled={busy || !input.trim()}
           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white disabled:opacity-40 transition-transform active:scale-95"
           style={{ background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", boxShadow: "0 6px 18px rgba(124,58,237,0.45)" }}

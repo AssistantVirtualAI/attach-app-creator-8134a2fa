@@ -243,6 +243,48 @@ describe("planipret task handler — update & delete", () => {
     expect((out.body as any).diagnostics.issues).toContain("status_unverifiable");
   });
 
+  it("confirms completion only when Maestro reads the task back as complete", async () => {
+    const { deps } = makeDeps({
+      listFetch: async () => ({
+        ok: true,
+        tasks: [{ id: 946044, status: "complete", users: [{ id: 93135 }] }],
+        endpoint: "/api/main/tasks",
+        status: 200,
+        complete: true,
+      }),
+    });
+    const out = await handleTaskRequest(
+      { action: "update", task_id: "946044", changes: { status: "complete" } },
+      deps,
+    );
+    expect(out.body).toMatchObject({ success: true, read_back: true, visible_in_maestro: true });
+    expect((out.body as any).task.status).toBe("complete");
+  });
+
+  it("keeps a task open when Maestro ignores the completion status", async () => {
+    const { deps } = makeDeps({
+      listFetch: async () => ({
+        ok: true,
+        tasks: [{ id: 946044, status: "pending", users: [{ id: 93135 }] }],
+        endpoint: "/api/main/tasks",
+        status: 200,
+        complete: true,
+      }),
+    });
+    const out = await handleTaskRequest(
+      { action: "update", task_id: "946044", changes: { status: "complete" } },
+      deps,
+    );
+    expect(out.body).toMatchObject({
+      success: false,
+      pending_confirmation: true,
+      error: "maestro_update_readback_mismatch",
+      task: null,
+    });
+    expect((out.body as any).diagnostics.issues).toContain("status_mismatch");
+    expect((out.body as any).message).toContain("demeure ouverte");
+  });
+
   it("rejects an update with no updatable field", async () => {
     const { deps } = makeDeps();
     const out = await handleTaskRequest({ action: "update", task_id: "1", changes: { foo: "bar" } }, deps);

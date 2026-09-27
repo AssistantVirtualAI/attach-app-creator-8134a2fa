@@ -34,7 +34,7 @@ type Session = { id: string; title: string; last_message_at: string };
 const MUTATING_ACTIONS = new Set([
   "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event",
   "send_teams_message", "reply_teams_message", "create_teams_chat",
-  "create_task", "update_task", "delete_task", "create_event", "create_appointment",
+  "create_task", "update_task", "delete_task", "complete_task", "reschedule_task", "create_event", "create_appointment",
   "create_client", "update_client", "push_call_summary", "push_client_note", "push_communication_log",
 ]);
 const CONFIRM_RE = /^(oui|ok|okay|confirm[eé]?|confirm[eé] pour envoyer|j['’]?autorise|autorise|vas-y|go|envoie|envoyer|appelle|appel|cr[eé]e|supprime|delete|yes|yep|approved?|approuv[eé])\b/i;

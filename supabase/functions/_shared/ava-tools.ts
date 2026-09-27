@@ -206,6 +206,15 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       task_id: { type: "string", description: "ID de la tâche" },
       confirmed: { type: "boolean", description: "true seulement après confirmation explicite du courtier" },
     }, ["task_id"]),
+    mk("complete_task", "Marque une tâche terminée dans Maestro (fermeture officielle + relecture). Fournir task_id OU search (titre/nom du client). Demande confirmation. Ne dis « terminée » que si le résultat contient completed=true.", {
+      task_id: { type: "string", description: "ID de la tâche (optionnel si search)" },
+      search: { type: "string", description: "Texte de la tâche ou nom du client pour la retrouver" },
+    }),
+    mk("reschedule_task", "Reporte une tâche à une nouvelle date/heure (America/Toronto). Fournir task_id OU search. Demande confirmation.", {
+      task_id: { type: "string", description: "ID de la tâche (optionnel si search)" },
+      search: { type: "string", description: "Texte de la tâche ou nom du client pour la retrouver" },
+      due_at: { type: "string", description: "Nouvelle échéance YYYY-MM-DD HH:mm:ss ou ISO (heure de Toronto)" },
+    }, ["due_at"]),
 
     mk("create_appointment", "Crée un rendez-vous dans Maestro + M365.", {
       client_id: { type: "string", description: "ID du client" },
@@ -465,7 +474,7 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 export const EXPECTED_TOOL_NAMES = [
   "make_call", "get_active_calls", "hangup_call", "get_call_history", "get_recording", "get_transcript", "send_sms", "get_voicemails",
   "analyze_call", "get_hot_leads", "get_coaching_summary",
-  "search_client", "get_client_profile", "get_client_contracts", "get_client_history", "list_tasks", "get_task", "list_task_targets", "create_task", "update_task", "delete_task", "submit_feedback", "create_appointment", "get_pending_tasks", "get_upcoming_appointments", "create_client",
+  "search_client", "get_client_profile", "get_client_contracts", "get_client_history", "list_tasks", "get_task", "list_task_targets", "create_task", "update_task", "delete_task", "complete_task", "reschedule_task", "submit_feedback", "create_appointment", "get_pending_tasks", "get_upcoming_appointments", "create_client",
   "list_my_clients", "get_maestro_client_profile", "list_my_brokers", "get_maestro_broker_profile",
   "get_commission_summary", "get_commission_by_lender", "compare_commission_periods", "list_commission_deposits", "list_financial_institutions", "get_commission_deposits", "get_commission_agents", "get_financial_institutions", "open_commission_report",
   "read_emails", "send_email", "search_contact", "propose_email_reply", "summarize_inbox", "update_calendar_event", "delete_calendar_event", "get_calendar_today", "get_calendar_week", "get_upcoming_meetings", "search_ms365_contacts", "find_contact", "search_directory", "list_company_directory",

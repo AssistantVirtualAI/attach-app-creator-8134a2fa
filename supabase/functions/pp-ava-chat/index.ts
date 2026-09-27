@@ -671,6 +671,24 @@ Deno.serve(async (req) => {
                   })
                 : [];
               if (exactMatches.length === 1) list = exactMatches;
+              if (exactMatches.length > 1) {
+                const detailedProfiles = await Promise.all(exactMatches.slice(0, 5).map(async (client: any) => {
+                  const clientId = client?.id ?? client?.client_id;
+                  if (!clientId) return { profile: client, contracts: [] };
+                  const detail = await invokeFunction("maestro-actions", authHeader, {
+                    action: "client_profile",
+                    payload: { client_id: clientId, with_contracts: true },
+                  });
+                  return detail.ok && detail.data?.success
+                    ? detail.data
+                    : { success: true, profile: client, contracts: [], profile_unavailable: true };
+                }));
+                return json({
+                  reply: `${L("Plusieurs profils Maestro correspondent :", "Several Maestro profiles match:")}\n\n${detailedProfiles.map((item, index) => `${index + 1}. ${formatMaestroProfile(item, lang)}`).join("\n\n")}`,
+                  result: { success: true, profiles: detailedProfiles },
+                  suggestions: [],
+                });
+              }
               if (list.length === 1) {
                 const clientId = list[0]?.id ?? list[0]?.client_id;
                 if (clientId) {

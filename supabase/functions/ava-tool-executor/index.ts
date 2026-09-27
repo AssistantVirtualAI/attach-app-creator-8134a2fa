@@ -706,10 +706,11 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       if (!query) return { success: false, error: "query_required" };
       // Cache first, but never cross a broker boundary. The cache is only an
       // acceleration of the live per-user Maestro lookup, not a shared directory.
+      const safe = query.replace(/[%,()*]/g, " ").trim();
       const { data: cached } = await ctx.admin.from("planipret_maestro_clients")
         .select("*")
         .eq("user_id", ctx.userId)
-        .or(`full_name.ilike.%${query}%,phone_e164.ilike.%${query}%,email.ilike.%${query}%`)
+        .or(`full_name.ilike.*${safe}*,phone_e164.ilike.*${safe}*,email.ilike.*${safe}*`)
         .limit(5);
       if (cached?.length) return { success: true, found: true, clients: cached, source: "cache" };
 
@@ -717,7 +718,19 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       // The published per-user client directory supports the user-facing
       // search; avoid the private lookup-by-phone route even for numeric input.
       const r = await maestroActions(ctx, "list_clients", { search: query, limit: 5 });
-      const clients = r?.clients ?? [];
+      let clients = r?.clients ?? [];
+      if (!clients.length) {
+        // Same broker-scoped directory as global search: tolerant, token-based
+        // local match (e.g. "Time out" ↔ "time out Maestro").
+        const norm = (v: unknown) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        const tokens = norm(query).split(/\s+/).filter(Boolean);
+        const all = await maestroActions(ctx, "list_clients", { limit: 500 });
+        clients = (all?.clients ?? []).filter((c: any) => {
+          const hay = norm(`${c?.full_name ?? ""} ${c?.name ?? ""} ${c?.email ?? ""} ${c?.phone ?? ""} ${c?.cell_phone ?? ""}`);
+          return tokens.every((t) => hay.includes(t));
+        }).slice(0, 5);
+        if (clients.length) return { success: true, found: true, clients, source: "maestro" };
+      }
       return r?.success
         ? { success: true, found: clients.length > 0, clients, source: "maestro" }
         : { success: false, error: r?.error ?? "maestro_search_failed" };

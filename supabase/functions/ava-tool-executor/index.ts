@@ -740,8 +740,20 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async get_client_profile(ctx, p) {
-    if (!p?.client_id) return { success: false, error: "client_id_required" };
-    const r = await maestroActions(ctx, "client_profile", { client_id: p.client_id });
+    let cid = firstText(p?.client_id, p?.id);
+    if (!cid) {
+      // Le bot vocal donne souvent un nom, courriel ou téléphone au lieu d'un ID.
+      const q = firstText(p?.query, p?.client_name, p?.name, p?.email, p?.phone, p?.phone_number);
+      if (!q) return { success: false, error: "client_id_or_query_required" };
+      const found: any = await (TOOLS as any).search_client(ctx, { query: q });
+      const list = found?.clients ?? [];
+      if (!list.length) return { success: false, error: "client_not_found", message: `Aucun client Maestro pour ${q}` };
+      if (list.length > 1) return { success: true, multiple: true, clients: list, message: "Plusieurs clients correspondent; demande lequel." };
+      const hit = list[0];
+      cid = String(hit?.maestro_client_id ?? hit?.id ?? hit?.client_id ?? "");
+      if (!cid) return { success: true, profile: hit, source: "search" };
+    }
+    const r = await maestroActions(ctx, "client_profile", { client_id: cid });
     return r?.success
       ? { success: true, profile: r.profile ?? r.raw ?? r.data ?? null }
       : { success: false, error: r?.error ?? "maestro_client_profile_failed" };
@@ -782,18 +794,19 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   // ===== MAESTRO — endpoints mobiles (/users/{id}/clients|brokers) =====
   async list_my_clients(ctx, p) {
-    // GET /api/main/clients is not documented and returns 405. Client listing
-    // therefore uses the live read-only broker directory endpoint.
-    const r = await maestroActions(ctx, "list_clients", { search: p?.search, limit: p?.limit ?? 25 });
+    const search = firstText(p?.search, p?.query, p?.name, p?.email, p?.phone);
+    if (search) {
+      const found: any = await (TOOLS as any).search_client(ctx, { query: search });
+      if (found?.success) return { ...found, count: (found.clients ?? []).length };
+    }
+    const r = await maestroActions(ctx, "list_clients", { search, limit: p?.limit ?? 25 });
     return r?.success
       ? { success: true, source: "broker_directory", clients: r.clients ?? [], count: (r.clients ?? []).length }
       : { success: false, error: r?.error ?? "maestro_list_clients_failed" };
   },
 
   async get_maestro_client_profile(ctx, p) {
-    if (!p?.client_id) return { success: false, error: "client_id_required" };
-    const r = await maestroActions(ctx, "client_profile", { client_id: p.client_id });
-    return r?.success ? { success: true, profile: r.profile ?? r.data ?? null } : { success: false, error: r?.error ?? "maestro_client_profile_failed" };
+    return (TOOLS as any).get_client_profile(ctx, p);
   },
 
   async list_my_brokers(ctx, p) {

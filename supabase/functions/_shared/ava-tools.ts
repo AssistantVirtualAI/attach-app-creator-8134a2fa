@@ -160,7 +160,7 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 
     // Maestro CRM
     mk("search_client", "Cherche un client dans Maestro CRM.", { query: { type: "string", description: "Nom, téléphone ou email" } }, ["query"]),
-    mk("get_client_profile", "Profil complet d'un client Maestro.", { client_id: { type: "string", description: "ID du client" } }, ["client_id"]),
+    mk("get_client_profile", "Profil complet d'un client Maestro. Donne client_id OU query (nom, courriel ou téléphone) — jamais demander l'ID à l'utilisateur.", { client_id: { type: "string", description: "ID du client (optionnel)" }, query: { type: "string", description: "Nom, courriel ou téléphone si l'ID est inconnu" } }),
     mk("get_client_history", "Historique des communications client.", {
       client_id: { type: "string", description: "ID du client" },
       limit: { type: "number", description: "Nombre d'entrées (défaut: 20)" },
@@ -233,9 +233,10 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       search: { type: "string", description: "Recherche par nom, téléphone ou email (optionnel)" },
       limit: { type: "number", description: "Nombre (défaut: 25)" },
     }),
-    mk("get_maestro_client_profile", "Profil détaillé d'un client Maestro du courtier (/users/{id}/clients/{client_id}/profile).", {
-      client_id: { type: "string", description: "ID du client Maestro" },
-    }, ["client_id"]),
+    mk("get_maestro_client_profile", "Profil détaillé d'un client Maestro du courtier. Donne client_id OU query (nom, courriel, téléphone).", {
+      client_id: { type: "string", description: "ID du client Maestro (optionnel)" },
+      query: { type: "string", description: "Nom, courriel ou téléphone si l'ID est inconnu" },
+    }),
     mk("list_my_brokers", "Liste les courtiers/collègues Maestro visibles (/users/{id}/brokers).", {
       search: { type: "string", description: "Recherche (optionnel)" },
       limit: { type: "number", description: "Nombre (défaut: 25)" },

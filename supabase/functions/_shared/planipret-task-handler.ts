@@ -1267,6 +1267,18 @@ export async function handleTaskRequest(
     return { status: 200, body: out.body };
   }
 
+  // Legacy clients send update { status: "complete" }, which Maestro ignores.
+  // Route it to the real completion path so the task actually closes.
+  if (action === "update") {
+    const ch = body?.changes ?? {};
+    const st = String(ch?.status ?? "").toLowerCase();
+    if (["complete", "completed", "done"].includes(st) && Object.keys(ch).length === 1) {
+      return handlePlanipretTaskRequest
+        ? await (handlePlanipretTaskRequest as any)(req, { ...body, action: "complete", idempotency_key: undefined }, deps)
+        : { status: 200, body: { success: false, code: "complete_unavailable", correlation_id } };
+    }
+  }
+
   // ── UPDATE ─────────────────────────────────────────────────────────────────
   if (action === "update") {
     const taskId = String(body?.task_id ?? "").trim();

@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
       }
       if (kind === "ms365_action") {
         const action = String(payload.action ?? "");
-        if (!MS365_ACTIONS.has(action)) return json({ reply: L("Action Microsoft inconnue.", "Unknown Microsoft action."), suggestions: [] }, 400);
+        if (!MS365_ACTIONS.has(action)) return json({ reply: L("Cette action Microsoft n'est plus disponible. Reformule ta demande.", "This Microsoft action is no longer available. Please rephrase."), suggestions: [] }, 200);
         if (MUTATING_MS365.has(action) && body?.approved !== true) {
           return json({ reply: L("Cette action nécessite votre confirmation avant l'envoi.", "This action requires your confirmation before sending."), suggestions: [confirmAction] });
         }

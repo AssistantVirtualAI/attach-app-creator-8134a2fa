@@ -298,7 +298,29 @@ Deno.serve(async (req) => {
         }, ok ? 200 : 200);
       }
       if (kind === "maestro_action") {
-        const action = String(payload.action ?? "");
+        let action = String(payload.action ?? "").trim().toLowerCase();
+        const ALIASES: Record<string, string> = {
+          open_client: "client_profile", show_client: "client_profile", get_client: "client_profile",
+          get_client_profile: "client_profile", client_card: "client_profile", fiche_client: "client_profile",
+          view_client: "client_profile", open_client_profile: "client_profile", show_client_profile: "client_profile",
+          search_client: "list_clients", search_clients: "list_clients", find_client: "list_clients",
+          get_clients: "list_clients", lookup_client: "list_clients",
+        };
+        action = ALIASES[action] ?? action;
+        const clientName = String(payload.client_name ?? payload.name ?? payload.search ?? payload.query ?? "").trim();
+        if (!action && (payload.client_id || clientName)) action = payload.client_id ? "client_profile" : "list_clients";
+        // Profile requested without an id: resolve by name first.
+        if (action === "client_profile" && !payload.client_id && clientName) {
+          const found = await invokeFunction("maestro-actions", authHeader, { action: "list_clients", payload: { search: clientName, offset: 0, page_size: 5 } });
+          const rows: any[] = found.data?.clients ?? found.data?.data ?? [];
+          if (rows.length === 1 && (rows[0]?.id ?? rows[0]?.client_id)) {
+            payload.client_id = rows[0].id ?? rows[0].client_id;
+          } else {
+            action = "list_clients";
+            payload.search = clientName;
+          }
+        }
+        payload.action = action;
         if (!MAESTRO_ACTIONS.has(action)) {
           return json({ reply: L("Je ne peux pas exécuter cette action directement. Reformule ta demande et je m'en occupe.", "I can't run this action directly. Rephrase your request and I'll take care of it."), suggestions: [] }, 200);
         }

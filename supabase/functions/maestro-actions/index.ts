@@ -608,13 +608,22 @@ Deno.serve(async (req) => {
 
         if (!isList) {
           const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
+          const wantContracts = action === "client_profile" && payload.with_contracts !== false;
+          const cid = String(payload.client_id ?? "").trim();
           if (!r.ok) {
             console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
             return j({ success: false, error: `Maestro indisponible (HTTP ${r.status ?? "?"})`, status: r.status, details: r.data });
           }
           const d: any = r.data;
           const obj = d?.profile ?? d?.client ?? d?.broker ?? d?.data ?? d;
-          return j({ success: true, profile: normalizeContact(obj), raw: obj });
+          let contracts: any[] | null = null;
+          let contracts_error: string | null = null;
+          if (wantContracts && cid) {
+            const c = await clientContracts(admin, callerId, cid).catch(() => ({ contracts: null, error: "contracts_unavailable" }));
+            contracts = c.contracts;
+            contracts_error = c.error;
+          }
+          return j({ success: true, profile: normalizeContact(obj), contracts, contracts_error, raw: obj });
         }
 
         const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });

@@ -110,7 +110,10 @@ function extractNameTokens(text: string): { emails: string[]; names: string[] } 
   const emails = Array.from(text.matchAll(/[\w.+-]+@[\w.-]+\.\w+/g)).map(m => m[0]);
   const quoted = Array.from(text.matchAll(/["“']([^"”']{2,60})["”']/g)).map(m => m[1]);
   const caps = Array.from(text.matchAll(/\b([A-ZÉÈÀÂÊÎÔÛÇ][a-zéèàâêîôûç'\-]{1,}(?:\s+[A-ZÉÈÀÂÊÎÔÛÇ][a-zéèàâêîôûç'\-]{1,}){0,2})\b/g)).map(m => m[1]);
-  const stop = new Set(["Bonjour", "Salut", "Hello", "Envoie", "Envoyer", "Envoi", "Courriel", "Email", "Mail", "Contact", "Ava", "AVA", "Microsoft", "Teams", "Outlook"]);
+  const stop = new Set(["Bonjour", "Salut", "Hello", "Hi", "Envoie", "Envoyer", "Envoi", "Courriel", "Email", "Mail", "Contact", "Ava", "AVA", "Microsoft", "Teams", "Outlook",
+    "Find", "Fetch", "Search", "Show", "Get", "Give", "Look", "Open", "Can", "Could", "Please", "Pull", "Display", "Where", "What", "Who", "I", "My",
+    "Trouve", "Trouver", "Cherche", "Chercher", "Recherche", "Montre", "Affiche", "Donne", "Ouvre", "Sors", "Sort", "Peux", "Est", "Quel", "Quelle", "Qui", "Où", "Je", "Mon", "Ma", "Mes",
+    "Maestro", "Client", "Clients", "Customer", "Customers", "Profil", "Profile", "Fiche", "Dossier", "Dossiers", "Liste", "List", "Contrat", "Contrats", "Contracts"]);
   // Also catch lowercase names right after an action verb ("appelle jean tremblay").
   const afterVerb = Array.from(
     text.matchAll(/\b(?:appelle[rz]?|appeler|call|t[ée]l[ée]phone[rz]?|texte[rz]?|envoie|écris|ecris)\s+(?:un\s+)?(?:sms|texto|message|courriel|email)?\s*(?:à|a|to)?\s*([\p{L}'\-]{2,}(?:\s+[\p{L}'\-]{2,}){0,2})/giu),
@@ -591,13 +594,24 @@ Deno.serve(async (req) => {
       if (/\bclients?\b|\bcourtiers?\b|\bbrokers?\b|\bdossiers?\b|\bportefeuille\b|\bmaestro\b|\bprospects?\b|\bpipeline\b|\bcustomers?\b|\bmes\s+clients\b|\bmy\s+clients\b|\bliste\b|\blist\b/i.test(userMessage)) {
         try {
           const isBroker = /\bcourtiers?\b|\bbrokers?\b/i.test(userMessage);
-          const r = await invokeFunction("maestro-actions", authHeader, {
-            action: isBroker ? "list_brokers" : "list_clients",
-            payload: { search: tokens.emails[0] ?? tokens.names.slice(0, 3).join(" "), limit: 25 },
-          });
-          if (r.ok && (r.data as any)?.success) {
-            const list = (r.data as any).clients ?? (r.data as any).brokers ?? [];
-            dataBlocks.push(`${isBroker ? "Courtiers" : "Clients"} Maestro: ${JSON.stringify(list).slice(0, 3000)}`);
+          const phones = Array.from(userMessage.matchAll(/\+?\d[\d\s().-]{8,}\d/g)).map(m => m[0].replace(/\D/g, ""));
+          const candidates = Array.from(new Set([...tokens.emails, ...phones, ...tokens.names].filter(Boolean))).slice(0, 4);
+          if (!candidates.length) candidates.push("");
+          let r: any = null; let list: any[] = []; let usedTerm = "";
+          for (const term of candidates) {
+            r = await invokeFunction("maestro-actions", authHeader, {
+              action: isBroker ? "list_brokers" : "list_clients",
+              payload: { search: term, limit: 25 },
+            });
+            if (!(r.ok && (r.data as any)?.success)) break;
+            list = (r.data as any).clients ?? (r.data as any).brokers ?? [];
+            usedTerm = term;
+            if (list.length) break;
+          }
+          if (r?.ok && (r.data as any)?.success) {
+            dataBlocks.push(list.length
+              ? `${isBroker ? "Courtiers" : "Clients"} Maestro (recherche « ${usedTerm} »): ${JSON.stringify(list).slice(0, 3000)}. Ces données sont réelles: affiche-les directement.`
+              : `${isBroker ? "Courtiers" : "Clients"} Maestro: aucun résultat pour ${JSON.stringify(candidates)}.`);
           } else {
             const err = String((r.data as any)?.error ?? `HTTP ${r.status}`);
             dataBlocks.push(/maestro_user_id_unresolved|maestro_not_connected|maestro_not_configured/.test(err)

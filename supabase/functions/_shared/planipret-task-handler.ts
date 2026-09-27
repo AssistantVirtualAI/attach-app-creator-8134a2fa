@@ -460,6 +460,25 @@ async function findTaskInCallerScope(
       if (found) return { task: found, endpoint: upstream.endpoint };
     } catch { /* continue with another documented scoped identity */ }
   }
+
+  // Maestro does not always return a broker's own task through the documented
+  // filters. Fall back to the general lookup, but only accept the task when it
+  // is actually assigned to one of the caller's identities.
+  for (const candidate of candidates) {
+    try {
+      const upstream = await deps.listFetch(candidate, {
+        status: null, type: null, from: null, to: null, findTaskId: taskId,
+      });
+      if (!upstream.ok) continue;
+      const raw = (upstream.tasks ?? []).find((item: any) => String(normalizeTask(item).id) === taskId);
+      if (!raw) continue;
+      const assignment = readAssignment(raw);
+      const assigned = (assignment.ids ?? []).map((v: any) => String(v ?? "").trim()).filter(Boolean);
+      if (assigned.some((id) => candidates.includes(id))) {
+        return { task: normalizeTask(raw), endpoint: upstream.endpoint };
+      }
+    } catch { /* fail closed */ }
+  }
   return null;
 }
 

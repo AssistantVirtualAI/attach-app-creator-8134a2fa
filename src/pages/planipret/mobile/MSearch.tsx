@@ -334,7 +334,10 @@ export default function MSearch() {
                   onClick={() => {
                     const name = c.full_name ?? c.name ?? "";
                     const key = String(name).trim().toLowerCase().replace(/\s+/g, " ");
-                    if (key) navigate(`/mplanipret/clients-360/${encodeURIComponent(key)}`);
+                    if (!key) return;
+                    const mid = c.id ?? c.client_id ?? c.maestro_client_id ?? null;
+                    const query = mid ? `?mid=${encodeURIComponent(String(mid))}` : "";
+                    navigate(`/mplanipret/clients-360/${encodeURIComponent(key)}${query}`);
                   }}
                   className="w-full text-left p-3 bg-white rounded-lg text-sm">
                   <div className="font-medium">{c.name ?? c.full_name ?? "Contact"}</div>

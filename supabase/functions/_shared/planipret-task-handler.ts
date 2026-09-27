@@ -187,6 +187,13 @@ function updateReadBackMatches(task: NormalizedTask, payload: Record<string, unk
     && String(raw?.status_option_id ?? "") !== String(payload.status_option_id)) {
     issues.push("status_option_mismatch");
   }
+  // A successful PUT is not proof that Maestro applied a textual status. Its
+  // API may return 200 while silently keeping the task pending. The live GET is
+  // the source of truth, especially for the green completion button.
+  if (payload.status !== undefined
+    && String(task.status ?? "").trim().toLowerCase() !== String(payload.status).trim().toLowerCase()) {
+    issues.push("status_mismatch");
+  }
   // `update_status` is documented only in conjunction with the selected
   // `status_option_id`; Maestro does not document a textual "completed"
   // value or a global completion-option id. Never guess one.
@@ -1330,7 +1337,9 @@ export async function handleTaskRequest(
             visible_in_maestro: false,
             endpoint: readBackEndpoint,
             message: readBack
-              ? "Maestro affiche la tâche, mais les modifications demandées ne sont pas encore confirmées."
+              ? comparison.issues.includes("status_mismatch")
+                ? "Maestro n’a pas marqué la tâche terminée. Elle demeure ouverte."
+                : "Maestro affiche la tâche, mais les modifications demandées ne sont pas encore confirmées."
               : "Maestro a accepté la demande, mais la modification n’est pas encore relue dans sa liste.",
             diagnostics: { issues: comparison.issues, list_complete: readBackComplete, expected_assignee: expectedAssignee },
             correlation_id,

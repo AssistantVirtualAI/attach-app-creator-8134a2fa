@@ -31,7 +31,7 @@ const COMMISSION_ACTIONS = new Set(["summary", "deposits", "agents", "institutio
 
 const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "create_teams_chat", "send_teams_message", "reply_teams_message"]);
 const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "list_teams_chats", "create_teams_chat", "send_teams_message", "reply_teams_message", "search_contact"]);
-const MAESTRO_READ_ACTIONS = new Set(["list_clients", "client_profile", "list_brokers", "broker_profile", "list_contacts"]);
+const MAESTRO_READ_ACTIONS = new Set(["list_clients", "client_profile", "client_contracts", "list_brokers", "broker_profile", "list_contacts"]);
 const MAESTRO_ACTIONS = new Set([...MAESTRO_READ_ACTIONS, "create_task", "create_event"]);
 
 const MAESTRO_PAGE_SIZE = 10;

@@ -298,7 +298,11 @@ Deno.serve(async (req) => {
         }, ok ? 200 : 200);
       }
       if (kind === "maestro_action") {
-        let action = String(payload.action ?? "").trim().toLowerCase();
+        // Some model outputs nest the real params one level deeper.
+        const nested = (payload as any).payload && typeof (payload as any).payload === "object" ? (payload as any).payload : null;
+        if (nested) for (const [k, v] of Object.entries(nested)) if ((payload as any)[k] === undefined) (payload as any)[k] = v;
+        const rawAction = String(payload.action ?? (nested as any)?.action ?? "").trim().toLowerCase();
+        let action = rawAction;
         const ALIASES: Record<string, string> = {
           open_client: "client_profile", show_client: "client_profile", get_client: "client_profile",
           get_client_profile: "client_profile", client_card: "client_profile", fiche_client: "client_profile",
@@ -307,14 +311,22 @@ Deno.serve(async (req) => {
           get_clients: "list_clients", lookup_client: "list_clients",
         };
         action = ALIASES[action] ?? action;
-        const clientName = String(payload.client_name ?? payload.name ?? payload.search ?? payload.query ?? payload.email ?? payload.phone ?? "").trim();
-        if (!action && (payload.client_id || clientName)) action = payload.client_id ? "client_profile" : "list_clients";
-        // Any other client/contact wording the model invents (e.g. "search_all_maestro_clients")
-        // maps to the documented read actions instead of being refused.
-        if (!MAESTRO_ACTIONS.has(action) && /client|contact|customer|fiche|search|find|lookup|cherch/.test(action)) {
-          action = payload.client_id ? "client_profile"
-            : /profile|fiche|open|show|view|card|info/.test(action) && clientName ? "client_profile"
-            : "list_clients";
+        const clientName = String(
+          payload.client_name ?? payload.name ?? payload.search ?? payload.query ?? payload.q ??
+          payload.term ?? payload.keyword ?? payload.full_name ?? payload.client ?? payload.customer ??
+          payload.customer_name ?? payload.contact_name ?? payload.email ?? payload.phone ?? "",
+        ).trim();
+        // Anything else the model invents still maps to the documented read actions
+        // instead of being refused.
+        if (!MAESTRO_ACTIONS.has(action)) {
+          console.log("pp-ava-chat maestro unknown action", rawAction, Object.keys(payload));
+          action = payload.client_id
+            ? "client_profile"
+            : /profile|fiche|card|open|show|view|info|detail/.test(action) && clientName
+              ? "client_profile"
+              : /broker|courtier/.test(action)
+                ? "list_brokers"
+                : "list_clients";
         }
         if (action === "list_clients" && !payload.search && clientName) payload.search = clientName;
         // Profile requested without an id: resolve by name first.
@@ -329,9 +341,6 @@ Deno.serve(async (req) => {
           }
         }
         payload.action = action;
-        if (!MAESTRO_ACTIONS.has(action)) {
-          return json({ reply: L("Je ne peux pas exécuter cette action directement. Reformule ta demande et je m'en occupe.", "I can't run this action directly. Rephrase your request and I'll take care of it."), suggestions: [] }, 200);
-        }
         if (!MAESTRO_READ_ACTIONS.has(action) && body?.approved !== true) {
           return json({ reply: L("Cette action Maestro nécessite votre confirmation.", "This Maestro action requires your confirmation."), suggestions: [confirmAction] });
         }

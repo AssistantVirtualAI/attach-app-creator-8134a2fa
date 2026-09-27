@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
     reason: tok.reason ?? null,
     env,
     probe,
+    own_probe: ownProbe,
     brokers: { total: total ?? 0, connected: connected ?? 0 },
   });
 });

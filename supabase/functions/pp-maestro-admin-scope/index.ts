@@ -6,6 +6,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 import { buildDepositQuery, commissionGet } from "../_shared/commission-reports.ts";
 
 const json = (body: unknown, status = 200) =>

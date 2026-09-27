@@ -307,8 +307,16 @@ Deno.serve(async (req) => {
           get_clients: "list_clients", lookup_client: "list_clients",
         };
         action = ALIASES[action] ?? action;
-        const clientName = String(payload.client_name ?? payload.name ?? payload.search ?? payload.query ?? "").trim();
+        const clientName = String(payload.client_name ?? payload.name ?? payload.search ?? payload.query ?? payload.email ?? payload.phone ?? "").trim();
         if (!action && (payload.client_id || clientName)) action = payload.client_id ? "client_profile" : "list_clients";
+        // Any other client/contact wording the model invents (e.g. "search_all_maestro_clients")
+        // maps to the documented read actions instead of being refused.
+        if (!MAESTRO_ACTIONS.has(action) && /client|contact|customer|fiche|search|find|lookup|cherch/.test(action)) {
+          action = payload.client_id ? "client_profile"
+            : /profile|fiche|open|show|view|card|info/.test(action) && clientName ? "client_profile"
+            : "list_clients";
+        }
+        if (action === "list_clients" && !payload.search && clientName) payload.search = clientName;
         // Profile requested without an id: resolve by name first.
         if (action === "client_profile" && !payload.client_id && clientName) {
           const found = await invokeFunction("maestro-actions", authHeader, { action: "list_clients", payload: { search: clientName, offset: 0, page_size: 5 } });

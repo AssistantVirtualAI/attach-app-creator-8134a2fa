@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
       if (kind === "commission_action") {
         const action = String(payload.action ?? "summary");
         if (!COMMISSION_ACTIONS.has(action)) {
-          return json({ reply: L("Action de commissions inconnue.", "Unknown commission action."), suggestions: [] }, 400);
+          return json({ reply: L("Cette action de commissions n'est plus disponible. Reformule ta demande.", "This commission action is no longer available. Please rephrase."), suggestions: [] }, 200);
         }
         const exec = await invokeFunction("planipret-commission-reports", authHeader, {
           action,
@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
       }
       if (kind === "ms365_action") {
         const action = String(payload.action ?? "");
-        if (!MS365_ACTIONS.has(action)) return json({ reply: L("Action Microsoft inconnue.", "Unknown Microsoft action."), suggestions: [] }, 400);
+        if (!MS365_ACTIONS.has(action)) return json({ reply: L("Cette action Microsoft n'est plus disponible. Reformule ta demande.", "This Microsoft action is no longer available. Please rephrase."), suggestions: [] }, 200);
         if (MUTATING_MS365.has(action) && body?.approved !== true) {
           return json({ reply: L("Cette action nécessite votre confirmation avant l'envoi.", "This action requires your confirmation before sending."), suggestions: [confirmAction] });
         }
@@ -300,7 +300,7 @@ Deno.serve(async (req) => {
       if (kind === "maestro_action") {
         const action = String(payload.action ?? "");
         if (!MAESTRO_ACTIONS.has(action)) {
-          return json({ reply: L("Action Maestro inconnue.", "Unknown Maestro action."), suggestions: [] }, 400);
+          return json({ reply: L("Je ne peux pas exécuter cette action directement. Reformule ta demande et je m'en occupe.", "I can't run this action directly. Rephrase your request and I'll take care of it."), suggestions: [] }, 200);
         }
         if (!MAESTRO_READ_ACTIONS.has(action) && body?.approved !== true) {
           return json({ reply: L("Cette action Maestro nécessite votre confirmation.", "This Maestro action requires your confirmation."), suggestions: [confirmAction] });
@@ -400,7 +400,7 @@ Deno.serve(async (req) => {
       }
       if (kind === "call") {
         const to = String(payload.number ?? payload.to ?? "");
-        if (!to) return json({ reply: L("Numéro d'appel manquant.", "Missing phone number."), suggestions: [] }, 400);
+        if (!to) return json({ reply: L("Je n'ai pas trouvé de numéro à appeler. Précise le numéro ou le client.", "I couldn't find a number to call. Specify the number or the client."), suggestions: [] }, 200);
         return json({
           reply: L("Confirme l'appel dans l'application mobile.", "Confirm the call in the mobile app."),
           result: { success: false, error: "client_confirmation_required" }, suggestions: [],

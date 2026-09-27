@@ -309,6 +309,9 @@ Deno.serve(async (req) => {
           view_client: "client_profile", open_client_profile: "client_profile", show_client_profile: "client_profile",
           search_client: "list_clients", search_clients: "list_clients", find_client: "list_clients",
           get_clients: "list_clients", lookup_client: "list_clients",
+          get_client_contracts: "client_contracts", client_deals: "client_contracts",
+          list_client_contracts: "client_contracts", dossiers_client: "client_contracts",
+          get_contracts: "client_contracts", contracts: "client_contracts",
         };
         action = ALIASES[action] ?? action;
         const clientName = String(
@@ -320,17 +323,19 @@ Deno.serve(async (req) => {
         // instead of being refused.
         if (!MAESTRO_ACTIONS.has(action)) {
           console.log("pp-ava-chat maestro unknown action", rawAction, Object.keys(payload));
-          action = payload.client_id
-            ? "client_profile"
-            : /profile|fiche|card|open|show|view|info|detail/.test(action) && clientName
+          action = /contract|dossier|deal|hypoth|mortgage/.test(action)
+            ? "client_contracts"
+            : payload.client_id
               ? "client_profile"
-              : /broker|courtier/.test(action)
-                ? "list_brokers"
-                : "list_clients";
+              : /profile|fiche|card|open|show|view|info|detail/.test(action) && clientName
+                ? "client_profile"
+                : /broker|courtier/.test(action)
+                  ? "list_brokers"
+                  : "list_clients";
         }
         if (action === "list_clients" && !payload.search && clientName) payload.search = clientName;
-        // Profile requested without an id: resolve by name first.
-        if (action === "client_profile" && !payload.client_id && clientName) {
+        // Profile/contracts requested without an id: resolve by name first.
+        if ((action === "client_profile" || action === "client_contracts") && !payload.client_id && clientName) {
           const found = await invokeFunction("maestro-actions", authHeader, { action: "list_clients", payload: { search: clientName, offset: 0, page_size: 5 } });
           const rows: any[] = found.data?.clients ?? found.data?.data ?? [];
           if (rows.length === 1 && (rows[0]?.id ?? rows[0]?.client_id)) {

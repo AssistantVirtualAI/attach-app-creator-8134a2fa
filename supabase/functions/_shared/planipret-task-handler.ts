@@ -1357,6 +1357,80 @@ export async function handleTaskRequest(
     return { status: 200, body: out.body };
   }
 
+  // ── COMPLETE ───────────────────────────────────────────────────────────────
+  // Maestro exposes no documented global completion status-option id. Its
+  // documented DELETE is a soft delete, i.e. the supported way to close a task.
+  // Keep this distinct from user-requested deletion in our audit trail/UI.
+  if (action === "complete") {
+    const taskId = String(body?.task_id ?? "").trim();
+    if (!taskId) {
+      return { status: 200, body: { success: false, error: "validation_failed", fields: { task_id: "task_id_required" }, correlation_id } };
+    }
+    if (!canDeleteTask(role)) {
+      await audit(admin, { action: "task_complete_denied", user_id: userId, task_id: taskId, source, session_id: sessionId, correlation_id, result: "role_forbidden" });
+      return { status: 200, body: { success: false, error: "role_forbidden", message: "Ton rôle ne permet pas de fermer une tâche.", correlation_id } };
+    }
+    const scopedTask = await findTaskInCallerScope(deps, profile, taskId);
+    if (!scopedTask) {
+      await audit(admin, { action: "task_complete_denied", user_id: userId, task_id: taskId, source, session_id: sessionId, correlation_id, result: "task_out_of_scope" });
+      return { status: 200, body: taskScopeDeniedBody(taskId, correlation_id) };
+    }
+    const key = String(body?.idempotency_key ?? idempotencyKey(["complete", userId, taskId]));
+    const out = await withIdempotency(admin, userId, key, "complete", async () => {
+      const res = await deps.apiFetch(`/api/main/tasks/${encodeURIComponent(taskId)}`, {
+        method: "DELETE", body: JSON.stringify({ task_id: Number.isNaN(Number(taskId)) ? taskId : Number(taskId) }),
+      });
+      if (!res.ok || res.data?.success === false) {
+        await audit(admin, { action: "task_complete_failed", user_id: userId, task_id: taskId, source, session_id: sessionId, status: res.status, correlation_id, result: "error" });
+        return { status: 200, body: { ...mapTaskApiError(res.status, res.data), correlation_id } };
+      }
+      const assigneeId = await withDeadline(
+        Promise.resolve(deps.resolveTaskAssigneeId?.()).catch(() => null),
+        5000,
+        null,
+      );
+      let closedReadBack = false;
+      let readBackEndpoint: string | null = null;
+      if (assigneeId) {
+        try {
+          const upstream = await deps.listFetch(String(assigneeId), {
+            status: null, type: null, from: null, to: null, findTaskId: taskId,
+          });
+          readBackEndpoint = upstream.endpoint;
+          const found = (upstream.tasks ?? []).map((item: any) => normalizeTask(item))
+            .find((item: NormalizedTask) => String(item.id) === taskId);
+          // Depending on the Maestro tenant, a soft-closed task is either
+          // returned as complete or omitted from a complete bounded scan.
+          closedReadBack = upstream.ok && upstream.complete === true
+            && (!found || String(found.status ?? "").trim().toLowerCase() === "complete");
+        } catch { /* DELETE acceptance alone is not confirmation */ }
+      }
+      if (!closedReadBack) {
+        await audit(admin, { action: "task_complete_pending_confirmation", user_id: userId, task_id: taskId, source, session_id: sessionId, status: res.status, correlation_id, result: "pending_confirmation" });
+        return {
+          status: 200,
+          body: {
+            success: false,
+            pending_confirmation: true,
+            error: "maestro_complete_readback_unconfirmed",
+            task_id: taskId,
+            completed: false,
+            read_back: false,
+            endpoint: readBackEndpoint,
+            message: "Maestro a reçu la fermeture, mais la tâche demeure ouverte lors de la relecture.",
+            correlation_id,
+          },
+        };
+      }
+      await admin.from("planipret_tasks_projection")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("user_id", userId).eq("task_id", taskId);
+      await audit(admin, { action: "task_completed", user_id: userId, task_id: taskId, source, session_id: sessionId, status: res.status, correlation_id, result: "confirmed" });
+      return { status: 200, body: { success: true, task_id: taskId, completed: true, read_back: true, correlation_id } };
+    });
+    return { status: 200, body: out.body };
+  }
+
   // ── DELETE ─────────────────────────────────────────────────────────────────
   if (action === "delete") {
     const taskId = String(body?.task_id ?? "").trim();

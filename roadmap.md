@@ -27,3 +27,4 @@
 - [ ] Vérifier et corriger la création de tâche depuis une fiche contact
 - [ ] Vérifier et corriger la lecture et le cache persistant des enregistrements
 - [ ] Produire un rapport de corrections et de tests
+- [x] Fermer réellement les tâches dans Maestro avec relecture obligatoire

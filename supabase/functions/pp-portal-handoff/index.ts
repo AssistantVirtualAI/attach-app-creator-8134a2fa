@@ -50,13 +50,12 @@ Deno.serve(async (req) => {
 
     // Destination demandée (optionnelle) — toujours restreinte au portail.
     const body = await req.json().catch(() => ({}));
-    // Depuis l'app courtier, la destination par défaut reste toujours le portail
-    // courtier. Un administrateur peut demander explicitement une page admin,
-    // mais son rôle ne doit jamais le détourner automatiquement vers le tableau
-    // admin mobile (dont l'écran d'avertissement causait la page blanche signalée).
-    const home = "/planipret/broker/overview";
+    // Le lien mène directement au portail du courtier : /planipret/broker pour
+    // un courtier, /planipret/admin pour un administrateur. Le garde du
+    // portail consomme le jeton magique sur ces pages.
+    const home = isAdmin ? "/planipret/admin" : "/planipret/broker";
     let target = typeof body?.path === "string" ? body.path : home;
-    if (!/^\/planipret\/(admin|broker)\//.test(target)) target = home;
+    if (!/^\/planipret\/(admin|broker)(\/|$)/.test(target)) target = home;
 
     // Le courtier est DÉJÀ authentifié dans l'app mobile : on estampille la
     // session comme « pont mobile vérifié » pour que le garde du portail

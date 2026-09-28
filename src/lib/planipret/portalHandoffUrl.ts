@@ -1,4 +1,6 @@
-const PORTAL_ORIGIN = "https://avastatistic.ca";
+// Origine de production : courtierai.planipret.com (proxifié vers avastatistic.ca).
+// avastatistic.ca reste accepté pour les liens déjà émis.
+const PORTAL_ORIGINS = ["https://courtierai.planipret.com", "https://avastatistic.ca"];
 // Le lien mène directement au portail (courtier ou admin) ; l'ancienne page
 // /planipret/portal-handoff reste acceptée pour les versions antérieures.
 const HANDOFF_PATHS = ["/planipret/broker", "/planipret/admin", "/planipret/portal-handoff"];

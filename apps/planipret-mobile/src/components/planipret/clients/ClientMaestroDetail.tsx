@@ -269,7 +269,7 @@ export default function ClientMaestroDetail({
         return (
           <Card title={L("Coordonnées Maestro", "Maestro details")} surface={surface}>
             <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1.5 text-[12px]">
-              {shown.map(([k, v]) => (<><dt key={`k${k}`} style={{ color: "var(--pp-text-muted)" }}>{k}</dt><dd key={`v${k}`} className="break-words" style={{ color: "var(--pp-text-primary)" }}>{String(v)}</dd></>))}
+              {shown.flatMap(([k, v]) => [<dt key={`k${k}`} style={{ color: "var(--pp-text-muted)" }}>{k}</dt>, <dd key={`v${k}`} className="break-words" style={{ color: "var(--pp-text-primary)" }}>{String(v)}</dd>])}
             </dl>
           </Card>
         );

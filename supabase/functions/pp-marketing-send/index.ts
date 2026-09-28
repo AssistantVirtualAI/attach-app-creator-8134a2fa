@@ -36,9 +36,10 @@ Deno.serve(async (req) => {
 
   // Verrou anti-double-envoi : même contenu envoyé par ce courtier il y a < 2 min.
   const since = new Date(Date.now() - 120_000).toISOString();
-  const { data: recent } = await admin.from("planipret_marketing_campaigns").select("id")
-    .eq("broker_user_id", userId).gte("created_at", since).eq("sms_text", smsText || null).eq("subject", subject || null).limit(1);
-  if (recent?.length) return json({ ok: false, error: "duplicate_send", campaign_id: recent[0].id }, 409);
+  const { data: recentRows } = await admin.from("planipret_marketing_campaigns").select("id, sms_text, subject")
+    .eq("broker_user_id", userId).gte("created_at", since).limit(20);
+  const recent = (recentRows ?? []).find((c: any) => (c.sms_text ?? "") === smsText && (c.subject ?? "") === subject);
+  if (recent) return json({ ok: false, error: "duplicate_send", campaign_id: recent.id }, 409);
 
   let token: string | null = null;
   if (channels.includes("email")) {

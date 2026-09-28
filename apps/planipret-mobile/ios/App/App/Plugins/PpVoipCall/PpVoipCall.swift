@@ -226,14 +226,27 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     }
 
     private func setupPushKit() {
-        guard pushRegistry == nil else {
-            pushRegistry?.desiredPushTypes = [.voIP]
+      guard pushRegistry == nil else {
+        pushRegistry?.desiredPushTypes = [.voIP]
             return
         }
         let registry = PKPushRegistry(queue: .main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
         self.pushRegistry = registry
+    }
+
+    /// Prépare la catégorie avant l'activation système. CallKit reste seul à
+    /// appeler setActive() dans didActivate. Cette préparation commune garantit
+    /// que les appels entrants ET sortants PJSIP utilisent une entrée/sortie
+    /// téléphonique, sans que le fallback WebView réinitialise RemoteIO.
+    private func prepareCallAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(
+            .playAndRecord,
+            mode: .voiceChat,
+            options: [.allowBluetoothHFP, .allowBluetoothA2DP]
+        )
     }
 
     // MARK: - JS ↔ Native
@@ -468,8 +481,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         }
         // Prepare the route but let CallKit own activation (didActivate:) —
         // activating here races the system session and yields a dead call.
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+        prepareCallAudioSession()
 
         // Keep CallKit pending until pjsua_call_answer really accepts the 200 OK.
         if nativeEngineOwnsCall {
@@ -517,6 +529,10 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             action.fail()
             return
         }
+        // Le chemin sortant doit recevoir la même préparation que l'entrant;
+        // auparavant seule la réponse d'un appel entrant configurait l'entrée
+        // micro avant didActivate, ce qui pouvait laisser le média sortant muet.
+        prepareCallAudioSession()
         let update = CXCallUpdate()
         update.remoteHandle = action.handle
         update.hasVideo = false

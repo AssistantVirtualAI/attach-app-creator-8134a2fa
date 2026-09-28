@@ -123,7 +123,15 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
       NotificationCenter.default.addObserver(forName: Notification.Name("PpCallKitAudioActivated"), object: nil, queue: .main) { [weak self] _ in
         self?.callKitAudioActive = true
-        self?.applyAudioRoute()
+        // CallKit vient d'activer le périphérique PJSIP. Ne pas reconfigurer
+        // ni réactiver la session ici : la couche WebView écrasait RemoteIO et
+        // causait des appels connectés mais muets dans les deux sens.
+        self?.notifyListeners("audioRouteChanged", data: [
+          "route": self?.currentAudioRoute() ?? "earpiece",
+          "bluetooth": self?.bluetoothAvailable() ?? false,
+          "bluetoothName": self?.bluetoothName() ?? "",
+          "wired": self?.wiredAvailable() ?? false
+        ])
       }
       NotificationCenter.default.addObserver(forName: Notification.Name("PpCallKitAudioDeactivated"), object: nil, queue: .main) { [weak self] _ in
         self?.callKitAudioActive = false
@@ -185,6 +193,17 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       DispatchQueue.main.async { [weak self] in
         guard let self = self else { call.resolve(["ok": false]); return }
         self.callActive = active
+        // PJSIP/CallKit est une chaîne média native complète. La session audio
+        // ne doit pas être activée, réinitialisée ou maintenue par le fallback
+        // WSS/WebView : ces appels concurrents ré-arbitraient les entrées et
+        // sorties iOS. Le routage explicite reste traité plus bas.
+        if self.nativeEngineOwnsAor {
+          if !active { self.stopAudioKeepAlive() }
+          self.backgroundHandoffWorkItem?.cancel(); self.backgroundHandoffWorkItem = nil
+          self.setStatus("protected", active ? "pjsip_callkit_audio_owner" : "pjsip_call_ended")
+          call.resolve(self.snapshot(ok: true))
+          return
+        }
         if active {
           self.beginBackgroundTask()
           self.activateAudioSession()
@@ -305,6 +324,25 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private func applyAudioRoute(retries: Int) {
       let s = AVAudioSession.sharedInstance()
       let speaker = preferredRoute == "speaker"
+      // Après didActivate, CallKit est l'unique propriétaire de l'activation
+      // et de la catégorie AVAudioSession. Réactiver la session ou modifier sa
+      // catégorie depuis la couche WSS perturbe le périphérique PJSIP. Seul le
+      // choix explicite de sortie reste sûr à ce stade.
+      if callKitAudioActive {
+        switch preferredRoute {
+        case "speaker":
+          try? s.setPreferredInput(nil)
+          try? s.overrideOutputAudioPort(.speaker)
+        case "bluetooth":
+          try? s.overrideOutputAudioPort(.none)
+          if let bt = bluetoothInput() { try? s.setPreferredInput(bt) }
+        default:
+          try? s.overrideOutputAudioPort(.none)
+          if let bt = bluetoothInput() { try? s.setPreferredInput(bt) }
+        }
+        NSLog("[PpSipKeepAlive] CallKit route wanted=%@ effective=%@", preferredRoute, currentAudioRoute())
+        return
+      }
       var opts: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP]
       if speaker { opts.insert(.defaultToSpeaker) }
       let wantedMode = modeFor(preferredRoute)

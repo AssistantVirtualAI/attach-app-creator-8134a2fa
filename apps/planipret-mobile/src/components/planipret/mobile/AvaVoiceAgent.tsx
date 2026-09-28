@@ -235,7 +235,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
       "get_recording", "get_transcript", "send_sms", "get_sms_conversations",
       "get_voicemails", "generate_voicemail_greeting",
       "analyze_call", "get_hot_leads", "get_coaching_summary",
-      "search_client", "get_client_profile", "get_client_history",
+      "search_client", "get_client_profile", "get_client_contracts", "get_client_history",
       "list_tasks", "get_task", "list_task_targets", "create_task", "update_task", "delete_task", "complete_task", "reschedule_task",
       "create_appointment", "get_pending_tasks",
       "get_upcoming_appointments", "update_client", "create_client",

@@ -3,6 +3,7 @@ import { X, UserPlus, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { invalidateCallerClient, resolveCallerClient } from "@/lib/planipret/callerClient";
+import { hasRequiredMaestroClientFields } from "@/lib/planipret/maestroClientDraft";
 
 /** Codes numériques des listes Maestro (salutation, type de rue). */
 const MAESTRO_SALUTATIONS = [{ v: "1", l: "M." }, { v: "2", l: "Mme" }];
@@ -62,9 +63,20 @@ export default function CreateMaestroClientSheet({
 
   const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const zipOk = /^[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d$/.test(zip.trim());
-  const canSubmit = first.trim().length > 0 && first.length <= 80 && last.trim().length > 0 && last.length <= 80 && emailOk
-    && !!salutation && !!sex && !!language && streetNumber.trim().length > 0 && streetName.trim().length > 0
-    && !!streetType && city.trim().length > 0 && !!region && zipOk && phone.replace(/\D/g, "").length >= 10 && !busy;
+  const canSubmit = hasRequiredMaestroClientFields({
+    firstName: first,
+    lastName: last,
+    phone,
+    salutation,
+    sex,
+    language,
+    streetNumber,
+    streetName,
+    streetType,
+    city,
+    region,
+    zip,
+  }) && emailOk && !busy;
 
   const submit = async () => {
     if (!canSubmit) return;

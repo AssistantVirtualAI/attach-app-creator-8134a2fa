@@ -133,26 +133,45 @@ Deno.serve(async (req) => {
 
     const s = (v: unknown, max = 120) => String(v ?? "").trim().slice(0, max);
     const a = (body?.address && typeof body.address === "object") ? body.address : {};
+    const salutation = Number(body?.salutation);
+    const sex = s(body?.sex, 10).toLowerCase();
+    const language = s(body?.language, 10).toLowerCase();
     const address = {
+      ...(s(a.unit ?? a.apartment, 20) ? { unit: s(a.unit ?? a.apartment, 20) } : {}),
       street_number: s(a.street_number, 20),
       street_name: s(a.street_name),
-      street_type_dd: s(a.street_type_dd, 40),
+      street_type_dd: Number(a.street_type_dd),
       city: s(a.city),
-      region: s(a.region, 40),
+      region: s(a.region, 2).toUpperCase(),
       zip: s(a.zip, 12).toUpperCase(),
-      ...(s(a.apartment, 20) ? { apartment: s(a.apartment, 20) } : {}),
-      country: s(a.country, 40) || "CA",
+      country: "ca",
+      address_type: "primary",
     };
+    const validation: Record<string, string[]> = {};
+    if (!lastName) validation.last_name = ["last_name_required"];
+    if (!phone) validation.phone = ["phone_required"];
+    if (!Number.isInteger(salutation) || salutation <= 0) validation.salutation = ["salutation_required"];
+    if (sex !== "m" && sex !== "f") validation.sex = ["sex_m_or_f_required"];
+    if (language !== "fr" && language !== "en") validation.language = ["language_fr_or_en_required"];
+    if (!address.street_number) validation.street_number = ["address.street_number_required"];
+    if (!address.street_name) validation.street_name = ["address.street_name_required"];
+    if (!Number.isInteger(address.street_type_dd) || address.street_type_dd <= 0) validation.street_type_dd = ["address.street_type_dd_required"];
+    if (!address.city) validation.city = ["address.city_required"];
+    if (!/^[A-Z]{2}$/.test(address.region)) validation.region = ["address.region_required"];
+    if (!/^[A-Z]\d[A-Z] ?\d[A-Z]\d$/.test(address.zip)) validation.zip = ["address.zip_required"];
+    if (Object.keys(validation).length > 0) {
+      return json({ success: false, error: "validation_failed", errors: validation }, 422);
+    }
     const payload: Record<string, unknown> = {
       first_name: firstName,
-      ...(lastName ? { last_name: lastName } : {}),
+      last_name: lastName,
+      salutation,
+      sex,
+      language,
+      mobile_number: phone,
+      address,
       ...(body?.email ? { email: String(body.email).trim() } : {}),
       ...(body?.company ? { company: String(body.company).trim() } : {}),
-      ...(body?.language ? { language: s(body.language, 10) } : {}),
-      ...(body?.salutation ? { salutation: s(body.salutation, 20) } : {}),
-      ...(body?.sex ? { sex: s(body.sex, 10) } : {}),
-      ...(Object.values(address).some((v) => v && v !== "CA") ? { address } : {}),
-      ...(phone ? { mobile_number: phone } : {}),
     };
 
     const res = await createClient_(cfg, payload, { token });

@@ -12,6 +12,7 @@ import {
 } from "./aorArbitration";
 import { pinnedCoreHost } from "./sipEdgePolicy";
 import { trackRegisterAttempt, logRegisterMetricsSummary, type RegisterTracker } from "./registerMetrics";
+import { requestPlanipretCallKitAnswer } from "./nativePpSipService";
 
 
 
@@ -54,7 +55,6 @@ interface PjsipPlugin {
   register(): Promise<{ ok: boolean }>;
   unregister(): Promise<{ ok: boolean }>;
   makeCall(opts: { destination: string }): Promise<{ callId: string }>;
-  answerCall(opts: { callId?: string }): Promise<{ callId: string }>;
   hangupCall(opts: { callId?: string }): Promise<{ ok: boolean }>;
   setMute(opts: { muted: boolean }): Promise<{ ok: boolean }>;
   setHold(opts: { onHold: boolean }): Promise<{ ok: boolean }>;

@@ -10,6 +10,7 @@ import {
   normalizePhone,
 } from "../_shared/maestro.ts";
 import { guardPlanipret } from "../_shared/planipret-guard.ts";
+import { maestroClientHasTelephone } from "../_shared/maestro-client-telephone.ts";
 import { createClient_, createTelephone, getClient } from "../_shared/maestro-scribe.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 
@@ -197,16 +198,33 @@ Deno.serve(async (req) => {
     // POST /clients body may ignore a flat phone field. Ensure the caller's
     // number is attached so the directory/caller lookup can match it.
     if (phone) {
-      const want = phone.replace(/\D/g, "").slice(-10);
-      const tels: any[] = Array.isArray(confirmed?.telephones) ? confirmed.telephones : [];
-      const has = tels.some((t) => String(t?.telephone_number ?? "").replace(/\D/g, "").slice(-10) === want);
-      if (!has) {
-        const tel = await createTelephone(cfg, clientId, { telephone_type: "mobile", telephone_number: want }, { token });
+      if (!maestroClientHasTelephone(confirmed, phone)) {
+        const telephoneNumber = phone.replace(/\D/g, "").slice(-10);
+        const tel = await createTelephone(cfg, clientId, {
+          telephone_type: "mobile",
+          telephone_number: telephoneNumber,
+          extension: "",
+          priority: "principal",
+        }, { token });
         await maestroAudit(admin, tel.ok ? "client_telephone_added" : "client_telephone_failed", { client_id: clientId, status: tel.status });
         if (tel.ok) {
           const rb2 = await getClient(cfg, clientId, { token });
           if (rb2.ok && rb2.data) confirmed = rb2.data as any;
         }
+      }
+
+      // Never claim a caller is durable when Maestro did not retain its
+      // telephone. The next incoming call would otherwise not resolve.
+      if (!maestroClientHasTelephone(confirmed, phone)) {
+        await maestroAudit(admin, "client_telephone_unconfirmed", {
+          client_id: clientId,
+          token_source: tokenSource,
+        });
+        return json({
+          success: false,
+          error: "maestro_telephone_unconfirmed",
+          message: "Client créé, mais son numéro n’a pas été confirmé par Maestro. Réessayez avant de lier l’appel.",
+        }, 200);
       }
     }
     const name = clientName(confirmed, firstName, lastName);

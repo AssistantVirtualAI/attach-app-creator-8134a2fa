@@ -317,3 +317,12 @@ verify_jwt = true
 
 [functions.planipret-commission-reports]
 verify_jwt = true
+
+[functions.pp-marketing-compose]
+verify_jwt = true
+
+[functions.pp-marketing-send]
+verify_jwt = true
+
+[functions.pp-marketing-track]
+verify_jwt = false

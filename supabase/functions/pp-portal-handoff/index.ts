@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
       // Capacitor's iOS in-app browser can discard URL fragments while opening
       // an external origin. Query parameters survive that handoff reliably;
       // the landing page removes them from browser history immediately.
-      url: `${PORTAL_ORIGIN}/planipret/portal-handoff?${handoffParams}`,
+      url: `${PORTAL_ORIGIN}${target}?${handoffParams}`,
       expires_in: 300,
     });
   } catch (e) {

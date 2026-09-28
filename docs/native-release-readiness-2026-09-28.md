@@ -1,7 +1,7 @@
 # Rapport de préparation — release native Planiprêt
 
-**Date :** 28 septembre 2026  
-**Auteur :** Manus AI  
+**Date :** 28 septembre 2026
+**Auteur :** Manus AI
 **Décision actuelle :** le code est prêt pour la **construction de candidats de release iOS et Android** après le déploiement ciblé des deux fonctions Edge indiquées ci-dessous. Il n’est pas encore possible d’affirmer que les appels sont fonctionnels sur appareils : la recette iPhone et Android n’a pas encore été exécutée avec de vrais appels.
 
 ## Conclusion

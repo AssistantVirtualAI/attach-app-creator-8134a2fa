@@ -1,92 +1,53 @@
 /**
  * Atterrissage du pont « app mobile → portail AVA Statistic ».
  *
- * L'app mobile ouvre cette page avec un lien magique à usage unique placé dans
- * le fragment d'URL (jamais dans la query, donc jamais journalisé côté serveur).
- * On établit la session, on marque la connexion comme fraîche pour le garde du
- * portail, puis on redirige vers la page demandée.
+ * Conservé pour les anciennes versions de l'app qui ouvrent encore
+ * /planipret/portal-handoff : on consomme le lien magique puis on redirige
+ * vers la page demandée. Les nouvelles versions ouvrent directement
+ * /planipret/broker ou /planipret/admin, où le garde consomme le jeton.
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { consumePortalHandoff, readHandoffParams } from "@/lib/planipret/portalHandoff";
 import { Loader2, ShieldAlert } from "lucide-react";
-
-// Le jeton est à usage unique : on empêche toute double consommation
-// (StrictMode, remontage, rechargement de version).
-let handoffRan = false;
 
 export default function PortalHandoff() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (handoffRan) return;
-    handoffRan = true;
     (async () => {
-      // iOS may discard fragments when Capacitor opens an external origin.
-      // Accept both formats so older app bundles and the reliable query-based
-      // handoff emitted by the backend work together.
-      const fragmentParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
       const queryParams = new URLSearchParams(window.location.search);
-      const params = fragmentParams.has("th") ? fragmentParams : queryParams;
-      const tokenHash = params.get("th") ?? "";
-      const email = params.get("em") ?? "";
-      const requestedTarget = params.get("to") ?? "/planipret/broker/overview";
+      const fragmentParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const requestedTarget = queryParams.get("to") ?? fragmentParams.get("to") ?? "/planipret/broker";
       const to = /^\/planipret\/(admin|broker)(\/|$)/.test(requestedTarget)
         ? requestedTarget
-        : "/planipret/broker/overview";
+        : "/planipret/broker";
 
-      // Le fragment est effacé immédiatement : le jeton ne doit pas rester
-      // dans l'historique du navigateur.
-      try { window.history.replaceState({}, "", window.location.pathname); } catch { /* ignore */ }
+      const result = await consumePortalHandoff();
 
-      const hasSession = async () => {
-        const { data } = await supabase.auth.getSession();
-        return !!data.session?.user;
-      };
+      if (result === "ok") {
+        // Full navigation avoids a blank stale shell when iOS resumes the
+        // external browser after the one-time session exchange.
+        window.location.replace(to);
+        return;
+      }
 
-      if (!tokenHash || !email) {
+      if (result === "none") {
         // Déjà connecté dans ce navigateur : on entre directement.
-        if (await hasSession()) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.user) {
           try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch { /* ignore */ }
-           window.location.replace(to);
+          window.location.replace(to);
           return;
         }
         setError("Lien incomplet ou expiré. Relancez l'ouverture depuis l'application mobile.");
         return;
       }
 
-      // Un `token_hash` issu de `generateLink` se vérifie SANS courriel :
-      // joindre `email` fait basculer GoTrue sur le flux « code à 6 chiffres »
-      // et le jeton est refusé (« Token has expired or is invalid »).
-      // On tente les deux types acceptés pour un lien magique.
-      let otpError: { message?: string } | null = null;
-      for (const type of ["magiclink", "email"] as const) {
-        const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash } as never);
-        if (!error) { otpError = null; break; }
-        otpError = error;
-      }
-      // Dernier recours : ancien flux avec courriel explicite.
-      if (otpError) {
-        const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash, email } as never);
-        if (!error) otpError = null;
-      }
-
-      if (otpError && !(await hasSession())) {
-        handoffRan = false;
-        setError(
-          `Connexion au portail impossible (${otpError.message ?? "lien invalide"}). Relancez l'ouverture depuis l'application mobile.`,
-        );
-        return;
-      }
-
-
-      try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch { /* ignore */ }
-      // Full navigation avoids a blank stale shell when iOS resumes the
-      // external browser after the one-time session exchange.
-      window.location.replace(to);
+      setError("Connexion au portail impossible (lien invalide). Relancez l'ouverture depuis l'application mobile.");
     })();
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, []);
 
   return (
@@ -97,7 +58,7 @@ export default function PortalHandoff() {
             <ShieldAlert className="w-8 h-8 mx-auto text-destructive" />
             <p className="text-sm text-muted-foreground">{error}</p>
             <button
-              onClick={() => navigate("/planipret/broker/overview", { replace: true })}
+              onClick={() => navigate("/planipret/broker", { replace: true })}
               className="text-sm underline"
             >
               Ouvrir le portail manuellement

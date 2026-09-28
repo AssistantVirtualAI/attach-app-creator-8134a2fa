@@ -235,7 +235,7 @@ export default function MCommissions() {
     } finally {
       setLoading(false);
     }
-  }, [allowed, rangeReady, filters, call, reportCacheKey]);
+  }, [allowed, rangeReady, filters, call, reportCacheKey, isAdmin, agentId]);
 
   useEffect(() => { load(); }, [load]);
 

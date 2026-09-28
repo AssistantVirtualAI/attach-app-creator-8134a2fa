@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ChevronDown, ChevronRight, Info, Mail, MessageSquare, RefreshCw } from "lucide-react";
 
@@ -18,6 +18,21 @@ const ERR: Record<string, [string, string]> = {
   adresse_refusee: ["Adresse refusée", "Address rejected"],
   desabonne: ["Désabonné", "Unsubscribed"],
 };
+
+const card: CSSProperties = {
+  background: "var(--pp-bg-card)", border: "1px solid var(--pp-bg-border)",
+  borderRadius: 14, color: "var(--pp-text-primary)",
+};
+const input: CSSProperties = {
+  background: "var(--pp-bg-deep)", color: "var(--pp-text-primary)",
+  border: "1px solid var(--pp-bg-border)", borderRadius: 10, padding: "8px 12px", fontSize: 14,
+};
+const btnGhost: CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 10, padding: "8px 14px",
+  fontSize: 14, fontWeight: 600, cursor: "pointer", background: "transparent",
+  border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)",
+};
+const muted: CSSProperties = { color: "var(--pp-text-muted)" };
 
 export default function MarketingHistory({ lang, adminView = false, reloadKey = 0 }: { lang: "fr" | "en"; adminView?: boolean; reloadKey?: number }) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
@@ -55,78 +70,81 @@ export default function MarketingHistory({ lang, adminView = false, reloadKey = 
     c: a.c + 1, se: a.se + r.sent_email, ss: a.ss + r.sent_sms, f: a.f + r.failed_count, o: a.o + r.opened_count, k: a.k + r.clicked_count,
   }), { c: 0, se: 0, ss: 0, f: 0, o: 0, k: 0 });
 
-  const statusLabel = (r: Recipient) => {
-    if (r.status === "failed") return [ERR[r.error ?? ""]?.[lang === "en" ? 1 : 0] ?? L("Échec", "Failed"), "text-destructive"];
-    if (r.status === "clicked") return [L("Cliqué", "Clicked"), "text-primary"];
-    if (r.status === "opened") return [L("Ouvert (estimé)", "Opened (estimated)"), "text-primary"];
-    if (r.status === "delivered") return [L("Livré", "Delivered"), "text-foreground"];
-    if (r.status === "sent") return [r.channel === "sms" ? L("Envoyé — lecture non mesurable", "Sent — read not measurable") : L("Envoyé — non ouvert", "Sent — not opened"), "text-muted-foreground"];
-    return [L("En file", "Queued"), "text-muted-foreground"];
+  const statusLabel = (r: Recipient): [string, string] => {
+    if (r.status === "failed") return [ERR[r.error ?? ""]?.[lang === "en" ? 1 : 0] ?? L("Échec", "Failed"), "var(--pp-danger, #FF6B6B)"];
+    if (r.status === "clicked") return [L("Cliqué", "Clicked"), "var(--pp-brand-accent-2, #2E9BDC)"];
+    if (r.status === "opened") return [L("Ouvert (estimé)", "Opened (estimated)"), "var(--pp-brand-accent-2, #2E9BDC)"];
+    if (r.status === "delivered") return [L("Livré", "Delivered"), "var(--pp-text-primary)"];
+    if (r.status === "sent") return [r.channel === "sms" ? L("Envoyé — lecture non mesurable", "Sent — read not measurable") : L("Envoyé — non ouvert", "Sent — not opened"), "var(--pp-text-muted)"];
+    return [L("En file", "Queued"), "var(--pp-text-muted)"];
   };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 items-center">
         {adminView && (
-          <select value={broker} onChange={(e) => setBroker(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+          <select value={broker} onChange={(e) => setBroker(e.target.value)} style={input}>
             <option value="all">{L("Tous les courtiers", "All brokers")}</option>
             {brokers.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
           </select>
         )}
-        <select value={period} onChange={(e) => setPeriod(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+        <select value={period} onChange={(e) => setPeriod(e.target.value)} style={input}>
           <option value="7">{L("7 derniers jours", "Last 7 days")}</option>
           <option value="30">{L("30 derniers jours", "Last 30 days")}</option>
           <option value="90">{L("90 derniers jours", "Last 90 days")}</option>
           <option value="all">{L("Tout", "All time")}</option>
         </select>
-        <button onClick={() => void load()} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-sm"><RefreshCw className="w-4 h-4" />{L("Actualiser", "Refresh")}</button>
+        <button onClick={() => void load()} style={{ ...btnGhost, marginLeft: "auto" }}><RefreshCw className="w-4 h-4" />{L("Actualiser", "Refresh")}</button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
         {[[L("Campagnes", "Campaigns"), tot.c], [L("Courriels envoyés", "Emails sent"), tot.se], [L("Textos envoyés", "Texts sent"), tot.ss],
           [L("Ouvertures (estimées)", "Opens (estimated)"), tot.o], [L("Clics", "Clicks"), tot.k], [L("Échecs", "Failures"), tot.f]].map(([k, v]) => (
-          <div key={String(k)} className="rounded-xl border border-border bg-card p-3"><div className="text-xs text-muted-foreground">{k}</div><div className="text-xl font-bold">{v}</div></div>
+          <div key={String(k)} style={{ ...card, padding: 12 }}>
+            <div style={{ ...muted, fontSize: 12 }}>{k}</div>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>{v}</div>
+          </div>
         ))}
       </div>
 
-      <p className="flex gap-2 text-xs text-muted-foreground"><Info className="w-4 h-4 shrink-0" />
+      <p className="flex gap-2" style={{ ...muted, fontSize: 12 }}><Info className="w-4 h-4 shrink-0" />
         {L("Ouvertures courriel estimées par pixel (sous-estimées si le client bloque les images). Les textos n'ont aucun accusé de lecture : seul l'envoi est mesurable.",
           "Email opens are estimated by pixel (under-counted when images are blocked). Texts have no read receipts: only sending is measurable.")}
       </p>
 
-      {loading ? <div className="h-24 rounded-xl bg-muted animate-pulse" /> : shown.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">{L("Aucun envoi pour cette période.", "No sends for this period.")}</div>
+      {loading ? <div className="h-24 rounded-xl animate-pulse" style={{ background: "var(--pp-bg-card)" }} /> : shown.length === 0 ? (
+        <div style={{ ...card, padding: 24, textAlign: "center", fontSize: 14, color: "var(--pp-text-muted)" }}>{L("Aucun envoi pour cette période.", "No sends for this period.")}</div>
       ) : (
         <div className="space-y-2">
           {shown.map((c) => (
-            <div key={c.id} className="rounded-xl border border-border bg-card">
-              <button onClick={() => void toggle(c.id)} className="w-full flex items-center gap-3 p-3 text-left">
+            <div key={c.id} style={card}>
+              <button onClick={() => void toggle(c.id)} className="w-full flex items-center gap-3 p-3 text-left" style={{ color: "var(--pp-text-primary)", cursor: "pointer" }}>
                 {open === c.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold truncate">{c.subject || c.sms_text?.slice(0, 60) || L("Campagne", "Campaign")}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div style={{ ...muted, fontSize: 12 }}>
                     {new Date(c.created_at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA")}{adminView && c.broker_name ? ` · ${c.broker_name}` : ""}
                   </div>
                 </div>
-                <div className="flex gap-3 text-xs">
+                <div className="flex gap-3" style={{ fontSize: 12 }}>
                   {c.channels.includes("email") && <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{c.sent_email}/{c.total_email} · {c.opened_count} {L("ouv.", "opens")}</span>}
                   {c.channels.includes("sms") && <span className="inline-flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" />{c.sent_sms}/{c.total_sms}</span>}
-                  {c.failed_count > 0 && <span className="text-destructive">{c.failed_count} {L("échecs", "failed")}</span>}
+                  {c.failed_count > 0 && <span style={{ color: "var(--pp-danger, #FF6B6B)" }}>{c.failed_count} {L("échecs", "failed")}</span>}
                 </div>
               </button>
               {open === c.id && (
-                <div className="border-t border-border p-3 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1">{L("Client", "Client")}</th><th>{L("Canal", "Channel")}</th><th>{L("Destination", "Destination")}</th><th>{L("Statut", "Status")}</th></tr></thead>
+                <div className="p-3 overflow-x-auto" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+                  <table className="w-full" style={{ fontSize: 14 }}>
+                    <thead><tr style={{ ...muted, fontSize: 12, textAlign: "left" }}><th className="py-1">{L("Client", "Client")}</th><th>{L("Canal", "Channel")}</th><th>{L("Destination", "Destination")}</th><th>{L("Statut", "Status")}</th></tr></thead>
                     <tbody>
                       {(recips[c.id] ?? []).map((r) => {
-                        const [lbl, cls] = statusLabel(r);
+                        const [lbl, color] = statusLabel(r);
                         return (
-                          <tr key={r.id} className="border-t border-border">
+                          <tr key={r.id} style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
                             <td className="py-1.5">{r.client_name || "—"}</td>
                             <td>{r.channel === "sms" ? L("Texto", "Text") : L("Courriel", "Email")}</td>
-                            <td className="text-muted-foreground">{r.channel === "sms" ? r.phone : r.email}</td>
-                            <td className={cls}>{lbl}</td>
+                            <td style={muted}>{r.channel === "sms" ? r.phone : r.email}</td>
+                            <td style={{ color }}>{lbl}</td>
                           </tr>
                         );
                       })}

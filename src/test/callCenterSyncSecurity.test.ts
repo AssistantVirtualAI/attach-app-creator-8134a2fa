@@ -5,9 +5,9 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "../..");
 const source = readFileSync(resolve(root, "supabase/functions/call-center-sync/index.ts"), "utf8");
 const config = readFileSync(resolve(root, "supabase/config.toml"), "utf8");
-const iosSnippetPath = existsSync(resolve(root, "apps/planipret-mobile/native-config/ios-Info.plist.snippet.xml"))
-  ? resolve(root, "apps/planipret-mobile/native-config/ios-Info.plist.snippet.xml")
-  : resolve(root, "native-config/ios-Info.plist.snippet.xml");
+const iosSnippetPath = existsSync(resolve(root, "native-config/ios-Info.plist.snippet.xml"))
+  ? resolve(root, "native-config/ios-Info.plist.snippet.xml")
+  : resolve(root, "apps/planipret-mobile/native-config/ios-Info.plist.snippet.xml");
 const iosSnippet = readFileSync(iosSnippetPath, "utf8");
 
 describe("call-center-sync security", () => {

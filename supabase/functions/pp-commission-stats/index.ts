@@ -141,8 +141,10 @@ Deno.serve(async (req) => {
     let live: Awaited<ReturnType<typeof fetchLiveRegisterRows>> = {
       rows: [], coverage: { connected: 0, total: 0 }, failures: [], brokers: [],
     };
-    try {
-      live = await fetchLiveRegisterRows(admin, user.id, isAdmin && scope === "all", years, cid);
+    // Firm-wide view: broker tokens are owner-scoped (0 deposits) and 26 live
+    // calls push the worker over its CPU budget. The register is the source.
+    if (!(isAdmin && scope === "all")) try {
+      live = await fetchLiveRegisterRows(admin, user.id, false, years, cid);
     } catch (e) {
       console.warn("[pp-commission-stats] live merge failed", e);
     }

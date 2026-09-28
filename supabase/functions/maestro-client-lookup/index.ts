@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     const client = cached;
     // The Maestro id — never the local cache row uuid.
-    const clientId = client?.maestro_client_id ?? client?.client_id ?? null;
+    const clientId = String(client?.maestro_client_id ?? "").trim() || null;
 
     if (callId && clientId) {
       await admin
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     return json({
       found: true,
       client_id: clientId,
-      name: client?.name ?? `${client?.first_name ?? ""} ${client?.last_name ?? ""}`.trim(),
+      name: client?.full_name ?? client?.name ?? `${client?.first_name ?? ""} ${client?.last_name ?? ""}`.trim(),
       company: client?.company ?? null,
       mortgage_stage: client?.mortgage_stage ?? null,
       tags: client?.tags ?? [],

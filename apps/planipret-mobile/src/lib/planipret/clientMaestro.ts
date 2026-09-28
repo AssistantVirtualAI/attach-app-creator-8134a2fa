@@ -176,6 +176,12 @@ export function buildClientBundles(
   // Appels : rattachés par nom d'appelant, sinon par numéro d'un dossier.
   const byPhone = new Map<string, ClientBundle>();
   for (const b of map.values()) {
+    // A client can exist in Maestro without a contract. Its own verified phone
+    // number must therefore be an association key before we inspect calls;
+    // otherwise an inbound call would disappear from an otherwise valid 360°
+    // profile until a mortgage file was created.
+    const contactPhone = digits10(b.phone);
+    if (contactPhone && !byPhone.has(contactPhone)) byPhone.set(contactPhone, b);
     for (const d of b.deals) {
       const k = digits10(d.contact_number);
       if (k && !byPhone.has(k)) byPhone.set(k, b);

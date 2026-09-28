@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { X, UserPlus, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { invalidateCallerClient } from "@/lib/planipret/callerClient";
+import { invalidateCallerClient, resolveCallerClient } from "@/lib/planipret/callerClient";
 
 export interface CreateClientTarget {
   phone: string;
@@ -48,6 +48,18 @@ export default function CreateMaestroClientSheet({
     setBusy(true);
     setWebUrl(null);
     try {
+      // A caller-ID name is not a trusted Maestro identity. Resolve the exact
+      // phone through the broker-scoped directory immediately before a write
+      // so a delayed UI/cache cannot create a duplicate client.
+      const existing = await resolveCallerClient(phone);
+      if (existing.found && existing.maestroClientId) {
+        const name = existing.name || [first.trim(), last.trim()].filter(Boolean).join(" ") || "Client Maestro";
+        invalidateCallerClient(phone);
+        toast.message("Ce numéro est déjà lié à un client Maestro", { description: name });
+        onCreated?.({ maestroClientId: existing.maestroClientId, name });
+        onClose();
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("maestro-client-create", {
         body: {
           first_name: first.trim(),

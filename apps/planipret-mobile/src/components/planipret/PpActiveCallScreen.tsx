@@ -348,7 +348,7 @@ export default function PpActiveCallScreen({
               </button>
             )}
             {callerClient && !callerClient.found && (
-              <button onClick={() => setCreateTarget({ phone: callerNumber, name: displayName })}
+              <button onClick={() => setCreateTarget({ phone: callerNumber, name: displayName, callId: snap.callId ?? null })}
                 className="mt-4 px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-2"
                 style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)" }}>
                 <UserPlus className="w-3.5 h-3.5" /> Numéro inconnu — créer le client

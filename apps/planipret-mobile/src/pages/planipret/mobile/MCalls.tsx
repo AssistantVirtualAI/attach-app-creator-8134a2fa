@@ -22,6 +22,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
 import { presentCallParty } from "@/lib/planipret/callPresentation";
+import { shouldOfferMaestroClientCreation } from "@/lib/planipret/clientHistory";
 import { peekScreenCache, readScreenCache, writeScreenCache, invalidateScreenCache, TTL } from "@/lib/planipret/screenCache";
 
 
@@ -61,6 +62,7 @@ type Call = {
   // Maestro / AI pipeline (optional)
   maestro_synced?: boolean | null;
   maestro_client_id?: string | null;
+  maestro_client_name?: string | null;
   transcript_segments?: any;
   transcript_language?: string | null;
   ai_coaching?: any;
@@ -691,7 +693,19 @@ export default function MCalls() {
       </div>
 
 
-      <CreateMaestroClientSheet target={createTarget} onClose={() => setCreateTarget(null)} onCreated={() => setCreateTarget(null)} />
+      <CreateMaestroClientSheet
+        target={createTarget}
+        onClose={() => setCreateTarget(null)}
+        onCreated={({ maestroClientId, name }) => {
+          const callId = createTarget?.callId;
+          if (callId) {
+            setCalls((rows) => rows.map((call) => call.id === callId
+              ? { ...call, maestro_client_id: maestroClientId, maestro_client_name: name }
+              : call));
+          }
+          setCreateTarget(null);
+        }}
+      />
       {selected && (
         <CallDetailSheet
           call={selected}
@@ -771,7 +785,10 @@ function CallRow({ call, onTap, onCall, showCallBtn, onCreateClient }: { call: C
           </div>
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
-          {onCreateClient && !partyWithName.name && party.phone && (
+          {onCreateClient && shouldOfferMaestroClientCreation({
+            phone: party.phone,
+            maestroClientId: call.maestro_client_id,
+          }) && party.phone && (
             <button
               onClick={() => onCreateClient(String(party.phone), call.from_name)}
               aria-label={lang === "en" ? "Create Maestro client" : "Créer le client Maestro"}

@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { consumePortalHandoff, readHandoffParams } from "@/lib/planipret/portalHandoff";
+import { consumePortalHandoff } from "@/lib/planipret/portalHandoff";
 import { Loader2, ShieldAlert } from "lucide-react";
 
 export default function PortalHandoff() {

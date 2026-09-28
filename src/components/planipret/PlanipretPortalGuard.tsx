@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
 import { logPortalLogin } from "@/lib/planipret/portalAudit";
 import { portalHome, resolvePortalAccess, type PortalKind } from "@/lib/planipret/portalAccess";
+import { consumePortalHandoff, readHandoffParams } from "@/lib/planipret/portalHandoff";
 
 const DENY_MESSAGES: Record<string, string> = {
   "not-microsoft": "Ce portail accepte uniquement les connexions Microsoft 365 Planiprêt.",

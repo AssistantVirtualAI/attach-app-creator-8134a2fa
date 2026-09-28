@@ -149,6 +149,8 @@ const PBMaestroClients = lazyWithRetry(() => import("./pages/planipret/broker/PB
 
 const PBSettings = lazyWithRetry(() => import("./pages/planipret/broker/PBSettings"));
 const PBFeedback = lazyWithRetry(() => import("./pages/planipret/broker/PBFeedback"));
+const PBMarketing = lazyWithRetry(() => import("./pages/planipret/broker/PBMarketing"));
+const PAMarketing = lazyWithRetry(() => import("./pages/planipret/admin/PAMarketing"));
 const MFeedback = lazyWithRetry(() => import("./pages/planipret/mobile/MFeedback"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));
@@ -760,6 +762,7 @@ const App = () => (
                   <Route path="maestro-brokers" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroBrokers /></Suspense>} />
                   <Route path="broker-360" element={<Suspense fallback={<AdminPageSkeleton />}><PABroker360 /></Suspense>} />
                   <Route path="maestro-clients" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClients360 /></Suspense>} />
+                  <Route path="marketing" element={<Suspense fallback={<AdminPageSkeleton />}><PAMarketing /></Suspense>} />
                   <Route path="maestro-clients/:clientKey" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClientDetail /></Suspense>} />
                   <Route path="broker-performance" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerPerformance /></Suspense>} />
                   <Route path="broker-journey" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerJourney /></Suspense>} />
@@ -800,6 +803,7 @@ const App = () => (
                   <Route path="search" element={<Navigate to="/planipret/broker/overview" replace />} />
                   <Route path="settings" element={<Suspense fallback={<AdminPageSkeleton />}><PBSettings /></Suspense>} />
                   <Route path="feedback" element={<Suspense fallback={<AdminPageSkeleton />}><PBFeedback /></Suspense>} />
+                  <Route path="marketing" element={<Suspense fallback={<AdminPageSkeleton />}><PBMarketing /></Suspense>} />
 
                 </Route>
                 <Route path="/planipret/privacy" element={<Suspense fallback={<AdminPageSkeleton />}><PlanipretPrivacy /></Suspense>} />

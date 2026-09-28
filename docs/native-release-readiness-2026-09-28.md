@@ -46,14 +46,15 @@ L’application ne télécharge plus, n’installe plus et n’affiche plus de r
 
 | Contrôle | Résultat | Limite |
 | --- | --- | --- |
-| Tests unitaires mobiles | 37 fichiers, 174 tests réussis | Ce sont des tests JavaScript/React, pas des appels réels. |
+| Tests unitaires mobiles source | 37 fichiers, 174 tests réussis | Ce sont des tests JavaScript/React, pas des appels réels. |
+| Tests unitaires dépôt de livraison | 53 fichiers, 288 tests réussis | Inclut les tests portail et mobile dans la copie standalone. |
 | Tests ciblés OTA et audio | 8 tests réussis | Le prompt natif iOS est simulé. |
 | Build WebView de production | Réussi avec `PP_SKIP_AUTOSYNC=1 npm run build` | Le bundle n’est pas encore archivé par Xcode. |
 | Invariants téléphonie backend | Réussis | Analyse de code, pas de CDR de production traité. |
 | Contrat Maestro | 20/20 opérations documentées validées | Aucun secret administrateur Maestro n’a été ajouté. |
 | Contrat AVA | 81/81 outils et 25 outils sensibles protégés | Aucun SMS ou appel réel n’a été envoyé. |
 | Contrôle de distribution OTA | Réussi | Aucun téléchargement OTA n’est encore possible dans le code. |
-| Android natif local | À refaire dans le dépôt standalone après synchronisation | Le worktree source ne contient pas le projet Android généré. |
+| Android natif local | APK debug compilé avec succès dans le dépôt standalone | Aucun téléphone ou émulateur n’était connecté au Sandbox. |
 | iOS / CallKit / PJSIP réel | Non exécuté | Nécessite un iPhone, un framework PJSIP TLS compilé et un appel consenti. |
 | Android / WebRTC réel | Non exécuté | Nécessite un téléphone Android et des appels consentis. |
 
@@ -80,7 +81,7 @@ Pour chaque appel consenti à sauvegarder, vérifier ensuite le CDR local, l’a
 
 ## Éléments qui restent honnêtement non prouvés
 
-Aucune preuve indépendante ne confirme encore que la release corrigée sonne, répond ou transporte un audio bidirectionnel sur des appareils physiques. Le build Android de debug, l’archive iOS, l’AAB signé, les soumissions Store et l’activation des deux fonctions Edge ne sont pas encore réalisés dans cette phase. La soumission doit attendre le résultat de la recette obligatoire, puis utiliser des numéros de version/build inédits dans les consoles.
+Aucune preuve indépendante ne confirme encore que la release corrigée sonne, répond ou transporte un audio bidirectionnel sur des appareils physiques. L’APK Android debug a été compilé, mais aucun appareil n’était connecté. L’archive iOS, l’AAB signé, les soumissions Store et l’activation des deux fonctions Edge ne sont pas encore réalisés dans cette phase. La soumission doit attendre le résultat de la recette obligatoire, puis utiliser des numéros de version/build inédits dans les consoles.
 
 ## References
 

@@ -131,12 +131,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    const s = (v: unknown, max = 120) => String(v ?? "").trim().slice(0, max);
+    const a = (body?.address && typeof body.address === "object") ? body.address : {};
+    const address = {
+      street_number: s(a.street_number, 20),
+      street_name: s(a.street_name),
+      street_type_dd: s(a.street_type_dd, 40),
+      city: s(a.city),
+      region: s(a.region, 40),
+      zip: s(a.zip, 12).toUpperCase(),
+      ...(s(a.apartment, 20) ? { apartment: s(a.apartment, 20) } : {}),
+      country: s(a.country, 40) || "CA",
+    };
     const payload: Record<string, unknown> = {
       first_name: firstName,
       ...(lastName ? { last_name: lastName } : {}),
       ...(body?.email ? { email: String(body.email).trim() } : {}),
       ...(body?.company ? { company: String(body.company).trim() } : {}),
-      ...(body?.language ? { language: String(body.language).trim() } : {}),
+      ...(body?.language ? { language: s(body.language, 10) } : {}),
+      ...(body?.salutation ? { salutation: s(body.salutation, 20) } : {}),
+      ...(body?.sex ? { sex: s(body.sex, 10) } : {}),
+      ...(Object.values(address).some((v) => v && v !== "CA") ? { address } : {}),
       ...(phone ? { mobile_number: phone } : {}),
     };
 

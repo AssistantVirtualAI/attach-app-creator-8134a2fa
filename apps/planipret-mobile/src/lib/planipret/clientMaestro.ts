@@ -44,6 +44,8 @@ export interface ClientCall {
   to_name: string | null;
   ai_summary: string | null;
   recording_url: string | null;
+  transcript?: string | null;
+  has_recording?: boolean | null;
   /** Rattachement explicite à un client Maestro, quand il a été forcé. */
   maestro_client_name?: string | null;
   maestro_client_id?: string | null;
@@ -261,7 +263,7 @@ export async function fetchClientCalls(userIds: string[], limit = 500): Promise<
   if (!ids.length) return [];
   const { data } = await supabase
     .from("planipret_phone_calls")
-    .select("id, user_id, direction, status, started_at, ended_at, duration_seconds, save_consent, save_consent_at, save_consent_channel, from_number, to_number, from_name, to_name, ai_summary, recording_url, maestro_client_name, maestro_client_id")
+    .select("id, user_id, direction, status, started_at, ended_at, duration_seconds, save_consent, save_consent_at, save_consent_channel, from_number, to_number, from_name, to_name, ai_summary, recording_url, transcript, has_recording, maestro_client_name, maestro_client_id")
     .in("user_id", ids)
     .order("started_at", { ascending: false })
     .limit(limit);

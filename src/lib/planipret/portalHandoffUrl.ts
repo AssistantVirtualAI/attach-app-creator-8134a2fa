@@ -10,7 +10,7 @@ export function validPortalHandoffUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   try {
     const url = new URL(value);
-    if (url.origin !== PORTAL_ORIGIN || !HANDOFF_PATHS.includes(url.pathname)) return null;
+    if (!PORTAL_ORIGINS.includes(url.origin) || !HANDOFF_PATHS.includes(url.pathname)) return null;
     if (!url.searchParams.get("th") || !url.searchParams.get("em")) return null;
     return url.toString();
   } catch {

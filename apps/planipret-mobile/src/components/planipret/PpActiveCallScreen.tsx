@@ -22,6 +22,9 @@ import { formatSipParty } from "@/lib/planipret/sip/formatSipParty";
 import { callUi, useCallUi } from "@/lib/planipret/callUiStore";
 import PpCallPill from "./PpCallPill";
 import PpCallDiagnosticPanel from "./PpCallDiagnosticPanel";
+import { useNavigate } from "react-router-dom";
+import { resolveCallerClient, clientDetailPath, type CallerClient } from "@/lib/planipret/callerClient";
+import CreateMaestroClientSheet, { type CreateClientTarget } from "./mobile/CreateMaestroClientSheet";
 
 type Contact = {
   id?: string;
@@ -63,6 +66,7 @@ export default function PpActiveCallScreen({
     answerSecond, declineSecond,
   } = softphone;
   const { minimized } = useCallUi();
+  const navigate = useNavigate();
   const waitingCall = snap.second?.state === "ringing-in";
 
 

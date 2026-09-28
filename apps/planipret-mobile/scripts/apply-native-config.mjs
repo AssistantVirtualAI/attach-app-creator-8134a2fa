@@ -2703,6 +2703,10 @@ function patchAndroidManifest() {
   for (const permission of [
     "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
     "android.permission.SCHEDULE_EXACT_ALARM",
+    "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+    "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
+    "android.permission.WAKE_LOCK",
   ]) {
     xml = xml.replace(new RegExp(`\\s*<uses-permission android:name="${permission.replace(/\./g, "\\.")}" \\/>`, "g"), "");
   }
@@ -2718,16 +2722,29 @@ function patchAndroidManifest() {
     }
   }
 
-  if (!xml.includes(".PpSipKeepAliveService")) {
-    xml = xml.replace(/\n\s*<\/application>/, `${ANDROID_SERVICE}\n    </application>`);
-  } else if (!xml.includes(".PpIncomingActionReceiver")) {
-    xml = xml.replace(/\n\s*<\/application>/, `        <receiver\n            android:name=".PpIncomingActionReceiver"\n            android:exported="false" />\n    </application>`);
+  // Earlier native projects can contain a background SIP UAS or boot receiver.
+  // Remove every managed component first, then add the one current wake-only
+  // definition. Updating only Java is insufficient: the manifest can retain a
+  // phoneCall|microphone service declaration and a boot-time REGISTER path.
+  for (const name of [
+    ".PpSipKeepAliveService",
+    ".PpFirebaseMessagingService",
+    "com.capacitorjs.plugins.pushnotifications.MessagingService",
+  ]) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const body = new RegExp(`\\s*<service\\b(?=[^>]*android:name="${escaped}")[\\s\\S]*?<\\/service>\\s*`, "g");
+    const singleton = new RegExp(`\\s*<service\\b(?=[^>]*android:name="${escaped}")[^>]*/>\\s*`, "g");
+    xml = xml.replace(body, "").replace(singleton, "");
   }
-  if (!xml.includes(".PpFirebaseMessagingService")) {
-    xml = xml.replace(/\n\s*<\/application>/, `        <service\n            android:name=".PpFirebaseMessagingService"\n            android:exported="false">\n            <intent-filter>\n                <action android:name="com.google.firebase.MESSAGING_EVENT" />\n            </intent-filter>\n        </service>\n        <service\n            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"\n            tools:node="remove" />\n    </application>`);
-  } else if (!xml.includes('android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"')) {
-    xml = xml.replace(/\n\s*<\/application>/, `        <service\n            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"\n            tools:node="remove" />\n    </application>`);
+  for (const name of [".PpIncomingActionReceiver", ".PpBootReceiver"]) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const body = new RegExp(`\\s*<receiver\\b(?=[^>]*android:name="${escaped}")[\\s\\S]*?<\\/receiver>\\s*`, "g");
+    const singleton = new RegExp(`\\s*<receiver\\b(?=[^>]*android:name="${escaped}")[^>]*/>\\s*`, "g");
+    xml = xml.replace(body, "").replace(singleton, "");
   }
+  // Component cleanup may leave `</application>` immediately after a comment.
+  // Do not require a leading newline or the canonical service block is skipped.
+  xml = xml.replace(/\s*<\/application>/, `${ANDROID_SERVICE}\n    </application>`);
   // Ensure MainActivity can be shown over the lockscreen for full-screen intents.
   if (!xml.includes('android:showWhenLocked')) {
     xml = xml.replace(/<activity([^>]*android:name="\.MainActivity"[^>]*)>/, `<activity$1\n            android:showWhenLocked="true"\n            android:turnScreenOn="true">`);

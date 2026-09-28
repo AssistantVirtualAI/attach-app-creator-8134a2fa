@@ -75,6 +75,9 @@ if (androidGenerated) {
     check(manifest.includes("PpSipKeepAliveService"), "AndroidManifest.xml missing PpSipKeepAliveService");
     check(manifest.includes("PpFirebaseMessagingService"), "AndroidManifest.xml missing PpFirebaseMessagingService");
     check(manifest.includes('com.capacitorjs.plugins.pushnotifications.MessagingService') && manifest.includes('tools:node="remove"'), "Capacitor MessagingService must be replaced so only one FCM service consumes each push");
+    check(!manifest.includes('foregroundServiceType="phoneCall|microphone"'), "AndroidManifest.xml must not retain the obsolete media SIP foreground service");
+    check(!manifest.includes("PpBootReceiver") && !manifest.includes("android.permission.RECEIVE_BOOT_COMPLETED"), "AndroidManifest.xml must not retain boot-time SIP registration");
+    check(!manifest.includes("android.permission.FOREGROUND_SERVICE_PHONE_CALL") && !manifest.includes("android.permission.FOREGROUND_SERVICE_MICROPHONE"), "AndroidManifest.xml must not request media foreground-service permissions for wake-only SIP");
     check(!manifest.includes("android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"), "Do not request blanket battery-optimization exemption");
     check(!manifest.includes("android.permission.SCHEDULE_EXACT_ALARM"), "Do not request exact-alarm permission without an alarm feature");
     check(manifest.includes('android:foregroundServiceType="dataSync"'), 'PpSipKeepAliveService must declare foregroundServiceType="dataSync" — run node scripts/apply-native-config.mjs');

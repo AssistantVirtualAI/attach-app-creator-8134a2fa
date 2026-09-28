@@ -13,17 +13,9 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const DEFAULT_PORTAL_ORIGIN = "https://avastatistic.ca";
 
-function portalOrigin(value: string | undefined): string {
-  try {
-    const url = new URL(value ?? DEFAULT_PORTAL_ORIGIN);
-    if (url.protocol !== "https:" || !url.hostname) throw new Error("invalid portal URL");
-    return url.origin;
-  } catch {
-    return DEFAULT_PORTAL_ORIGIN;
-  }
-}
-
-const PORTAL_ORIGIN = portalOrigin(Deno.env.get("PP_PORTAL_URL"));
+// L'origine du portail est fixée en production : le lien magique doit toujours
+// mener à https://avastatistic.ca, peu importe la valeur de PP_PORTAL_URL.
+const PORTAL_ORIGIN = DEFAULT_PORTAL_ORIGIN;
 
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });

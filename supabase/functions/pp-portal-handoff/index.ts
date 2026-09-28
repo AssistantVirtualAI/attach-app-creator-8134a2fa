@@ -11,10 +11,11 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-const DEFAULT_PORTAL_ORIGIN = "https://avastatistic.ca";
+const DEFAULT_PORTAL_ORIGIN = "https://courtierai.planipret.com";
 
 // L'origine du portail est fixée en production : le lien magique doit toujours
-// mener à https://avastatistic.ca, peu importe la valeur de PP_PORTAL_URL.
+// mener à https://courtierai.planipret.com (proxifié vers avastatistic.ca,
+// le sous-chemin /planipret est inclus dans target), peu importe PP_PORTAL_URL.
 const PORTAL_ORIGIN = DEFAULT_PORTAL_ORIGIN;
 
 const json = (b: unknown, status = 200) =>

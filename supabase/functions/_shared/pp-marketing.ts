@@ -131,5 +131,5 @@ export function trackBaseUrl(): string {
 export function rewriteLinks(html: string, token: string): string {
   const base = trackBaseUrl();
   return html.replace(/href="(https?:\/\/[^"]+)"/g, (_m, url) =>
-    `href="${base}?c=${encodeURIComponent(token)}&u=${encodeURIComponent(url)}"`);
+    `href="${base}?a=click&c=${encodeURIComponent(token)}&u=${encodeURIComponent(url)}"`);
 }

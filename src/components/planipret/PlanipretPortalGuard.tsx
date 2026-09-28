@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
 import { logPortalLogin } from "@/lib/planipret/portalAudit";
 import { portalHome, resolvePortalAccess, type PortalKind } from "@/lib/planipret/portalAccess";
+import { consumePortalHandoff, readHandoffParams } from "@/lib/planipret/portalHandoff";
 
 const DENY_MESSAGES: Record<string, string> = {
   "not-microsoft": "Ce portail accepte uniquement les connexions Microsoft 365 Planiprêt.",
@@ -32,6 +33,18 @@ export default function PlanipretPortalGuard({ portal, children }: { portal: Por
   };
 
   const evaluate = async (attempt = 0) => {
+    // Pont mobile : le lien magique (th/em) peut arriver directement sur
+    // /planipret/broker ou /planipret/admin. On l'échange contre une session
+    // avant toute évaluation d'accès.
+    if (attempt === 0 && readHandoffParams()) {
+      setState("checking");
+      const handoff = await consumePortalHandoff();
+      if (handoff === "error") {
+        setReason("not-microsoft");
+        setState("denied");
+        return;
+      }
+    }
     const access = await resolvePortalAccess();
     if (access.state === "anon") {
       // Premier rendu juste après le callback : la session n'est pas encore

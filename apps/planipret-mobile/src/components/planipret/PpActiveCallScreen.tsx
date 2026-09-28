@@ -136,6 +136,31 @@ export default function PpActiveCallScreen({
     return () => clearInterval(id);
   }, [snap.callState, snap.startedAt]);
 
+  // Identification Maestro de l'appelant entrant (UI seulement, jamais bloquant).
+  const [callerClient, setCallerClient] = useState<CallerClient | null>(null);
+  const [createTarget, setCreateTarget] = useState<CreateClientTarget | null>(null);
+  const autoOpenedRef = useRef<string | null>(null);
+  const callerNumber = snap.direction === "in" ? String(snap.remoteNumber ?? "") : "";
+  useEffect(() => {
+    setCallerClient(null);
+    if (!active || callerNumber.replace(/\D/g, "").length < 10) return;
+    let alive = true;
+    void resolveCallerClient(callerNumber).then((c) => { if (alive) setCallerClient(c); });
+    return () => { alive = false; };
+  }, [active, callerNumber]);
+
+  // Dès la réponse d'un client connu : ouvrir sa fiche derrière et réduire
+  // l'écran d'appel (l'appel continue, la pastille reste visible).
+  useEffect(() => {
+    if (snap.callState !== "active" || snap.direction !== "in" || !callerClient?.found) return;
+    const key = snap.callId || String(snap.startedAt ?? "");
+    if (autoOpenedRef.current === key) return;
+    autoOpenedRef.current = key;
+    navigate(clientDetailPath(callerClient));
+    callUi.minimize();
+  }, [snap.callState, snap.direction, snap.callId, snap.startedAt, callerClient, navigate]);
+
+
   // Load internal contacts when entering transfer / add-call view (once)
   useEffect(() => {
     if ((view !== "transfer" && view !== "addcall") || contacts.length > 0 || loadingContacts) return;

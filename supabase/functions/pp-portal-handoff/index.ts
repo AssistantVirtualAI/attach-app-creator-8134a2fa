@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
-      portal: target.startsWith("/planipret/admin/") && isAdmin ? "admin" : "broker",
+      portal: /^\/planipret\/admin(\/|$)/.test(target) && isAdmin ? "admin" : "broker",
       email: user.email,
       // Capacitor's iOS in-app browser can discard URL fragments while opening
       // an external origin. Query parameters survive that handoff reliably;

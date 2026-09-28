@@ -29,6 +29,13 @@ describe("AVA portal handoff URL", () => {
     expect(validPortalHandoffUrl(adminDirect)).toBe(adminDirect);
   });
 
+  it("accepts the courtierai.planipret.com production origin", () => {
+    const broker = "https://courtierai.planipret.com/planipret/broker?th=one-time&em=broker%40example.ca";
+    const admin = "https://courtierai.planipret.com/planipret/admin?th=one-time&em=broker%40example.ca";
+    expect(validPortalHandoffUrl(broker)).toBe(broker);
+    expect(validPortalHandoffUrl(admin)).toBe(admin);
+  });
+
   it("rejects invalid, foreign, or incomplete browser URLs", () => {
     expect(validPortalHandoffUrl("capacitor://localhost/planipret/portal-handoff?th=x&em=y")).toBeNull();
     expect(validPortalHandoffUrl("https://example.invalid/planipret/portal-handoff?th=x&em=y")).toBeNull();

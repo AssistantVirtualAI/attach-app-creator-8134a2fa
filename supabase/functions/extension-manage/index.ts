@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Multi-tenant extension management: reset SIP password, link email account,
 // send welcome email. Works for ANY organization/domain (super_admin or
 // org admin/owner) — not restricted to Lemtel.

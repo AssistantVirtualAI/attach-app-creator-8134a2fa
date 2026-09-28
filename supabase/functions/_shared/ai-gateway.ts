@@ -3,8 +3,8 @@
 // (google/*, openai/*, ...) is mapped to an equivalent Claude model.
 // If ANTHROPIC_API_KEY is absent, we fall back to OpenAI (secondary provider)
 // so AI features keep working instead of failing hard.
-import { createAnthropic } from "npm:@ai-sdk/anthropic@3.0.118";
-import { createOpenAI } from "npm:@ai-sdk/openai@3.0.112";
+import { createAnthropic } from "https://esm.sh/@ai-sdk/anthropic@3.0.118";
+import { createOpenAI } from "https://esm.sh/@ai-sdk/openai@3.0.112";
 import { toClaudeModel } from "./claude-compat.ts";
 
 function toOpenAiModel(model: string): string {

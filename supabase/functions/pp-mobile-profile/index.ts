@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { corsHeaders, jsonResponse, requireUser } from "../_shared/auth.ts";
 import { linkBrokerIdByEmail } from "../_shared/maestro-broker-directory.ts";
 

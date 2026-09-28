@@ -7,7 +7,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 // @ts-ignore npm package has no bundled TS declarations.
-import GSMDecoder from "npm:gsm-decoder@1.0.0";
+import GSMDecoder from "https://esm.sh/gsm-decoder@1.0.0";
 
 const FALLBACK_NS_API_BASE_URL = (Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2").replace(/\/$/, "");
 const FALLBACK_NS_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? Deno.env.get("NS_API_DOMAIN") ?? "planipret.ca";

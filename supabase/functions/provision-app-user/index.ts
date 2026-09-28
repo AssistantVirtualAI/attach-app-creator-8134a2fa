@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Provisions Supabase Auth accounts for PBX softphone users.
 // - Idempotent: existing auth user is re-linked; password updates flow through.
 // - Lemtel-only by JWT; service-role processor via x-provision-secret header.

@@ -4,8 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const mobileRoot = fs.existsSync(path.join(root, "apps", "planipret-mobile"))
-  ? path.join(root, "apps", "planipret-mobile")
+const nestedMobileRoot = path.join(root, "apps", "planipret-mobile");
+const mobileRoot = fs.existsSync(path.join(nestedMobileRoot, "src", "components", "planipret", "mobile", "CreateMaestroClientSheet.tsx"))
+  ? nestedMobileRoot
   : root;
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const mobileRead = (relative) => fs.readFileSync(path.join(mobileRoot, relative), "utf8");

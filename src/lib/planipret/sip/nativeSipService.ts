@@ -553,41 +553,33 @@ export class NativeSipService {
   }
 
   async answer(): Promise<boolean> {
-    const pjsip = getPjsip();
-    if (!pjsip) { releaseAorFromNative("answer_plugin_absent"); return false; }
-    try {
-      const res = await pjsip.answerCall({ callId: this.currentCallId ?? undefined });
-      this.currentCallId = res?.callId ?? this.currentCallId;
-      return true;
-    } catch (err: any) {
-      console.error("[SIP] answer échoué:", err);
-      if (this.isMissingBinary(err)) {
-        releaseAorFromNative("answer_binary_missing");
-        void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
-      }
-      return false;
-    }
+    // Le bouton in-app ne peut pas appeler answerCall() : CallKit doit être le
+    // seul propriétaire de la transition et PJSIP le seul émetteur du 200 OK.
+    // La transaction reste valable même si le push a précédé l'INVITE TLS.
+    return requestPlanipretCallKitAnswer();
   }
 
 
   async hangup(): Promise<boolean> {
     // CallKit doit être fermé même si PJSIP échoue, sinon l'UI système reste
     // affichée alors que l'appel est terminé.
-    const endCallKit = () => {
+    const endCallKit = (callId?: string | null) => {
       const voip = (window as any)?.Capacitor?.Plugins?.PpVoipCall;
       if (!voip) return;
-      if (voip.endCall) { void Promise.resolve(voip.endCall({})).catch(() => {}); }
-      else if (voip.reportCallEnded) { void Promise.resolve(voip.reportCallEnded({})).catch(() => {}); }
+      const payload = callId ? { callId } : {};
+      if (voip.endCall) { void Promise.resolve(voip.endCall(payload)).catch(() => {}); }
+      else if (voip.reportCallEnded) { void Promise.resolve(voip.reportCallEnded(payload)).catch(() => {}); }
     };
     const pjsip = getPjsip();
     if (!pjsip) { endCallKit(); releaseAorFromNative("hangup_plugin_absent"); return false; }
+    const targetCallId = this.currentCallId;
     try {
-      await pjsip.hangupCall({ callId: this.currentCallId ?? undefined });
+      await pjsip.hangupCall({ callId: targetCallId ?? undefined });
       this.currentCallId = null;
-      endCallKit();
+      endCallKit(targetCallId);
       return true;
     } catch (err: any) {
-      endCallKit();
+      endCallKit(targetCallId);
       if (this.isMissingBinary(err)) releaseAorFromNative("hangup_binary_missing");
       return false;
     }

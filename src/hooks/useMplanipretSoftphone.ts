@@ -348,7 +348,21 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     const onCallState = (event: Event) => {
       const d = (event as CustomEvent<any>).detail ?? {};
       const state = String(d.state ?? "").toLowerCase();
+      const eventCallId = String(d.callId ?? "");
       setSnap((current) => {
+        const currentCallId = String(current.callId ?? "");
+        const currentIsLive = ["ringing-in", "ringing-out", "active", "held"].includes(current.callState);
+        // A delayed disconnect for an older PJSIP dialog must never overwrite a
+        // newer ringing/active call. CallKit enforces the same correlation on
+        // the native side; this keeps the React screen in lockstep with it.
+        if ((state === "disconnected" || state === "ended")
+          && currentIsLive
+          && eventCallId
+          && currentCallId
+          && eventCallId !== currentCallId) {
+          console.info("[SIP] stale native end ignored", { endedCallId: eventCallId, activeCallId: currentCallId });
+          return current;
+        }
         const callState: PpSipSnapshot["callState"] = state === "ringing"
           ? (d.direction === "out" ? "ringing-out" : "ringing-in")
           : state === "connecting" || state === "connected" || state === "media"
@@ -358,7 +372,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
           ...current,
           status: nativeSip.isRegistered() ? "registered" : current.status,
           callState,
-          callId: String(d.callId ?? current.callId ?? ""),
+          callId: eventCallId || currentCallId,
           remoteIdentity: String(d.remoteNumber ?? current.remoteIdentity ?? ""),
           remoteNumber: String(d.remoteNumber ?? current.remoteNumber ?? ""),
           direction: d.direction === "out" || d.direction === "in" ? d.direction : current.direction,
@@ -638,7 +652,9 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     onPlanipretIncomingInvite((invite) => {
       if (isIosNativePlatform() && !usingWebFallback) {
         if (invite?.action === "answer") {
-          void nativeSip.answer().then((ok) => completePlanipretCallKitAnswer(invite?.callId, ok));
+          // CallKit owns the only native answer transaction. Completing it a
+          // second time from JavaScript could emit two 200 OK responses.
+          void nativeSip.answer();
         } else if (invite?.action === "decline" || invite?.action === "cancelled") {
           void nativeSip.hangup();
         } else {
@@ -1159,11 +1175,19 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   useEffect(() => {
     if (softphoneOwnerId !== ownerIdRef.current) return;
     if (snap.callState !== "ended" || !snap.callId) return;
+    const endedRestCallId = restCall?.id ?? null;
+    // A PJSIP/CallKit termination is authoritative for the visible call. The
+    // REST attachment is only a control handle and must not revive the in-call
+    // screen while the CDR pipeline finishes its server-side reconciliation.
+    if (endedRestCallId) {
+      setRestCall((current) => current?.id === endedRestCallId ? null : current);
+    }
+    setPushRing(null);
     void endSession(snap.callId, snap.errorCause || "hangup");
     // Le client peut raccrocher en premier : la question de consentement doit
     // aussi s'afficher quand la fin d'appel vient du réseau, pas seulement
     // quand le courtier appuie sur Raccrocher.
-    emitCallEnded(restCall?.id ?? snap.callId);
+    emitCallEnded(endedRestCallId ?? snap.callId);
   }, [snap.callState, snap.callId, snap.errorCause, restCall?.id, ownerTick]);
 
   const registered = snap.status === "registered";

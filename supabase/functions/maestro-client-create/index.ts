@@ -11,7 +11,8 @@ import {
 } from "../_shared/maestro.ts";
 import { guardPlanipret } from "../_shared/planipret-guard.ts";
 import { maestroClientHasTelephone } from "../_shared/maestro-client-telephone.ts";
-import { createClient_, createTelephone, getClient } from "../_shared/maestro-scribe.ts";
+import { createClient_, getClient } from "../_shared/maestro-scribe.ts";
+import { ensureClientTelephone } from "../_shared/maestro-client-telephone.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 
 function clientName(client: any, fallbackFirst: string, fallbackLast: string): string {
@@ -194,38 +195,13 @@ Deno.serve(async (req) => {
     }
 
     let confirmed = readBack.data as any;
-    // Maestro stores numbers in the documented telephones sub-resource; the
-    // POST /clients body may ignore a flat phone field. Ensure the caller's
-    // number is attached so the directory/caller lookup can match it.
     if (phone) {
-      if (!maestroClientHasTelephone(confirmed, phone)) {
-        const telephoneNumber = phone.replace(/\D/g, "").slice(-10);
-        const tel = await createTelephone(cfg, clientId, {
-          telephone_type: "mobile",
-          telephone_number: telephoneNumber,
-          extension: "",
-          priority: "principal",
-        }, { token });
-        await maestroAudit(admin, tel.ok ? "client_telephone_added" : "client_telephone_failed", { client_id: clientId, status: tel.status });
-        if (tel.ok) {
-          const rb2 = await getClient(cfg, clientId, { token });
-          if (rb2.ok && rb2.data) confirmed = rb2.data as any;
-        }
+      const tel = await ensureClientTelephone(cfg, clientId, confirmed, phone, token);
+      await maestroAudit(admin, tel.confirmed ? "client_telephone_confirmed" : "client_telephone_unconfirmed", { client_id: clientId, added: tel.added, status: tel.status ?? null });
+      if (!tel.confirmed) {
+        return json({ success: false, error: "maestro_telephone_unconfirmed", client_id: clientId, message: "Client créé, mais Maestro ne confirme pas encore son numéro." }, 200);
       }
-
-      // Never claim a caller is durable when Maestro did not retain its
-      // telephone. The next incoming call would otherwise not resolve.
-      if (!maestroClientHasTelephone(confirmed, phone)) {
-        await maestroAudit(admin, "client_telephone_unconfirmed", {
-          client_id: clientId,
-          token_source: tokenSource,
-        });
-        return json({
-          success: false,
-          error: "maestro_telephone_unconfirmed",
-          message: "Client créé, mais son numéro n’a pas été confirmé par Maestro. Réessayez avant de lier l’appel.",
-        }, 200);
-      }
+      confirmed = tel.client;
     }
     const name = clientName(confirmed, firstName, lastName);
     await linkCallToClient(admin, guard.user.id, body?.call_id, clientId, name);

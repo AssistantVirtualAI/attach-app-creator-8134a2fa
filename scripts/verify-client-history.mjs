@@ -2,14 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
+const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+const mobileRoot = rootPackage.name === "planipret-mobile"
+  ? root
+  : path.join(root, "apps", "planipret-mobile");
 const read = (file) => {
-  const canonical = path.join(root, file);
-  if (fs.existsSync(canonical)) return fs.readFileSync(canonical, "utf8");
   const mobilePrefix = "apps/planipret-mobile/";
   if (file.startsWith(mobilePrefix)) {
-    return fs.readFileSync(path.join(root, file.slice(mobilePrefix.length)), "utf8");
+    return fs.readFileSync(path.join(mobileRoot, file.slice(mobilePrefix.length)), "utf8");
   }
-  return fs.readFileSync(canonical, "utf8");
+  return fs.readFileSync(path.join(root, file), "utf8");
 };
 const checks = [];
 const requireText = (file, expected, label) => {

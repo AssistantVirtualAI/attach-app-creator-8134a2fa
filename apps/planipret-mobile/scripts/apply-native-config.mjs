@@ -710,7 +710,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       DispatchQueue.main.async { [weak self] in
         guard let self = self else { call.resolve(["ok": false]); return }
         self.callActive = active
-        // `nativeEngineOwnsAor` is a module-scoped value shared with PJSIP;
+        // nativeEngineOwnsAor is a module-scoped value shared with PJSIP;
         // it is not a property of this Capacitor plugin instance.
         if nativeEngineOwnsAor {
           if !active { self.stopAudioKeepAlive() }

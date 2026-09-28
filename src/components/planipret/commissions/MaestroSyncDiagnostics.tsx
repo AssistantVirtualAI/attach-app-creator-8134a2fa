@@ -97,6 +97,12 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
     }
   };
 
+  // Maestro 5xx / "temporarily unavailable" are transient upstream hiccups,
+  // retried automatically on the next sync — not import errors to surface.
+  const isTransient = (r: DiagRow) =>
+    (r.http_status != null && r.http_status >= 500) || /temporarily_unavailable|timeout/i.test(r.reason ?? "");
+  const hardErrors = rows.filter((r) => r.status === "error" && !isTransient(r));
+  const runError = run?.error && !/temporarily_unavailable|\b50[234]\b|timeout/i.test(run.error) ? run.error : null;
   const connected = rows.filter((r) => r.connected);
   const problems = rows.filter((r) => !r.connected || r.status === "error" || r.rows_count === 0);
   const shown = filter === "all" ? rows : filter === "connected" ? connected : problems;
@@ -135,7 +141,7 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
         </div>
       </div>
 
-      {!loading && (run?.error || rows.some((r) => r.status === "error")) && (
+      {!loading && (runError || hardErrors.length > 0) && (
         <div className="flex flex-wrap items-start gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)", padding: "8px 10px", background: "rgba(239,68,68,.08)" }}>
           <XCircle className="w-4 h-4 mt-[1px]" style={{ color: "#ef4444" }} />
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -143,14 +149,14 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
               {isFr ? "Erreurs d'import Maestro" : "Maestro import errors"}
             </div>
             <div style={{ fontSize: 11.5, color: "var(--pp-text-secondary)", wordBreak: "break-word" }}>
-              {run?.error
-                ? run.error
+              {runError
+                ? runError
                 : isFr
-                  ? `${rows.filter((r) => r.status === "error").length} courtier(s) en erreur lors de la dernière synchronisation.`
-                  : `${rows.filter((r) => r.status === "error").length} broker(s) failed during the last sync.`}
+                  ? `${hardErrors.length} courtier(s) en erreur lors de la dernière synchronisation.`
+                  : `${hardErrors.length} broker(s) failed during the last sync.`}
             </div>
             <ul style={{ marginTop: 4, fontSize: 11, color: "var(--pp-text-muted)" }}>
-              {rows.filter((r) => r.status === "error").slice(0, 5).map((r) => (
+              {hardErrors.slice(0, 5).map((r) => (
                 <li key={r.broker_user_id}>
                   • {r.broker_label ?? r.broker_email ?? r.broker_user_id} — {explain(r, isFr)}
                   {r.http_status ? ` (HTTP ${r.http_status})` : ""}

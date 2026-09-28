@@ -340,6 +340,20 @@ export default function PpActiveCallScreen({
             {displayNumber && <div className="text-sm text-white/60 mt-1">{displayNumber}</div>}
             <div className="mt-3 text-sm text-white/70">{statusText}</div>
             {dtmfBuf && <div className="mt-2 text-xs text-white/50">DTMF: {dtmfBuf}</div>}
+            {callerClient?.found && (
+              <button onClick={() => { navigate(clientDetailPath(callerClient)); if (!isIncoming) callUi.minimize(); }}
+                className="mt-4 px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-2"
+                style={{ background: "rgba(46,155,220,0.25)", border: "1px solid rgba(46,155,220,0.5)" }}>
+                <User className="w-3.5 h-3.5" /> Client Maestro{callerClient.name ? ` · ${callerClient.name}` : ""} — voir la fiche
+              </button>
+            )}
+            {callerClient && !callerClient.found && (
+              <button onClick={() => setCreateTarget({ phone: callerNumber, name: displayName })}
+                className="mt-4 px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-2"
+                style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)" }}>
+                <UserPlus className="w-3.5 h-3.5" /> Numéro inconnu — créer le client
+              </button>
+            )}
             {/* Internal transport states (ws_disconnected, registration_failed…)
                 are debug tokens: never show them to the user. Only human
                 readable causes are surfaced, and never during an inbound ring. */}
@@ -544,6 +558,8 @@ export default function PpActiveCallScreen({
               </button>
           </>
         </div>}
+        <CreateMaestroClientSheet target={createTarget} onClose={() => setCreateTarget(null)}
+          onCreated={(c) => setCallerClient({ found: true, maestroClientId: c.maestroClientId, name: c.name })} />
       </motion.div>
     </AnimatePresence>
     </>

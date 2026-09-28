@@ -53,8 +53,6 @@ Deno.serve(async (req) => {
         const analysisResp = await r.json().catch(() => ({}));
         if (analysisResp?.error === "ai_consent_required") {
           // No valid AI consent: analysis is intentionally skipped (privacy gate).
-          // Pause the subscription so we stop re-sending every email until the broker re-consents.
-          await admin.from("planipret_ava_mail_subscriptions").update({ status: "paused_no_consent" }).eq("id", sub.id).then(() => {}, () => {});
           console.info("[mail-webhook-receiver] skipped: broker AI consent missing", sub.broker_user_id);
           return;
         }

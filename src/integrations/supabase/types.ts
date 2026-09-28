@@ -10830,6 +10830,158 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_marketing_campaigns: {
+        Row: {
+          broker_name: string | null
+          broker_user_id: string
+          channels: string[]
+          clicked_count: number
+          created_at: string
+          email_html: string | null
+          failed_count: number
+          id: string
+          opened_count: number
+          prompt: string | null
+          sent_email: number
+          sent_sms: number
+          sms_text: string | null
+          status: string
+          subject: string | null
+          total_email: number
+          total_sms: number
+          updated_at: string
+        }
+        Insert: {
+          broker_name?: string | null
+          broker_user_id: string
+          channels?: string[]
+          clicked_count?: number
+          created_at?: string
+          email_html?: string | null
+          failed_count?: number
+          id?: string
+          opened_count?: number
+          prompt?: string | null
+          sent_email?: number
+          sent_sms?: number
+          sms_text?: string | null
+          status?: string
+          subject?: string | null
+          total_email?: number
+          total_sms?: number
+          updated_at?: string
+        }
+        Update: {
+          broker_name?: string | null
+          broker_user_id?: string
+          channels?: string[]
+          clicked_count?: number
+          created_at?: string
+          email_html?: string | null
+          failed_count?: number
+          id?: string
+          opened_count?: number
+          prompt?: string | null
+          sent_email?: number
+          sent_sms?: number
+          sms_text?: string | null
+          status?: string
+          subject?: string | null
+          total_email?: number
+          total_sms?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      planipret_marketing_optouts: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          phone: string | null
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          phone?: string | null
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          phone?: string | null
+          reason?: string | null
+        }
+        Relationships: []
+      }
+      planipret_marketing_recipients: {
+        Row: {
+          campaign_id: string
+          channel: string
+          clicked_at: string | null
+          client_id: string | null
+          client_name: string | null
+          created_at: string
+          delivered_at: string | null
+          email: string | null
+          error: string | null
+          id: string
+          opened_at: string | null
+          phone: string | null
+          sent_at: string | null
+          status: string
+          track_token: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          channel: string
+          clicked_at?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email?: string | null
+          error?: string | null
+          id?: string
+          opened_at?: string | null
+          phone?: string | null
+          sent_at?: string | null
+          status?: string
+          track_token?: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          channel?: string
+          clicked_at?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email?: string | null
+          error?: string | null
+          id?: string
+          opened_at?: string | null
+          phone?: string | null
+          sent_at?: string | null
+          status?: string
+          track_token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planipret_marketing_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "planipret_marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planipret_ms_auth_attempts: {
         Row: {
           attempt_type: string

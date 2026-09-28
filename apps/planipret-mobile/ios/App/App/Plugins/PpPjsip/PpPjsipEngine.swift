@@ -742,8 +742,14 @@ final class PjsipEngine {
     }
 
     func handleIncomingCall(callId: pjsua_call_id, remoteUri: String) {
+        // Une retransmission du même INVITE ne doit ni réinitialiser l'époque
+        // du dialogue ni demander une seconde sonnerie CallKit.
+        if activeCall == callId {
+            NSLog("[PpPjsip] duplicate incoming INVITE ignored callId=%d", callId)
+            return
+        }
         // Un seul appel simultané : tout INVITE concurrent est refusé (486).
-        if activeCall >= 0 && activeCall != callId {
+        if activeCall >= 0 {
             pjsua_call_answer(callId, 486, nil, nil)
             return
         }

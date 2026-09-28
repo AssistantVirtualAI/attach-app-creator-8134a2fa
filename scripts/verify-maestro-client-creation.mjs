@@ -18,6 +18,7 @@ for (const required of [
   "hasRequiredMaestroClientFields",
   "streetNumber",
   "streetName",
+  "streetType",
   "city",
   "region",
   "zip",

@@ -127,6 +127,14 @@ describe("native telephony safety invariants", () => {
     expect(engine).toContain("pjsua_call_hangup(target, UInt32(code), nil, nil)");
   });
 
+  it("does not reopen CallKit for a retransmitted INVITE on the same dialog", () => {
+    const engine = read("ios/App/App/Plugins/PpPjsip/PpPjsipEngine.swift");
+
+    expect(engine).toContain("if activeCall == callId {");
+    expect(engine).toContain("duplicate incoming INVITE ignored");
+    expect(engine).toContain("if activeCall >= 0 {");
+  });
+
   it("refuses a JsSIP answer without a live microphone and cleans media", () => {
     const provider = read("src/lib/planipret/sip/ppSipProvider.ts");
 

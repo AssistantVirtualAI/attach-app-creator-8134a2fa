@@ -3,19 +3,16 @@ import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
-const readFirst = (...candidates) => {
-  const relative = candidates.find((candidate) => fs.existsSync(path.join(root, candidate)));
-  if (!relative) throw new Error(`Missing expected source: ${candidates.join(", ")}`);
-  return read(relative);
-};
+const packageName = JSON.parse(read("package.json")).name;
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
 
 const cdr = read("supabase/functions/pp-ns-cdr/index.ts");
 const autoProcess = read("supabase/functions/pp-auto-process-call/index.ts");
-const callsPage = readFirst(
-  "apps/planipret-mobile/src/pages/planipret/mobile/MCalls.tsx",
-  "src/pages/planipret/mobile/MCalls.tsx",
+const callsPage = read(
+  packageName === "planipret-mobile"
+    ? "src/pages/planipret/mobile/MCalls.tsx"
+    : "apps/planipret-mobile/src/pages/planipret/mobile/MCalls.tsx",
 );
 
 check(cdr.includes("const CDR_IDENTITY_COLUMNS"), "CDR reconciliation must use immutable SIP/CDR identity columns");

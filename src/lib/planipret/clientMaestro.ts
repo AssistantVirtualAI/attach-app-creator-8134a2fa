@@ -44,6 +44,8 @@ export interface ClientCall {
   to_name: string | null;
   ai_summary: string | null;
   recording_url: string | null;
+  transcript?: string | null;
+  has_recording?: boolean | null;
   /** Rattachement explicite à un client Maestro, quand il a été forcé. */
   maestro_client_name?: string | null;
   maestro_client_id?: string | null;
@@ -174,6 +176,12 @@ export function buildClientBundles(
   // Appels : rattachés par nom d'appelant, sinon par numéro d'un dossier.
   const byPhone = new Map<string, ClientBundle>();
   for (const b of map.values()) {
+    // A client can exist in Maestro without a contract. Its own verified phone
+    // number must therefore be an association key before we inspect calls;
+    // otherwise an inbound call would disappear from an otherwise valid 360°
+    // profile until a mortgage file was created.
+    const contactPhone = digits10(b.phone);
+    if (contactPhone && !byPhone.has(contactPhone)) byPhone.set(contactPhone, b);
     for (const d of b.deals) {
       const k = digits10(d.contact_number);
       if (k && !byPhone.has(k)) byPhone.set(k, b);
@@ -242,9 +250,33 @@ export async function fetchClientDeposits(months = 24): Promise<ClientDeposit[]>
   }
 }
 
+/**
+ * Appels/textos sont enregistrés sous l'id de profil Planiprêt du courtier,
+ * pas sous l'id de connexion : on résout tous les alias (mis en cache).
+ */
+const brokerIdCache = new Map<string, Promise<string[]>>();
+export async function expandBrokerIds(userIds: string[]): Promise<string[]> {
+  const base = [...new Set(userIds.filter(Boolean).map(String))];
+  const lists = await Promise.all(base.map((id) => {
+    let p = brokerIdCache.get(id);
+    if (!p) {
+      p = (async () => {
+        try {
+          const { data } = await supabase.rpc("planipret_broker_ids", { _uid: id });
+          const out = ((data ?? []) as any[]).map((v) => String(typeof v === "string" ? v : v?.planipret_broker_ids ?? "")).filter(Boolean);
+          return out.length ? out : [id];
+        } catch { brokerIdCache.delete(id); return [id]; }
+      })();
+      brokerIdCache.set(id, p);
+    }
+    return p;
+  }));
+  return [...new Set([...base, ...lists.flat()])];
+}
+
 /** Dossiers locaux (pipeline) pour un ou plusieurs propriétaires. */
 export async function fetchClientDeals(userIds: string[]): Promise<ClientDeal[]> {
-  const ids = userIds.filter(Boolean);
+  const ids = await expandBrokerIds(userIds);
   if (!ids.length) return [];
   const { data } = await supabase
     .from("planipret_pipeline")
@@ -257,11 +289,11 @@ export async function fetchClientDeals(userIds: string[]): Promise<ClientDeal[]>
 
 /** Historique d'appels local pour un ou plusieurs propriétaires. */
 export async function fetchClientCalls(userIds: string[], limit = 500): Promise<ClientCall[]> {
-  const ids = userIds.filter(Boolean);
+  const ids = await expandBrokerIds(userIds);
   if (!ids.length) return [];
   const { data } = await supabase
     .from("planipret_phone_calls")
-    .select("id, user_id, direction, status, started_at, ended_at, duration_seconds, save_consent, save_consent_at, save_consent_channel, from_number, to_number, from_name, to_name, ai_summary, recording_url, maestro_client_name, maestro_client_id")
+    .select("id, user_id, direction, status, started_at, ended_at, duration_seconds, save_consent, save_consent_at, save_consent_channel, from_number, to_number, from_name, to_name, ai_summary, recording_url, transcript, has_recording, maestro_client_name, maestro_client_id")
     .in("user_id", ids)
     .order("started_at", { ascending: false })
     .limit(limit);
@@ -270,7 +302,7 @@ export async function fetchClientCalls(userIds: string[], limit = 500): Promise<
 
 /** Textos locaux pour un ou plusieurs propriétaires. */
 export async function fetchClientMessages(userIds: string[], limit = 500): Promise<ClientMessage[]> {
-  const ids = userIds.filter(Boolean);
+  const ids = await expandBrokerIds(userIds);
   if (!ids.length) return [];
   const { data } = await supabase
     .from("planipret_phone_messages")
@@ -314,7 +346,7 @@ export async function fetchClientContacts(
   userIds: string[],
   opts: { search?: string; limit?: number } = {},
 ): Promise<ClientContact[]> {
-  const ids = userIds.filter(Boolean);
+  const ids = await expandBrokerIds(userIds);
   const term = String(opts.search ?? "").trim();
   let local: ClientContact[] = [];
   if (ids.length) {

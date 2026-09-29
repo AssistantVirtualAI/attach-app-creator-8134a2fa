@@ -13,7 +13,9 @@ import {
   clientProfileErrorMessage, maestroClientProfileFromPayload, mergeClientProfile,
   type MaestroClientProfile,
 } from "@/lib/planipret/clientProfile";
+import { canViewLocalCallMedia } from "@/lib/planipret/recordingConsent";
 import { supabase } from "@/integrations/supabase/client";
+import { CallRecordingPlayer } from "@/components/planipret/mobile/call/CallRecordingPlayer";
 
 const cad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);
@@ -53,7 +55,32 @@ export default function ClientMaestroDetail({
   const [profileState, setProfileState] = useState<"loading" | "ready" | "not_found" | "error">("loading");
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  const idsKey = userIds.filter(Boolean).sort().join(",");
+  const [tab, setTab] = useState<"all" | "calls" | "sms" | "emails" | "tasks" | "contracts">("all");
+  const [contracts, setContracts] = useState<any[] | null>(null);
+  const [contractsError, setContractsError] = useState<string | null>(null);
+  const [emails, setEmails] = useState<any[]>([]);
+
+  // Calls/texts are stored under the broker's Planiprêt profile id, not the
+  // auth user id: resolve every alias so the history is never empty.
+  const rawIdsKey = userIds.filter(Boolean).sort().join(",");
+  const [idsKey, setIdsKey] = useState("");
+  useEffect(() => {
+    let alive = true;
+    const base = rawIdsKey ? rawIdsKey.split(",") : [];
+    if (!base.length) { setIdsKey(""); return; }
+    void Promise.all(base.map((id) => supabase.rpc("planipret_broker_ids", { _uid: id })))
+      .then((results) => {
+        if (!alive) return;
+        const all = new Set(base);
+        for (const r of results) for (const v of ((r as any).data ?? []) as any[]) {
+          const id = typeof v === "string" ? v : v?.planipret_broker_ids;
+          if (id) all.add(String(id));
+        }
+        setIdsKey([...all].sort().join(","));
+      })
+      .catch(() => { if (alive) setIdsKey(rawIdsKey); });
+    return () => { alive = false; };
+  }, [rawIdsKey]);
 
   const loadActivity = useCallback(async () => {
     const ids = idsKey ? idsKey.split(",") : [];
@@ -146,12 +173,122 @@ export default function ClientMaestroDetail({
     return () => { if (timer) clearTimeout(timer); void supabase.removeChannel(ch); };
   }, [loadActivity, idsKey]);
 
-  const b = localBundle ?? (profile ? {
+  // The verified Maestro profile is the authoritative identity: its phone
+  // numbers attach calls and texts even when no local contact row exists.
+  const profileBundle: ClientBundle | undefined = useMemo(() => {
+    if (!profile) return undefined;
+    const phones = [profile.phone, ...(((profile as any).phones ?? []) as string[]), localBundle?.phone]
+      .filter((v, i, a) => !!v && a.indexOf(v) === i) as string[];
+    const extra: ClientContact[] = (phones.length ? phones : [null]).map((ph) => ({
+      name: profile.name, phone: ph, email: profile.email, maestroClientId: profile.maestroClientId,
+    }));
+    const key = makeKey(profile.name);
+    return buildClientBundles(tasks, deals, deposits, calls, messages, [...contacts, ...extra]).find((x) =>
+      x.key === key || (!!profile.maestroClientId && x.maestroClientId === String(profile.maestroClientId)),
+    );
+  }, [profile, localBundle?.phone, tasks, deals, deposits, calls, messages, contacts]);
+
+  const b = profileBundle ?? localBundle ?? (profile ? {
     key: makeKey(profile.name), name: profile.name, maestroClientId: profile.maestroClientId,
     phone: profile.phone, email: profile.email,
     tasks: [], overdue: 0, today: 0, upcoming: 0, nextDue: null,
     deals: [], deposits: [], depositTotal: 0, calls: [], messages: [], brokerIds: [],
   } as ClientBundle : null);
+
+  const contractClientId = profile?.maestroClientId ?? b?.maestroClientId ?? null;
+  useEffect(() => {
+    if (!contractClientId) return;
+    let alive = true;
+    void supabase.functions.invoke("maestro-actions", { body: { action: "client_contracts", payload: { client_id: contractClientId } } })
+      .then(({ data }) => {
+        if (!alive) return;
+        const d = data as any;
+        setContracts(Array.isArray(d?.contracts) ? d.contracts : []);
+        setContractsError(d?.success === false ? (d?.error ?? "contracts_unavailable") : null);
+      })
+      .catch(() => { if (alive) { setContracts([]); setContractsError("contracts_unavailable"); } });
+    return () => { alive = false; };
+  }, [contractClientId]);
+
+  // Targeted per-client fetch: guarantees full history (calls, recordings,
+  // transcripts, texts) beyond the global 500-row window, by every verified
+  // phone number and by explicit Maestro link.
+  const phoneKeys = useMemo(() => {
+    const raw = [profile?.phone, ...(((profile as any)?.phones ?? []) as string[]), localBundle?.phone];
+    return [...new Set(raw.map((p) => String(p ?? "").replace(/\D/g, "").slice(-10)).filter((p) => p.length === 10))].join(",");
+  }, [profile, localBundle?.phone]);
+  useEffect(() => {
+    const ids = idsKey ? idsKey.split(",") : [];
+    const mid = contractClientId ? String(contractClientId) : "";
+    if (!ids.length || (!phoneKeys && !mid)) return;
+    let alive = true;
+    const phones = phoneKeys ? phoneKeys.split(",") : [];
+    const callOr = [...phones.flatMap((p) => [`from_number.ilike.%${p}`, `to_number.ilike.%${p}`]), ...(mid ? [`maestro_client_id.eq.${mid}`] : [])].join(",");
+    const msgOr = phones.flatMap((p) => [`from_number.ilike.%${p}`, `to_number.ilike.%${p}`]).join(",");
+    void (async () => {
+      const [cRes, mRes] = await Promise.all([
+        supabase.from("planipret_phone_calls")
+          .select("id, user_id, direction, status, started_at, ended_at, duration_seconds, save_consent, save_consent_at, save_consent_channel, from_number, to_number, from_name, to_name, ai_summary, recording_url, transcript, has_recording, maestro_client_name, maestro_client_id")
+          .in("user_id", ids).or(callOr).order("started_at", { ascending: false }).limit(1000),
+        msgOr ? supabase.from("planipret_phone_messages")
+          .select("id, user_id, direction, body, created_at, from_number, to_number")
+          .in("user_id", ids).or(msgOr).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [] as any[] }),
+      ]);
+      if (!alive) return;
+      const mergeById = <T extends { id: any }>(a: T[], extra: T[]) => {
+        const seen = new Set(a.map((x) => String(x.id)));
+        const add = extra.filter((x) => !seen.has(String(x.id)));
+        return add.length ? [...a, ...add] : a;
+      };
+      const ec = ((cRes as any).data ?? []) as ClientCall[];
+      const em = ((mRes as any).data ?? []) as ClientMessage[];
+      // Explicitly linked calls with a different number: tag with the client name so they attach.
+      const tagged = ec.map((c) => (mid && String(c.maestro_client_id ?? "") === mid && !c.maestro_client_name && profile?.name) ? { ...c, maestro_client_name: profile.name } : c);
+      setCalls((prev) => mergeById(prev, tagged));
+      setMessages((prev) => mergeById(prev, em));
+    })();
+    return () => { alive = false; };
+  }, [phoneKeys, contractClientId, idsKey, profile?.name]);
+
+  const clientEmail = String(profile?.email ?? b?.email ?? "").trim().toLowerCase();
+  useEffect(() => {
+    if (!clientEmail || !/^[^\s@,()]+@[^\s@,()]+$/.test(clientEmail) || !idsKey) { setEmails([]); return; }
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase.from("planipret_email_messages")
+        .select("id, subject, from_email, from_name, body_preview, is_sent_by_me, sent_at, received_at")
+        .in("user_id", idsKey.split(","))
+        .or(`from_email.ilike.${clientEmail},to_recipients.ilike.%${clientEmail}%`)
+        .order("received_at", { ascending: false })
+        .limit(100);
+      const local = (data ?? []) as any[];
+      // Outlook fallback: courriels reçus/envoyés avec ce client.
+      let outlook: any[] = [];
+      try {
+        const pull = async (folder: "inbox" | "sent") => {
+          const { data: r } = await supabase.functions.invoke("ms365-actions", { body: { action: "read_emails", payload: { top: 100, folder } } });
+          const list = ((r as any)?.emails ?? (r as any)?.messages ?? (r as any)?.data?.emails ?? (r as any)?.value ?? []) as any[];
+          return list.map((m) => ({ ...m, _folder: folder }));
+        };
+        const all = [...(await pull("inbox")), ...(await pull("sent"))];
+        outlook = all.filter((m) => JSON.stringify([m.from, m.from_email, m.fromEmail, m.to, m.to_recipients, m.toRecipients]).toLowerCase().includes(clientEmail))
+          .map((m) => ({
+            id: `o-${m.id ?? m.message_id ?? Math.random()}`,
+            subject: m.subject ?? null,
+            body_preview: m.body_preview ?? m.bodyPreview ?? m.preview ?? null,
+            is_sent_by_me: m._folder === "sent",
+            received_at: m.received_at ?? m.receivedDateTime ?? m.sent_at ?? m.sentDateTime ?? m.date ?? null,
+            sent_at: m.sent_at ?? m.sentDateTime ?? null,
+          }));
+      } catch { /* Outlook non connecté */ }
+      if (!alive) return;
+      const seen = new Set(local.map((m) => String(m.subject ?? "") + String(m.received_at ?? m.sent_at ?? "").slice(0, 16)));
+      const merged = [...local, ...outlook.filter((m) => !seen.has(String(m.subject ?? "") + String(m.received_at ?? m.sent_at ?? "").slice(0, 16)))]
+        .sort((a, z) => new Date(z.received_at ?? z.sent_at ?? 0).getTime() - new Date(a.received_at ?? a.sent_at ?? 0).getTime());
+      setEmails(merged);
+    })();
+    return () => { alive = false; };
+  }, [clientEmail, idsKey]);
 
   const brokerIdsKey = (b?.brokerIds ?? []).join(",");
   useEffect(() => {
@@ -213,46 +350,106 @@ export default function ClientMaestroDetail({
         )}
       </section>
 
-      <section className="grid grid-cols-3 gap-2">
+      {profile?.raw && (() => {
+        const r: any = profile.raw;
+        const tels: any[] = Array.isArray(r.telephones) ? r.telephones : [];
+        const tel = (...t: string[]) => tels.find((x) => t.includes(String(x?.telephone_type ?? "").toLowerCase()))?.telephone_number;
+        const rows: [string, unknown][] = [
+          [L("No client Maestro", "Maestro client #"), profile.maestroClientId],
+          [L("Cellulaire", "Mobile"), r.cell_phone ?? r.mobile ?? tel("mobile", "cell")],
+          [L("Travail", "Work"), r.work_phone ?? tel("work", "office")],
+          [L("Domicile", "Home"), r.home_phone ?? tel("home")],
+          [L("Courriel", "Email"), r.email ?? r.email_address],
+          [L("Adresse", "Address"), r.address_line],
+          [L("Langue", "Language"), r.language ?? r.preferred_language],
+          [L("Date de naissance", "Birth date"), r.birth_date ? String(r.birth_date).slice(0, 10) : r.date_of_birth ? String(r.date_of_birth).slice(0, 10) : null],
+          [L("Employeur", "Employer"), r.company ?? r.employer],
+          [L("Occupation", "Occupation"), r.job_title ?? r.occupation],
+        ];
+        const shown = rows.filter(([, v]) => v !== null && v !== undefined && String(v).trim());
+        if (!shown.length) return null;
+        return (
+          <Card title={L("Coordonnées Maestro", "Maestro details")} surface={surface}>
+            <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1.5 text-[12px]">
+              {shown.flatMap(([k, v]) => [<dt key={`k${k}`} style={{ color: "var(--pp-text-muted)" }}>{k}</dt>, <dd key={`v${k}`} className="break-words" style={{ color: "var(--pp-text-primary)" }}>{String(v)}</dd>])}
+            </dl>
+          </Card>
+        );
+      })()}
+
+      <section className="grid grid-cols-4 gap-2">
         <Metric icon={<ListIcon />} label={L("Tâches", "Tasks")} value={String(b.tasks.length)} tone={b.overdue ? "danger" : "blue"} />
         <Metric icon={<Phone className="w-4 h-4" />} label={L("Appels", "Calls")} value={String(b.calls.length)} tone="blue" />
-        <Metric icon={<FolderKanban className="w-4 h-4" />} label={L("Dossiers", "Files")} value={String(b.deals.length)} tone="blue" />
+        <Metric icon={<MessageSquare className="w-4 h-4" />} label={L("Textos", "Texts")} value={String(b.messages.length)} tone="blue" />
+        <Metric icon={<FolderKanban className="w-4 h-4" />} label={L("Contrats", "Contracts")} value={String(contracts?.length ?? b.deals.length)} tone="blue" />
       </section>
 
-      <Card title={L("Suivi", "Follow-up")} surface={surface}>
-        <div className="flex flex-wrap gap-1.5">
-          {b.overdue > 0 && <Badge tone="danger" icon={<AlertTriangle className="w-3 h-3" />} text={`${b.overdue} ${L("en retard", "overdue")}`} />}
-          {b.today > 0 && <Badge tone="warn" icon={<CalendarClock className="w-3 h-3" />} text={L("à faire aujourd’hui", "due today")} />}
-          {b.upcoming > 0 && <Badge tone="info" text={`${b.upcoming} ${L("à venir", "upcoming")}`} />}
-          {!b.overdue && !b.today && !b.upcoming && <Empty text={L("Aucune échéance ouverte.", "No open due date.")} />}
-        </div>
-        {b.nextDue && <p className="text-[11px] mt-2" style={{ color: "var(--pp-text-muted)" }}>{L("Prochaine échéance", "Next due")} : {formatTaskDue(b.nextDue, lang)}</p>}
-        {lastSyncAt && <p className="text-[10px] mt-1" style={{ color: "var(--pp-text-faint)" }}>{L("Activité actualisée", "Activity refreshed")} {new Date(lastSyncAt).toLocaleTimeString(en ? "en-CA" : "fr-CA", { timeZone: "America/Toronto" })}</p>}
-      </Card>
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {([
+          ["all", L("Tout", "All")], ["calls", L("Appels", "Calls")], ["sms", L("Textos", "Texts")],
+          ["emails", L("Courriels", "Emails")], ["tasks", L("Tâches", "Tasks")], ["contracts", L("Contrats", "Contracts")],
+        ] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setTab(k)} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold"
+            style={tab === k ? { background: "var(--pp-brand-accent)", color: "#fff" } : { background: "var(--pp-bg-surface)", color: "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border)" }}>
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <Card title={L("Tâches", "Tasks")} surface={surface}>
-        {b.tasks.length === 0 ? <Empty text={L("Aucune tâche liée à ce client.", "No task linked to this client.")} /> : (
-          <ul className="space-y-1.5">{b.tasks.map((task) => <li key={task.id} className="rounded-xl px-2 py-2" style={{ background: "var(--pp-bg-elevated)" }}><MaestroTaskRow task={task} lang={lang} syncedAt={(task as any)?.raw?.updated_at ?? lastSyncAt ?? null} /></li>)}</ul>
-        )}
-      </Card>
-
-      <Card title={L("Appels et historique", "Calls & history")} surface={surface}>
-        {b.calls.length === 0 ? <Empty text={L("Aucun appel lié à ce client.", "No call linked to this client.")} /> : <ul className="space-y-1.5">{b.calls.map((call) => <CallRow key={call.id} call={call} lang={lang} />)}</ul>}
-      </Card>
-
-      <Card title={L("Textos", "Texts")} surface={surface}>
-        {b.messages.length === 0 ? <Empty text={L("Aucun texto lié à ce client.", "No text linked to this client.")} /> : (
-          <div className="space-y-2">
-            {b.messages.map((message) => (
-              <SmsBubble key={message.id} message={message} lang={lang} />
-            ))}
+      {tab === "all" && (
+        <Card title={L("Suivi", "Follow-up")} surface={surface}>
+          <div className="flex flex-wrap gap-1.5">
+            {b.overdue > 0 && <Badge tone="danger" icon={<AlertTriangle className="w-3 h-3" />} text={`${b.overdue} ${L("en retard", "overdue")}`} />}
+            {b.today > 0 && <Badge tone="warn" icon={<CalendarClock className="w-3 h-3" />} text={L("à faire aujourd’hui", "due today")} />}
+            {b.upcoming > 0 && <Badge tone="info" text={`${b.upcoming} ${L("à venir", "upcoming")}`} />}
+            {!b.overdue && !b.today && !b.upcoming && <Empty text={L("Aucune échéance ouverte.", "No open due date.")} />}
           </div>
-        )}
-      </Card>
+          {b.nextDue && <p className="text-[11px] mt-2" style={{ color: "var(--pp-text-muted)" }}>{L("Prochaine échéance", "Next due")} : {formatTaskDue(b.nextDue, lang)}</p>}
+          {lastSyncAt && <p className="text-[10px] mt-1" style={{ color: "var(--pp-text-faint)" }}>{L("Activité actualisée", "Activity refreshed")} {new Date(lastSyncAt).toLocaleTimeString(en ? "en-CA" : "fr-CA", { timeZone: "America/Toronto" })}</p>}
+        </Card>
+      )}
 
-      <Card title={L("Dossiers", "Files")} surface={surface}>
-        {b.deals.length === 0 ? <Empty text={L("Aucun dossier local associé.", "No linked local file.")} /> : <ul className="space-y-1.5">{b.deals.map((deal) => <li key={deal.id} className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}><span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{deal.stage || "—"}</span><span className="ml-2">{deal.contact_number || "—"}</span></li>)}</ul>}
-      </Card>
+      {(tab === "all" || tab === "tasks") && (
+        <Card title={L("Tâches", "Tasks")} surface={surface}>
+          {b.tasks.length === 0 ? <Empty text={L("Aucune tâche liée à ce client.", "No task linked to this client.")} /> : (
+            <ul className="space-y-1.5">{b.tasks.map((task) => <li key={task.id} className="rounded-xl px-2 py-2" style={{ background: "var(--pp-bg-elevated)" }}><MaestroTaskRow task={task} lang={lang} syncedAt={(task as any)?.raw?.updated_at ?? lastSyncAt ?? null} /></li>)}</ul>
+          )}
+        </Card>
+      )}
+
+      {(tab === "all" || tab === "calls") && (
+        <Card title={L("Appels, enregistrements et transcriptions", "Calls, recordings & transcripts")} surface={surface}>
+          {b.calls.length === 0 ? <Empty text={L("Aucun appel lié à ce client.", "No call linked to this client.")} /> : <ul className="space-y-1.5">{(tab === "all" ? b.calls.slice(0, 5) : b.calls).map((call) => <CallRow key={call.id} call={call} lang={lang} />)}</ul>}
+        </Card>
+      )}
+
+      {(tab === "all" || tab === "sms") && (
+        <Card title={L("Textos", "Texts")} surface={surface}>
+          {b.messages.length === 0 ? <Empty text={L("Aucun texto lié à ce client.", "No text linked to this client.")} /> : (
+            <div className="space-y-2">
+              {(tab === "all" ? b.messages.slice(0, 5) : b.messages).map((message) => (
+                <SmsBubble key={message.id} message={message} lang={lang} />
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {(tab === "all" || tab === "emails") && (
+        <Card title={L("Courriels", "Emails")} surface={surface}>
+          {!clientEmail ? <Empty text={L("Aucun courriel connu pour ce client dans Maestro.", "No email known for this client in Maestro.")} />
+            : emails.length === 0 ? <Empty text={L("Aucun courriel synchronisé avec ce client.", "No synced email with this client.")} />
+            : <ul className="space-y-1.5">{(tab === "all" ? emails.slice(0, 5) : emails).map((m) => <li key={m.id} className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}><span className="flex items-center gap-2" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}><Mail className="w-3.5 h-3.5 shrink-0" style={{ color: m.is_sent_by_me ? "var(--pp-brand-accent)" : "#10B981" }} /><span className="truncate">{m.subject || L("(sans objet)", "(no subject)")}</span></span>{m.body_preview && <p className="mt-1 line-clamp-2 break-words">{m.body_preview}</p>}<span className="block text-[10px] mt-1" style={{ color: "var(--pp-text-faint)" }}>{fmtDate(m.received_at ?? m.sent_at, lang)}</span></li>)}</ul>}
+        </Card>
+      )}
+
+      {(tab === "all" || tab === "contracts") && (
+        <Card title={L("Contrats Maestro", "Maestro contracts")} surface={surface}>
+          {contracts === null ? <Empty text={L("Chargement des contrats…", "Loading contracts…")} />
+            : contracts.length === 0 ? <Empty text={contractsError ? L("Contrats Maestro indisponibles pour le moment.", "Maestro contracts unavailable right now.") : L("Aucun contrat Maestro pour ce client.", "No Maestro contract for this client.")} />
+            : <ul className="space-y-1.5">{contracts.map((c, i) => <li key={c.id ?? i} className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}><span className="flex flex-wrap gap-2 items-center"><span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{c.number ? `#${c.number}` : L("Contrat", "Contract")}</span>{(c.status_of_transaction || c.status) && <Badge tone="info" text={String(c.status_of_transaction || c.status)} />}</span><span className="block mt-1">{[c.application_purpose || c.application_type, c.mortgage_type, c.loan_amount ? cad(c.loan_amount) : null, c.rate ? `${c.rate}%` : null, c.term ? `${c.term}` : null].filter(Boolean).join(" · ") || "—"}</span>{c.date_closing && <span className="block text-[10px] mt-1" style={{ color: "var(--pp-text-faint)" }}>{L("Clôture", "Closing")} : {String(c.date_closing).slice(0, 10)}</span>}</li>)}</ul>}
+        </Card>
+      )}
 
       {b.deposits.length > 0 && <Card title={L("Commissions", "Commissions")} surface={surface}><p className="text-sm font-bold" style={{ color: "var(--pp-success)" }}>{cad(b.depositTotal)}</p></Card>}
       {b.brokerIds.length > 0 && <div className="flex flex-wrap gap-1.5">{b.brokerIds.map((id) => <Badge key={id} tone="muted" icon={<User className="w-3 h-3" />} text={brokerNames[id] ?? id.slice(0, 8)} />)}</div>}
@@ -260,9 +457,7 @@ export default function ClientMaestroDetail({
   );
 }
 
-function ListIcon() { return <CalendarClock className="w-4 h-4" />; }
-function HeroChip({ icon, text }: { icon: React.ReactNode; text: string }) { return <span className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-1 text-[10px] bg-white/15 border border-white/15 truncate">{icon}<span className="truncate">{text}</span></span>; }
-function Metric({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "blue" | "danger" }) { return <div className="rounded-2xl p-2.5" style={{ background: tone === "danger" ? "rgba(239,68,68,.09)" : "var(--pp-bg-surface)", border: `1px solid ${tone === "danger" ? "rgba(239,68,68,.22)" : "var(--pp-bg-border)"}` }}><div className="flex items-center gap-1.5" style={{ color: tone === "danger" ? "#EF4444" : "var(--pp-brand-accent)" }}>{icon}<span className="text-lg font-bold">{value}</span></div><p className="text-[10px] mt-1" style={{ color: "var(--pp-text-muted)" }}>{label}</p></div>; }
+/** Bulle de texto : envoyé par le courtier à droite (bleu), reçu à gauche (vert). */
 export function SmsBubble({ message, lang }: { message: ClientMessage; lang: "fr" | "en" }) {
   const out = message.direction === "outbound";
   return (
@@ -279,14 +474,45 @@ export function SmsBubble({ message, lang }: { message: ClientMessage; lang: "fr
         </div>
         <p className={`text-[10px] mt-0.5 ${out ? "text-right" : "text-left"}`} style={{ color: "var(--pp-text-faint)" }}>
           {out ? (lang === "en" ? "Sent" : "Envoyé") : (lang === "en" ? "Received" : "Reçu")}
-          {message.created_at ? ` · ${new Date(message.created_at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto" })}` : ""}
+          {message.created_at ? ` · ${fmtDate(message.created_at, lang)}` : ""}
         </p>
       </div>
     </div>
   );
 }
 
-function CallRow({ call, lang }: { call: ClientCall; lang: "fr" | "en" }) { const missed = call.direction === "missed" || call.status === "missed" || call.status === "no-answer"; const outgoing = call.direction === "outbound"; const Icon = missed ? PhoneMissed : outgoing ? PhoneOutgoing : PhoneIncoming; return <li className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}><span className="flex flex-wrap items-center gap-2"><Icon className="w-3.5 h-3.5" style={{ color: missed ? "#EF4444" : outgoing ? "var(--pp-brand-accent)" : "#10B981" }} /><span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{call.started_at ? new Date(call.started_at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto" }) : "—"}</span><span>{missed ? (lang === "en" ? "missed" : "manqué") : call.status ?? (lang === "en" ? "completed" : "terminé")}</span></span>{call.ai_summary && <p className="mt-1 break-words">{call.ai_summary}</p>}</li>; }
+function ListIcon() { return <CalendarClock className="w-4 h-4" />; }
+function HeroChip({ icon, text }: { icon: React.ReactNode; text: string }) { return <span className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-1 text-[10px] bg-white/15 border border-white/15 truncate">{icon}<span className="truncate">{text}</span></span>; }
+function Metric({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "blue" | "danger" }) { return <div className="rounded-2xl p-2.5" style={{ background: tone === "danger" ? "rgba(239,68,68,.09)" : "var(--pp-bg-surface)", border: `1px solid ${tone === "danger" ? "rgba(239,68,68,.22)" : "var(--pp-bg-border)"}` }}><div className="flex items-center gap-1.5" style={{ color: tone === "danger" ? "#EF4444" : "var(--pp-brand-accent)" }}>{icon}<span className="text-lg font-bold">{value}</span></div><p className="text-[10px] mt-1" style={{ color: "var(--pp-text-muted)" }}>{label}</p></div>; }
+function fmtDate(v: string | null | undefined, lang: "fr" | "en") { return v ? new Date(v).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto" }) : "—"; }
+function CallRow({ call, lang }: { call: ClientCall; lang: "fr" | "en" }) {
+  const [listen, setListen] = useState(false);
+  const [showTx, setShowTx] = useState(false);
+  const en = lang === "en";
+  const missed = call.direction === "missed" || call.status === "missed" || call.status === "no-answer";
+  const outgoing = call.direction === "outbound";
+  const Icon = missed ? PhoneMissed : outgoing ? PhoneOutgoing : PhoneIncoming;
+  const canViewMedia = canViewLocalCallMedia(call.save_consent);
+  const canListen = canViewMedia && (!!call.has_recording || !!call.recording_url);
+  return (
+    <li className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
+      <span className="flex flex-wrap items-center gap-2">
+        <Icon className="w-3.5 h-3.5" style={{ color: missed ? "#EF4444" : outgoing ? "var(--pp-brand-accent)" : "#10B981" }} />
+        <span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{fmtDate(call.started_at, lang)}</span>
+        <span>{missed ? (en ? "missed" : "manqué") : call.status ?? (en ? "completed" : "terminé")}</span>
+        {call.duration_seconds ? <span>{Math.floor(call.duration_seconds / 60)}:{String(call.duration_seconds % 60).padStart(2, "0")}</span> : null}
+      </span>
+      {call.ai_summary && <p className="mt-1 break-words">{call.ai_summary}</p>}
+      <span className="mt-1.5 flex flex-wrap gap-1.5">
+        {canListen && <button onClick={() => setListen((v) => !v)} className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: "rgba(46,155,220,.12)", color: "var(--pp-brand-accent)" }}>{listen ? (en ? "Hide recording" : "Masquer l’enregistrement") : (en ? "Listen" : "Écouter")}</button>}
+        {canViewMedia && call.transcript && <button onClick={() => setShowTx((v) => !v)} className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: "rgba(46,155,220,.12)", color: "var(--pp-brand-accent)" }}>{showTx ? (en ? "Hide transcript" : "Masquer la transcription") : (en ? "Transcript" : "Transcription")}</button>}
+        {!canViewMedia && <span className="text-[10px]">{en ? "Call deleted" : "Appel supprimé"}</span>}
+      </span>
+      {listen && <div className="mt-2"><CallRecordingPlayer callId={call.id} duration={call.duration_seconds ?? 0} /></div>}
+      {showTx && call.transcript && <p className="mt-2 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">{call.transcript}</p>}
+    </li>
+  );
+}
 function Card({ title, surface, children }: { title: string; surface: React.CSSProperties; children: React.ReactNode }) { return <section className="rounded-2xl px-3.5 py-3.5" style={surface}><p className="text-[10px] uppercase tracking-[0.12em] mb-2" style={{ color: "var(--pp-text-muted)" }}>{title}</p>{children}</section>; }
 function Badge({ text, icon, tone }: { text: string; icon?: React.ReactNode; tone: "danger" | "warn" | "info" | "ok" | "muted" }) { const tones: Record<string, React.CSSProperties> = { danger: { background: "rgba(239,68,68,.12)", color: "#EF4444" }, warn: { background: "rgba(245,158,11,.14)", color: "#D97706" }, info: { background: "rgba(46,155,220,.12)", color: "var(--pp-brand-accent)" }, ok: { background: "rgba(16,185,129,.12)", color: "#059669" }, muted: { background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" } }; return <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full" style={tones[tone]}>{icon}{text}</span>; }
 function Empty({ text }: { text: string }) { return <p className="text-[12px]" style={{ color: "var(--pp-text-muted)" }}>{text}</p>; }

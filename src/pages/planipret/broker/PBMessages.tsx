@@ -200,7 +200,7 @@ export default function PBMessages() {
                 <div key={m.id} className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}>
                   <button onClick={() => setDetail(m)} className="text-left" style={{
                     maxWidth: "72%", borderRadius: 14, padding: "8px 12px", fontSize: 13,
-                    background: m.direction === "outbound" ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
+                    background: m.direction === "outbound" ? "var(--pp-brand-accent-2)" : "rgba(16,185,129,0.16)",
                     color: m.direction === "outbound" ? "#fff" : "var(--pp-text-primary)",
                   }}>
                     <div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>

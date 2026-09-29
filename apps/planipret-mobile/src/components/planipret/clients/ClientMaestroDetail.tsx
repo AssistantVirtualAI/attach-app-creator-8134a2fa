@@ -323,7 +323,13 @@ export default function ClientMaestroDetail({
 
       {(tab === "all" || tab === "sms") && (
         <Card title={L("Textos", "Texts")} surface={surface}>
-          {b.messages.length === 0 ? <Empty text={L("Aucun texto lié à ce client.", "No text linked to this client.")} /> : <ul className="space-y-1.5">{(tab === "all" ? b.messages.slice(0, 5) : b.messages).map((message) => <li key={message.id} className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}><span className="flex gap-2"><MessageSquare className="w-3.5 h-3.5 shrink-0" style={{ color: message.direction === "outbound" ? "var(--pp-brand-accent)" : "#10B981" }} /><span className="flex-1">{message.body || "—"}</span></span>{message.created_at && <span className="block text-[10px] mt-1" style={{ color: "var(--pp-text-faint)" }}>{fmtDate(message.created_at, lang)}</span>}</li>)}</ul>}
+          {b.messages.length === 0 ? <Empty text={L("Aucun texto lié à ce client.", "No text linked to this client.")} /> : (
+            <div className="space-y-2">
+              {(tab === "all" ? b.messages.slice(0, 5) : b.messages).map((message) => (
+                <SmsBubble key={message.id} message={message} lang={lang} />
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
@@ -345,6 +351,29 @@ export default function ClientMaestroDetail({
 
       {b.deposits.length > 0 && <Card title={L("Commissions", "Commissions")} surface={surface}><p className="text-sm font-bold" style={{ color: "var(--pp-success)" }}>{cad(b.depositTotal)}</p></Card>}
       {b.brokerIds.length > 0 && <div className="flex flex-wrap gap-1.5">{b.brokerIds.map((id) => <Badge key={id} tone="muted" icon={<User className="w-3 h-3" />} text={brokerNames[id] ?? id.slice(0, 8)} />)}</div>}
+    </div>
+  );
+}
+
+/** Bulle de texto : envoyé par le courtier à droite (bleu), reçu à gauche (vert). */
+function SmsBubble({ message, lang }: { message: ClientMessage; lang: "fr" | "en" }) {
+  const out = message.direction === "outbound";
+  return (
+    <div className={`flex ${out ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[80%]">
+        <div
+          className="rounded-2xl px-3 py-2 text-[12px] leading-snug"
+          style={out
+            ? { background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", color: "#fff", borderBottomRightRadius: 6 }
+            : { background: "rgba(16,185,129,0.14)", color: "var(--pp-text-primary)", border: "1px solid rgba(16,185,129,0.35)", borderBottomLeftRadius: 6 }}
+        >
+          <p className="whitespace-pre-wrap break-words">{message.body || "—"}</p>
+        </div>
+        <p className={`text-[10px] mt-0.5 ${out ? "text-right" : "text-left"}`} style={{ color: "var(--pp-text-faint)" }}>
+          {out ? (lang === "en" ? "Sent" : "Envoyé") : (lang === "en" ? "Received" : "Reçu")}
+          {message.created_at ? ` · ${fmtDate(message.created_at, lang)}` : ""}
+        </p>
+      </div>
     </div>
   );
 }

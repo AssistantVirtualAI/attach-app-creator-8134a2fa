@@ -360,7 +360,7 @@ function CallRow({ call, lang }: { call: ClientCall; lang: "fr" | "en" }) {
   const missed = call.direction === "missed" || call.status === "missed" || call.status === "no-answer";
   const outgoing = call.direction === "outbound";
   const Icon = missed ? PhoneMissed : outgoing ? PhoneOutgoing : PhoneIncoming;
-  const consentOk = !call.save_consent || call.save_consent === "approved";
+  const consentOk = call.save_consent === "approved";
   const canListen = consentOk && (!!call.has_recording || !!call.recording_url);
   return (
     <li className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>

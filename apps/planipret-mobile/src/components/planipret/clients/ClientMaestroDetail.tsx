@@ -153,7 +153,22 @@ export default function ClientMaestroDetail({
     return () => { if (timer) clearTimeout(timer); void supabase.removeChannel(ch); };
   }, [loadActivity, idsKey]);
 
-  const b = localBundle ?? (profile ? {
+  // The verified Maestro profile is the authoritative identity: its phone
+  // numbers attach calls and texts even when no local contact row exists.
+  const profileBundle: ClientBundle | undefined = useMemo(() => {
+    if (!profile) return undefined;
+    const phones = [profile.phone, ...(((profile as any).phones ?? []) as string[]), localBundle?.phone]
+      .filter((v, i, a) => !!v && a.indexOf(v) === i) as string[];
+    const extra: ClientContact[] = (phones.length ? phones : [null]).map((ph) => ({
+      name: profile.name, phone: ph, email: profile.email, maestroClientId: profile.maestroClientId,
+    }));
+    const key = makeKey(profile.name);
+    return buildClientBundles(tasks, deals, deposits, calls, messages, [...contacts, ...extra]).find((x) =>
+      x.key === key || (!!profile.maestroClientId && x.maestroClientId === String(profile.maestroClientId)),
+    );
+  }, [profile, localBundle?.phone, tasks, deals, deposits, calls, messages, contacts]);
+
+  const b = profileBundle ?? localBundle ?? (profile ? {
     key: makeKey(profile.name), name: profile.name, maestroClientId: profile.maestroClientId,
     phone: profile.phone, email: profile.email,
     tasks: [], overdue: 0, today: 0, upcoming: 0, nextDue: null,

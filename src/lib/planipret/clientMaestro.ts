@@ -44,6 +44,8 @@ export interface ClientCall {
   to_name: string | null;
   ai_summary: string | null;
   recording_url: string | null;
+  transcript?: string | null;
+  has_recording?: boolean | null;
   /** Rattachement explicite à un client Maestro, quand il a été forcé. */
   maestro_client_name?: string | null;
   maestro_client_id?: string | null;
@@ -174,6 +176,12 @@ export function buildClientBundles(
   // Appels : rattachés par nom d'appelant, sinon par numéro d'un dossier.
   const byPhone = new Map<string, ClientBundle>();
   for (const b of map.values()) {
+    // A client can exist in Maestro without a contract. Its own verified phone
+    // number must therefore be an association key before we inspect calls;
+    // otherwise an inbound call would disappear from an otherwise valid 360°
+    // profile until a mortgage file was created.
+    const contactPhone = digits10(b.phone);
+    if (contactPhone && !byPhone.has(contactPhone)) byPhone.set(contactPhone, b);
     for (const d of b.deals) {
       const k = digits10(d.contact_number);
       if (k && !byPhone.has(k)) byPhone.set(k, b);
@@ -261,7 +269,7 @@ export async function fetchClientCalls(userIds: string[], limit = 500): Promise<
   if (!ids.length) return [];
   const { data } = await supabase
     .from("planipret_phone_calls")
-    .select("id, user_id, direction, status, started_at, ended_at, duration_seconds, save_consent, save_consent_at, save_consent_channel, from_number, to_number, from_name, to_name, ai_summary, recording_url, maestro_client_name, maestro_client_id")
+    .select("id, user_id, direction, status, started_at, ended_at, duration_seconds, save_consent, save_consent_at, save_consent_channel, from_number, to_number, from_name, to_name, ai_summary, recording_url, transcript, has_recording, maestro_client_name, maestro_client_id")
     .in("user_id", ids)
     .order("started_at", { ascending: false })
     .limit(limit);

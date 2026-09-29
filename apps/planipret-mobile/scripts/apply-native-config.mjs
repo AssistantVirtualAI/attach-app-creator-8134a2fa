@@ -80,6 +80,9 @@ const ANDROID_PERMISSIONS = [
   "android.permission.USE_FULL_SCREEN_INTENT",
   "android.permission.FOREGROUND_SERVICE",
   "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+  "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+  "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+  "android.permission.WAKE_LOCK",
   "android.permission.ACCESS_NETWORK_STATE",
   "android.permission.CHANGE_WIFI_STATE",
   "android.permission.VIBRATE",
@@ -93,7 +96,7 @@ const ANDROID_PERMISSIONS = [
 const ANDROID_SERVICE = `
         <service
             android:name=".PpSipKeepAliveService"
-            android:foregroundServiceType="dataSync"
+            android:foregroundServiceType="dataSync|phoneCall|microphone"
             android:exported="false" />
         <service
             android:name=".PpFirebaseMessagingService"
@@ -199,7 +202,8 @@ public class PpSipKeepAlivePlugin extends Plugin {
     boolean active = Boolean.TRUE.equals(call.getBoolean("active", false));
     getContext().getSharedPreferences(PpSipKeepAliveService.PREFS_NAME, Context.MODE_PRIVATE)
       .edit().putBoolean("call_active", active).apply();
-    if (active) PpSipKeepAliveService.stop(getContext());
+    if (active) PpSipKeepAliveService.startCall(getContext());
+    else PpSipKeepAliveService.endCall(getContext());
     call.resolve(readStatus().put("ok", true));
   }
   @PluginMethod public void declareJsOwnsAor(PluginCall call) {
@@ -429,6 +433,40 @@ public class PpSipKeepAliveService extends Service {
     Intent intent = new Intent(context, PpSipKeepAliveService.class).setAction("com.planipret.mobile.PP_SIP_WAKE_ONLY");
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent); else context.startService(intent);
   }
+  public static final String ACTION_CALL_START = "com.planipret.mobile.PP_SIP_CALL_START", ACTION_CALL_END = "com.planipret.mobile.PP_SIP_CALL_END";
+  private static android.os.PowerManager.WakeLock callWake;
+  private static android.net.wifi.WifiManager.WifiLock callWifi;
+  private boolean inCall = false;
+  /** Active call: keep CPU, Wi-Fi, WebView WSS and microphone alive while the screen is off. */
+  public static void startCall(Context context) {
+    Intent intent = new Intent(context, PpSipKeepAliveService.class).setAction(ACTION_CALL_START);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent); else context.startService(intent);
+  }
+  public static void endCall(Context context) {
+    releaseCallLocks();
+    context.stopService(new Intent(context, PpSipKeepAliveService.class));
+  }
+  private static synchronized void acquireCallLocks(Context ctx) {
+    try {
+      if (callWake == null) {
+        android.os.PowerManager pm = (android.os.PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+        callWake = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "planipret:activeCall");
+        callWake.setReferenceCounted(false);
+      }
+      if (!callWake.isHeld()) callWake.acquire(4 * 60 * 60 * 1000L);
+      if (callWifi == null) {
+        android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        int mode = Build.VERSION.SDK_INT >= 29 ? android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY : android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF;
+        callWifi = wm.createWifiLock(mode, "planipret:activeCall");
+        callWifi.setReferenceCounted(false);
+      }
+      if (!callWifi.isHeld()) callWifi.acquire();
+    } catch (Exception ignored) { }
+  }
+  private static synchronized void releaseCallLocks() {
+    try { if (callWake != null && callWake.isHeld()) callWake.release(); } catch (Exception ignored) { }
+    try { if (callWifi != null && callWifi.isHeld()) callWifi.release(); } catch (Exception ignored) { }
+  }
   public static void stop(Context context) { context.stopService(new Intent(context, PpSipKeepAliveService.class)); }
   public static void declineIncoming(Context context, String callId) {
     Intent intent = new Intent(context, PpSipKeepAliveService.class).setAction(ACTION_DECLINE_CALL).putExtra("callId", callId);
@@ -457,13 +495,27 @@ public class PpSipKeepAliveService extends Service {
   }
 
   @Override public int onStartCommand(Intent intent, int flags, int startId) {
+    String action = intent == null ? "" : intent.getAction();
+    if (ACTION_CALL_START.equals(action) || (inCall && !ACTION_CALL_END.equals(action))) {
+      inCall = true;
+      Notification callNotif = buildOngoingNotification("Appel en cours");
+      if (Build.VERSION.SDK_INT >= 30) {
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, callNotif,
+          ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+      } else {
+        startForeground(NOTIFICATION_ID, callNotif);
+      }
+      acquireCallLocks(this);
+      if (stopRunnable != null) handler.removeCallbacks(stopRunnable);
+      emitStatus("protected", "active_call_foreground");
+      return START_STICKY;
+    }
     Notification notification = buildOngoingNotification("Ouverture de l’application pour la téléphonie");
     if (Build.VERSION.SDK_INT >= 34) {
       ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
     } else {
       startForeground(NOTIFICATION_ID, notification);
     }
-    String action = intent == null ? "" : intent.getAction();
     if (ACTION_REREGISTER.equals(action)) {
       sendBroadcast(new Intent(ACTION_REREGISTER).setPackage(getPackageName())
         .putExtra("reason", intent.getStringExtra("reason")));
@@ -488,6 +540,8 @@ public class PpSipKeepAliveService extends Service {
     super.onTaskRemoved(rootIntent);
   }
   @Override public void onDestroy() {
+    inCall = false;
+    releaseCallLocks();
     if (stopRunnable != null) handler.removeCallbacks(stopRunnable);
     emitStatus("disconnected", "service_destroyed");
     super.onDestroy();

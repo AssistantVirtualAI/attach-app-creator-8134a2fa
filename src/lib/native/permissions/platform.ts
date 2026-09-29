@@ -41,9 +41,9 @@ export async function openAppSettings() {
     if (platform === "ios") {
       window.open("app-settings:", "_system");
     } else if (platform === "android") {
-      const { App } = await import("@capacitor/app");
-      const info = await App.getInfo();
-      window.open(`package:${info.id}`, "_system");
+      // Never navigate the WebView to a pseudo-URL (it resolved to
+      // https://localhost/... and showed "Web page not available").
+      window.alert("Ouvrez Réglages Android > Applications > Planiprêt > Autorisations pour activer l'accès.");
     }
   } catch { /* ignore */ }
 }

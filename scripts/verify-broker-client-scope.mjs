@@ -11,7 +11,13 @@ const requireAbsent = (relative, text, label) => {
 };
 
 const gateway = "supabase/functions/maestro-actions/index.ts";
-const mobileCache = "apps/planipret-mobile/src/lib/ppContactsCache.ts";
+// The delivery repository retains a source snapshot under apps/, but its
+// canonical signed application lives at its root. The revision marker exists
+// only in that delivery layout.
+const mobileRoot = fs.existsSync(path.join(root, ".lovable-planipret-source-revision"))
+  ? "."
+  : "apps/planipret-mobile";
+const mobileCache = path.posix.join(mobileRoot, "src/lib/ppContactsCache.ts");
 const portalCache = "src/lib/ppContactsCache.ts";
 
 requireText(gateway, "if (!isServiceRole && !authenticatedUserId)", "Maestro gateway rejects unauthenticated app callers");

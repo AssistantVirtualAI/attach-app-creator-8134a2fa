@@ -1,7 +1,8 @@
 /**
- * A missing, pending, declined, or malformed decision is never consent.
- * Client history may expose recorded media only after an explicit approval.
+ * The broker may use locally retained media while deciding. A declined call is
+ * deleted and must never be rendered again. Maestro delivery is separately
+ * gated to `approved` on the server.
  */
-export function hasApprovedRecordingConsent(saveConsent: string | null | undefined): boolean {
-  return saveConsent === "approved";
+export function canViewLocalCallMedia(saveConsent: string | null | undefined): boolean {
+  return saveConsent !== "declined";
 }

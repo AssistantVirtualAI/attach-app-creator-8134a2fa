@@ -13,7 +13,7 @@ import {
   clientProfileErrorMessage, maestroClientProfileFromPayload, mergeClientProfile,
   type MaestroClientProfile,
 } from "@/lib/planipret/clientProfile";
-import { hasApprovedRecordingConsent } from "@/lib/planipret/recordingConsent";
+import { canViewLocalCallMedia } from "@/lib/planipret/recordingConsent";
 import { supabase } from "@/integrations/supabase/client";
 import { CallRecordingPlayer } from "@/components/planipret/mobile/call/CallRecordingPlayer";
 
@@ -391,7 +391,7 @@ function CallRow({ call, lang }: { call: ClientCall; lang: "fr" | "en" }) {
   const missed = call.direction === "missed" || call.status === "missed" || call.status === "no-answer";
   const outgoing = call.direction === "outbound";
   const Icon = missed ? PhoneMissed : outgoing ? PhoneOutgoing : PhoneIncoming;
-  const consentOk = hasApprovedRecordingConsent(call.save_consent);
+  const consentOk = canViewLocalCallMedia(call.save_consent);
   const canListen = consentOk && (!!call.has_recording || !!call.recording_url);
   return (
     <li className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
@@ -405,7 +405,7 @@ function CallRow({ call, lang }: { call: ClientCall; lang: "fr" | "en" }) {
       <span className="mt-1.5 flex flex-wrap gap-1.5">
         {canListen && <button onClick={() => setListen((v) => !v)} className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: "rgba(46,155,220,.12)", color: "var(--pp-brand-accent)" }}>{listen ? (en ? "Hide recording" : "Masquer l’enregistrement") : (en ? "Listen" : "Écouter")}</button>}
         {consentOk && call.transcript && <button onClick={() => setShowTx((v) => !v)} className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: "rgba(46,155,220,.12)", color: "var(--pp-brand-accent)" }}>{showTx ? (en ? "Hide transcript" : "Masquer la transcription") : (en ? "Transcript" : "Transcription")}</button>}
-        {!consentOk && <span className="text-[10px]">{en ? "Recording consent pending" : "Consentement d’enregistrement en attente"}</span>}
+        {!consentOk && <span className="text-[10px]">{en ? "Call deleted" : "Appel supprimé"}</span>}
       </span>
       {listen && <div className="mt-2"><CallRecordingPlayer callId={call.id} duration={call.duration_seconds ?? 0} /></div>}
       {showTx && call.transcript && <p className="mt-2 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">{call.transcript}</p>}

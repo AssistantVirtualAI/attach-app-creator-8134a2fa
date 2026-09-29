@@ -3,9 +3,8 @@ import {
   alreadyDecided,
   canSendFollowup,
   clientNameOf,
-  clientNumberOf,
   followupIdempotencyKey,
-  needsClientSelection,
+  clientNumberOf,
   pickEndedCall,
   requiresPostCallDecision,
   type ConsentCall,
@@ -16,7 +15,7 @@ const base = (over: Partial<ConsentCall> = {}): ConsentCall => ({
   user_id: "broker-1",
   from_number: "+15550001111",
   to_number: "+15550002222",
-  direction: "outbound",
+  direction: "out",
   maestro_client_id: "cli-1",
   maestro_client_name: "Client Fictif",
   from_name: null,
@@ -48,30 +47,79 @@ describe("sélection de l'appel terminé", () => {
   });
 
   it("ne réutilise jamais un appel déjà tranché", () => {
-    expect(pickEndedCall([base({ save_consent: "approved" })], { providerCallId: "call-1" }, ["broker-1"])).toBeNull();
+    const rows = [base({ save_consent: "approved" })];
+    expect(pickEndedCall(rows, { providerCallId: "call-1" }, ["broker-1"])).toBeNull();
+  });
+
+  it("ignore l'appel d'un autre courtier", () => {
+    const rows = [base({ user_id: "broker-2" })];
+    expect(pickEndedCall(rows, { providerCallId: "call-1" }, ["broker-1"])).toBeNull();
+  });
+
+  it("sans identifiant fournisseur, exige le même numéro", () => {
+    const rows = [base({ id: "call-7" })];
+    expect(pickEndedCall(rows, { number: "5550002222" }, ["broker-1"])?.id).toBe("call-7");
+    expect(pickEndedCall(rows, { number: "5559998888" }, ["broker-1"])).toBeNull();
+    expect(pickEndedCall(rows, {}, ["broker-1"])).toBeNull();
+  });
+
+  it("détecte une décision déjà prise", () => {
     expect(alreadyDecided({ save_consent: "declined" })).toBe(true);
+    expect(alreadyDecided({ save_consent: null })).toBe(false);
   });
 });
 
-describe("client post-appel", () => {
-  it("prend l'appelant comme client quand NetSapiens normalise en inbound", () => {
-    const call = base({ direction: "inbound", maestro_client_name: null, from_name: "Marc", to_name: "Courtier" });
-    expect(clientNumberOf(call)).toBe("+15550001111");
-    expect(clientNameOf(call)).toBe("Marc");
+describe("client inconnu", () => {
+  it("laisse le courtier enregistrer l'appel sans troisième décision", () => {
+    const unknown = base({ maestro_client_id: null, maestro_client_name: null, from_name: null, to_name: null });
+    expect(clientNameOf(unknown)).toBe("+15550002222");
   });
 
-  it("demande le choix du client uniquement quand aucune identité n'est disponible", () => {
-    expect(needsClientSelection(base({ maestro_client_id: null, maestro_client_name: null }))).toBe(true);
-    expect(needsClientSelection(base())).toBe(false);
+  it("affiche le nom du client connu", () => {
+    expect(clientNameOf(base())).toBe("Client Fictif");
+  });
+
+  it("choisit le numéro de l’appelant pour une direction inbound normalisée", () => {
+    const call = base({ direction: "inbound", from_number: "+15550001111", to_number: "+15550002222" });
+    expect(clientNumberOf(call)).toBe("+15550001111");
+    expect(clientNameOf({ ...call, maestro_client_name: null, from_name: "Marc", to_name: "Courtier" })).toBe("Marc");
   });
 });
 
 describe("garde d'envoi du suivi", () => {
   const draft = { kind: "sms" as const, body: "Merci pour l'appel.", recipient: "+15550002222", confirmed: true };
-  it("requiert une confirmation explicite et reste idempotent", () => {
+
+  it("bloque tant que la case de confirmation n'est pas cochée", () => {
     expect(canSendFollowup({ ...draft, confirmed: false })).toBe(false);
+  });
+  it("bloque un brouillon vide", () => {
+    expect(canSendFollowup({ ...draft, body: "   " })).toBe(false);
+  });
+  it("bloque un courriel invalide", () => {
+    expect(canSendFollowup({ ...draft, kind: "email", recipient: "pas-un-courriel" })).toBe(false);
+    expect(canSendFollowup({ ...draft, kind: "email", recipient: "client@exemple.test" })).toBe(true);
+  });
+  it("bloque pendant un envoi en cours", () => {
+    expect(canSendFollowup({ ...draft, busy: true })).toBe(false);
+  });
+  it("autorise après confirmation explicite", () => {
     expect(canSendFollowup(draft)).toBe(true);
-    const value = { userId: "u1", callId: "c1", kind: "sms" as const, recipient: draft.recipient, body: draft.body };
-    expect(followupIdempotencyKey(value)).toBe(followupIdempotencyKey(value));
+  });
+});
+
+describe("clé d'idempotence", () => {
+  const args = { userId: "u1", callId: "c1", kind: "sms" as const, recipient: "+15550002222", body: "Bonjour" };
+
+  it("est stable pour le même contenu (double tap = un seul envoi)", () => {
+    expect(followupIdempotencyKey(args)).toBe(followupIdempotencyKey({ ...args }));
+  });
+  it("change si le texte change", () => {
+    expect(followupIdempotencyKey(args)).not.toBe(followupIdempotencyKey({ ...args, body: "Bonjour !" }));
+  });
+  it("change si l'appel change", () => {
+    expect(followupIdempotencyKey(args)).not.toBe(followupIdempotencyKey({ ...args, callId: "c2" }));
+  });
+  it("change si le destinataire change", () => {
+    expect(followupIdempotencyKey(args)).not.toBe(followupIdempotencyKey({ ...args, recipient: "+15550003333" }));
   });
 });

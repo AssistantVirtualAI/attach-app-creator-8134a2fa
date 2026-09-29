@@ -18,7 +18,6 @@ import {
   clientNameOf,
   clientNumberOf,
   followupIdempotencyKey,
-  needsClientSelection,
   pickEndedCall,
   type ConsentCall,
   type EndedDetail,
@@ -68,7 +67,6 @@ export default function PostCallConsentSheet() {
   const [subject, setSubject] = useState("Suivi de notre appel");
   const [confirmed, setConfirmed] = useState(false);
   const [recipient, setRecipient] = useState("");
-  const [clientChoice, setClientChoice] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
   const spokenFor = useRef<string | null>(null);
   // Heure exacte où l'appel s'est terminé (moment de l'événement, pas de la réponse).
@@ -79,7 +77,7 @@ export default function PostCallConsentSheet() {
 
   const reset = useCallback(() => {
     setStep("consent"); setKind(null); setDraft(""); setConfirmed(false);
-    setRecipient(""); setClientChoice(""); setSubject("Suivi de notre appel");
+    setRecipient(""); setSubject("Suivi de notre appel");
     sending.current = false;
   }, []);
 
@@ -149,11 +147,7 @@ export default function PostCallConsentSheet() {
   }, [loadEndedCall]);
 
   const clientNumber = useMemo(() => (call ? clientNumberOf(call) : ""), [call]);
-  const clientName = useMemo(
-    () => (call ? (clientChoice.trim() || clientNameOf(call)) : ""),
-    [call, clientChoice],
-  );
-  const mustPickClient = !!call && needsClientSelection(call) && !clientChoice.trim();
+  const clientName = useMemo(() => (call ? clientNameOf(call) : ""), [call]);
 
   useEffect(() => {
     if (!call || spokenFor.current === call.id) return;
@@ -176,10 +170,6 @@ export default function PostCallConsentSheet() {
 
   const consent = async (action: "approve" | "delete") => {
     if (busy) return;
-    if (action === "approve" && mustPickClient) {
-      toast.error("Choisissez le client associé avant de sauvegarder.");
-      return;
-    }
     setBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("pp-call-consent", {
@@ -188,7 +178,6 @@ export default function PostCallConsentSheet() {
           action,
           channel: "screen",
           ended_at: endedAt.current,
-          client_name: clientChoice.trim() || undefined,
         },
       });
       if (error) throw error;
@@ -265,22 +254,9 @@ export default function PostCallConsentSheet() {
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
               Enregistrer conserve l'appel et l'envoie dans Maestro. Supprimer efface l'enregistrement, la transcription et le sommaire.
             </div>
-            {needsClientSelection(call) && (
-              <>
-                <div style={{ fontSize: 12, color: "#FBBF24", marginBottom: 6 }}>
-                  Client non identifié — indiquez à quel client rattacher cet appel.
-                </div>
-                <input
-                  value={clientChoice}
-                  onChange={(e) => setClientChoice(e.target.value)}
-                  placeholder="Nom du client"
-                  style={{ ...input, minHeight: 0, marginBottom: 10 }}
-                />
-              </>
-            )}
             <div style={{ display: "grid", gap: 10 }}>
               <Button
-                disabled={busy || mustPickClient}
+                disabled={busy}
                 className="h-12 w-full gap-2"
                 onClick={() => consent("approve")}
               >

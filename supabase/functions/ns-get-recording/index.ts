@@ -5,7 +5,7 @@
 
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
+import { authorizeCallAccess, allowCallViewing } from "../_shared/planipret-call-access.ts";
 // @ts-ignore npm package has no bundled TS declarations.
 import GSMDecoder from "https://esm.sh/gsm-decoder@1.0.0";
 
@@ -434,7 +434,9 @@ Deno.serve(async (req) => {
     if (!row) return json({ success: false, error: "call_not_found" }, 404);
     const access = await authorizeCallAccess(req, admin, row);
     if (!access.ok) return json({ success: false, error: access.error }, access.status);
-    const consent = requireApprovedCallConsent(row);
+    // The broker may listen before choosing Save or Delete.  The media stays
+    // local at this stage; every Maestro write keeps its separate approval gate.
+    const consent = allowCallViewing(row);
     if (!consent.ok) return json({ success: false, error: consent.error }, consent.status);
     domain = row?.ns_domain || row?.metadata?.domain || domain;
     ns_callid = ns_callid || row?.ns_callid || row?.ns_orig_callid || row?.ns_term_callid

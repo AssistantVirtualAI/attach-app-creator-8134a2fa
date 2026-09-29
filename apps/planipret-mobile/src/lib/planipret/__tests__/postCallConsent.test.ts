@@ -5,7 +5,6 @@ import {
   clientNameOf,
   followupIdempotencyKey,
   clientNumberOf,
-  needsClientSelection,
   pickEndedCall,
   requiresPostCallDecision,
   type ConsentCall,
@@ -70,10 +69,10 @@ describe("sélection de l'appel terminé", () => {
   });
 });
 
-describe("client ambigu", () => {
-  it("exige une sélection manuelle sans client identifié", () => {
-    expect(needsClientSelection(base({ maestro_client_id: null, maestro_client_name: null }))).toBe(true);
-    expect(needsClientSelection(base())).toBe(false);
+describe("client inconnu", () => {
+  it("laisse le courtier enregistrer l'appel sans troisième décision", () => {
+    const unknown = base({ maestro_client_id: null, maestro_client_name: null, from_name: null, to_name: null });
+    expect(clientNameOf(unknown)).toBe("+15550002222");
   });
 
   it("affiche le nom du client connu", () => {

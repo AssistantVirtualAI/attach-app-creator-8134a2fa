@@ -162,7 +162,7 @@ const softphoneInstances = new Set<{ id: string; notify: () => void }>();
 
 // Fin d'appel : émettre une seule fois par appel, peu importe qui raccroche.
 const emittedCallEnded = new Set<string>();
-function emitCallEnded(providerCallId: string | null) {
+function emitCallEnded(providerCallId: string | null, detail: { number?: string | null; direction?: "in" | "out" | null; answered?: boolean } = {}) {
   const key = providerCallId || "unknown";
   if (emittedCallEnded.has(key)) return;
   emittedCallEnded.add(key);
@@ -170,8 +170,10 @@ function emitCallEnded(providerCallId: string | null) {
     emittedCallEnded.delete(emittedCallEnded.values().next().value as string);
   }
   try {
+    const payload = { providerCallId: providerCallId || null, ...detail };
+    localStorage.setItem("pp.pending-post-call-decision.v2", JSON.stringify({ ...payload, endedAt: new Date().toISOString() }));
     window.dispatchEvent(new CustomEvent("pp:call-ended", {
-      detail: { providerCallId: providerCallId || null },
+      detail: payload,
     }));
   } catch { /* l'écran de consentement reste accessible depuis l'historique */ }
 }
@@ -310,6 +312,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   const answerAttemptRef = useRef<Promise<boolean> | null>(null);
 
   const seenCallIds = useRef<Set<string>>(new Set());
+  const answeredCallIds = useRef<Set<string>>(new Set());
   const mobileSipConfigRef = useRef<PpSipConfig | null>(null);
   /** Mobile WebView and native iOS stack deliberately share `<ext>M`, but never concurrently. */
   const sameAorRef = useRef<boolean>(false);
@@ -446,6 +449,9 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   useEffect(() => {
     if (snap.callState === "active" && snap.direction === "in") {
       void completePlanipretCallKitAnswer(snap.callId, true);
+    }
+    if ((snap.callState === "active" || snap.callState === "held") && snap.callId) {
+      answeredCallIds.current.add(snap.callId);
     }
   }, [snap.callState, snap.direction, snap.callId]);
 
@@ -1187,8 +1193,15 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // Le client peut raccrocher en premier : la question de consentement doit
     // aussi s'afficher quand la fin d'appel vient du réseau, pas seulement
     // quand le courtier appuie sur Raccrocher.
-    emitCallEnded(endedRestCallId ?? snap.callId);
-  }, [snap.callState, snap.callId, snap.errorCause, restCall?.id, ownerTick]);
+    const decisionId = endedRestCallId ?? snap.callId;
+    if (answeredCallIds.current.has(snap.callId) || (endedRestCallId ? answeredCallIds.current.has(endedRestCallId) : false)) {
+      emitCallEnded(decisionId, {
+        number: snap.remoteNumber || snap.remoteIdentity || restCall?.number || null,
+        direction: snap.direction,
+        answered: true,
+      });
+    }
+  }, [snap.callState, snap.callId, snap.errorCause, snap.remoteNumber, snap.remoteIdentity, snap.direction, restCall?.id, restCall?.number, ownerTick]);
 
   const registered = snap.status === "registered";
 
@@ -1659,8 +1672,16 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   const hangup = useCallback(() => {
     const callId = ppSipProvider.getSnapshot().callId;
     const restId = restCall?.id ?? null;
-    // Fin d'appel : demander au courtier s'il sauvegarde l'appel dans Maestro.
-    emitCallEnded(restId || callId || null);
+    // Only connected calls require a post-call decision; missed and declined
+    // calls remain in history without interrupting the broker.
+    const wasAnswered = !!callId && answeredCallIds.current.has(callId);
+    if (wasAnswered) {
+      emitCallEnded(restId || callId, {
+        number: snap.remoteNumber || snap.remoteIdentity || restCall?.number || null,
+        direction: snap.direction,
+        answered: true,
+      });
+    }
     console.info("[hangup] requested", { sipCallId: callId || null, restCallId: restId, hasLiveSipSession });
     const iosNative = clientType === "mobile" && isIosNativePlatform() && !usingWebFallback;
     if (iosNative && nativeSip.getCallId()) {
@@ -1686,7 +1707,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       void endSession(callId, "hangup");
       void updateCallIfPosted(callId, { status: "ended", ended_reason: "completed" });
     }
-  }, [restCall?.id, restDisconnectWithRetry, hasLiveSipSession, clientType, usingWebFallback]);
+  }, [restCall?.id, restCall?.number, restDisconnectWithRetry, hasLiveSipSession, clientType, usingWebFallback, snap.remoteNumber, snap.remoteIdentity, snap.direction]);
 
 
 

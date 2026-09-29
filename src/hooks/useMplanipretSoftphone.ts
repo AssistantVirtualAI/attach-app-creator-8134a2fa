@@ -171,7 +171,7 @@ function emitCallEnded(providerCallId: string | null, detail: { number?: string 
   }
   try {
     const payload = { providerCallId: providerCallId || null, ...detail };
-    localStorage.setItem("pp.pending-post-call-decision.v2", JSON.stringify({ ...payload, endedAt: new Date().toISOString() }));
+    try { localStorage.setItem("pp.pending-post-call-decision.v2", JSON.stringify({ ...payload, endedAt: new Date().toISOString() })); } catch { /* event still fires */ }
     window.dispatchEvent(new CustomEvent("pp:call-ended", {
       detail: payload,
     }));
@@ -454,6 +454,13 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       answeredCallIds.current.add(snap.callId);
     }
   }, [snap.callState, snap.direction, snap.callId]);
+
+  useEffect(() => {
+    const state = String(restCall?.status ?? "").toLowerCase();
+    if (restCall?.id && ["active", "held", "answered", "in_progress"].includes(state)) {
+      answeredCallIds.current.add(restCall.id);
+    }
+  }, [restCall?.id, restCall?.status]);
 
   // 24h SIP stability soak recorder (rolling window in localStorage).
   useEffect(() => startSipStabilityMonitor(), []);
@@ -1674,7 +1681,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     const restId = restCall?.id ?? null;
     // Only connected calls require a post-call decision; missed and declined
     // calls remain in history without interrupting the broker.
-    const wasAnswered = !!callId && answeredCallIds.current.has(callId);
+    const wasAnswered = (!!callId && answeredCallIds.current.has(callId))
+      || (!!restId && answeredCallIds.current.has(restId));
     if (wasAnswered) {
       emitCallEnded(restId || callId, {
         number: snap.remoteNumber || snap.remoteIdentity || restCall?.number || null,

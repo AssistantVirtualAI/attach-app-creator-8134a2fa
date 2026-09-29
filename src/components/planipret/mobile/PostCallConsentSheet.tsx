@@ -194,6 +194,7 @@ export default function PostCallConsentSheet() {
       if (error) throw error;
       if ((data as any)?.error) throw new Error(String((data as any).error));
       if (action === "approve") {
+        try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
         const started = (data as any)?.ok === true && (data as any)?.processing !== "retryable";
         if (started) {
           toast.success("Consentement enregistré. Synchronisation avec Maestro en cours.");

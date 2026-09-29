@@ -28,3 +28,4 @@
 - [ ] Vérifier et corriger la lecture et le cache persistant des enregistrements
 - [ ] Produire un rapport de corrections et de tests
 - [x] Fermer réellement les tâches dans Maestro avec relecture obligatoire
+- [x] Afficher une décision obligatoire Enregistrer/Supprimer après chaque appel répondu, avec reprise après redémarrage

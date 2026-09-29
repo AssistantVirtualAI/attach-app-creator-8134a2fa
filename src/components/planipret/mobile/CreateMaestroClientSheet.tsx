@@ -155,7 +155,7 @@ export default function CreateMaestroClientSheet({
   const fieldStyle: React.CSSProperties = { background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" };
 
   return createPortal(
-    <div className="fixed inset-0 z-[1000] flex items-end justify-center" style={{ background: "rgba(0,0,0,.5)" }} onClick={onClose}>
+    <div data-client-create-overlay className="fixed inset-0 z-[1000] flex items-end justify-center" style={{ background: "rgba(0,0,0,.5)" }} onClick={onClose}>
       <div className="w-full max-w-md rounded-t-3xl p-5 space-y-3 max-h-[85dvh] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}
         style={{ background: "var(--pp-bg-surface)", color: "var(--pp-text-primary)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 120px)", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}>
         <div className="flex items-center justify-between">

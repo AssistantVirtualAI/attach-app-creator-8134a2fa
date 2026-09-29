@@ -92,6 +92,20 @@ Deno.serve(async (req) => {
   const smsUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-ns-sms?action=send`;
   let sentE = 0, sentS = 0, failed = 0;
 
+  const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
+  const personalize = (text: string, r: any, html: boolean) => {
+    const full = String(r.client_name ?? "").trim();
+    const parts = full.split(/\s+/).filter(Boolean);
+    const first = parts[0] ?? "";
+    const last = parts.slice(1).join(" ");
+    const v = (s: string) => (html ? esc(s) : s);
+    return text
+      .replace(/\{\s*(pr[eé]nom|first_?name)\s*\}/gi, v(first))
+      .replace(/\{\s*(nom_complet|full_?name)\s*\}/gi, v(full))
+      .replace(/\{\s*(nom|last_?name)\s*\}/gi, v(last))
+      .replace(/(Bonjour|Hello|Hi|Salut) ,/g, "$1,");
+  };
+
   const sendOne = async (r: any) => {
     const now = new Date().toISOString();
     try {

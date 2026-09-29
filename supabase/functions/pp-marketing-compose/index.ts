@@ -20,6 +20,7 @@ Deno.serve(async (req) => {
 Langue de sortie: ${lang === "en" ? "anglais" : "français québécois professionnel"}.
 Écris au nom du courtier ${sig.name}. N'invente aucun taux, chiffre, promotion ou date absents de la demande.
 Réponds UNIQUEMENT en JSON: {"subject": string, "email_body_html": string, "sms_text": string}.
+- Personnalisation: commence le courriel ET le texto par "${lang === "en" ? "Hello" : "Bonjour"} {prenom}," — garde exactement le jeton {prenom} (remplacé par le prénom de chaque client à l'envoi).
 - email_body_html: HTML simple (p, strong, ul/li, et au plus un bouton <a href="https://planipret.com" style="display:inline-block;background:#176FAD;color:#ffffff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:bold">…</a>). Pas de <html>, pas de signature, pas de logo (ajoutés automatiquement).
 - sms_text: max 300 caractères, clair, chaleureux, signé "${sig.name.split(" ")[0]} - Planiprêt", terminé par "${lang === "en" ? "Reply STOP to opt out." : "Répondez STOP pour vous désabonner."}"`;
 

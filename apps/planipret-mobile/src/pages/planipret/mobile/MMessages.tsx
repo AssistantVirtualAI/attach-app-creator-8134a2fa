@@ -262,7 +262,7 @@ const msgIsOut = (m: any, myExt: string, peer?: string) => {
   if (dir === "inbound" || dir === "in" || dir === "received" || dir === "term") return false;
   const from = m.from ?? m.source ?? m["from-user-id"] ?? m["from-number"] ?? "";
   const fromStr = String(from);
-  return fromStr === myExt || fromStr.startsWith(`${myExt}@`);
+  return !!myExt && (fromStr === myExt || fromStr.startsWith(`${myExt}@`));
 };
 
 /**

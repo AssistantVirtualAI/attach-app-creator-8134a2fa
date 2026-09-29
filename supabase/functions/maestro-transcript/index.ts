@@ -16,7 +16,7 @@ import {
   telecomAuth,
   updateCallPipeline,
 } from "../_shared/maestro.ts";
-import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
+import { authorizeCallAccess, allowCallViewing as requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 
 // Un WAV « en-tête seulement » (~1,3 Ko) ne contient aucun son : le fournisseur STT
 // le refuse systématiquement en HTTP 400. On n'envoie rien en dessous de ce seuil.

@@ -6,7 +6,7 @@ import { aiFetch } from "../_shared/claude-compat.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";
-import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
+import { authorizeCallAccess, allowCallViewing as requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     analysis_locked_at: new Date().toISOString(),
     analysis_locked_by: lockId,
   }).eq("id", call_id)
-    .eq("save_consent", "approved")
+    .or("save_consent.is.null,save_consent.neq.declined")
     .is("deleted_at", null)
     .or(`analysis_in_progress.eq.false,analysis_in_progress.is.null,analysis_locked_at.is.null,analysis_locked_at.lt.${staleBefore}`)
     .select("id")

@@ -17,7 +17,7 @@ import {
 import { callAnthropic } from "../_shared/anthropic.ts";
 import { callCorrelationId, ensureMaestroCall } from "../_shared/maestro-guard.ts";
 import { recordingPermalink } from "../_shared/recording-link.ts";
-import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
+import { authorizeCallAccess, allowCallViewing as requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 
 
 

@@ -13,6 +13,7 @@ import {
   clientProfileErrorMessage, maestroClientProfileFromPayload, mergeClientProfile,
   type MaestroClientProfile,
 } from "@/lib/planipret/clientProfile";
+import { hasApprovedRecordingConsent } from "@/lib/planipret/recordingConsent";
 import { supabase } from "@/integrations/supabase/client";
 import { CallRecordingPlayer } from "@/components/planipret/mobile/call/CallRecordingPlayer";
 
@@ -356,12 +357,13 @@ export default function ClientMaestroDetail({
 }
 
 /** Bulle de texto : envoyé par le courtier à droite (bleu), reçu à gauche (vert). */
-function SmsBubble({ message, lang }: { message: ClientMessage; lang: "fr" | "en" }) {
+export function SmsBubble({ message, lang }: { message: ClientMessage; lang: "fr" | "en" }) {
   const out = message.direction === "outbound";
   return (
-    <div className={`flex ${out ? "justify-end" : "justify-start"}`}>
+    <div className={`flex ${out ? "justify-end" : "justify-start"}`} data-testid={out ? "sms-outbound" : "sms-inbound"}>
       <div className="max-w-[80%]">
         <div
+          data-testid="sms-bubble"
           className="rounded-2xl px-3 py-2 text-[12px] leading-snug"
           style={out
             ? { background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", color: "#fff", borderBottomRightRadius: 6 }
@@ -389,7 +391,7 @@ function CallRow({ call, lang }: { call: ClientCall; lang: "fr" | "en" }) {
   const missed = call.direction === "missed" || call.status === "missed" || call.status === "no-answer";
   const outgoing = call.direction === "outbound";
   const Icon = missed ? PhoneMissed : outgoing ? PhoneOutgoing : PhoneIncoming;
-  const consentOk = !call.save_consent || call.save_consent === "approved";
+  const consentOk = hasApprovedRecordingConsent(call.save_consent);
   const canListen = consentOk && (!!call.has_recording || !!call.recording_url);
   return (
     <li className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>

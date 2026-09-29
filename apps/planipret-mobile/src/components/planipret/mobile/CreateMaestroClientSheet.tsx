@@ -176,7 +176,7 @@ export default function CreateMaestroClientSheet({
             <option value="">Sexe *</option><option value="m">Homme</option><option value="f">Femme</option>
           </select>
           <select className={field} style={fieldStyle} value={language} onChange={(e) => setLanguage(e.target.value)} aria-label="Langue">
-            <option value="fr">Français</option><option value="en">English</option>
+            <option value="fr">Français *</option><option value="en">English *</option>
           </select>
         </div>
         <p className="text-xs font-semibold pt-1" style={{ color: "var(--pp-text-secondary)" }}>Adresse (exigée par Maestro)</p>
@@ -194,7 +194,7 @@ export default function CreateMaestroClientSheet({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <select className={field} style={fieldStyle} value={region} onChange={(e) => setRegion(e.target.value)} aria-label="Province">
-            {["QC","ON","NB","NS","PE","NL","MB","SK","AB","BC","YT","NT","NU"].map((r) => <option key={r} value={r}>{r}</option>)}
+            {["QC","ON","NB","NS","PE","NL","MB","SK","AB","BC","YT","NT","NU"].map((r) => <option key={r} value={r}>{r} *</option>)}
           </select>
           <input className={field} style={fieldStyle} placeholder="Code postal *" value={zip} maxLength={7} onChange={(e) => setZip(e.target.value.toUpperCase())} />
         </div>

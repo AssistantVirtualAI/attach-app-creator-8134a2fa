@@ -263,12 +263,13 @@ export default function ClientMaestroDetail({
 function ListIcon() { return <CalendarClock className="w-4 h-4" />; }
 function HeroChip({ icon, text }: { icon: React.ReactNode; text: string }) { return <span className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-1 text-[10px] bg-white/15 border border-white/15 truncate">{icon}<span className="truncate">{text}</span></span>; }
 function Metric({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "blue" | "danger" }) { return <div className="rounded-2xl p-2.5" style={{ background: tone === "danger" ? "rgba(239,68,68,.09)" : "var(--pp-bg-surface)", border: `1px solid ${tone === "danger" ? "rgba(239,68,68,.22)" : "var(--pp-bg-border)"}` }}><div className="flex items-center gap-1.5" style={{ color: tone === "danger" ? "#EF4444" : "var(--pp-brand-accent)" }}>{icon}<span className="text-lg font-bold">{value}</span></div><p className="text-[10px] mt-1" style={{ color: "var(--pp-text-muted)" }}>{label}</p></div>; }
-function SmsBubble({ message, lang }: { message: ClientMessage; lang: "fr" | "en" }) {
+export function SmsBubble({ message, lang }: { message: ClientMessage; lang: "fr" | "en" }) {
   const out = message.direction === "outbound";
   return (
-    <div className={`flex ${out ? "justify-end" : "justify-start"}`}>
+    <div className={`flex ${out ? "justify-end" : "justify-start"}`} data-testid={out ? "sms-outbound" : "sms-inbound"}>
       <div className="max-w-[80%]">
         <div
+          data-testid="sms-bubble"
           className="rounded-2xl px-3 py-2 text-[12px] leading-snug"
           style={out
             ? { background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", color: "#fff", borderBottomRightRadius: 6 }

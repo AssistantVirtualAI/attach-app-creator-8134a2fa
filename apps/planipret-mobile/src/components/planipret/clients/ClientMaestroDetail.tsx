@@ -190,17 +190,83 @@ export default function ClientMaestroDetail({
     return () => { alive = false; };
   }, [contractClientId]);
 
+  // Targeted per-client fetch: guarantees full history (calls, recordings,
+  // transcripts, texts) beyond the global 500-row window, by every verified
+  // phone number and by explicit Maestro link.
+  const phoneKeys = useMemo(() => {
+    const raw = [profile?.phone, ...(((profile as any)?.phones ?? []) as string[]), localBundle?.phone];
+    return [...new Set(raw.map((p) => String(p ?? "").replace(/\D/g, "").slice(-10)).filter((p) => p.length === 10))].join(",");
+  }, [profile, localBundle?.phone]);
+  useEffect(() => {
+    const ids = idsKey ? idsKey.split(",") : [];
+    const mid = contractClientId ? String(contractClientId) : "";
+    if (!ids.length || (!phoneKeys && !mid)) return;
+    let alive = true;
+    const phones = phoneKeys ? phoneKeys.split(",") : [];
+    const callOr = [...phones.flatMap((p) => [`from_number.ilike.%${p}`, `to_number.ilike.%${p}`]), ...(mid ? [`maestro_client_id.eq.${mid}`] : [])].join(",");
+    const msgOr = phones.flatMap((p) => [`from_number.ilike.%${p}`, `to_number.ilike.%${p}`]).join(",");
+    void (async () => {
+      const [cRes, mRes] = await Promise.all([
+        supabase.from("planipret_phone_calls")
+          .select("id, user_id, direction, status, started_at, ended_at, duration_seconds, save_consent, save_consent_at, save_consent_channel, from_number, to_number, from_name, to_name, ai_summary, recording_url, transcript, has_recording, maestro_client_name, maestro_client_id")
+          .in("user_id", ids).or(callOr).order("started_at", { ascending: false }).limit(1000),
+        msgOr ? supabase.from("planipret_phone_messages")
+          .select("id, user_id, direction, body, created_at, from_number, to_number")
+          .in("user_id", ids).or(msgOr).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [] as any[] }),
+      ]);
+      if (!alive) return;
+      const mergeById = <T extends { id: any }>(a: T[], extra: T[]) => {
+        const seen = new Set(a.map((x) => String(x.id)));
+        const add = extra.filter((x) => !seen.has(String(x.id)));
+        return add.length ? [...a, ...add] : a;
+      };
+      const ec = ((cRes as any).data ?? []) as ClientCall[];
+      const em = ((mRes as any).data ?? []) as ClientMessage[];
+      // Explicitly linked calls with a different number: tag with the client name so they attach.
+      const tagged = ec.map((c) => (mid && String(c.maestro_client_id ?? "") === mid && !c.maestro_client_name && profile?.name) ? { ...c, maestro_client_name: profile.name } : c);
+      setCalls((prev) => mergeById(prev, tagged));
+      setMessages((prev) => mergeById(prev, em));
+    })();
+    return () => { alive = false; };
+  }, [phoneKeys, contractClientId, idsKey, profile?.name]);
+
   const clientEmail = String(profile?.email ?? b?.email ?? "").trim().toLowerCase();
   useEffect(() => {
     if (!clientEmail || !/^[^\s@,()]+@[^\s@,()]+$/.test(clientEmail) || !idsKey) { setEmails([]); return; }
     let alive = true;
-    void supabase.from("planipret_email_messages")
-      .select("id, subject, from_email, from_name, body_preview, is_sent_by_me, sent_at, received_at")
-      .in("user_id", idsKey.split(","))
-      .or(`from_email.ilike.${clientEmail},to_recipients.ilike.%${clientEmail}%`)
-      .order("received_at", { ascending: false })
-      .limit(100)
-      .then(({ data }) => { if (alive) setEmails(data ?? []); });
+    void (async () => {
+      const { data } = await supabase.from("planipret_email_messages")
+        .select("id, subject, from_email, from_name, body_preview, is_sent_by_me, sent_at, received_at")
+        .in("user_id", idsKey.split(","))
+        .or(`from_email.ilike.${clientEmail},to_recipients.ilike.%${clientEmail}%`)
+        .order("received_at", { ascending: false })
+        .limit(100);
+      const local = (data ?? []) as any[];
+      // Outlook fallback: courriels reçus/envoyés avec ce client.
+      let outlook: any[] = [];
+      try {
+        const pull = async (folder: "inbox" | "sent") => {
+          const { data: r } = await supabase.functions.invoke("ms365-actions", { body: { action: "read_emails", payload: { top: 100, folder } } });
+          const list = ((r as any)?.emails ?? (r as any)?.messages ?? (r as any)?.data?.emails ?? (r as any)?.value ?? []) as any[];
+          return list.map((m) => ({ ...m, _folder: folder }));
+        };
+        const all = [...(await pull("inbox")), ...(await pull("sent"))];
+        outlook = all.filter((m) => JSON.stringify([m.from, m.from_email, m.fromEmail, m.to, m.to_recipients, m.toRecipients]).toLowerCase().includes(clientEmail))
+          .map((m) => ({
+            id: `o-${m.id ?? m.message_id ?? Math.random()}`,
+            subject: m.subject ?? null,
+            body_preview: m.body_preview ?? m.bodyPreview ?? m.preview ?? null,
+            is_sent_by_me: m._folder === "sent",
+            received_at: m.received_at ?? m.receivedDateTime ?? m.sent_at ?? m.sentDateTime ?? m.date ?? null,
+            sent_at: m.sent_at ?? m.sentDateTime ?? null,
+          }));
+      } catch { /* Outlook non connecté */ }
+      if (!alive) return;
+      const seen = new Set(local.map((m) => String(m.subject ?? "") + String(m.received_at ?? m.sent_at ?? "").slice(0, 16)));
+      const merged = [...local, ...outlook.filter((m) => !seen.has(String(m.subject ?? "") + String(m.received_at ?? m.sent_at ?? "").slice(0, 16)))]
+        .sort((a, z) => new Date(z.received_at ?? z.sent_at ?? 0).getTime() - new Date(a.received_at ?? a.sent_at ?? 0).getTime());
+      setEmails(merged);
+    })();
     return () => { alive = false; };
   }, [clientEmail, idsKey]);
 

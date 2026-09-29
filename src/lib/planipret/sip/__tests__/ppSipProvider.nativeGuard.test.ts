@@ -133,7 +133,11 @@ describe("ppSipProvider — garde plateforme native", () => {
     expect(keepAlive).toContain("pjsip_callkit_audio_owner");
     expect(keepAlive).toContain("if callKitAudioActive {");
     expect(keepAlive).toContain("CallKit vient d'activer le périphérique PJSIP");
-    expect(callKit.match(/prepareCallAudioSession\(\)/g)?.length).toBeGreaterThanOrEqual(3);
+    // CallKit is now the sole activator. PJSIP starts outgoing media only after
+    // `didActivate`; incoming calls receive the same session callback.
+    expect(callKit).toContain("public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession)");
+    expect(callKit).toContain("PpCallKitAudioActivated");
+    expect(callKit).toContain(".ppPjsipOutgoingAudioReady");
     expect(router).toContain('import { nativeOwnsAor } from "../sip/aorArbitration"');
     expect(router).toContain("if (nativeOwnsAor()) {");
   });

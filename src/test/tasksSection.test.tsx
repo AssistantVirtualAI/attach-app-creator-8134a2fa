@@ -12,6 +12,10 @@ let broadcastHandler: (() => void) | null = null;
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: vi.fn().mockResolvedValue({ data: { team: [] }, error: null }) },
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: "u1" } } } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    },
     channel: () => {
       // Chainable stub: TasksSection subscribes to several realtime events.
       const chan: any = {

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import CreateMaestroClientSheet, { type CreateClientTarget } from "@/components/planipret/mobile/CreateMaestroClientSheet";
 import { motion } from "framer-motion";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,12 +6,14 @@ import { toast } from "sonner";
 import {
   Search, X, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Copy,
   Bot, ChevronDown, ChevronUp, Pause, Play, Mic, MicOff, ArrowRightLeft, Loader2,
-  Check, Sparkles, RefreshCw, Voicemail as VmIcon, Save, Trash2, FileText, Download, UserPlus,
+  Check, Sparkles, RefreshCw, Voicemail as VmIcon, Save, Trash2, FileText, Download,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { TEMP_COLORS, TEMP_EMOJI, TEMP_LABEL, tempBorder, callbackDelayToDate, delayLabel, type LeadTemp } from "@/components/planipret/leadHelpers";
 import ContactTimeline from "@/components/planipret/ContactTimeline";
 import RecordingsList from "@/components/planipret/mobile/recordings/RecordingsList";
+import { UserPlus as UserPlusIcon } from "lucide-react";
+import CreateMaestroClientSheet, { type CreateClientTarget } from "@/components/planipret/mobile/CreateMaestroClientSheet";
 import { CallRecordingPlayer } from "@/components/planipret/mobile/call/CallRecordingPlayer";
 import MaestroTab from "@/components/planipret/mobile/call/MaestroTab";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
@@ -459,9 +460,10 @@ export default function MCalls() {
 
   const missedCount = useMemo(() => calls.filter(isMissed).length, [calls]);
 
-  // The server reconciles NetSapiens CDRs with their local mobile rows and
-  // launches the consent-aware Maestro workflow. Provider data can arrive
-  // later, but brokers must never be asked to repair call history manually.
+  // The server reconciles a completed NetSapiens CDR with its live mobile row
+  // and starts the consent-aware Maestro pipeline automatically. Local rows
+  // remain visible during the short provider delay, but the app deliberately
+  // does not ask the broker to repair or reload call history manually.
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -664,13 +666,7 @@ export default function MCalls() {
                             {header}
                           </div>
                         )}
-                        <CallRow
-                          call={c}
-                          onTap={() => setSelected(c)}
-                          onCall={() => openDialer(otherNumber(c), true)}
-                          showCallBtn={tab === "missed"}
-                          onCreateClient={(phone, name) => setCreateTarget({ phone, name, callId: c.id })}
-                        />
+                        <CallRow call={c} onTap={() => setSelected(c)} onCall={() => openDialer(otherNumber(c), true)} showCallBtn={tab === "missed"} onCreateClient={(phone, name) => setCreateTarget({ phone, name, callId: c.id })} />
                       </div>
                     );
                   })}
@@ -727,13 +723,7 @@ export default function MCalls() {
 }
 
 // ---------- row ----------
-function CallRow({ call, onTap, onCall, showCallBtn, onCreateClient }: {
-  call: Call;
-  onTap: () => void;
-  onCall: () => void;
-  showCallBtn?: boolean;
-  onCreateClient?: (phone: string, name?: string | null) => void;
-}) {
+function CallRow({ call, onTap, onCall, showCallBtn, onCreateClient }: { call: Call; onTap: () => void; onCall: () => void; showCallBtn?: boolean; onCreateClient?: (phone: string, name?: string | null) => void }) {
   const { t, lang } = useMplanipretLang();
   const missed = isMissed(call);
   const out = isOutbound(call);
@@ -805,7 +795,7 @@ function CallRow({ call, onTap, onCall, showCallBtn, onCreateClient }: {
               className="rounded-full px-2 py-1.5 flex items-center gap-1 text-[10px] font-semibold"
               style={{ background: "rgba(46,155,220,0.12)", color: "var(--pp-brand-accent)" }}
             >
-              <UserPlus className="w-3.5 h-3.5" /> Client
+              <UserPlusIcon className="w-3.5 h-3.5" /> Client
             </button>
           )}
           {hasAi && (

@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { mirrorCallAnalysisToMaestro } from "../_shared/maestro-telecom.ts";
 import { callAnthropic } from "../_shared/anthropic.ts";
-import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
+import { authorizeCallAccess, allowCallViewing as requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 
 
 const SYSTEM_PROMPT = `Tu es un analyste IA spécialisé en appels téléphoniques et coaching d'agents.

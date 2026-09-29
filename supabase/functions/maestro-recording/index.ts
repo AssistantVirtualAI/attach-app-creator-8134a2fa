@@ -8,7 +8,7 @@ import {
   json,
   maestroFetch,
 } from "../_shared/maestro.ts";
-import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
+import { authorizeCallAccess, allowCallViewing as requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

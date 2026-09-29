@@ -112,12 +112,12 @@ Deno.serve(async (req) => {
       if (r.channel === "email") {
         const base = trackBaseUrl();
         const html = renderEmailHtml({
-          bodyHtml: rewriteLinks(emailBody, r.track_token), signature: sig,
+          bodyHtml: rewriteLinks(personalize(emailBody, r, true), r.track_token), signature: sig,
           unsubscribeUrl: `${base}?a=unsub&c=${r.track_token}`, pixelUrl: `${base}?a=open&c=${r.track_token}`,
         });
         const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
           method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ message: { subject, body: { contentType: "HTML", content: html }, toRecipients: [{ emailAddress: { address: r.email } }] }, saveToSentItems: true }),
+          body: JSON.stringify({ message: { subject: personalize(subject, r, false), body: { contentType: "HTML", content: html }, toRecipients: [{ emailAddress: { address: r.email } }] }, saveToSentItems: true }),
         });
         if (!res.ok) throw new Error(res.status === 400 ? "adresse_refusee" : `outlook_${res.status}`);
         await res.text();
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
         const res = await fetch(smsUrl, {
           method: "POST",
           headers: { Authorization: ctx.auth, apikey: Deno.env.get("SUPABASE_ANON_KEY")!, "Content-Type": "application/json" },
-          body: JSON.stringify({ to: r.phone, message: smsText, confirmed: true, origin: "marketing", surface: "portal-marketing", idempotency_key: `mkt:${r.id}` }),
+          body: JSON.stringify({ to: r.phone, message: personalize(smsText, r, false), confirmed: true, origin: "marketing", surface: "portal-marketing", idempotency_key: `mkt:${r.id}` }),
         });
         const d = await res.json().catch(() => ({}));
         if (!res.ok || d?.ok === false) throw new Error(String(d?.error_code ?? d?.error ?? `sms_${res.status}`).slice(0, 120));

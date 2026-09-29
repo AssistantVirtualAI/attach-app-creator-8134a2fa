@@ -119,6 +119,7 @@ export default function PBMarketing() {
           {step === 1 && (
             <div className="rounded-xl border border-border bg-card p-4 space-y-3">
               <label className="text-sm font-semibold">{L("Votre message", "Your message")}</label>
+              <p className="text-xs text-muted-foreground">{L("Astuce : {prenom}, {nom} et {nom_complet} sont remplacés par le nom de chaque client à l'envoi.", "Tip: {prenom}, {nom} and {nom_complet} are replaced with each client's name when sending.")}</p>
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={4000} rows={5}
                 placeholder={L("Ex. : Rappeler à mes clients que leur renouvellement approche et offrir une révision gratuite.", "E.g. Remind clients their renewal is coming and offer a free review.")}
                 className="w-full rounded-lg border border-border bg-background p-3 text-sm" />
@@ -187,7 +188,7 @@ export default function PBMarketing() {
                     {filtered.map((c) => (
                       <label key={c.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-muted">
                         <input type="checkbox" checked={sel.has(c.id)} onChange={() => setSel((s) => { const n = new Set(s); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n; })} />
-                        <span className="flex-1 truncate">{c.name}</span>
+                        <span className="flex-1 min-w-0"><span className="block truncate font-medium">{c.name}</span><span className="block truncate text-xs text-muted-foreground">{c.phone || L("Aucun cellulaire", "No mobile")} · {c.email || L("Aucun courriel", "No email")}</span></span>
                         <span className={`inline-flex items-center gap-1 text-xs ${phoneOk(c.phone) ? "text-foreground" : "text-muted-foreground line-through"}`}><MessageSquare className="w-3.5 h-3.5" />{L("Cell.", "Mobile")}</span>
                         <span className={`inline-flex items-center gap-1 text-xs ${emailOk(c.email) ? "text-foreground" : "text-muted-foreground line-through"}`}><Mail className="w-3.5 h-3.5" />{L("Courriel", "Email")}</span>
                       </label>

@@ -154,6 +154,7 @@ export default function MContacts() {
     "favorites",
     ...(peekPpContacts("directory") ? (["directory"] as Tab[]) : []),
     ...(peekPpContacts("list") ? (["personal"] as Tab[]) : []),
+    ...(peekPpContacts("maestro_clients") ? (["clients"] as Tab[]) : []),
   ]));
 
   useEffect(() => {
@@ -245,7 +246,7 @@ export default function MContacts() {
 
   useEffect(() => {
     if (tab === "favorites") return;
-    void load(tab, { limit: 120 });
+    void load(tab, { limit: 500 });
   }, [tab, load]);
 
   useEffect(() => {
@@ -263,7 +264,11 @@ export default function MContacts() {
   // second Maestro request after every navigation.
   useEffect(() => {
     prefetchPpContacts(["list", "directory", "maestro_clients", "maestro_brokers"], 500);
-    const quick = window.setTimeout(() => { void load("directory", { limit: 120, background: true }); }, 250);
+    const quick = window.setTimeout(() => {
+      void load("directory", { limit: 500, background: true });
+      void load("clients", { limit: 500, background: true });
+      void load("personal", { limit: 500, background: true });
+    }, 150);
     return () => { window.clearTimeout(quick); };
   }, [load]);
 

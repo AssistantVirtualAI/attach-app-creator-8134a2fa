@@ -35,15 +35,23 @@ export async function getPref(key: string): Promise<string | null> {
 }
 
 export async function openAppSettings() {
+  let platform: "ios" | "android" | "web" = "web";
   try {
-    const { Capacitor } = await import("@capacitor/core");
-    const platform = Capacitor.getPlatform();
+    const { Capacitor, registerPlugin } = await import("@capacitor/core");
+    platform = Capacitor.getPlatform() as "ios" | "android" | "web";
     if (platform === "ios") {
       window.open("app-settings:", "_system");
     } else if (platform === "android") {
-      // Never navigate the WebView to a pseudo-URL (it resolved to
-      // https://localhost/... and showed "Web page not available").
-      window.alert("Ouvrez Réglages Android > Applications > Planiprêt > Autorisations pour activer l'accès.");
+      // An Android Settings action is an Intent, not a WebView URL. Navigating
+      // to a pseudo-URL would otherwise resolve under https://localhost/.
+      const nativeSettings = registerPlugin<{
+        openAppSettings: () => Promise<{ ok?: boolean }>;
+      }>("PpSipKeepAlive");
+      await nativeSettings.openAppSettings();
     }
-  } catch { /* ignore */ }
+  } catch {
+    // Legacy Android binaries have no native bridge. Never navigate the WebView.
+    if (platform !== "android") return;
+    window.alert("Ouvrez Réglages Android > Applications > Planiprêt > Autorisations pour activer l'accès.");
+  }
 }

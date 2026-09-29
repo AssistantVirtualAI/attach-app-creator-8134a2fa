@@ -158,7 +158,7 @@ export default function PostCallConsentSheet() {
   useEffect(() => {
     if (!call || spokenFor.current === call.id) return;
     spokenFor.current = call.id;
-    speak(`Voulez-vous sauvegarder cet appel dans Maestro et préparer le suivi ?`);
+    speak("Désirez-vous enregistrer cet appel ou le supprimer ?");
   }, [call]);
 
   const close = useCallback((resolved = false) => {

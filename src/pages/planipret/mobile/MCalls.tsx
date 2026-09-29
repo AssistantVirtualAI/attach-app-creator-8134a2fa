@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import CreateMaestroClientSheet, { type CreateClientTarget } from "@/components/planipret/mobile/CreateMaestroClientSheet";
 import { motion } from "framer-motion";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";

@@ -67,9 +67,41 @@ export default function EmailHistoryList() {
         .limit(200);
       if (filter === "sent") query = query.eq("is_sent_by_me", true);
       else if (filter === "inbox") query = query.eq("is_sent_by_me", false);
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as Row[];
+      const outlook = async (folder: "inbox" | "sent"): Promise<Row[]> => {
+        const { data } = await supabase.functions.invoke("ms365-actions", {
+          body: { action: "read_emails", payload: { top: 50, skip: 0, folder } },
+        });
+        if (!(data as any)?.success) return [];
+        return (((data as any).emails ?? []) as any[]).map((m) => ({
+          id: `graph:${m.id}`,
+          graph_id: m.id ?? null,
+          subject: m.subject ?? null,
+          from_email: m.from?.emailAddress?.address ?? null,
+          from_name: m.from?.emailAddress?.name ?? null,
+          to_recipients: (m.toRecipients ?? []).map((r: any) => ({ address: r?.emailAddress?.address, name: r?.emailAddress?.name })),
+          body_preview: m.bodyPreview ?? null,
+          sent_at: m.sentDateTime ?? m.receivedDateTime ?? null,
+          received_at: m.receivedDateTime ?? null,
+          is_sent_by_me: folder === "sent",
+          folder,
+          locally_saved: false,
+        }));
+      };
+      const [dbRes, inRes, sentRes] = await Promise.allSettled([
+        query,
+        filter === "sent" ? Promise.resolve([]) : outlook("inbox"),
+        filter === "inbox" ? Promise.resolve([]) : outlook("sent"),
+      ]);
+      const dbRows = dbRes.status === "fulfilled" && !(dbRes.value as any).error ? (((dbRes.value as any).data ?? []) as Row[]) : [];
+      const graphRows = [
+        ...(inRes.status === "fulfilled" ? inRes.value : []),
+        ...(sentRes.status === "fulfilled" ? sentRes.value : []),
+      ];
+      const seen = new Set(dbRows.map((r) => r.graph_id).filter(Boolean));
+      const merged = [...dbRows, ...graphRows.filter((r) => !r.graph_id || !seen.has(r.graph_id))];
+      if (!merged.length && dbRes.status === "rejected") throw dbRes.reason;
+      const ts = (r: Row) => new Date(r.sent_at ?? r.received_at ?? 0).getTime();
+      return merged.sort((a, b) => ts(b) - ts(a)).slice(0, 200);
     })();
     if (!pending) emailInFlight.set(key, request);
     try {

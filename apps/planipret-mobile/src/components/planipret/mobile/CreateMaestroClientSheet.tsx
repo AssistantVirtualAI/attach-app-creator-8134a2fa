@@ -161,6 +161,9 @@ export default function CreateMaestroClientSheet({
           <h2 className="text-base font-semibold flex items-center gap-2"><UserPlus className="w-4 h-4" /> Créer le client dans Maestro</h2>
           <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-full" style={{ background: "var(--pp-bg-elevated)" }}><X className="w-4 h-4" /></button>
         </div>
+        <p className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
+          <span style={{ color: "var(--pp-danger)" }}>*</span> Champs obligatoires exigés par Maestro — sans eux, Maestro refuse la création.
+        </p>
         <input className={field} style={fieldStyle} placeholder="Prénom *" value={first} maxLength={80} onChange={(e) => setFirst(e.target.value)} />
         <input className={field} style={fieldStyle} placeholder="Nom *" value={last} maxLength={80} onChange={(e) => setLast(e.target.value)} />
         <input className={field} style={fieldStyle} placeholder="Courriel (facultatif)" type="email" value={email} maxLength={255} onChange={(e) => setEmail(e.target.value)} />

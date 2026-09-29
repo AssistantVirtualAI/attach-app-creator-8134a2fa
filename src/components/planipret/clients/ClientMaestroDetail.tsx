@@ -241,7 +241,13 @@ export default function ClientMaestroDetail({
       </Card>
 
       <Card title={L("Textos", "Texts")} surface={surface}>
-        {b.messages.length === 0 ? <Empty text={L("Aucun texto lié à ce client.", "No text linked to this client.")} /> : <ul className="space-y-1.5">{b.messages.map((message) => <li key={message.id} className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}><span className="flex gap-2"><MessageSquare className="w-3.5 h-3.5 shrink-0" style={{ color: message.direction === "outbound" ? "var(--pp-brand-accent)" : "#10B981" }} />{message.body || "—"}</span></li>)}</ul>}
+        {b.messages.length === 0 ? <Empty text={L("Aucun texto lié à ce client.", "No text linked to this client.")} /> : (
+          <div className="space-y-2">
+            {b.messages.map((message) => (
+              <SmsBubble key={message.id} message={message} lang={lang} />
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card title={L("Dossiers", "Files")} surface={surface}>

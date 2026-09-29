@@ -263,6 +263,28 @@ export default function ClientMaestroDetail({
 function ListIcon() { return <CalendarClock className="w-4 h-4" />; }
 function HeroChip({ icon, text }: { icon: React.ReactNode; text: string }) { return <span className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-1 text-[10px] bg-white/15 border border-white/15 truncate">{icon}<span className="truncate">{text}</span></span>; }
 function Metric({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "blue" | "danger" }) { return <div className="rounded-2xl p-2.5" style={{ background: tone === "danger" ? "rgba(239,68,68,.09)" : "var(--pp-bg-surface)", border: `1px solid ${tone === "danger" ? "rgba(239,68,68,.22)" : "var(--pp-bg-border)"}` }}><div className="flex items-center gap-1.5" style={{ color: tone === "danger" ? "#EF4444" : "var(--pp-brand-accent)" }}>{icon}<span className="text-lg font-bold">{value}</span></div><p className="text-[10px] mt-1" style={{ color: "var(--pp-text-muted)" }}>{label}</p></div>; }
+function SmsBubble({ message, lang }: { message: ClientMessage; lang: "fr" | "en" }) {
+  const out = message.direction === "outbound";
+  return (
+    <div className={`flex ${out ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[80%]">
+        <div
+          className="rounded-2xl px-3 py-2 text-[12px] leading-snug"
+          style={out
+            ? { background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", color: "#fff", borderBottomRightRadius: 6 }
+            : { background: "rgba(16,185,129,0.14)", color: "var(--pp-text-primary)", border: "1px solid rgba(16,185,129,0.35)", borderBottomLeftRadius: 6 }}
+        >
+          <p className="whitespace-pre-wrap break-words">{message.body || "—"}</p>
+        </div>
+        <p className={`text-[10px] mt-0.5 ${out ? "text-right" : "text-left"}`} style={{ color: "var(--pp-text-faint)" }}>
+          {out ? (lang === "en" ? "Sent" : "Envoyé") : (lang === "en" ? "Received" : "Reçu")}
+          {message.created_at ? ` · ${new Date(message.created_at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto" })}` : ""}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function CallRow({ call, lang }: { call: ClientCall; lang: "fr" | "en" }) { const missed = call.direction === "missed" || call.status === "missed" || call.status === "no-answer"; const outgoing = call.direction === "outbound"; const Icon = missed ? PhoneMissed : outgoing ? PhoneOutgoing : PhoneIncoming; return <li className="rounded-xl px-3 py-2 text-[11.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}><span className="flex flex-wrap items-center gap-2"><Icon className="w-3.5 h-3.5" style={{ color: missed ? "#EF4444" : outgoing ? "var(--pp-brand-accent)" : "#10B981" }} /><span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{call.started_at ? new Date(call.started_at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto" }) : "—"}</span><span>{missed ? (lang === "en" ? "missed" : "manqué") : call.status ?? (lang === "en" ? "completed" : "terminé")}</span></span>{call.ai_summary && <p className="mt-1 break-words">{call.ai_summary}</p>}</li>; }
 function Card({ title, surface, children }: { title: string; surface: React.CSSProperties; children: React.ReactNode }) { return <section className="rounded-2xl px-3.5 py-3.5" style={surface}><p className="text-[10px] uppercase tracking-[0.12em] mb-2" style={{ color: "var(--pp-text-muted)" }}>{title}</p>{children}</section>; }
 function Badge({ text, icon, tone }: { text: string; icon?: React.ReactNode; tone: "danger" | "warn" | "info" | "ok" | "muted" }) { const tones: Record<string, React.CSSProperties> = { danger: { background: "rgba(239,68,68,.12)", color: "#EF4444" }, warn: { background: "rgba(245,158,11,.14)", color: "#D97706" }, info: { background: "rgba(46,155,220,.12)", color: "var(--pp-brand-accent)" }, ok: { background: "rgba(16,185,129,.12)", color: "#059669" }, muted: { background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" } }; return <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full" style={tones[tone]}>{icon}{text}</span>; }

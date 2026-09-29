@@ -91,7 +91,9 @@ export default function MMessages() {
     const q = searchParams.get("tab");
     return (q === "sms" || q === "team" || q === "teams365" || q === "emails" || q === "roster") ? q : "sms";
   })();
-  const [sub, setSub] = useState<SubTab>(initialTab);
+  const [sub, setSubRaw] = useState<SubTab>(initialTab);
+  const [visited, setVisited] = useState<Set<SubTab>>(() => new Set([initialTab]));
+  const setSub = (k: SubTab) => { setVisited((v) => (v.has(k) ? v : new Set(v).add(k))); setSubRaw(k); };
   const qTo = searchParams.get("to") ?? "";
   const qName = searchParams.get("name") ?? "";
 
@@ -159,11 +161,11 @@ export default function MMessages() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} initialTo={qTo} />}
-        {sub === "team" && <TeamChat profile={profile} />}
-        {sub === "teams365" && <Teams365Panel profile={profile} />}
-        {sub === "emails" && <EmailsList profile={profile} initialTo={qTo} initialName={qName} />}
-        {sub === "history" && <EmailHistoryList />}
+        {visited.has("sms") && <div className="h-full" hidden={sub !== "sms"}><SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} initialTo={qTo} /></div>}
+        {visited.has("team") && <div className="h-full" hidden={sub !== "team"}><TeamChat profile={profile} /></div>}
+        {visited.has("teams365") && <div className="h-full" hidden={sub !== "teams365"}><Teams365Panel profile={profile} /></div>}
+        {visited.has("emails") && <div className="h-full" hidden={sub !== "emails"}><EmailsList profile={profile} initialTo={qTo} initialName={qName} /></div>}
+        {visited.has("history") && <div className="h-full" hidden={sub !== "history"}><EmailHistoryList /></div>}
       </div>
     </div>
   );

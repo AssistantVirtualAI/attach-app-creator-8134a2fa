@@ -1349,7 +1349,7 @@ function CallDetailSheet({
     const { ok, res, error } = await runTranscriptOnce();
 
     if (ok) {
-      setTxLoading(false); setTxPreparing(false); setTxAttempt(0);
+      setTxLoading(false); setTxPreparing(false); setTxAttempt(0); setTxReason(null);
       const transcript = res.transcript ?? (Array.isArray(res.segments) ? res.segments.map((s: any) => `${s.speaker ?? "Speaker"}: ${s.text}`).join("\n") : call.transcript);
       onUpdated({ ...call, transcript, transcript_segments: res.segments ?? call.transcript_segments });
       await refreshCall();
@@ -1579,6 +1579,8 @@ function CallDetailSheet({
               loading={txLoading}
               preparing={txPreparing}
               attempt={txAttempt}
+              unavailableReason={txReason?.message ?? null}
+              unavailableHint={txReason?.hint ?? null}
               onFetch={() => fetchTranscript(0)}
               onAnalyze={analyzeAI}
               aiLoading={aiLoading}

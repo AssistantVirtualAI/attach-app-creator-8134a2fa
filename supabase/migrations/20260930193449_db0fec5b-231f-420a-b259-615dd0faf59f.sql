@@ -23,12 +23,55 @@ CREATE TABLE public.luc_provisioning_jobs (id uuid PRIMARY KEY DEFAULT gen_rando
 CREATE TABLE public.luc_push_registrations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES public.luc_tenants(id) ON DELETE CASCADE, device_id uuid NOT NULL REFERENCES public.luc_devices(id) ON DELETE CASCADE, provider text NOT NULL, token_ciphertext text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE public.luc_audit_events (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid, actor_id uuid, action text NOT NULL, entity text NOT NULL, entity_id text, created_at timestamptz NOT NULL DEFAULT now());
 
-DO $$ DECLARE t text; BEGIN
-FOREACH t IN ARRAY ARRAY['luc_tenants','luc_memberships','luc_devices','luc_pbx_connections','luc_extension_mappings','luc_feature_flags','luc_contacts','luc_conversations','luc_conversation_members','luc_messages','luc_call_events','luc_voicemails','luc_recordings','luc_provisioning_jobs','luc_push_registrations','luc_audit_events'] LOOP
-  EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO authenticated', t);
-  EXECUTE format('GRANT ALL ON public.%I TO service_role', t);
-  EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
-END LOOP; END $$;
+-- Explicit grants (verifiable by scripts/security-gate.mjs); narrowed below.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_tenants TO authenticated;
+GRANT ALL ON public.luc_tenants TO service_role;
+ALTER TABLE public.luc_tenants ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_memberships TO authenticated;
+GRANT ALL ON public.luc_memberships TO service_role;
+ALTER TABLE public.luc_memberships ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_devices TO authenticated;
+GRANT ALL ON public.luc_devices TO service_role;
+ALTER TABLE public.luc_devices ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_pbx_connections TO authenticated;
+GRANT ALL ON public.luc_pbx_connections TO service_role;
+ALTER TABLE public.luc_pbx_connections ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_extension_mappings TO authenticated;
+GRANT ALL ON public.luc_extension_mappings TO service_role;
+ALTER TABLE public.luc_extension_mappings ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_feature_flags TO authenticated;
+GRANT ALL ON public.luc_feature_flags TO service_role;
+ALTER TABLE public.luc_feature_flags ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_contacts TO authenticated;
+GRANT ALL ON public.luc_contacts TO service_role;
+ALTER TABLE public.luc_contacts ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_conversations TO authenticated;
+GRANT ALL ON public.luc_conversations TO service_role;
+ALTER TABLE public.luc_conversations ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_conversation_members TO authenticated;
+GRANT ALL ON public.luc_conversation_members TO service_role;
+ALTER TABLE public.luc_conversation_members ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_messages TO authenticated;
+GRANT ALL ON public.luc_messages TO service_role;
+ALTER TABLE public.luc_messages ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_call_events TO authenticated;
+GRANT ALL ON public.luc_call_events TO service_role;
+ALTER TABLE public.luc_call_events ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_voicemails TO authenticated;
+GRANT ALL ON public.luc_voicemails TO service_role;
+ALTER TABLE public.luc_voicemails ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_recordings TO authenticated;
+GRANT ALL ON public.luc_recordings TO service_role;
+ALTER TABLE public.luc_recordings ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_provisioning_jobs TO authenticated;
+GRANT ALL ON public.luc_provisioning_jobs TO service_role;
+ALTER TABLE public.luc_provisioning_jobs ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_push_registrations TO authenticated;
+GRANT ALL ON public.luc_push_registrations TO service_role;
+ALTER TABLE public.luc_push_registrations ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.luc_audit_events TO authenticated;
+GRANT ALL ON public.luc_audit_events TO service_role;
+ALTER TABLE public.luc_audit_events ENABLE ROW LEVEL SECURITY;
 
 -- secrets never readable by clients
 REVOKE SELECT ON public.luc_pbx_connections FROM authenticated;

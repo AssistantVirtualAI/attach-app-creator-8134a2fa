@@ -18,7 +18,7 @@ export function LucTenantAdmin() {
   const audit = useLucList("luc_audit_events", "id,action,entity,entity_id,created_at");
   const flags = useLucList("luc_feature_flags", "id,key,enabled,created_at");
   const [u, setU] = useState({ email: "", extension: "", role: "end_user" as LucRole, display_name: "", pbx_connection_id: "" });
-  const [p, setP] = useState({ name: "", pbx_domain: "", api_credential: "" });
+  const [p, setP] = useState({ name: "", pbx_domain: "" });
   const [flag, setFlag] = useState("");
   const [err, setErr] = useState<unknown>(null); const [busy, setBusy] = useState(false);
   const run = async (f: () => Promise<unknown>) => { setBusy(true); setErr(null); try { await f(); await qc.invalidateQueries({ queryKey: ["luc"] }); } catch (e) { setErr(e); } finally { setBusy(false); } };
@@ -29,7 +29,7 @@ export function LucTenantAdmin() {
       <PageTitle title="Organization admin" sub="Users, extensions, devices, phone-system connection and audit trail." />
       <ErrorNote error={err} />
       <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Invite user + map extension">
+        <Panel title="Invite user + map extension (preview data only)">
           <form className="grid gap-2" onSubmit={(e) => { e.preventDefault(); void run(() => lucApi.provisionUser({ tenant_id: tenantId!, ...u, pbx_connection_id: u.pbx_connection_id || undefined })).then(() => setU({ ...u, email: "", extension: "", display_name: "" })); }}>
             <input className="luc-input" type="email" placeholder="Email" value={u.email} onChange={(e) => setU({ ...u, email: e.target.value })} required />
             <input className="luc-input" placeholder="Display name" value={u.display_name} onChange={(e) => setU({ ...u, display_name: e.target.value })} maxLength={120} />
@@ -41,13 +41,13 @@ export function LucTenantAdmin() {
             <button className="luc-btn-primary" disabled={busy}>Invite</button>
           </form>
         </Panel>
-        <Panel title="Phone-system connection (FusionPBX)">
-          <form className="mb-3 grid gap-2" onSubmit={(e) => { e.preventDefault(); void run(() => lucApi.createPbx(tenantId!, p.name, p.pbx_domain, p.api_credential || undefined)).then(() => setP({ name: "", pbx_domain: "", api_credential: "" })); }}>
+        <Panel title="Phone-system connection (FusionPBX · simulated)">
+          <form className="mb-3 grid gap-2" onSubmit={(e) => { e.preventDefault(); void run(() => lucApi.createPbx(tenantId!, p.name, p.pbx_domain)).then(() => setP({ name: "", pbx_domain: "" })); }}>
             <div className="grid grid-cols-2 gap-2">
               <input className="luc-input" placeholder="Name" value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} required />
               <input className="luc-input" placeholder="PBX domain" value={p.pbx_domain} onChange={(e) => setP({ ...p, pbx_domain: e.target.value })} required />
             </div>
-            <input className="luc-input" type="password" autoComplete="off" placeholder="Integration credential (stored encrypted, optional)" value={p.api_credential} onChange={(e) => setP({ ...p, api_credential: e.target.value })} />
+            <p className="luc-muted text-xs">Preview only: simulated connection. No credential is entered here; real FusionPBX access stays in the existing Lemtel portal.</p>
             <button className="luc-btn" disabled={busy}>Add connection</button>
           </form>
           {pbx.isLoading ? <Skeleton rows={1} /> : !pbx.data?.length ? <Empty>No connection yet.</Empty> : pbx.data.map((c: any) => (

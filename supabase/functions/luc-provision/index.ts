@@ -1,4 +1,4 @@
-import { admin, corsHeaders, encryptSecret, hasRole, isUuid, json, requireUser, str } from "../_shared/luc.ts";
+import { admin, corsHeaders, hasRole, isUuid, json, requireUser, str } from "../_shared/luc.ts";
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -10,10 +10,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const action = String(b?.action ?? "");
 
   if (action === "bootstrap") {
-    // First signed-in user becomes platform admin, only while none exists.
-    const { count } = await db.from("luc_memberships").select("id", { count: "exact", head: true }).eq("role", "platform_admin");
-    if ((count ?? 0) > 0) return json({ error: "already_bootstrapped" }, 409);
-    await db.from("luc_memberships").insert({ user_id: user.id, tenant_id: null, role: "platform_admin", email: user.email });
+    // Atomic: unique partial index + advisory lock; only one caller can ever succeed.
+    const { data, error } = await db.rpc("luc_bootstrap_platform_admin", { _user_id: user.id, _email: user.email ?? null });
+    if (error) return json({ error: "bootstrap_failed" }, 500);
+    if (data !== true) return json({ error: "already_bootstrapped" }, 409);
     return json({ ok: true });
   }
 
@@ -34,16 +34,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (action === "create_pbx_connection") {
     const name = str(b.name, 120); const domain = str(b.pbx_domain, 200);
     if (!name || !domain) return json({ error: "invalid_input" }, 400);
-    const secret = str(b.api_credential, 500);
+    // Phase 0: mock-only. Credentials are never accepted from a browser.
+    if (b.api_credential !== undefined || b.sip_password !== undefined) return json({ error: "credentials_not_accepted" }, 400);
     const { data, error } = await db.from("luc_pbx_connections").insert({
       tenant_id: tenantId, name, pbx_domain: domain, mode: "mock",
-      credential_ciphertext: secret ? await encryptSecret(secret) : null,
     }).select("id,name,pbx_domain,mode,health").single();
     if (error) return json({ error: "create_failed" }, 400);
     return json({ ok: true, connection: data });
   }
 
   if (action === "provision_user") {
+    if (b.sip_password !== undefined || b.api_credential !== undefined) return json({ error: "credentials_not_accepted" }, 400);
     const email = str(b.email, 200)?.toLowerCase(); const ext = str(b.extension, 20);
     const role = ["end_user", "tenant_support", "tenant_admin"].includes(b.role) ? b.role : "end_user";
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !ext || !/^\d{2,8}$/.test(ext)) return json({ error: "invalid_email_or_extension" }, 400);
@@ -63,11 +64,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return json({ error: "user_create_failed" }, 400);
     }
     await db.from("luc_memberships").upsert({ user_id: uid, tenant_id: tenantId, role, email, display_name: str(b.display_name, 120) }, { onConflict: "user_id,tenant_id,role" });
-    const sip = str(b.sip_password, 200);
     const { error: mapErr } = await db.from("luc_extension_mappings").insert({
       tenant_id: tenantId, user_id: uid, extension: ext, status: "active",
       pbx_connection_id: isUuid(b.pbx_connection_id) ? b.pbx_connection_id : null,
-      sip_credential_ciphertext: sip ? await encryptSecret(sip) : null,
     });
     if (mapErr) {
       await db.from("luc_provisioning_jobs").update({ status: "failed", detail: { extension: ext, reason: mapErr.code === "23505" ? "extension_taken" : "mapping_failed" } }).eq("id", job?.id);

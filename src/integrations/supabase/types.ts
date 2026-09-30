@@ -17953,6 +17953,10 @@ export type Database = {
         }
         Returns: string
       }
+      luc_bootstrap_platform_admin: {
+        Args: { _email: string; _user_id: string }
+        Returns: boolean
+      }
       luc_has_role: {
         Args: {
           _role: Database["public"]["Enums"]["luc_role"]

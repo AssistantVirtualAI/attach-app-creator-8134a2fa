@@ -1,6 +1,9 @@
 // Lemtel UC shared helpers. Isolated from Planipret: touches only luc_* tables.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { LucConfigError, requireSecret, verifyEdgeSignature } from "./luc_secrets.ts";
+
+export { LucConfigError, verifyEdgeSignature };
 
 export { corsHeaders };
 
@@ -29,7 +32,7 @@ export async function hasRole(db: SupabaseClient, uid: string, tenantId: string 
 }
 
 async function key(): Promise<CryptoKey> {
-  const raw = new TextEncoder().encode(Deno.env.get("LUC_CRED_KEY") ?? "");
+  const raw = new TextEncoder().encode(requireSecret("LUC_CRED_KEY", Deno.env.get("LUC_CRED_KEY")));
   const digest = await crypto.subtle.digest("SHA-256", raw);
   return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
@@ -43,10 +46,9 @@ export async function encryptSecret(plain: string): Promise<string> {
   return `v1:${b64(iv)}:${b64(ct)}`;
 }
 
-export async function hmacHex(body: string): Promise<string> {
-  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(Deno.env.get("LUC_EDGE_SECRET") ?? ""), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(body)));
-  return Array.from(sig).map((b) => b.toString(16).padStart(2, "0")).join("");
+/** Safe response for missing configuration — never includes the secret value. */
+export function configError(e: unknown): Response | null {
+  return e instanceof LucConfigError ? json({ error: "service_not_configured", setting: e.setting }, 503) : null;
 }
 
 export const isUuid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v);

@@ -7,6 +7,14 @@ import { lucApi } from "@/components/lemtel-uc/api";
 import { ErrorNote, Panel } from "@/components/lemtel-uc/ui";
 import "@/components/lemtel-uc/lemtel-uc.css";
 
+function PreviewNotice() {
+  return (
+    <div role="note" className="luc-panel mb-4 text-xs" style={{ borderColor: "hsl(var(--luc-warn, 38 92% 50%))" }}>
+      <strong>Non-production preview.</strong> Phone system, Edge and push behavior are simulated. This preview does not replace the published Lemtel apps or portal data, and records created here are preview-only. It uses the existing shared sign-in, not a separate identity system.
+    </div>
+  );
+}
+
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +36,7 @@ function Login() {
       <form onSubmit={submit} className="luc-panel w-full max-w-sm space-y-4">
         <div>
           <div className="luc-logo">Lemtel<span>UC</span></div>
-          <p className="luc-muted text-sm">Sign in with your Lemtel account. Your phone-system password is never needed here.</p>
+          <p className="luc-muted text-sm">Preview — sign in with your existing account (shared sign-in). Your phone-system password is never needed here.</p>
         </div>
         <label className="block text-sm">Email<input className="luc-input mt-1" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label className="block text-sm">Password<input className="luc-input mt-1" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
@@ -48,7 +56,8 @@ function Onboarding() {
   const run = async (f: () => Promise<unknown>) => { setBusy(true); setErr(null); try { await f(); await refresh(); } catch (e) { setErr(e); } finally { setBusy(false); } };
   return (
     <div className="mx-auto max-w-lg p-6">
-      <Panel title="Welcome to Lemtel UC">
+      <PreviewNotice />
+      <Panel title="Welcome to Lemtel UC (preview)">
         {!isPlatformAdmin ? (
           <div className="space-y-3 text-sm">
             <p className="luc-muted">Your account is not linked to any organization yet. Ask your administrator to invite you.</p>
@@ -103,7 +112,7 @@ function Shell() {
           <button className="luc-nav" onClick={async () => { await supabase.auth.signOut(); nav("/lemtel-uc"); }}><LogOut size={16} /> <span>Sign out</span></button>
         </nav>
       </aside>
-      <main className="flex-1 overflow-y-auto p-4 md:p-8"><Outlet /></main>
+      <main className="flex-1 overflow-y-auto p-4 md:p-8"><PreviewNotice /><Outlet /></main>
     </div>
   );
 }

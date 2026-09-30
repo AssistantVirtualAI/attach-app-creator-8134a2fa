@@ -1,4 +1,4 @@
-import { admin, corsHeaders, hmacHex, isUuid, json } from "../_shared/luc.ts";
+import { admin, configError, corsHeaders, isUuid, json, verifyEdgeSignature } from "../_shared/luc.ts";
 
 // Contract endpoint for the separate Lemtel Edge SIP proxy (Kamailio/OpenSIPS).
 // Requests must carry x-luc-signature = hex(HMAC-SHA256(LUC_EDGE_SECRET, body)).
@@ -7,8 +7,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   const raw = await req.text();
-  const sig = req.headers.get("x-luc-signature") ?? "";
-  if (!sig || sig !== (await hmacHex(raw))) return json({ error: "invalid_signature" }, 401);
+  let ok = false;
+  try { ok = await verifyEdgeSignature(Deno.env.get("LUC_EDGE_SECRET"), raw, req.headers.get("x-luc-signature")); }
+  catch (e) { return configError(e) ?? json({ error: "internal_error" }, 500); }
+  if (!ok) return json({ error: "invalid_signature" }, 401);
   let b: any;
   try { b = JSON.parse(raw); } catch { return json({ error: "bad_json" }, 400); }
   if (!isUuid(b?.tenant_id)) return json({ error: "tenant_id_required" }, 400);

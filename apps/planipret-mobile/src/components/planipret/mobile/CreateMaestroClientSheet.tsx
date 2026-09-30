@@ -4,7 +4,7 @@ import { X, UserPlus, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { invalidateCallerClient, resolveCallerClient } from "@/lib/planipret/callerClient";
-import { hasRequiredMaestroClientFields } from "@/lib/planipret/maestroClientDraft";
+import { formatMaestroPhone, hasRequiredMaestroClientFields, maestroPhoneDigits } from "@/lib/planipret/maestroClientDraft";
 import AddressAutocomplete, { splitRoute } from "./AddressAutocomplete";
 
 /** Codes numériques des listes Maestro (salutation, type de rue). */
@@ -54,7 +54,7 @@ export default function CreateMaestroClientSheet({
     setFirst(parts[0] ?? "");
     setLast(parts.slice(1).join(" "));
     setEmail("");
-    setPhone(target.phone ?? "");
+    setPhone(formatMaestroPhone(target.phone ?? ""));
     setSalutation(""); setSex(""); setLanguage("fr");
     setStreetNumber(""); setStreetName(""); setStreetType(""); setApartment("");
     setCity(""); setRegion("QC"); setZip("");
@@ -114,7 +114,7 @@ export default function CreateMaestroClientSheet({
             zip: zip.trim().toUpperCase().replace(/\s/g, ""),
           },
           email: email.trim() || undefined,
-          phone: phone.trim(),
+          phone: maestroPhoneDigits(phone),
           call_id: target.callId ?? undefined,
         },
       });
@@ -211,7 +211,7 @@ export default function CreateMaestroClientSheet({
         </div>
         {zip.trim() && !zipOk && <p className="text-[11px]" style={{ color: "var(--pp-danger)" }}>Code postal invalide (ex. H2X 1Y4)</p>}
         {!emailOk && <p className="text-[11px]" style={{ color: "var(--pp-danger)" }}>Courriel invalide</p>}
-        <input className={field} style={fieldStyle} placeholder="Téléphone *" inputMode="tel" value={phone} maxLength={30} onChange={(e) => setPhone(e.target.value)} />
+        <input className={field} style={fieldStyle} placeholder="Téléphone * — (514) 555-1234" inputMode="tel" value={phone} maxLength={14} onChange={(e) => setPhone(formatMaestroPhone(e.target.value))} />
         {webUrl && (
           <a href={webUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold"
             style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-brand-accent)" }}>

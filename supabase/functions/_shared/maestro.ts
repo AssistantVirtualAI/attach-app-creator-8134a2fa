@@ -468,10 +468,12 @@ export async function maestroAudit(
   payload: Record<string, unknown>,
 ) {
   try {
-    await admin.from("planipret_audit_log").insert({
+    const { error } = await admin.from("planipret_audit_log").insert({
       action: `maestro_${action}`,
-      payload,
+      resource_type: "maestro",
+      metadata: payload,
     });
+    if (error) console.warn("maestroAudit insert error", action, error.message);
   } catch (e) {
     console.warn("maestroAudit failed", action, e);
   }

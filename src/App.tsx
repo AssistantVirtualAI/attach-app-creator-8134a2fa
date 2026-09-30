@@ -70,6 +70,15 @@ const MStyleDiagnosticsWeb = lazyWithRetry(() => import("./pages/MStyleDiagnosti
 const I18nDiagnostics = lazyWithRetry(() => import("./pages/I18nDiagnostics"));
 const TaskTargetsDiagnostics = lazyWithRetry(() => import("./pages/planipret/TaskTargetsDiagnostics"));
 const SoftphoneSetup = lazyWithRetry(() => import("./pages/lemtel/SoftphoneSetup"));
+const LucApp = lazyWithRetry(() => import("./pages/lemtel-uc/LucApp"));
+const LucDashboard = lazyWithRetry(() => import("./pages/lemtel-uc/LucUserPages").then((m) => ({ default: m.LucDashboard })));
+const LucCalls = lazyWithRetry(() => import("./pages/lemtel-uc/LucUserPages").then((m) => ({ default: m.LucCalls })));
+const LucContacts = lazyWithRetry(() => import("./pages/lemtel-uc/LucUserPages").then((m) => ({ default: m.LucContacts })));
+const LucMessages = lazyWithRetry(() => import("./pages/lemtel-uc/LucUserPages").then((m) => ({ default: m.LucMessages })));
+const LucVoicemail = lazyWithRetry(() => import("./pages/lemtel-uc/LucUserPages").then((m) => ({ default: m.LucVoicemail })));
+const LucSettings = lazyWithRetry(() => import("./pages/lemtel-uc/LucUserPages").then((m) => ({ default: m.LucSettings })));
+const LucTenantAdmin = lazyWithRetry(() => import("./pages/lemtel-uc/LucAdminPages").then((m) => ({ default: m.LucTenantAdmin })));
+const LucPlatform = lazyWithRetry(() => import("./pages/lemtel-uc/LucAdminPages").then((m) => ({ default: m.LucPlatform })));
 // Lazy-load admin pages (each is its own chunk)
 const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin/PlanipretAdminLayout"));
 const PAOverview = lazyWithRetry(() => import("./pages/planipret/admin/PAOverview"));
@@ -638,6 +647,17 @@ const App = () => (
                 <Route path="/planipret/mobile/*" element={<Navigate to={ROUTES.MPLANIPRET} replace />} />
                 <Route path="/lemtel/setup/:token" element={<SoftphoneSetup />} />
                 <Route path="/lemtel/redeem/:token" element={<SoftphoneSetup />} />
+                {/* Lemtel UC — isolated product area (luc_* data only) */}
+                <Route path="/lemtel-uc" element={<Suspense fallback={null}><LucApp /></Suspense>}>
+                  <Route index element={<LucDashboard />} />
+                  <Route path="calls" element={<LucCalls />} />
+                  <Route path="contacts" element={<LucContacts />} />
+                  <Route path="messages" element={<LucMessages />} />
+                  <Route path="voicemail" element={<LucVoicemail />} />
+                  <Route path="settings" element={<LucSettings />} />
+                  <Route path="admin" element={<LucTenantAdmin />} />
+                  <Route path="platform" element={<LucPlatform />} />
+                </Route>
                 <Route path={ROUTES.MPLANIPRET} element={<MplanipretGuard><PlanipretMobile /></MplanipretGuard>}>
                   <Route index element={<Suspense fallback={<MobilePageSkeleton />}><MHome /></Suspense>} />
                   <Route path="home" element={<Suspense fallback={<MobilePageSkeleton />}><MHome /></Suspense>} />

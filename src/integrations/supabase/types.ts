@@ -3133,6 +3133,647 @@ export type Database = {
           },
         ]
       }
+      luc_audit_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: string
+          tenant_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      luc_call_events: {
+        Row: {
+          direction: string
+          duration_seconds: number
+          id: string
+          remote_number: string | null
+          source: string
+          started_at: string
+          status: string
+          tenant_id: string
+          user_id: string | null
+        }
+        Insert: {
+          direction: string
+          duration_seconds?: number
+          id?: string
+          remote_number?: string | null
+          source?: string
+          started_at?: string
+          status: string
+          tenant_id: string
+          user_id?: string | null
+        }
+        Update: {
+          direction?: string
+          duration_seconds?: number
+          id?: string
+          remote_number?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          tenant_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_call_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_contacts: {
+        Row: {
+          created_at: string
+          email: string | null
+          favorite: boolean
+          id: string
+          name: string
+          number: string | null
+          owner_id: string
+          speed_dial: number | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          favorite?: boolean
+          id?: string
+          name: string
+          number?: string | null
+          owner_id: string
+          speed_dial?: number | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          favorite?: boolean
+          id?: string
+          name?: string
+          number?: string | null
+          owner_id?: string
+          speed_dial?: number | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_contacts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_conversation_members: {
+        Row: {
+          conversation_id: string
+          last_read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          last_read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          last_read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_conversation_members_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "luc_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_conversations: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          kind: string
+          tenant_id: string
+          title: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          kind?: string
+          tenant_id: string
+          title?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: string
+          tenant_id?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_conversations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_devices: {
+        Row: {
+          created_at: string
+          credential_expires_at: string | null
+          credential_status: string
+          id: string
+          label: string
+          last_seen_at: string | null
+          platform: string
+          revoked_at: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credential_expires_at?: string | null
+          credential_status?: string
+          id?: string
+          label: string
+          last_seen_at?: string | null
+          platform?: string
+          revoked_at?: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credential_expires_at?: string | null
+          credential_status?: string
+          id?: string
+          label?: string
+          last_seen_at?: string | null
+          platform?: string
+          revoked_at?: string | null
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_extension_mappings: {
+        Row: {
+          created_at: string
+          extension: string
+          id: string
+          pbx_connection_id: string | null
+          sip_credential_ciphertext: string | null
+          status: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          extension: string
+          id?: string
+          pbx_connection_id?: string | null
+          sip_credential_ciphertext?: string | null
+          status?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          extension?: string
+          id?: string
+          pbx_connection_id?: string | null
+          sip_credential_ciphertext?: string | null
+          status?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_extension_mappings_pbx_connection_id_fkey"
+            columns: ["pbx_connection_id"]
+            isOneToOne: false
+            referencedRelation: "luc_pbx_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "luc_extension_mappings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_feature_flags: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          key: string
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          key: string
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          key?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_feature_flags_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_memberships: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          role: Database["public"]["Enums"]["luc_role"]
+          tenant_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["luc_role"]
+          tenant_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["luc_role"]
+          tenant_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_memberships_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_messages: {
+        Row: {
+          attachment: Json | null
+          body: string
+          conversation_id: string
+          created_at: string
+          id: string
+          sender_id: string
+          tenant_id: string
+        }
+        Insert: {
+          attachment?: Json | null
+          body: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          sender_id: string
+          tenant_id: string
+        }
+        Update: {
+          attachment?: Json | null
+          body?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          sender_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "luc_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "luc_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_pbx_connections: {
+        Row: {
+          created_at: string
+          credential_ciphertext: string | null
+          health: string
+          id: string
+          last_checked_at: string | null
+          mode: string
+          name: string
+          pbx_domain: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          credential_ciphertext?: string | null
+          health?: string
+          id?: string
+          last_checked_at?: string | null
+          mode?: string
+          name: string
+          pbx_domain: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          credential_ciphertext?: string | null
+          health?: string
+          id?: string
+          last_checked_at?: string | null
+          mode?: string
+          name?: string
+          pbx_domain?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_pbx_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_provisioning_jobs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detail: Json
+          id: string
+          kind: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detail?: Json
+          id?: string
+          kind: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detail?: Json
+          id?: string
+          kind?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_provisioning_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_push_registrations: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          provider: string
+          tenant_id: string
+          token_ciphertext: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          provider: string
+          tenant_id: string
+          token_ciphertext: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          provider?: string
+          tenant_id?: string
+          token_ciphertext?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_push_registrations_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "luc_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "luc_push_registrations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_recordings: {
+        Row: {
+          ai_status: string
+          call_event_id: string | null
+          created_at: string
+          id: string
+          policy_allows_playback: boolean
+          retention_until: string | null
+          tenant_id: string
+          user_id: string | null
+        }
+        Insert: {
+          ai_status?: string
+          call_event_id?: string | null
+          created_at?: string
+          id?: string
+          policy_allows_playback?: boolean
+          retention_until?: string | null
+          tenant_id: string
+          user_id?: string | null
+        }
+        Update: {
+          ai_status?: string
+          call_event_id?: string | null
+          created_at?: string
+          id?: string
+          policy_allows_playback?: boolean
+          retention_until?: string | null
+          tenant_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_recordings_call_event_id_fkey"
+            columns: ["call_event_id"]
+            isOneToOne: false
+            referencedRelation: "luc_call_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "luc_recordings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      luc_tenants: {
+        Row: {
+          branding: Json
+          created_at: string
+          id: string
+          name: string
+          seat_limit: number
+          slug: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          branding?: Json
+          created_at?: string
+          id?: string
+          name: string
+          seat_limit?: number
+          slug: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          branding?: Json
+          created_at?: string
+          id?: string
+          name?: string
+          seat_limit?: number
+          slug?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      luc_voicemails: {
+        Row: {
+          caller: string | null
+          created_at: string
+          duration_seconds: number
+          id: string
+          read: boolean
+          retention_until: string | null
+          tenant_id: string
+          transcription_status: string
+          user_id: string
+        }
+        Insert: {
+          caller?: string | null
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          read?: boolean
+          retention_until?: string | null
+          tenant_id: string
+          transcription_status?: string
+          user_id: string
+        }
+        Update: {
+          caller?: string | null
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          read?: boolean
+          retention_until?: string | null
+          tenant_id?: string
+          transcription_status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luc_voicemails_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "luc_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mascot_messages: {
         Row: {
           created_at: string
@@ -17312,6 +17953,27 @@ export type Database = {
         }
         Returns: string
       }
+      luc_has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["luc_role"]
+          _tenant: string
+          _uid: string
+        }
+        Returns: boolean
+      }
+      luc_in_conversation: {
+        Args: { _c: string; _uid: string }
+        Returns: boolean
+      }
+      luc_is_member: {
+        Args: { _tenant: string; _uid: string }
+        Returns: boolean
+      }
+      luc_is_platform_admin: { Args: { _uid: string }; Returns: boolean }
+      luc_is_staff: {
+        Args: { _tenant: string; _uid: string }
+        Returns: boolean
+      }
       mark_channel_read: { Args: { _channel_id: string }; Returns: undefined }
       mark_messages_read: {
         Args: { _channel_id: string; _up_to?: string }
@@ -17453,6 +18115,11 @@ export type Database = {
         | "viewer"
         | "planipret_admin"
         | "planipret_broker"
+      luc_role:
+        | "platform_admin"
+        | "tenant_admin"
+        | "tenant_support"
+        | "end_user"
       porting_status:
         | "submitted"
         | "in_review"
@@ -17607,6 +18274,12 @@ export const Constants = {
         "viewer",
         "planipret_admin",
         "planipret_broker",
+      ],
+      luc_role: [
+        "platform_admin",
+        "tenant_admin",
+        "tenant_support",
+        "end_user",
       ],
       porting_status: [
         "submitted",

@@ -1,0 +1,14 @@
+# Lemtel UC local dev dependencies only. No production secrets.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${LUC_DEV_DB_PASSWORD:-change-me-local}
+    ports: ["5432:5432"]
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+  minio:
+    image: minio/minio
+    command: server /data
+    ports: ["9000:9000"]

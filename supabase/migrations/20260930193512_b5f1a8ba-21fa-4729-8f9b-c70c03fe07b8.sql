@@ -1,0 +1,3 @@
+REVOKE EXECUTE ON FUNCTION public.luc_is_platform_admin(uuid), public.luc_is_member(uuid,uuid), public.luc_has_role(uuid,uuid,public.luc_role), public.luc_is_staff(uuid,uuid), public.luc_in_conversation(uuid,uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.luc_is_platform_admin(uuid), public.luc_is_member(uuid,uuid), public.luc_has_role(uuid,uuid,public.luc_role), public.luc_is_staff(uuid,uuid), public.luc_in_conversation(uuid,uuid) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.luc_audit() FROM PUBLIC, anon, authenticated;

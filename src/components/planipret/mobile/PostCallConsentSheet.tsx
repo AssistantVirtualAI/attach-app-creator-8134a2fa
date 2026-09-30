@@ -147,6 +147,7 @@ export default function PostCallConsentSheet() {
   }, [loadEndedCall]);
 
   const clientNumber = useMemo(() => (call ? clientNumberOf(call) : ""), [call]);
+  const [failed, setFailed] = useState(false);
   const clientName = useMemo(() => (call ? clientNameOf(call) : ""), [call]);
 
   useEffect(() => {
@@ -198,6 +199,7 @@ export default function PostCallConsentSheet() {
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Action impossible — rien n'a été envoyé.");
+      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -265,6 +267,11 @@ export default function PostCallConsentSheet() {
               <Button disabled={busy} variant="destructive" className="h-12 w-full gap-2" onClick={() => consent("delete")}>
                 <Trash2 size={18} /> Supprimer l'appel
               </Button>
+              {failed && (
+                <Button disabled={busy} variant="ghost" className="h-10 w-full" onClick={() => { setFailed(false); close(false); }}>
+                  Décider plus tard (connexion indisponible)
+                </Button>
+              )}
             </div>
           </>
         )}

@@ -427,11 +427,16 @@ async function processEvent(event: any) {
       };
       let localCallId: string | null = null;
       if (existing?.id) {
-        const { data: updated, error: updateError } = await admin.from("planipret_phone_calls")
+        let { data: updated, error: updateError } = await admin.from("planipret_phone_calls")
           .update(callPatch)
           .eq("id", existing.id)
           .select("id")
           .maybeSingle();
+        if (updateError?.code === "23505") {
+          const { ns_call_id: _a, ns_cdr_id: _b, ns_callid: _c, ...safePatch } = callPatch as any;
+          ({ data: updated, error: updateError } = await admin.from("planipret_phone_calls")
+            .update(safePatch).eq("id", existing.id).select("id").maybeSingle());
+        }
         if (updateError) {
           console.error("[ns-webhook] CDR reconciliation update failed", { call_id: existing.id, code: updateError.code, message: updateError.message });
         } else {

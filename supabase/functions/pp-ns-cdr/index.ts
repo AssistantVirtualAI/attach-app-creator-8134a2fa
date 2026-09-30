@@ -421,12 +421,23 @@ Deno.serve(async (req) => {
             cdr_identities: identities,
           },
         };
-        const { data: updated, error: updateError } = await supabase
+        let { data: updated, error: updateError } = await supabase
           .from("planipret_phone_calls")
           .update(patch)
           .eq("id", existing.id)
           .select("id,save_consent")
           .maybeSingle();
+        if (updateError?.code === "23505") {
+          // Another row already owns this CDR identity: merge details into the
+          // live row while keeping its own unique identifiers.
+          const { ns_call_id: _a, ns_cdr_id: _b, ns_callid: _c, ...safePatch } = patch as any;
+          ({ data: updated, error: updateError } = await supabase
+            .from("planipret_phone_calls")
+            .update(safePatch)
+            .eq("id", existing.id)
+            .select("id,save_consent")
+            .maybeSingle());
+        }
         if (updateError) {
           console.warn("[pp-ns-cdr] CDR reconciliation update failed", { call_id: existing.id, code: updateError.code });
           continue;

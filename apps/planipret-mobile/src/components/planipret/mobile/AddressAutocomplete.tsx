@@ -30,14 +30,15 @@ export default function AddressAutocomplete({ onSelect, className, style }: {
 
   useEffect(() => {
     if (skip.current) { skip.current = false; return; }
-    if (q.trim().length < 3 || off) { setItems([]); return; }
+    if (q.trim().length < 3) { setItems([]); setOff(false); return; }
     const id = setTimeout(async () => {
-      const { data } = await supabase.functions.invoke("pp-address-autocomplete", { body: { input: q } });
-      if (data?.error === "not_configured") { setOff(true); return; }
+      const { data, error } = await supabase.functions.invoke("pp-address-autocomplete", { body: { input: q } });
+      if (error || data?.error) { setOff(true); setItems([]); return; }
+      setOff(false);
       setItems(data?.suggestions ?? []);
     }, 300);
     return () => clearTimeout(id);
-  }, [q, off]);
+  }, [q]);
 
   const pick = async (s: { placeId: string; text: string }) => {
     skip.current = true;
@@ -46,7 +47,6 @@ export default function AddressAutocomplete({ onSelect, className, style }: {
     if (data && !data.error) onSelect(data as ParsedAddress);
   };
 
-  if (off) return null;
   return (
     <div className="relative">
       <div className="relative">
@@ -54,6 +54,7 @@ export default function AddressAutocomplete({ onSelect, className, style }: {
         <input className={className} style={{ ...style, paddingLeft: 34 }} placeholder="Rechercher l'adresse (Google)"
           value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" />
       </div>
+      {off && <p className="text-xs mt-1" style={{ color: "var(--pp-text-secondary)" }}>Recherche Google indisponible — remplissez l'adresse manuellement.</p>}
       {items.length > 0 && (
         <div className="absolute left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-xl z-10"
           style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)" }}>

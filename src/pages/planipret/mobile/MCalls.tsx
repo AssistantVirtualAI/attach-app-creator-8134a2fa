@@ -1217,6 +1217,7 @@ function CallDetailSheet({
   const [txLoading, setTxLoading] = useState(false);
   const [txPreparing, setTxPreparing] = useState(false);
   const [txAttempt, setTxAttempt] = useState(0);
+  const [txReason, setTxReason] = useState<{ message?: string | null; hint?: string | null } | null>(null);
   const txRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (txRetryTimerRef.current) clearTimeout(txRetryTimerRef.current); }, []);
   const [aiLoading, setAiLoading] = useState(false);
@@ -1375,8 +1376,9 @@ function CallDetailSheet({
 
     // Give up — show real error
     setTxLoading(false); setTxPreparing(false); setTxAttempt(0);
-    const msg = res.error ?? error?.message ?? t("calls.transcriptUnavailable");
+    const msg = res.message ?? res.error ?? error?.message ?? t("calls.transcriptUnavailable");
     const hint = res.hint ?? res.action_required ?? "";
+    setTxReason({ message: msg, hint });
     toast.error(hint ? `${msg} — ${hint}` : msg);
   };
 

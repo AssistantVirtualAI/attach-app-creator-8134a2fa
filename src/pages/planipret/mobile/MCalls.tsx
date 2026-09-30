@@ -975,10 +975,10 @@ function TranscriptView({
       <div className="pp-card p-4 space-y-3">
 
         <div className="text-xs" style={{ color: "var(--pp-warning, #F5A623)" }}>
-          ⚠️ {t("calls.transcriptUnavailable") || "Transcription non disponible."}
+          ⚠️ {unavailableReason || t("calls.transcriptUnavailable") || "Transcription non disponible."}
         </div>
         <div className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
-          Vérifiez que <code>PORTAL_VOICE_TRANSCRIPTION_SENTIMENT = yes</code> est activé pour votre domaine dans NetSapiens.
+          {unavailableHint || "La transcription apparaît quelques minutes après la fin de l'appel."}
         </div>
         <button onClick={() => onFetch()} className="w-full py-2 rounded-lg text-xs font-semibold"
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}>

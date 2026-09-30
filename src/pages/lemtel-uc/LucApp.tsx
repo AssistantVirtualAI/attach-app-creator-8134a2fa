@@ -1,0 +1,117 @@
+import { useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Building2, Contact, Gauge, LogOut, MessageSquare, Phone, Settings, Shield, Voicemail } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { LucProvider, useLuc } from "@/components/lemtel-uc/LucContext";
+import { lucApi } from "@/components/lemtel-uc/api";
+import { ErrorNote, Panel } from "@/components/lemtel-uc/ui";
+import "@/components/lemtel-uc/lemtel-uc.css";
+
+function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<unknown>(null);
+  const [note, setNote] = useState("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true); setErr(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setErr(error); setBusy(false);
+  };
+  const reset = async () => {
+    if (!email) return setErr(new Error("Enter your email first."));
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+    if (error) setErr(error); else setNote("Check your email for a reset link.");
+  };
+  return (
+    <div className="grid min-h-screen place-items-center p-4">
+      <form onSubmit={submit} className="luc-panel w-full max-w-sm space-y-4">
+        <div>
+          <div className="luc-logo">Lemtel<span>UC</span></div>
+          <p className="luc-muted text-sm">Sign in with your Lemtel account. Your phone-system password is never needed here.</p>
+        </div>
+        <label className="block text-sm">Email<input className="luc-input mt-1" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+        <label className="block text-sm">Password<input className="luc-input mt-1" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
+        <ErrorNote error={err} />
+        {note && <p className="text-sm luc-ok">{note}</p>}
+        <button className="luc-btn-primary w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+        <button type="button" className="luc-link text-sm" onClick={reset}>Forgot password?</button>
+      </form>
+    </div>
+  );
+}
+
+function Onboarding() {
+  const { isPlatformAdmin, refresh } = useLuc();
+  const [name, setName] = useState(""); const [slug, setSlug] = useState("");
+  const [err, setErr] = useState<unknown>(null); const [busy, setBusy] = useState(false);
+  const run = async (f: () => Promise<unknown>) => { setBusy(true); setErr(null); try { await f(); await refresh(); } catch (e) { setErr(e); } finally { setBusy(false); } };
+  return (
+    <div className="mx-auto max-w-lg p-6">
+      <Panel title="Welcome to Lemtel UC">
+        {!isPlatformAdmin ? (
+          <div className="space-y-3 text-sm">
+            <p className="luc-muted">Your account is not linked to any organization yet. Ask your administrator to invite you.</p>
+            <p className="luc-muted">Setting up Lemtel UC for the first time? Claim platform administration (only works while no administrator exists).</p>
+            <button className="luc-btn" disabled={busy} onClick={() => run(lucApi.bootstrap)}>Become platform administrator</button>
+          </div>
+        ) : (
+          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void run(() => lucApi.createTenant(name, slug)); }}>
+            <p className="luc-muted text-sm">Create your first organization (tenant).</p>
+            <input className="luc-input" placeholder="Organization name" value={name} onChange={(e) => { setName(e.target.value); setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")); }} required />
+            <input className="luc-input" placeholder="short-id" value={slug} onChange={(e) => setSlug(e.target.value)} required />
+            <button className="luc-btn-primary" disabled={busy}>Create organization</button>
+          </form>
+        )}
+        <ErrorNote error={err} />
+      </Panel>
+    </div>
+  );
+}
+
+function Shell() {
+  const { session, loading, tenants, tenantId, setTenantId, isTenantAdmin, isPlatformAdmin } = useLuc();
+  const nav = useNavigate();
+  if (loading) return <div className="grid min-h-screen place-items-center luc-muted">Loading…</div>;
+  if (!session) return <Login />;
+  if (!tenantId) return <Onboarding />;
+  const links = [
+    { to: "/lemtel-uc", icon: Gauge, label: "Dashboard", end: true },
+    { to: "/lemtel-uc/calls", icon: Phone, label: "Calls" },
+    { to: "/lemtel-uc/contacts", icon: Contact, label: "Contacts" },
+    { to: "/lemtel-uc/messages", icon: MessageSquare, label: "Messages" },
+    { to: "/lemtel-uc/voicemail", icon: Voicemail, label: "Voicemail" },
+    { to: "/lemtel-uc/settings", icon: Settings, label: "Settings" },
+    ...(isTenantAdmin ? [{ to: "/lemtel-uc/admin", icon: Shield, label: "Admin" }] : []),
+    ...(isPlatformAdmin ? [{ to: "/lemtel-uc/platform", icon: Building2, label: "Platform" }] : []),
+  ];
+  return (
+    <div className="flex min-h-screen flex-col md:flex-row">
+      <aside className="luc-side md:w-56">
+        <div className="luc-logo px-3 py-4">Lemtel<span>UC</span></div>
+        {tenants.length > 1 && (
+          <select aria-label="Organization" className="luc-input mx-3 mb-3 w-[calc(100%-1.5rem)]" value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
+            {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        )}
+        <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:overflow-visible">
+          {links.map((l) => (
+            <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => `luc-nav ${isActive ? "luc-nav-active" : ""}`}>
+              <l.icon size={16} /> <span>{l.label}</span>
+            </NavLink>
+          ))}
+          <button className="luc-nav" onClick={async () => { await supabase.auth.signOut(); nav("/lemtel-uc"); }}><LogOut size={16} /> <span>Sign out</span></button>
+        </nav>
+      </aside>
+      <main className="flex-1 overflow-y-auto p-4 md:p-8"><Outlet /></main>
+    </div>
+  );
+}
+
+export default function LucApp() {
+  return (
+    <div className="lemtel-uc-scope">
+      <LucProvider><Shell /></LucProvider>
+    </div>
+  );
+}

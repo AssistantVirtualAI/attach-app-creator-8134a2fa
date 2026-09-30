@@ -1,0 +1,57 @@
+/* Lemtel UC — own visual system, scoped so it never leaks into Planiprêt/AVA. */
+.lemtel-uc-scope {
+  --luc-bg: 222 30% 7%;
+  --luc-surface: 222 26% 11%;
+  --luc-border: 220 18% 20%;
+  --luc-text: 210 30% 95%;
+  --luc-muted: 215 15% 65%;
+  --luc-accent: 162 78% 45%;
+  --luc-accent-fg: 222 30% 7%;
+  --luc-warn: 38 92% 55%;
+  --luc-bad: 0 80% 62%;
+  min-height: 100vh;
+  background: hsl(var(--luc-bg));
+  color: hsl(var(--luc-text));
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  .lemtel-uc-scope {
+    --luc-bg: 40 20% 97%;
+    --luc-surface: 0 0% 100%;
+    --luc-border: 30 10% 86%;
+    --luc-text: 222 30% 12%;
+    --luc-muted: 220 10% 40%;
+    --luc-accent: 162 80% 30%;
+    --luc-accent-fg: 0 0% 100%;
+  }
+}
+.lemtel-uc-scope .luc-logo { font-weight: 800; font-size: 1.25rem; letter-spacing: -0.02em; }
+.lemtel-uc-scope .luc-logo span { color: hsl(var(--luc-accent)); margin-left: 2px; }
+.lemtel-uc-scope .luc-muted { color: hsl(var(--luc-muted)); }
+.lemtel-uc-scope .luc-ok { color: hsl(var(--luc-accent)); }
+.lemtel-uc-scope .luc-error { color: hsl(var(--luc-bad)); }
+.lemtel-uc-scope .luc-panel { background: hsl(var(--luc-surface)); border: 1px solid hsl(var(--luc-border)); border-radius: 14px; padding: 1.25rem; }
+.lemtel-uc-scope .luc-side { background: hsl(var(--luc-surface)); border-right: 1px solid hsl(var(--luc-border)); }
+.lemtel-uc-scope .luc-nav { display: flex; align-items: center; gap: .6rem; padding: .55rem .75rem; border-radius: 10px; font-size: .875rem; color: hsl(var(--luc-muted)); white-space: nowrap; }
+.lemtel-uc-scope .luc-nav:hover { color: hsl(var(--luc-text)); background: hsl(var(--luc-border) / .5); }
+.lemtel-uc-scope .luc-nav-active { color: hsl(var(--luc-text)); background: hsl(var(--luc-accent) / .15); box-shadow: inset 3px 0 0 hsl(var(--luc-accent)); }
+.lemtel-uc-scope .luc-input { width: 100%; background: hsl(var(--luc-bg)); border: 1px solid hsl(var(--luc-border)); color: hsl(var(--luc-text)); border-radius: 10px; padding: .55rem .75rem; font-size: .875rem; }
+.lemtel-uc-scope .luc-input:focus-visible, .lemtel-uc-scope button:focus-visible, .lemtel-uc-scope a:focus-visible { outline: 2px solid hsl(var(--luc-accent)); outline-offset: 2px; }
+.lemtel-uc-scope .luc-btn, .lemtel-uc-scope .luc-btn-primary { border-radius: 10px; padding: .5rem .9rem; font-size: .875rem; font-weight: 600; border: 1px solid hsl(var(--luc-border)); }
+.lemtel-uc-scope .luc-btn:hover { background: hsl(var(--luc-border) / .6); }
+.lemtel-uc-scope .luc-btn-primary { background: hsl(var(--luc-accent)); color: hsl(var(--luc-accent-fg)); border-color: transparent; }
+.lemtel-uc-scope .luc-btn-primary:hover { filter: brightness(1.08); }
+.lemtel-uc-scope button:disabled { opacity: .55; cursor: not-allowed; }
+.lemtel-uc-scope .luc-link { color: hsl(var(--luc-accent)); text-decoration: underline; }
+.lemtel-uc-scope .luc-skel { border-radius: 8px; background: linear-gradient(90deg, hsl(var(--luc-border) / .4), hsl(var(--luc-border) / .8), hsl(var(--luc-border) / .4)); background-size: 200% 100%; animation: luc-sh 1.2s infinite; }
+@keyframes luc-sh { to { background-position: -200% 0; } }
+.lemtel-uc-scope .luc-badge { display: inline-block; font-size: .7rem; font-weight: 700; padding: .15rem .5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.lemtel-uc-scope .luc-badge-ok { background: hsl(var(--luc-accent) / .18); color: hsl(var(--luc-accent)); }
+.lemtel-uc-scope .luc-badge-warn { background: hsl(var(--luc-warn) / .18); color: hsl(var(--luc-warn)); }
+.lemtel-uc-scope .luc-badge-bad { background: hsl(var(--luc-bad) / .18); color: hsl(var(--luc-bad)); }
+.lemtel-uc-scope .luc-badge-neutral { background: hsl(var(--luc-border)); color: hsl(var(--luc-muted)); }
+.lemtel-uc-scope .luc-table { width: 100%; font-size: .85rem; }
+.lemtel-uc-scope .luc-table th { text-align: left; color: hsl(var(--luc-muted)); font-weight: 500; padding: .4rem .5rem; border-bottom: 1px solid hsl(var(--luc-border)); }
+.lemtel-uc-scope .luc-table td { padding: .5rem; border-bottom: 1px solid hsl(var(--luc-border) / .5); }
+.lemtel-uc-scope .luc-key { height: 3.2rem; border-radius: 12px; font-size: 1.2rem; font-weight: 600; background: hsl(var(--luc-bg)); border: 1px solid hsl(var(--luc-border)); }
+.lemtel-uc-scope .luc-key:hover { border-color: hsl(var(--luc-accent)); }

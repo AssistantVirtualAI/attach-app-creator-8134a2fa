@@ -1471,6 +1471,81 @@ All colors MUST be HSL.
   .planipret-admin-scope .pa-skel { animation: none; }
 }
 
+/* Marketing courtier — contraste stable dans les thèmes clair et sombre. */
+.planipret-admin-scope .pp-marketing {
+  color: var(--pp-text-primary);
+}
+.planipret-admin-scope .pp-marketing-panel {
+  border: 1px solid var(--pp-bg-border);
+  border-radius: 12px;
+  background: var(--pp-bg-card, var(--pp-bg-surface));
+  color: var(--pp-text-primary);
+  box-shadow: var(--pp-shadow-sm);
+}
+.planipret-admin-scope .pp-marketing-label,
+.planipret-admin-scope .pp-marketing-channels,
+.planipret-admin-scope .pp-marketing-history {
+  color: var(--pp-text-primary);
+}
+.planipret-admin-scope .pp-marketing-help,
+.planipret-admin-scope .pp-marketing .text-muted-foreground {
+  color: var(--pp-text-secondary) !important;
+}
+.planipret-admin-scope .pp-marketing-field {
+  background: var(--pp-bg-deep, var(--pp-bg-surface)) !important;
+  border-color: var(--pp-bg-border) !important;
+  color: var(--pp-text-primary) !important;
+  caret-color: var(--pp-brand-accent);
+}
+.planipret-admin-scope .pp-marketing-field::placeholder {
+  color: var(--pp-text-muted);
+  opacity: 1;
+}
+.planipret-admin-scope .pp-marketing-field:focus {
+  outline: 2px solid var(--pp-brand-accent-2);
+  outline-offset: 2px;
+}
+.planipret-admin-scope .pp-marketing-channels label {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--pp-bg-border);
+  border-radius: 10px;
+  background: var(--pp-bg-elevated, var(--pp-bg-surface));
+  cursor: pointer;
+}
+.planipret-admin-scope .pp-marketing-channels input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--pp-brand-accent-2);
+}
+.planipret-admin-scope .pp-marketing-step {
+  border-color: var(--pp-bg-border);
+  background: var(--pp-bg-surface);
+  color: var(--pp-text-secondary);
+}
+.planipret-admin-scope .pp-marketing-step-active {
+  border-color: var(--pp-brand-accent-2);
+  background: var(--pp-brand-accent-2);
+  color: #fff;
+}
+.planipret-admin-scope .pp-marketing select,
+.planipret-admin-scope .pp-marketing-history select {
+  background: var(--pp-bg-deep, var(--pp-bg-surface));
+  border-color: var(--pp-bg-border);
+  color: var(--pp-text-primary);
+}
+.planipret-admin-scope .pp-marketing button:not(.pa-btn-primary),
+.planipret-admin-scope .pp-marketing-history button {
+  color: var(--pp-text-primary);
+}
+@media (max-width: 640px) {
+  .planipret-admin-scope .pp-marketing-steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .planipret-admin-scope .pp-marketing-steps li { text-align: center; }
+}
+
 /* --- Normalisation globale des pages admin (pages pas encore migrées au shell) --- */
 .planipret-admin-scope .pa-main > div > h1,
 .planipret-admin-scope .pa-main h1.pa-title,

@@ -200,12 +200,16 @@ Deno.serve(async (req) => {
         }, 200);
       }
 
+      console.warn("[maestro-client-create] Maestro refused", { status: res.status, error: res.error, errors: res.errors ?? null });
+      // Always 200 so the app can show Maestro's real reason instead of a generic "non-2xx" error.
+      const msg = typeof res.error === "string" && res.error ? res.error : `Maestro a refusé la création (HTTP ${res.status}).`;
       return json({
         success: false,
         error: res.error ?? "create_failed",
+        message: msg,
         errors: res.errors ?? null,
         status: res.status,
-      }, res.status >= 400 && res.status < 500 ? res.status : 200);
+      }, 200);
     }
 
     const client = res.data as any;

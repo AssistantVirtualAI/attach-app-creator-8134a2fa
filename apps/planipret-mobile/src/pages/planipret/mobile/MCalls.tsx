@@ -909,6 +909,7 @@ function TranscriptStatusBanner({ s, has }: { s?: TxStatus; has: boolean }) {
 }
 function TranscriptView({
   segments, transcript, loading, preparing = false, attempt = 0, onFetch, onAnalyze, aiLoading, analyzed, t, filenameHint, status,
+  unavailableReason, unavailableHint,
 }: {
   segments: Seg[] | null;
   transcript: string | null;
@@ -921,6 +922,8 @@ function TranscriptView({
   analyzed: boolean;
   t: (k: string) => string;
   filenameHint?: string;
+  unavailableReason?: string | null;
+  unavailableHint?: string | null;
   status?: TxStatus;
 }) {
   const has = (segments && segments.length > 0) || !!(transcript && transcript.trim());
@@ -975,10 +978,10 @@ function TranscriptView({
       <div className="pp-card p-4 space-y-3">
 
         <div className="text-xs" style={{ color: "var(--pp-warning, #F5A623)" }}>
-          ⚠️ {t("calls.transcriptUnavailable") || "Transcription non disponible."}
+          ⚠️ {unavailableReason || t("calls.transcriptUnavailable") || "Transcription non disponible."}
         </div>
         <div className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
-          Vérifiez que <code>PORTAL_VOICE_TRANSCRIPTION_SENTIMENT = yes</code> est activé pour votre domaine dans NetSapiens.
+          {unavailableHint || "La transcription apparaît quelques minutes après la fin de l'appel."}
         </div>
         <button onClick={() => onFetch()} className="w-full py-2 rounded-lg text-xs font-semibold"
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}>
@@ -1214,6 +1217,7 @@ function CallDetailSheet({
   const [txLoading, setTxLoading] = useState(false);
   const [txPreparing, setTxPreparing] = useState(false);
   const [txAttempt, setTxAttempt] = useState(0);
+  const [txReason, setTxReason] = useState<{ message?: string | null; hint?: string | null } | null>(null);
   const txRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (txRetryTimerRef.current) clearTimeout(txRetryTimerRef.current); }, []);
   const [aiLoading, setAiLoading] = useState(false);
@@ -1345,7 +1349,7 @@ function CallDetailSheet({
     const { ok, res, error } = await runTranscriptOnce();
 
     if (ok) {
-      setTxLoading(false); setTxPreparing(false); setTxAttempt(0);
+      setTxLoading(false); setTxPreparing(false); setTxAttempt(0); setTxReason(null);
       const transcript = res.transcript ?? (Array.isArray(res.segments) ? res.segments.map((s: any) => `${s.speaker ?? "Speaker"}: ${s.text}`).join("\n") : call.transcript);
       onUpdated({ ...call, transcript, transcript_segments: res.segments ?? call.transcript_segments });
       await refreshCall();
@@ -1372,8 +1376,9 @@ function CallDetailSheet({
 
     // Give up — show real error
     setTxLoading(false); setTxPreparing(false); setTxAttempt(0);
-    const msg = res.error ?? error?.message ?? t("calls.transcriptUnavailable");
+    const msg = res.message ?? res.error ?? error?.message ?? t("calls.transcriptUnavailable");
     const hint = res.hint ?? res.action_required ?? "";
+    setTxReason({ message: msg, hint });
     toast.error(hint ? `${msg} — ${hint}` : msg);
   };
 
@@ -1574,6 +1579,8 @@ function CallDetailSheet({
               loading={txLoading}
               preparing={txPreparing}
               attempt={txAttempt}
+              unavailableReason={txReason?.message ?? null}
+              unavailableHint={txReason?.hint ?? null}
               onFetch={() => fetchTranscript(0)}
               onAnalyze={analyzeAI}
               aiLoading={aiLoading}

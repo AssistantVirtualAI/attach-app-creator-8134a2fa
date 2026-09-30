@@ -20,9 +20,15 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({}));
   const lang = body.language === "en" ? "en" : "fr";
+  const sessionToken = typeof body.sessionToken === "string" && body.sessionToken.length <= 128
+    ? body.sessionToken
+    : undefined;
   try {
     if (body.action === "details" && typeof body.placeId === "string") {
-      const r = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(body.placeId)}?languageCode=${lang}`, {
+      const placeId = body.placeId.trim().slice(0, 256);
+      if (!placeId) return json({ error: "invalid_place" }, 400);
+      const session = sessionToken ? `&sessionToken=${encodeURIComponent(sessionToken)}` : "";
+      const r = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=${lang}${session}`, {
         headers: { "X-Goog-Api-Key": key, "X-Goog-FieldMask": "addressComponents" },
       });
       const d = await r.json();
@@ -43,8 +49,12 @@ Deno.serve(async (req) => {
     if (input.length < 3) return json({ suggestions: [] });
     const r = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key },
-      body: JSON.stringify({ input, includedRegionCodes: ["ca"], languageCode: lang, includedPrimaryTypes: ["street_address", "premise", "subpremise"] }),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text",
+      },
+      body: JSON.stringify({ input, includedRegionCodes: ["ca"], languageCode: lang, includedPrimaryTypes: ["street_address", "premise", "subpremise"], ...(sessionToken ? { sessionToken } : {}) }),
     });
     const d = await r.json();
     if (!r.ok) return json({ error: "google_error", suggestions: [] }, 502);

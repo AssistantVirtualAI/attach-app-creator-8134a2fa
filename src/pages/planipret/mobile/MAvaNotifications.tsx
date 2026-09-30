@@ -117,8 +117,11 @@ export default function MAvaNotifications() {
     if (!u.user) return;
     const sb: any = supabase;
     const { error } = await sb.from("planipret_ava_notifications").delete().eq("user_id", u.user.id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error("Impossible de vider les notifications."); return; }
+    const { count } = await sb.from("planipret_ava_notifications").select("id", { count: "exact", head: true }).eq("user_id", u.user.id);
+    if ((count ?? 0) > 0) { toast.error("Certaines notifications n'ont pas pu être supprimées."); return; }
     setItems([]);
+    toast.success("Notifications vidées");
   };
 
   const open = async (n: Notif) => {

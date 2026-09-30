@@ -909,6 +909,7 @@ function TranscriptStatusBanner({ s, has }: { s?: TxStatus; has: boolean }) {
 }
 function TranscriptView({
   segments, transcript, loading, preparing = false, attempt = 0, onFetch, onAnalyze, aiLoading, analyzed, t, filenameHint, status,
+  unavailableReason, unavailableHint,
 }: {
   segments: Seg[] | null;
   transcript: string | null;
@@ -921,6 +922,8 @@ function TranscriptView({
   analyzed: boolean;
   t: (k: string) => string;
   filenameHint?: string;
+  unavailableReason?: string | null;
+  unavailableHint?: string | null;
   status?: TxStatus;
 }) {
   const has = (segments && segments.length > 0) || !!(transcript && transcript.trim());

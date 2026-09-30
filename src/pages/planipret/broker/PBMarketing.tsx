@@ -94,12 +94,12 @@ export default function PBMarketing() {
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   };
 
-  const btn = "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50";
-  const primary = `${btn} bg-primary text-primary-foreground`;
-  const ghost = `${btn} border border-border bg-background`;
+  const btn = "pa-btn";
+  const primary = `${btn} pa-btn-primary`;
+  const ghost = btn;
 
   return (
-    <PAPage>
+    <PAPage className="pp-marketing">
       <PAPageHeader icon={<Megaphone className="w-5 h-5" />} title="Marketing"
         subtitle={L("Envoyez un texto et/ou un courriel à vos clients Maestro.", "Send a text and/or email to your Maestro clients.")} />
 
@@ -110,20 +110,21 @@ export default function PBMarketing() {
 
       {tab === "history" ? <MarketingHistory lang={lang} reloadKey={reloadKey} /> : (
         <div className="space-y-4">
-          <ol className="flex gap-2 text-xs">
+          <ol className="pp-marketing-steps flex gap-2 text-xs" aria-label={L("Étapes de l'envoi", "Sending steps")}>
             {[L("Écrire", "Write"), L("Valider", "Review"), L("Clients", "Clients"), L("Envoyer", "Send")].map((s, i) => (
-              <li key={s} className={`rounded-full px-3 py-1 border border-border ${step === i + 1 ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{i + 1}. {s}</li>
+               <li key={s} aria-current={step === i + 1 ? "step" : undefined} className={`rounded-full px-3 py-1 border ${step === i + 1 ? "pp-marketing-step-active" : "pp-marketing-step"}`}>{i + 1}. {s}</li>
             ))}
           </ol>
 
           {step === 1 && (
-            <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-              <label className="text-sm font-semibold">{L("Votre message", "Your message")}</label>
-              <p className="text-xs text-muted-foreground">{L("Astuce : {prenom}, {nom} et {nom_complet} sont remplacés par le nom de chaque client à l'envoi.", "Tip: {prenom}, {nom} and {nom_complet} are replaced with each client's name when sending.")}</p>
+            <div className="pp-marketing-panel p-4 space-y-3">
+              <label htmlFor="marketing-prompt" className="pp-marketing-label text-sm font-semibold">{L("Votre message", "Your message")}</label>
+              <p className="pp-marketing-help text-xs">{L("Astuce : {prenom}, {nom} et {nom_complet} sont remplacés par le nom de chaque client à l'envoi.", "Tip: {prenom}, {nom} and {nom_complet} are replaced with each client's name when sending.")}</p>
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={4000} rows={5}
+                id="marketing-prompt"
                 placeholder={L("Ex. : Rappeler à mes clients que leur renouvellement approche et offrir une révision gratuite.", "E.g. Remind clients their renewal is coming and offer a free review.")}
-                className="w-full rounded-lg border border-border bg-background p-3 text-sm" />
-              <div className="flex gap-4 text-sm">
+                className="pp-marketing-field w-full rounded-lg border p-3 text-sm" />
+              <div className="pp-marketing-channels flex flex-wrap gap-3 text-sm">
                 <label className="inline-flex items-center gap-2"><input type="checkbox" checked={useSms} onChange={(e) => setUseSms(e.target.checked)} /><MessageSquare className="w-4 h-4" />{L("Texto", "Text")}</label>
                 <label className="inline-flex items-center gap-2"><input type="checkbox" checked={useEmail} onChange={(e) => setUseEmail(e.target.checked)} /><Mail className="w-4 h-4" />{L("Courriel", "Email")}</label>
               </div>
@@ -137,11 +138,11 @@ export default function PBMarketing() {
             <div className="space-y-3">
               <div className="grid gap-3 lg:grid-cols-2">
                 {useEmail && (
-                  <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+                  <div className="pp-marketing-panel p-3 space-y-2">
                     <div className="text-sm font-semibold flex items-center gap-2"><Mail className="w-4 h-4" />{L("Courriel", "Email")}</div>
                     {editing ? (<>
-                      <input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} maxLength={150} className="w-full rounded-lg border border-border bg-background p-2 text-sm" />
-                      <textarea value={draft.email_body_html} onChange={(e) => setDraft({ ...draft, email_body_html: e.target.value })} rows={12} className="w-full rounded-lg border border-border bg-background p-2 text-xs font-mono" />
+                      <input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} maxLength={150} className="pp-marketing-field w-full rounded-lg border p-2 text-sm" />
+                      <textarea value={draft.email_body_html} onChange={(e) => setDraft({ ...draft, email_body_html: e.target.value })} rows={12} className="pp-marketing-field w-full rounded-lg border p-2 text-xs font-mono" />
                     </>) : (<>
                       <div className="text-sm"><span className="text-muted-foreground">{L("Objet", "Subject")} : </span>{draft.subject}</div>
                       <iframe title="preview" sandbox="" srcDoc={draft.email_preview_html} className="w-full h-[480px] rounded-lg border border-border bg-background" />
@@ -149,10 +150,10 @@ export default function PBMarketing() {
                   </div>
                 )}
                 {useSms && (
-                  <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+                  <div className="pp-marketing-panel p-3 space-y-2">
                     <div className="text-sm font-semibold flex items-center gap-2"><MessageSquare className="w-4 h-4" />{L("Texto", "Text")}</div>
                     {editing ? (
-                      <textarea value={draft.sms_text} onChange={(e) => setDraft({ ...draft, sms_text: e.target.value })} maxLength={480} rows={6} className="w-full rounded-lg border border-border bg-background p-2 text-sm" />
+                       <textarea value={draft.sms_text} onChange={(e) => setDraft({ ...draft, sms_text: e.target.value })} maxLength={480} rows={6} className="pp-marketing-field w-full rounded-lg border p-2 text-sm" />
                     ) : (
                       <div className="rounded-2xl bg-muted p-3 text-sm whitespace-pre-wrap max-w-sm">{draft.sms_text}</div>
                     )}
@@ -171,11 +172,11 @@ export default function PBMarketing() {
           )}
 
           {step === 3 && (
-            <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <div className="pp-marketing-panel p-4 space-y-3">
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={L("Rechercher un client", "Search clients")} className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm" />
+                   <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={L("Rechercher un client", "Search clients")} className="pp-marketing-field w-full rounded-lg border py-2 pl-9 pr-3 text-sm" />
                 </div>
                 <button className={ghost} disabled={!filtered.length} onClick={() => setSel((s) => { const n = new Set(s); filtered.forEach((c) => allSel ? n.delete(c.id) : n.add(c.id)); return n; })}>
                   {allSel ? L("Tout désélectionner", "Deselect all") : L("Tout sélectionner", "Select all")}
@@ -208,7 +209,7 @@ export default function PBMarketing() {
 
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4" onClick={() => !busy && setConfirmOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="pp-marketing-panel w-full max-w-md p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold">{L("Confirmer l'envoi réel", "Confirm real send")}</h3>
             <ul className="text-sm space-y-1">
               {useSms && <li>• {nSms} {L("texto(s) depuis votre numéro Planiprêt", "text(s) from your Planiprêt number")}</li>}

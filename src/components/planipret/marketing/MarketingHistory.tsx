@@ -65,7 +65,7 @@ export default function MarketingHistory({ lang, adminView = false, reloadKey = 
   };
 
   return (
-    <div className="space-y-4">
+    <div className="pp-marketing-history space-y-4">
       <div className="flex flex-wrap gap-2 items-center">
         {adminView && (
           <select value={broker} onChange={(e) => setBroker(e.target.value)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
@@ -85,7 +85,7 @@ export default function MarketingHistory({ lang, adminView = false, reloadKey = 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
         {[[L("Campagnes", "Campaigns"), tot.c], [L("Courriels envoyés", "Emails sent"), tot.se], [L("Textos envoyés", "Texts sent"), tot.ss],
           [L("Ouvertures (estimées)", "Opens (estimated)"), tot.o], [L("Clics", "Clicks"), tot.k], [L("Échecs", "Failures"), tot.f]].map(([k, v]) => (
-          <div key={String(k)} className="rounded-xl border border-border bg-card p-3"><div className="text-xs text-muted-foreground">{k}</div><div className="text-xl font-bold">{v}</div></div>
+          <div key={String(k)} className="pp-marketing-panel p-3"><div className="pp-marketing-help text-xs">{k}</div><div className="text-xl font-bold">{v}</div></div>
         ))}
       </div>
 
@@ -95,11 +95,11 @@ export default function MarketingHistory({ lang, adminView = false, reloadKey = 
       </p>
 
       {loading ? <div className="h-24 rounded-xl bg-muted animate-pulse" /> : shown.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">{L("Aucun envoi pour cette période.", "No sends for this period.")}</div>
+        <div className="pp-marketing-panel pp-marketing-help p-6 text-center text-sm">{L("Aucun envoi pour cette période.", "No sends for this period.")}</div>
       ) : (
         <div className="space-y-2">
           {shown.map((c) => (
-            <div key={c.id} className="rounded-xl border border-border bg-card">
+            <div key={c.id} className="pp-marketing-panel">
               <button onClick={() => void toggle(c.id)} className="w-full flex items-center gap-3 p-3 text-left">
                 {open === c.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 <div className="min-w-0 flex-1">

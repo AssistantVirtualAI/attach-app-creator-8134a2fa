@@ -432,14 +432,21 @@ Deno.serve(async (req) => {
   }
 
   if (!transcript) {
+    // A call that never connected (ringing/missed) has no audio at all, so a
+    // missing transcript is expected — say so instead of blaming NS config.
+    const neverConnected = !!row && !row.started_at && Number(row.duration_seconds ?? 0) === 0;
     return json({
       success: false,
       available: false,
-      reason: "transcript_not_available",
-      error: "TRANSCRIPT_NOT_AVAILABLE",
-      message: "La transcription n'est pas encore disponible pour cet appel.",
+      reason: neverConnected ? "call_not_connected" : "transcript_not_available",
+      error: neverConnected ? "CALL_NOT_CONNECTED" : "TRANSCRIPT_NOT_AVAILABLE",
+      message: neverConnected
+        ? "Cet appel n'a pas été connecté : il n'y a ni enregistrement ni transcription."
+        : "La transcription n'est pas encore disponible pour cet appel.",
       ns_callid, ns_extension, domain, attempts,
-      action_required: "Réessayez après la finalisation de l'enregistrement. Si le problème persiste, vérifiez la configuration de transcription NetSapiens.",
+      action_required: neverConnected
+        ? ""
+        : "La transcription apparaît quelques minutes après la fin de l'appel. Réessayez dans un moment.",
     }, 200);
   }
 

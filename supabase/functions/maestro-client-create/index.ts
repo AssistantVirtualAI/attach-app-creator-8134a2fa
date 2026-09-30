@@ -10,7 +10,7 @@ import {
   normalizePhone,
 } from "../_shared/maestro.ts";
 import { guardPlanipret } from "../_shared/planipret-guard.ts";
-import { maestroClientHasTelephone } from "../_shared/maestro-client-telephone.ts";
+import { maestroClientHasTelephone, tenDigits } from "../_shared/maestro-client-telephone.ts";
 import { createClient_, getClient } from "../_shared/maestro-scribe.ts";
 import { ensureClientTelephone } from "../_shared/maestro-client-telephone.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
@@ -149,7 +149,8 @@ Deno.serve(async (req) => {
     };
     const validation: Record<string, string[]> = {};
     if (!lastName) validation.last_name = ["last_name_required"];
-    if (!phone) validation.phone = ["phone_required"];
+    const maestroMobileNumber = tenDigits(phone);
+    if (!maestroMobileNumber) validation.phone = ["phone_must_have_10_digits"];
     if (!Number.isInteger(salutation) || salutation <= 0) validation.salutation = ["salutation_required"];
     if (sex !== "m" && sex !== "f") validation.sex = ["sex_m_or_f_required"];
     if (language !== "fr" && language !== "en") validation.language = ["language_fr_or_en_required"];
@@ -168,7 +169,7 @@ Deno.serve(async (req) => {
       salutation,
       sex,
       language,
-      mobile_number: phone,
+      mobile_number: maestroMobileNumber,
       address,
       ...(body?.email ? { email: String(body.email).trim() } : {}),
       ...(body?.company ? { company: String(body.company).trim() } : {}),

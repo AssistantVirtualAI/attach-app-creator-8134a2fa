@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasRequiredMaestroClientFields } from "@/lib/planipret/maestroClientDraft";
+import { formatMaestroPhone, hasRequiredMaestroClientFields, maestroPhoneDigits } from "@/lib/planipret/maestroClientDraft";
 
 const complete = {
   firstName: "Jeanne",
@@ -30,6 +30,11 @@ describe("Maestro client creation draft", () => {
   it("keeps submit disabled for a missing mandatory client identity", () => {
     expect(hasRequiredMaestroClientFields({ ...complete, lastName: "" })).toBe(false);
     expect(hasRequiredMaestroClientFields({ ...complete, phone: "1136" })).toBe(false);
+  });
+
+  it("formats Canadian numbers for display and sends Maestro ten digits", () => {
+    expect(formatMaestroPhone("14389535011")).toBe("(438) 953-5011");
+    expect(maestroPhoneDigits("+1 (438) 953-5011")).toBe("4389535011");
   });
 
   it("keeps submit disabled for every mandatory Maestro classification field", () => {

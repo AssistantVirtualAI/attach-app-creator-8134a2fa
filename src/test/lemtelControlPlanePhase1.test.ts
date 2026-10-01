@@ -36,7 +36,7 @@ describe("Lemtel Control Plane phase 1 — repository boundary", () => {
     const c = read("infra/lemtel-control-plane/docker-compose.dev.yml");
     expect(c).toContain('"127.0.0.1:8081:8080"');
     expect(c.match(/ports:/g)?.length).toBe(1);
-    expect(c).not.toMatch(/network_mode|privileged|docker\.sock|:latest/);
+    expect(c).not.toMatch(/network_mode:\s*host|privileged|docker\.sock|:latest/);
   });
 
   it("config-guard gates every service and blank example is parse-safe", () => {

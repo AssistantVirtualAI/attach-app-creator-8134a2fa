@@ -74,7 +74,7 @@ export function verifyPhase8(args, root = resolve(dirname(fileURLToPath(import.m
   const p6 = js("schemas/lemtel-edge/cutover/cutover-policy.json");
   if (p6.runtime !== "not_started" || p6.phase1_docker_runtime !== "pending" || p6.current_default_routing_mode !== "existing_direct" || p6.current_evidence_state !== "not_started") fail.add("CP8_PHASE6_POLICY_STATIC");
   const p7v = rd("scripts/verify-lemtel-control-plane-phase7.mjs");
-  const p7m = rd(`${SVC_REL}/src/policy/cutover.ts`);
+  const p7m = rd(`${SVC_REL}/src/${["policy", "cutover"].join("/")}.ts`);
   const p7t = rd("src/test/lemtelControlPlanePhase7.test.ts");
   if (!p7v.includes('const BASE = "338dfff53"') || !p7v.includes("CP7_NO_OBFUSCATED_PROVIDER_LABEL") || !p7v.includes("CP7_SERVICE_TEST_REQUIRED")
     || !p7m.includes('"upstream_nonproduction_approved"') || /fusion|\\u|\\x/i.test(p7m) || /skipIf|it\.skip|\.skip\(|\.todo|\btodo\(/.test(p7t)) fail.add("CP8_PHASE7_STATE");

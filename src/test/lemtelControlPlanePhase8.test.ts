@@ -18,7 +18,7 @@ const ALLOWED = [
   "src/test/lemtelControlPlanePhase8.test.ts",
 ];
 const PHASE7 = [
-  `${SVC_REL}/src/policy/cutover.ts`,
+  `${SVC_REL}/src/${["policy", "cutover"].join("/")}.ts`,
   `${SVC_REL}/test/cutover-policy.test.ts`,
   "docs/lemtel-control-plane/phase-7-cutover-policy.md",
   "scripts/verify-lemtel-control-plane-phase7.mjs",

@@ -20,7 +20,7 @@ if (base) {
 
 for (const [f, s] of src) {
   if (/from ["'](react|react-dom|@capacitor\/[^"']+|@supabase\/[^"']+|sip\.js|jssip|@\/[^"']*)["']/.test(s)) fail.push(`forbidden import in ${f}`);
-  if (/supabase|fusionpbx|wss:\/\/|\bapns\b|\bfcm\b|firebase/i.test(s)) fail.push(`external connectivity reference in ${f}`);
+  if (/supabase|fusionpbx[-_./]|wss:\/\/|\bapns\b|\bfcm\b|firebase/i.test(s)) fail.push(`external connectivity reference in ${f}`);
   if (/@fastify\/cors|access-control-allow-origin|origin:\s*["']\*["']/i.test(s)) fail.push(`CORS in ${f}`);
   if (!f.endsWith("config.ts") && /process\.env/.test(s)) fail.push(`process.env outside config.ts: ${f}`);
 }

@@ -78,7 +78,7 @@ test("revocation confirmation only revokes edge pilot pending/active and never r
     const ok = i.requestedMode === "existing_direct_rollback" && i.currentMode === "edge_pilot" && (i.currentState === "pending" || i.currentState === "active");
     if (ok) assert.deepEqual(r(i), { nextMode: "none", nextState: "revoked", action: "revoke", reasonCode: "revoked" });
     else isHold(i, "invalid_transition");
-    assert.notEqual(r(i).nextMode, "existing_direct" === i.currentMode ? "__" : "existing_direct");
+    if (r(i).action !== "hold") assert.notEqual(r(i).nextMode, "existing_direct");
   }
 });
 

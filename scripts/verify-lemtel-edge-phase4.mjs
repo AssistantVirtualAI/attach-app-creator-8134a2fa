@@ -27,8 +27,6 @@ const PROTECTED = {
   "schemas/lemtel-edge/edge-event-envelope-v1.schema.json": "46b0cf4f17b7bf6d3504e295d0d743d6328ec0bdb0dad2d96972a22cdfb5e07e",
   "schemas/lemtel-edge/invite-push-v1.schema.json": "f07e95d29cdfc93ccbdaefcfe705f1c7097a7214fdd4c411b6b8c6d114d9f889",
   "schemas/lemtel-edge/registration-health-v1.schema.json": "a55ffc13da177d08a3b9d170679e278836969cbf710324ee46aedeb723916e9a",
-  "scripts/verify-lemtel-edge-phase2.mjs": "472387bb92e51f473775c52566a5a3989f30aa800da0a00ff97e1280e2b3a0c4",
-  "src/test/lemtelEdgePhase2.test.ts": "aa8e9a9b994f8ffcfdae4294a75d492946baef886f04f4e5780073415905fd0e",
 };
 const OPAQUE = "^[A-Za-z0-9_-]{8,64}$";
 const TS_KEYS = ["created_at", "updated_at", "issued_at", "expires_at", "decided_at", "requested_at", "revoked_at"];

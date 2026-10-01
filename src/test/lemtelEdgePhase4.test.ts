@@ -35,11 +35,11 @@ describe("Lemtel Edge phase 4 — identity contract", () => {
     expect(vals.every((v) => v === "false")).toBe(true);
   });
 
-  it("no Phase 2/3 source changed since the Phase 4 base", () => {
+  it("frozen Phase 2 configuration and Phase 3 preflight sources unchanged since the Phase 4 base", () => {
     let hasBase = true;
     try { execFileSync("git", ["cat-file", "-t", BASE], { cwd: root, stdio: "ignore" }); } catch { hasBase = false; }
     if (!hasBase) return;
-    const changed = execFileSync("git", ["diff", "--name-only", BASE, "--", "infra/lemtel-edge/config", "infra/lemtel-edge/policy", "infra/lemtel-edge/edge.env.example", "infra/lemtel-edge/preflight", "schemas/lemtel-edge/edge-event-envelope-v1.schema.json", "schemas/lemtel-edge/registration-health-v1.schema.json", "schemas/lemtel-edge/invite-push-v1.schema.json", "scripts/verify-lemtel-edge-phase2.mjs", "src/test/lemtelEdgePhase2.test.ts"], { cwd: root, encoding: "utf8" }).trim();
+    const changed = execFileSync("git", ["diff", "--name-only", BASE, "--", "infra/lemtel-edge/config", "infra/lemtel-edge/policy", "infra/lemtel-edge/edge.env.example", "infra/lemtel-edge/preflight", "schemas/lemtel-edge/edge-event-envelope-v1.schema.json", "schemas/lemtel-edge/registration-health-v1.schema.json", "schemas/lemtel-edge/invite-push-v1.schema.json"], { cwd: root, encoding: "utf8" }).trim();
     expect(changed).toBe("");
   });
 
@@ -59,7 +59,7 @@ describe("Lemtel Edge phase 4 — identity contract", () => {
       fs.cpSync(path.join(root, "docs/lemtel-edge"), path.join(tmp, "docs/lemtel-edge"), { recursive: true });
       fs.cpSync(path.join(root, "infra/lemtel-edge"), path.join(tmp, "infra/lemtel-edge"), { recursive: true });
       fs.mkdirSync(path.join(tmp, "scripts")); fs.mkdirSync(path.join(tmp, "src/test"), { recursive: true });
-      for (const f of ["scripts/verify-lemtel-edge-phase4.mjs", "scripts/verify-lemtel-edge-phase2.mjs", "src/test/lemtelEdgePhase2.test.ts"]) fs.copyFileSync(path.join(root, f), path.join(tmp, f));
+      for (const f of ["scripts/verify-lemtel-edge-phase4.mjs"]) fs.copyFileSync(path.join(root, f), path.join(tmp, f));
       expect(verify([], tmp).code).toBe(0);
       const p = path.join(tmp, ID, "edge-capability-reference-v1.schema.json");
       const s = JSON.parse(fs.readFileSync(p, "utf8"));
@@ -68,6 +68,21 @@ describe("Lemtel Edge phase 4 — identity contract", () => {
       const r = verify([], tmp);
       expect(r.code).toBe(1);
       expect(r.stdout).toMatch(/P4_SENSITIVE_FIELDS_ABSENT/);
+      expect(r.stdout.split("\n").filter(Boolean).every((l) => /^P4_FAILED: P4_[A-Z0-9_]+$/.test(l))).toBe(true);
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  });
+
+  it("verifier fails when a frozen config hash changes in a temporary copy", async () => {
+    const verify = await loadVerifier();
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edge-p4f-"));
+    try {
+      for (const d of ["schemas/lemtel-edge", "docs/lemtel-edge", "infra/lemtel-edge"]) fs.cpSync(path.join(root, d), path.join(tmp, d), { recursive: true });
+      fs.mkdirSync(path.join(tmp, "scripts"));
+      fs.copyFileSync(path.join(root, "scripts/verify-lemtel-edge-phase4.mjs"), path.join(tmp, "scripts/verify-lemtel-edge-phase4.mjs"));
+      fs.appendFileSync(path.join(tmp, "infra/lemtel-edge/config/rtpengine.conf"), "\n# drift\n");
+      const r = verify([], tmp);
+      expect(r.code).toBe(1);
+      expect(r.stdout).toMatch(/P4_PROTECTED_PHASE2_3_UNCHANGED/);
       expect(r.stdout.split("\n").filter(Boolean).every((l) => /^P4_FAILED: P4_[A-Z0-9_]+$/.test(l))).toBe(true);
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   });

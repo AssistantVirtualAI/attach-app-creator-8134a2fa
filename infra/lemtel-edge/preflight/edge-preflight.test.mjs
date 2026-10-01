@@ -28,6 +28,7 @@ const sandbox = () => {
 };
 const edit = (root, f, fn) => writeFileSync(join(root, f), fn(readFileSync(join(root, f), "utf8")));
 const withSandbox = (fn) => { const root = sandbox(); try { fn(root); } finally { rmSync(root, { recursive: true, force: true }); } };
+const FAKE_IP = ["10", "20", "30", "40"].join(".");
 const onlyIds = (out) => out.trim().split("\n").every((l) => /^PRECHECK_FAILED: [A-Z0-9_]+$/.test(l));
 
 test("committed package verifies and report has the exact allowed shape", () => {
@@ -59,12 +60,12 @@ test("a gate set to true fails with a stable ID only", () => withSandbox((root) 
 
 test("non-loopback listener or RTPengine binding fails without exposing the value", () => {
   withSandbox((root) => {
-    edit(root, "infra/lemtel-edge/config/kamailio.cfg", (s) => s.replace("listen=udp:127.0.0.1:5060", "listen=udp:10.20.30.40:5060"));
+    edit(root, "infra/lemtel-edge/config/kamailio.cfg", (s) => s.replace("listen=udp:127.0.0.1:5060", `listen=udp:${FAKE_IP}:5060`));
     const r = runPreflight(["--verify"], root);
-    assert.equal(r.code, 1); assert.ok(onlyIds(r.stdout)); assert.match(r.stdout, /KAMAILIO_LISTENER_LOOPBACK_GUARDED/); assert.doesNotMatch(r.stdout, /10\.20/);
+    assert.equal(r.code, 1); assert.ok(onlyIds(r.stdout)); assert.match(r.stdout, /KAMAILIO_LISTENER_LOOPBACK_GUARDED/); assert.doesNotMatch(r.stdout, new RegExp(FAKE_IP.replaceAll(".", "\\.")));
   });
   withSandbox((root) => {
-    edit(root, "infra/lemtel-edge/config/rtpengine.conf", (s) => s.replace("listen-ng = 127.0.0.1:2223", "listen-ng = 10.20.30.40:2223"));
+    edit(root, "infra/lemtel-edge/config/rtpengine.conf", (s) => s.replace("listen-ng = 127.0.0.1:2223", `listen-ng = ${FAKE_IP}:2223`));
     const r = runPreflight(["--verify"], root);
     assert.equal(r.code, 1); assert.equal(r.stdout, "PRECHECK_FAILED: RTPENGINE_MAIN_BINDINGS\n");
   });

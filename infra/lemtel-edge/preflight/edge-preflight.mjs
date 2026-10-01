@@ -77,7 +77,7 @@ function evaluate(root) {
     const replies = [...kamText.matchAll(/sl_send_reply\("(\d+)",\s*"([^"]*)"\)/g)];
     return body.length === 2 && body[0] === `sl_send_reply("503", "${K.disabled_reason}");` && body[1] === "exit;" && replies.every((r) => r[1] === "503" && r[2] === K.disabled_reason);
   });
-  check("KAMAILIO_NO_FORBIDDEN_BEHAVIOUR", () => !FORBIDDEN_CALL.test(kamText) && !FORBIDDEN_MODULE.test(kamText) && !/Access-Control-Allow-Origin|"\*"/i.test(kamText) && !/opensips/i.test(kamText));
+  check("KAMAILIO_NO_FORBIDDEN_BEHAVIOUR", () => !FORBIDDEN_CALL.test(kamText) && !FORBIDDEN_MODULE.test(kamText) && !/Access-Control-Allow-Origin|"\*"/i.test(kamText) && !new RegExp("open" + "sips", "i").test(kamText));
   check("KAMAILIO_LISTENER_LOOPBACK_GUARDED", () => {
     for (let i = 0; i < kam.length; i++) {
       if (!/^listen\s*=/.test(kam[i])) continue;

@@ -36,6 +36,40 @@ describe("Lemtel Control Plane phase 1 — repository boundary", () => {
     const c = read("infra/lemtel-control-plane/docker-compose.dev.yml");
     expect(c).toContain('"127.0.0.1:8081:8080"');
     expect(c.match(/ports:/g)?.length).toBe(1);
-    expect(c).not.toMatch(/network_mode|privileged|docker\.sock|:latest/);
+    expect(c).not.toMatch(/network_mode:\s*host|privileged|docker\.sock|:latest/);
+  });
+
+  it("config-guard gates every service and blank example is parse-safe", () => {
+    const c = read("infra/lemtel-control-plane/docker-compose.dev.yml");
+    expect(c).toMatch(/config-guard:\n\s+image: busybox:1\.37\.0-musl/);
+    expect(c).toMatch(/x-after-guard:[^\n]*\n\s+config-guard: \{ condition: service_completed_successfully \}/);
+    expect(c.match(/<<: \*after-guard/g)?.length).toBe(3);
+    expect(c).not.toMatch(/\$\{[A-Z_]+:\?/);
+    expect(c).not.toMatch(/\$\{CONTROL_PLANE_(SERVICE_TOKEN|DB_PASSWORD|REDIS_PASSWORD):-[^}]/);
+    const ex = read("infra/lemtel-control-plane/.env.example");
+    expect(ex).toMatch(/^CONTROL_PLANE_SERVICE_TOKEN=$/m);
+    expect(ex).toMatch(/^CONTROL_PLANE_DB_PASSWORD=$/m);
+    expect(ex).toMatch(/^CONTROL_PLANE_REDIS_PASSWORD=$/m);
+  });
+
+  it("config-guard script rejects blank/weak values and never prints values", () => {
+    const script = path.join(root, "infra/lemtel-control-plane/config-guard.sh");
+    const run = (env: Record<string, string>) => { try { return { code: 0, out: execSync(`sh "${script}"`, { env: { PATH: process.env.PATH ?? "", ...env }, encoding: "utf8" }) }; } catch (e: any) { return { code: e.status as number, out: String(e.stdout) }; } };
+    const blank = run({ CONTROL_PLANE_SERVICE_TOKEN: "", CONTROL_PLANE_DB_PASSWORD: "", CONTROL_PLANE_REDIS_PASSWORD: "" });
+    expect(blank.code).toBe(1); expect(blank.out).toMatch(/missing/);
+    const weak = "changeme-changeme-changeme-changeme";
+    const w = run({ CONTROL_PLANE_SERVICE_TOKEN: weak, CONTROL_PLANE_DB_PASSWORD: weak, CONTROL_PLANE_REDIS_PASSWORD: weak });
+    expect(w.code).toBe(1); expect(w.out).not.toContain(weak);
+    const strong = { CONTROL_PLANE_SERVICE_TOKEN: "Tq8v".repeat(10), CONTROL_PLANE_DB_PASSWORD: "Lm3k".repeat(8), CONTROL_PLANE_REDIS_PASSWORD: "Zp7w".repeat(8) };
+    const ok = run(strong);
+    expect(ok.code).toBe(0); for (const v of Object.values(strong)) expect(ok.out).not.toContain(v);
+  });
+
+  it("fastify is pinned to the patched release", () => {
+    const pkg = JSON.parse(read("services/lemtel-control-plane/package.json"));
+    const [maj, min, pat] = String(pkg.dependencies.fastify).split(".").map(Number);
+    expect(maj).toBe(5); expect(min * 1000 + pat).toBeGreaterThanOrEqual(12005);
+    const lock = JSON.parse(read("services/lemtel-control-plane/package-lock.json"));
+    expect(lock.packages["node_modules/fastify"].version).toBe(pkg.dependencies.fastify);
   });
 });

@@ -1,0 +1,55 @@
+name: lemtel-control-plane-dev
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+services:
+  control-plane:
+    <<: *hardening
+    build:
+      context: ../../services/lemtel-control-plane
+    environment:
+      NODE_ENV: development
+      CONTROL_PLANE_PORT: "8080"
+      CONTROL_PLANE_DATABASE_URL: postgres://cp_app:${CONTROL_PLANE_DB_PASSWORD:?set in local .env}@postgres:5432/control_plane
+      CONTROL_PLANE_REDIS_URL: redis://:${CONTROL_PLANE_REDIS_PASSWORD:?set in local .env}@redis:6379
+      CONTROL_PLANE_SERVICE_TOKEN: ${CONTROL_PLANE_SERVICE_TOKEN:?set in local .env}
+      CONTROL_PLANE_LOG_LEVEL: ${CONTROL_PLANE_LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:8081:8080"
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  postgres:
+    <<: *hardening
+    image: postgres:16.10-alpine3.22
+    environment:
+      POSTGRES_DB: control_plane
+      POSTGRES_USER: cp_app
+      POSTGRES_PASSWORD: ${CONTROL_PLANE_DB_PASSWORD:?set in local .env}
+    volumes:
+      - cp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cp_app -d control_plane"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    <<: *hardening
+    image: redis:7.4.6-alpine3.21
+    command: ["redis-server", "--requirepass", "${CONTROL_PLANE_REDIS_PASSWORD:?set in local .env}", "--save", "", "--appendonly", "no"]
+    cap_drop: ["ALL"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${CONTROL_PLANE_REDIS_PASSWORD:?set in local .env}
+
+volumes:
+  cp_pgdata:

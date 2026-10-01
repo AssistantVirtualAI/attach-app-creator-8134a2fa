@@ -747,33 +747,50 @@ function NotificationsSection({ profile, reloadProfile }: { profile: any; reload
 /* =================== Sheets (dark) =================== */
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, []);
+
   return (
     <div
-      className="absolute inset-0 z-40 flex items-end"
-      style={{ background: "rgba(4,11,22,0.7)", backdropFilter: "blur(6px)" }}
+      className="fixed inset-0 z-[100] flex items-end md:absolute"
+      style={{ background: "rgba(4,11,22,0.7)", backdropFilter: "blur(6px)", touchAction: "none" }}
       onClick={onClose}
+      role="presentation"
     >
       <div
-        className="w-full p-4 max-h-[80%] overflow-y-auto"
+        className="flex w-full min-h-0 max-h-[calc(100dvh-env(safe-area-inset-top)-1rem)] flex-col"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--pp-bg-surface)",
           borderTop: "1px solid var(--pp-bg-border-2)",
           borderTopLeftRadius: 20, borderTopRightRadius: 20,
           boxShadow: "0 -20px 40px -10px rgba(0,0,0,0.5)",
+          touchAction: "pan-y",
         }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
       >
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex shrink-0 items-center justify-between px-4 pb-3 pt-4">
           <h2 style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 16, color: "var(--pp-text-primary)" }}>{title}</h2>
           <button
             onClick={onClose}
             className="flex items-center justify-center active:scale-95"
             style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+            aria-label={title}
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
-        {children}
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4"
+          style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))", WebkitOverflowScrolling: "touch" }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

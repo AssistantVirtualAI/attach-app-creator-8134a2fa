@@ -72,4 +72,27 @@ describe("Lemtel Control Plane phase 1 — repository boundary", () => {
     const lock = JSON.parse(read("services/lemtel-control-plane/package-lock.json"));
     expect(lock.packages["node_modules/fastify"].version).toBe(pkg.dependencies.fastify);
   });
+
+  it("every documented docker compose command names docker-compose.dev.yml explicitly", () => {
+    for (const p of ["docs/lemtel-control-plane/local-development.md", "infra/lemtel-control-plane/README.md"]) {
+      const cmds = read(p).split("\n").map((l) => l.trim().replace(/^`|`$/g, "")).filter((l) => /^docker compose\b/.test(l) || /`docker compose /.test(l));
+      expect(cmds.length, p).toBeGreaterThan(0);
+      for (const l of cmds) {
+        for (const m of l.match(/docker compose [^`]*/g) ?? [l]) {
+          expect(m, `${p}: ${m}`).toMatch(/^docker compose -f docker-compose\.dev\.yml /);
+          expect(m).not.toContain("#");
+        }
+      }
+    }
+    const doc = read("docs/lemtel-control-plane/local-development.md");
+    for (const c of [
+      "docker compose -f docker-compose.dev.yml --env-file .env.example config",
+      "docker compose -f docker-compose.dev.yml --env-file .env.example up --abort-on-container-exit --exit-code-from config-guard",
+      "docker compose -f docker-compose.dev.yml --env-file .env.example down -v --remove-orphans",
+      "docker compose -f docker-compose.dev.yml --env-file .env up -d --build",
+      "docker compose -f docker-compose.dev.yml --env-file .env exec control-plane node dist/src/migrations.js",
+      "docker compose -f docker-compose.dev.yml --env-file .env ps",
+      "docker compose -f docker-compose.dev.yml --env-file .env down -v --remove-orphans",
+    ]) expect(doc).toContain(c);
+  });
 });

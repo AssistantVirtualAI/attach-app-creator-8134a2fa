@@ -1,0 +1,14 @@
+# Lemtel Edge feature gates - static policy data, NOT a runtime switch.
+# Future production activation requires a separately approved phase and an immutable, auditable change.
+version: 1
+gates:
+  edge_enabled: false
+  sip_registration_enabled: false
+  sip_proxy_enabled: false
+  rtp_relay_enabled: false
+  fusionpbx_upstream_enabled: false
+  control_plane_events_enabled: false
+  push_invite_events_enabled: false
+  recording_enabled: false
+  transcoding_enabled: false
+  media_forking_enabled: false

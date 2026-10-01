@@ -1,0 +1,17 @@
+# Lemtel Edge - future Kamailio TLS profile.
+# NOT ENABLED IN PHASE 2. Documentation-only template. No certificate or key exists.
+# Paths are placeholders for a future secret mount; nothing is generated or stored here.
+
+[server:default]
+method = TLSv1.2+
+verify_certificate = yes
+require_certificate = no
+private_key = /run/secrets/edge_tls_private_key
+certificate = /run/secrets/edge_tls_certificate
+
+[client:default]
+method = TLSv1.2+
+verify_certificate = yes
+require_certificate = yes
+
+# Future module setting (not active): modparam("tls", "renegotiation", 0)

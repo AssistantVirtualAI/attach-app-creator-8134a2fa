@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Static safety checks for the Lemtel Control Plane (Phase 1). Usage: node scripts/verify-lemtel-control-plane.mjs [baseRef]
+// Static safety checks for the Lemtel Control Plane (Phase 1). Usage: node scripts/verify-lemtel-control-plane.mjs [baseRef] [--audit]
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
-const base = process.argv[2];
+const base = process.argv.slice(2).find((a) => !a.startsWith("--"));
 const fail = [];
 const walk = (d) => existsSync(d) ? readdirSync(d, { withFileTypes: true }).flatMap((e) => e.name === "node_modules" || e.name === "dist" ? [] : e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]) : [];
 const SVC = join(root, "services/lemtel-control-plane");
@@ -43,6 +43,27 @@ for (const svc of ["postgres", "redis"]) if (/\n\s+ports:/.test(blocks[svc] ?? "
 for (const m of compose.matchAll(/-\s*"([^"]+)"/g)) if (/^\S*:\d+:\d+$/.test(m[1]) && !m[1].startsWith("127.0.0.1:")) fail.push(`non-loopback port ${m[1]}`);
 if (/network_mode:\s*host|privileged:\s*true|docker\.sock/.test(compose)) fail.push("unsafe compose option");
 if (/:latest\b/.test(compose)) fail.push("compose uses latest tag");
+
+if (!blocks["config-guard"]) fail.push("compose missing config-guard");
+else {
+  const g = blocks["config-guard"];
+  if (!/image:\s*\S+:\d[\w.-]*/.test(g)) fail.push("config-guard image not pinned");
+  for (const opt of [/restart:\s*"no"/, /no-new-privileges:true/, /cap_drop:\s*\["ALL"\]/, /read_only:\s*true/, /user:\s*"\d+:\d+"/, /network_mode:\s*none/]) if (!opt.test(g)) fail.push(`config-guard missing hardening ${opt}`);
+  if (/ports:|volumes:/.test(g)) fail.push("config-guard must have no ports or volumes");
+}
+for (const svc of ["control-plane", "postgres", "redis"]) {
+  const b = blocks[svc] ?? "";
+  if (!/depends_on:[\s\S]*\*after-guard/.test(b)) fail.push(`${svc} does not wait for config-guard`);
+  if (!/no-new-privileges|<<: \*hardening/.test(b)) fail.push(`${svc} missing hardening`);
+}
+if (!/x-after-guard:[^\n]*\n\s+config-guard:\s*\{\s*condition:\s*service_completed_successfully\s*\}/.test(compose)) fail.push("after-guard anchor must require service_completed_successfully");
+if (/\$\{[A-Z_]+:\?/.test(compose)) fail.push("compose uses ${VAR:?} which breaks config with the blank example");
+for (const m of compose.matchAll(/\$\{(CONTROL_PLANE_(?:SERVICE_TOKEN|DB_PASSWORD|REDIS_PASSWORD))(:?-)([^}]*)\}/g)) if (m[3]) fail.push(`fallback value for ${m[1]}`);
+
+if (process.argv.includes("--audit")) {
+  try { execSync("npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org", { cwd: SVC, stdio: "pipe" }); }
+  catch { fail.push("npm audit reports a high/critical production vulnerability (or audit unavailable)"); }
+}
 
 const docker = readFileSync(join(SVC, "Dockerfile"), "utf8");
 if (/:latest\b/.test(docker)) fail.push("Dockerfile uses latest tag");

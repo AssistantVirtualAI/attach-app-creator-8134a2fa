@@ -31,4 +31,24 @@ curl -fsS http://127.0.0.1:8081/health/ready
 docker compose --env-file .env down -v
 ```
 
-With the tracked `.env.example` (empty values), `docker compose up` refuses to start. This is intended.
+Expected behavior with the tracked `.env.example` (blank values):
+
+```sh
+docker compose -f infra/lemtel-control-plane/docker-compose.dev.yml --env-file infra/lemtel-control-plane/.env.example config
+cd infra/lemtel-control-plane
+docker compose --env-file .env.example up --abort-on-container-exit --exit-code-from config-guard
+```
+
+- `config` succeeds and shows no secret value.
+- `up` fails: `config-guard` rejects the missing values, so PostgreSQL, Redis and the Control Plane never start.
+
+Strong, developer-generated values belong only in the ignored `.env`. Never send a real secret to Lovable or chat, and never commit it.
+
+Release validation (needs network access to the public npm advisory service):
+
+```sh
+cd services/lemtel-control-plane
+npm audit --omit=dev --audit-level=high
+cd ../..
+node scripts/verify-lemtel-control-plane.mjs 6e512e962 --audit
+```

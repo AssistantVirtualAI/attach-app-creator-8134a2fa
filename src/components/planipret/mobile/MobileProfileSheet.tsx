@@ -79,9 +79,9 @@ export default function MobileProfileSheet({
   const setStatus = async (s: string) => {
     if (!profile?.user_id) return;
     setSavingStatus(s);
-    const { error } = await supabase.from("planipret_profiles").update({ status: s }).eq("user_id", profile.user_id);
+    const { error } = await supabase.rpc("set_my_planipret_status" as never, { _status: s } as never);
     setSavingStatus(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(lang === "fr" ? "Impossible de changer le statut. Réessayez." : "Could not update status. Try again."); return; }
     toast.success(t("profile.statusUpdated"));
     await reloadProfile();
   };
@@ -124,8 +124,13 @@ export default function MobileProfileSheet({
         style={{ background: "rgba(0,0,0,0.45)", zIndex: 9000 }}
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
         <motion.div onClick={(e) => e.stopPropagation()}
-          className="w-full max-h-[92%] overflow-y-auto"
+          className="w-full overflow-y-auto"
           style={{
+            maxHeight: "min(92%, calc(100dvh - env(safe-area-inset-top) - 16px))",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehavior: "contain",
+            touchAction: "pan-y",
+            paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
             background: "var(--pp-bg-surface)",
             borderTopLeftRadius: 28, borderTopRightRadius: 28,
             color: "var(--pp-text-primary)",

@@ -51,7 +51,7 @@ const SECRET = [
   [/(sip|pbx|auth|db)_?pass(word)?\s*[=:]\s*\S/i, "SIP/PBX password"],
 ];
 for (const [f, s] of files) {
-  for (const [re, label] of SECRET) if (re.test(s)) fail.push(`${label} in ${f}`);
+  for (const [re, label] of SECRET) if (re.test(s.replaceAll("https://json-schema.org/draft/2020-12/schema", ""))) fail.push(`${label} in ${f}`);
   for (const m of s.matchAll(/\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g)) if (m[1] !== "127") fail.push(`non-loopback IP in ${f}`);
 }
 for (const line of read("infra/lemtel-edge/edge.env.example").split("\n").filter(Boolean)) {
@@ -62,7 +62,7 @@ for (const line of read("infra/lemtel-edge/edge.env.example").split("\n").filter
 
 // 4. No runtime / deployment mechanism
 for (const f of pkg.map(rel)) if (/(^|\/)(Dockerfile|docker-compose[^/]*|compose\.ya?ml|[^/]+\.(sh|service))$/i.test(f)) fail.push(`executable runtime file ${f}`);
-const RUNTIME = /docker\s+(compose|run|build)|\bcurl\b|\bwget\b|\bnc\s+-|\btelnet\b|\bsipp\b|\bsipsak\b|^\s*(sudo\s+)?(kamailio|rtpengine)\s+-|\b(iptables|ufw|nft|firewall-cmd|systemctl|ssh|scp|rsync|kubectl|terraform|ansible)\s/im;
+const RUNTIME = /docker\s+(compose|run|build)\b|\bcurl\b|\bwget\b|\bnc\s+-|\btelnet\b|\bsipp\b|\bsipsak\b|^\s*(sudo\s+)?(kamailio|rtpengine)\s+-|\b(iptables|ufw|nft|firewall-cmd|systemctl|ssh|scp|rsync|kubectl|terraform|ansible)\s/im;
 for (const [f, s] of files) if (RUNTIME.test(s)) fail.push(`runtime/deployment command in ${f}`);
 
 // 5-7. Active Kamailio configuration

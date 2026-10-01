@@ -56,12 +56,14 @@ describe("Lemtel Control Plane phase 7 — offline cutover policy", () => {
     expect(vals.every((v) => v === "false")).toBe(true);
   });
 
-  it.skipIf(!hasBase)("Phase 3–6 packages unchanged since base", () => {
+  it("Phase 3–6 packages unchanged since base", () => {
+    expect(hasBase, "base commit must be available locally").toBe(true);
     const changed = execFileSync("git", ["diff", "--name-only", BASE, "--", "infra/lemtel-edge", "schemas/lemtel-edge", "docs/lemtel-edge"], { cwd: root, encoding: "utf8" }).trim();
     expect(changed).toBe("");
   });
 
-  it.skipIf(!hasBase)("Phase 7 changed-file scope is limited to the five allowed paths", () => {
+  it("Phase 7 changed-file scope is limited to the five allowed paths", () => {
+    expect(hasBase, "base commit must be available locally").toBe(true);
     const changed = execFileSync("git", ["diff", "--name-only", BASE], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
     const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
     for (const f of [...changed, ...untracked]) expect(ALLOWED, f).toContain(f);

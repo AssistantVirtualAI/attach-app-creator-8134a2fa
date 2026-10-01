@@ -70,4 +70,3 @@ describe("Lemtel Control Plane phase 7 — offline cutover policy", () => {
     for (const f of changed) expect(ALLOWED, f).toContain(f);
   });
 });
-});

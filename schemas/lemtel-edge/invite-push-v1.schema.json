@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:invite-push-v1",
+  "title": "Lemtel Edge invite push payload v1 (future contract)",
+  "description": "expires_at must be at most 60 seconds after occurred_at; enforced by the future Control Plane.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenant_ref", "extension_ref", "device_ref", "call_ref", "expires_at", "push_eligible"],
+  "properties": {
+    "tenant_ref": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" },
+    "extension_ref": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" },
+    "device_ref": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" },
+    "call_ref": { "type": "string", "pattern": "^[A-Za-z0-9_-]{16,64}$" },
+    "expires_at": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$" },
+    "push_eligible": { "type": "boolean" }
+  }
+}

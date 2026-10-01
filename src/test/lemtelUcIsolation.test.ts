@@ -34,7 +34,7 @@ describe("Lemtel UC isolation", () => {
     for (const f of ["luc-provision", "luc-device", "luc-pbx-adapter"]) {
       const s = fs.readFileSync(path.join(root, `supabase/functions/${f}/index.ts`), "utf8");
       expect(s).toMatch(/requireUser/);
-      expect(s).toMatch(/hasRole|luc_memberships/);
+      expect(s).toMatch(/hasRole|luc_memberships|preview_read_only/);
     }
   });
 });

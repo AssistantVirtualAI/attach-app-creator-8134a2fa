@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:pbx:pbx-tenant-binding-v1",
+  "title": "PBX tenant binding v1",
+  "description": "Future contract only, not implemented in Phase 5. Server-side tenant to opaque upstream adapter reference.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "tenant_ref",
+    "upstream_ref",
+    "binding_state",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "upstream_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "binding_state": {
+      "enum": [
+        "active",
+        "suspended",
+        "revoked"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:pbx:pbx-extension-desired-state-v1",
+  "title": "PBX extension desired state v1",
+  "description": "Future contract only, not implemented in Phase 5. Desired state declaration only; no PBX action.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "operation_ref",
+    "tenant_ref",
+    "extension_ref",
+    "desired_state",
+    "requested_at"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "operation_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "extension_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "desired_state": {
+      "enum": [
+        "active",
+        "suspended",
+        "revoked"
+      ]
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    }
+  }
+}

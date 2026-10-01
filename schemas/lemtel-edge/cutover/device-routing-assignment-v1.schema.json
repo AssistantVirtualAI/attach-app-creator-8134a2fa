@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:cutover:device-routing-assignment-v1",
+  "title": "Device routing assignment v1",
+  "description": "Future contract only, no live app/route/PBX action in Phase 6. existing_direct is the only current default; one active assignment per device is a future issuer rule.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "assignment_ref",
+    "tenant_ref",
+    "extension_ref",
+    "device_ref",
+    "routing_mode",
+    "assignment_state",
+    "issued_at",
+    "expires_at"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "assignment_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "extension_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "device_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "routing_mode": {
+      "enum": [
+        "existing_direct",
+        "shadow_observe",
+        "edge_pilot",
+        "existing_direct_rollback"
+      ]
+    },
+    "assignment_state": {
+      "enum": [
+        "pending",
+        "active",
+        "revoked",
+        "expired"
+      ]
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    }
+  }
+}

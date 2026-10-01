@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:cutover:device-migration-evidence-v1",
+  "title": "Device migration evidence v1",
+  "description": "Future contract only, no live app/route/PBX action in Phase 6. Opaque reference and enumerated outcome only; current reality is not_started.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "evidence_ref",
+    "tenant_ref",
+    "extension_ref",
+    "device_ref",
+    "assignment_ref",
+    "evidence_state",
+    "validation_scope",
+    "observed_at"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "evidence_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "extension_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "device_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "assignment_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "evidence_state": {
+      "enum": [
+        "not_started",
+        "collected",
+        "validated",
+        "rejected"
+      ]
+    },
+    "validation_scope": {
+      "enum": [
+        "registration_control",
+        "inbound_control",
+        "outbound_control",
+        "media_control",
+        "rollback_control"
+      ]
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    }
+  }
+}

@@ -25,7 +25,7 @@ test("missing or blank values fail closed naming only the setting", () => {
 });
 
 test("weak tokens are rejected without leaking the value", () => {
-  for (const t of ["short", "changeme".repeat(5), "replace-me-replace-me-replace-me-123", "0".repeat(40), "a".repeat(40), "default_default_default_default_default", "my-secret-token-that-is-long-enough-xx"]) {
+  for (const t of ["abc12", "changeme".repeat(5), "replace-me-replace-me-replace-me-123", "0".repeat(40), "a".repeat(40), "default_default_default_default_default", "my-secret-token-that-is-long-enough-xx"]) {
     assert.throws(() => loadConfig({ ...base, CONTROL_PLANE_SERVICE_TOKEN: t }), (e: unknown) => e instanceof ConfigError && !e.message.includes(t));
   }
 });

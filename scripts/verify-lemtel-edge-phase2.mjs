@@ -1,12 +1,20 @@
 #!/usr/bin/env node
-// Static checks for the Lemtel Edge Phase 2 offline package. Usage: node scripts/verify-lemtel-edge-phase2.mjs [baseRef]
+// Static checks for the Lemtel Edge Phase 2 offline package.
+// Usage: node scripts/verify-lemtel-edge-phase2.mjs --invariants | --historical-acceptance
+//   --invariants              frozen Phase 2 safety invariants against the checked-out package; no git diff.
+//   --historical-acceptance   same invariants + scope proof on the immutable range 224da47b7..cc28b5a80 only.
 // Never prints file contents. Makes no network request and starts no process other than git.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const root = process.cwd();
-const base = process.argv.slice(2).find((a) => !a.startsWith("--"));
+const USAGE = "Usage: node scripts/verify-lemtel-edge-phase2.mjs --invariants | --historical-acceptance";
+const args = process.argv.slice(2);
+if (args.length !== 1 || !["--invariants", "--historical-acceptance"].includes(args[0])) { console.error(USAGE); process.exit(2); }
+const MODE = args[0];
+const HISTORICAL_FROM = "224da47b7";
+const HISTORICAL_TO = "cc28b5a80";
 const fail = [];
 const walk = (d) => existsSync(d) ? readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]) : [];
 const rel = (f) => relative(root, f);
@@ -23,14 +31,12 @@ const REQUIRED = [
 ];
 for (const f of REQUIRED) if (!existsSync(join(root, f))) fail.push(`missing ${f}`);
 
-// 1-2. Path boundaries
-if (base) {
-  if (!/^[0-9a-fA-F]{7,40}$/.test(base)) fail.push("base ref must be a commit hash");
-  else {
-    const changed = [
-      ...execFileSync("git", ["diff", "--name-only", base, "--", "."], { cwd: root, encoding: "utf8" }).split("\n"),
-      ...execFileSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8" }).split("\n"),
-    ].filter(Boolean);
+// 1-2. Path boundaries (historical mode only, immutable range, never moving HEAD)
+if (MODE === "--historical-acceptance") {
+  let changed = null;
+  try { changed = execFileSync("git", ["diff", "--name-only", `${HISTORICAL_FROM}..${HISTORICAL_TO}`, "--", "."], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\n").filter(Boolean); }
+  catch { fail.push("historical commits unavailable"); }
+  if (changed) {
     const ALLOWED = /^(infra\/lemtel-edge\/|docs\/lemtel-edge\/|schemas\/lemtel-edge\/|scripts\/verify-lemtel-edge-phase2\.mjs$|src\/test\/lemtelEdgePhase2\.test\.ts$)/;
     for (const f of new Set(changed)) if (!ALLOWED.test(f)) fail.push(`path outside Phase 2 allowlist changed: ${f}`);
   }
@@ -135,4 +141,4 @@ for (const m of arch.matchAll(/-->\|([^|]*)\||-\.->\|([^|]*)\|/g)) if (!/future 
 if (/luc-edge/.test(allPhase2)) fail.push("Phase 2 package must not reference luc-edge");
 
 if (fail.length) { console.error(`✗ Lemtel Edge Phase 2 verification failed (${fail.length}):`); for (const f of fail) console.error(` - ${f}`); process.exit(1); }
-console.log(`✓ Lemtel Edge Phase 2 verification passed${base ? ` (base ${base})` : ""}`);
+console.log(MODE === "--invariants" ? "✓ Lemtel Edge Phase 2 invariants passed" : "✓ Lemtel Edge Phase 2 historical acceptance passed");

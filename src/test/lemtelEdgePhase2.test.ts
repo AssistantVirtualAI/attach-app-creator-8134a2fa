@@ -1,18 +1,43 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 const BASE = "224da47b7";
 
 describe("Lemtel Edge phase 2 — offline package", () => {
-  it("static verifier passes against the Phase 1 acceptance commit", () => {
-    let hasBase = true;
-    try { execFileSync("git", ["cat-file", "-t", BASE], { cwd: root, stdio: "ignore" }); } catch { hasBase = false; }
-    const out = execFileSync("node", ["scripts/verify-lemtel-edge-phase2.mjs", ...(hasBase ? [BASE] : [])], { cwd: root, encoding: "utf8" });
-    expect(out).toMatch(/passed/);
+  const run = (args: string[]) => spawnSync("node", ["scripts/verify-lemtel-edge-phase2.mjs", ...args], { cwd: root, encoding: "utf8" });
+  const USAGE = "Usage: node scripts/verify-lemtel-edge-phase2.mjs --invariants | --historical-acceptance";
+  const hasCommit = (c: string) => { try { execFileSync("git", ["cat-file", "-t", c], { cwd: root, stdio: "ignore" }); return true; } catch { return false; } };
+  const historicalAvailable = hasCommit("224da47b7") && hasCommit("cc28b5a80");
+
+  it("--invariants passes with the exact success line", () => {
+    const r = run(["--invariants"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim()).toBe("✓ Lemtel Edge Phase 2 invariants passed");
+  });
+
+  it.skipIf(!historicalAvailable)("--historical-acceptance passes on 224da47b7..cc28b5a80 (skipped when those commits are not local)", () => {
+    const r = run(["--historical-acceptance"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim()).toBe("✓ Lemtel Edge Phase 2 historical acceptance passed");
+  });
+
+  it("later-phase files do not make --invariants fail", () => {
+    expect(fs.existsSync(path.join(root, "scripts/verify-lemtel-edge-phase4.mjs"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "schemas/lemtel-edge/identity"))).toBe(true);
+    expect(run(["--invariants"]).status).toBe(0);
+  });
+
+  it("raw base hash, unknown flag, no args and extra args are rejected with the usage line", () => {
+    for (const a of [["224da47b7"], ["--oops"], [], ["--invariants", "--historical-acceptance"]]) {
+      const r = run(a);
+      expect(r.status).toBe(2);
+      expect(r.stderr.trim()).toBe(USAGE);
+      expect(r.stdout).toBe("");
+    }
   });
 
   it("every feature gate is false", () => {

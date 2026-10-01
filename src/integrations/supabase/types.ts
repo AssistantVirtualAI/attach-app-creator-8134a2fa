@@ -18061,6 +18061,7 @@ export type Database = {
         Args: { _call_id: string; _notes: string; _tags?: string[] }
         Returns: undefined
       }
+      set_my_planipret_status: { Args: { _status: string }; Returns: undefined }
       set_softphone_app_access: {
         Args: { _enabled: boolean; _softphone_id: string }
         Returns: Json

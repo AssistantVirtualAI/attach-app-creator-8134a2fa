@@ -42,14 +42,42 @@ describe("Lemtel UC phase 0", () => {
   });
 
   it("bootstrap is one-only and database-enforced", () => {
-    const prov = read("supabase/functions/luc-provision/index.ts");
-    expect(prov).toMatch(/rpc\("luc_bootstrap_platform_admin"/);
-    expect(prov).not.toMatch(/count: "exact"/);
     const mig = walk(path.join(root, "supabase/migrations")).filter((f) => f.includes("luc_bootstrap")).map((f) => fs.readFileSync(f, "utf8")).join("\n");
     expect(mig).toMatch(/CREATE UNIQUE INDEX[\s\S]*WHERE role = 'platform_admin'/);
     expect(mig).toMatch(/pg_advisory_xact_lock/);
     expect(mig).toMatch(/ON CONFLICT DO NOTHING/);
     expect(mig).toMatch(/FROM PUBLIC, anon, authenticated/);
+  });
+
+  it("browser UI has no LUC write path", () => {
+    for (const f of [...walk(path.join(root, "src/pages/lemtel-uc")), ...walk(path.join(root, "src/components/lemtel-uc"))]) {
+      const s = fs.readFileSync(f, "utf8");
+      expect(s, f).not.toMatch(/\.(insert|update|upsert|delete)\s*\(/);
+      expect(s, f).not.toMatch(/\b(bootstrap|createTenant|createPbx|provisionUser|simulate|enrollDevice|deviceAction)\b/);
+      expect(s, f).not.toMatch(/functions\.invoke/);
+    }
+  });
+
+  it("luc-provision has no auth.admin or database write path", () => {
+    const prov = read("supabase/functions/luc-provision/index.ts");
+    expect(prov).not.toMatch(/auth\.admin|inviteUserByEmail|listUsers|\.rpc\(|\.from\(|\.(insert|upsert|update|delete)\s*\(/);
+    for (const a of ["bootstrap", "create_tenant", "create_pbx_connection", "provision_user", "simulate_events"]) expect(prov).toContain(`"${a}"`);
+    expect(prov).toMatch(/preview_read_only" }, 409/);
+  });
+
+  it("device, pbx-adapter and edge are disabled before any write", () => {
+    for (const [f, code] of [["luc-device", /preview_read_only" }, 409/], ["luc-pbx-adapter", /preview_read_only" }, 409/], ["luc-edge", /edge_not_enabled" }, 503/]] as const) {
+      const s = read(`supabase/functions/${f}/index.ts`);
+      expect(s, f).toMatch(code);
+      expect(s, f).not.toMatch(/admin\(\)|\.from\(|\.rpc\(|\.(insert|upsert|update|delete)\s*\(|"issued"/);
+    }
+    expect(read("supabase/functions/luc-edge/index.ts")).toMatch(/verifyEdgeSignature/);
+  });
+
+  it("no LUC function can create tenants, invites, mappings, devices, events, messages, contacts, flags or jobs", () => {
+    const all = ["luc-provision", "luc-device", "luc-pbx-adapter", "luc-edge"].map((f) => read(`supabase/functions/${f}/index.ts`)).join("\n");
+    for (const t of ["luc_tenants", "luc_memberships", "luc_extension_mappings", "luc_devices", "luc_call_events", "luc_voicemails", "luc_recordings", "luc_messages", "luc_contacts", "luc_feature_flags", "luc_provisioning_jobs"]) expect(all).not.toContain(t);
+    expect(read("docs/lemtel-uc/reconciliation.md")).toMatch(/no write path/);
   });
 
   it("reconciliation doc names the canonical Lemtel objects", () => {

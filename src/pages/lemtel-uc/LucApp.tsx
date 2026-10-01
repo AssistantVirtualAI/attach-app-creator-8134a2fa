@@ -3,14 +3,14 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Building2, Contact, Gauge, LogOut, MessageSquare, Phone, Settings, Shield, Voicemail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LucProvider, useLuc } from "@/components/lemtel-uc/LucContext";
-import { lucApi } from "@/components/lemtel-uc/api";
+import { READ_ONLY } from "@/components/lemtel-uc/api";
 import { ErrorNote, Panel } from "@/components/lemtel-uc/ui";
 import "@/components/lemtel-uc/lemtel-uc.css";
 
 function PreviewNotice() {
   return (
     <div role="note" className="luc-panel mb-4 text-xs" style={{ borderColor: "hsl(var(--luc-warn, 38 92% 50%))" }}>
-      <strong>Non-production preview.</strong> Phone system, Edge and push behavior are simulated. This preview does not replace the published Lemtel apps or portal data, and records created here are preview-only. It uses the existing shared sign-in, not a separate identity system.
+      <strong>Non-production, read-only preview.</strong> Any data shown is non-production preview data. Nothing can be created, changed or deleted here; live administration remains in the existing Lemtel portal. Phone system, Edge and push are not connected. It uses the existing shared sign-in.
     </div>
   );
 }
@@ -50,29 +50,14 @@ function Login() {
 }
 
 function Onboarding() {
-  const { isPlatformAdmin, refresh } = useLuc();
-  const [name, setName] = useState(""); const [slug, setSlug] = useState("");
-  const [err, setErr] = useState<unknown>(null); const [busy, setBusy] = useState(false);
-  const run = async (f: () => Promise<unknown>) => { setBusy(true); setErr(null); try { await f(); await refresh(); } catch (e) { setErr(e); } finally { setBusy(false); } };
   return (
     <div className="mx-auto max-w-lg p-6">
       <PreviewNotice />
       <Panel title="Welcome to Lemtel UC (preview)">
-        {!isPlatformAdmin ? (
-          <div className="space-y-3 text-sm">
-            <p className="luc-muted">Your account is not linked to any organization yet. Ask your administrator to invite you.</p>
-            <p className="luc-muted">Setting up Lemtel UC for the first time? Claim platform administration (only works while no administrator exists).</p>
-            <button className="luc-btn" disabled={busy} onClick={() => run(lucApi.bootstrap)}>Become platform administrator</button>
-          </div>
-        ) : (
-          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void run(() => lucApi.createTenant(name, slug)); }}>
-            <p className="luc-muted text-sm">Create your first organization (tenant).</p>
-            <input className="luc-input" placeholder="Organization name" value={name} onChange={(e) => { setName(e.target.value); setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")); }} required />
-            <input className="luc-input" placeholder="short-id" value={slug} onChange={(e) => setSlug(e.target.value)} required />
-            <button className="luc-btn-primary" disabled={busy}>Create organization</button>
-          </form>
-        )}
-        <ErrorNote error={err} />
+        <div className="space-y-3 text-sm">
+          <p className="luc-muted">Your account is not linked to any preview organization.</p>
+          <p className="luc-muted">{READ_ONLY}</p>
+        </div>
       </Panel>
     </div>
   );

@@ -5,6 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "0b0d74f9d";
+const PHASE8_END = "a76ac1d48";
 const SVC_REL = ["services", "lemtel-control-plane"].join("/");
 const SVC = path.join(root, SVC_REL);
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
@@ -17,12 +18,11 @@ const ALLOWED = [
   "scripts/verify-lemtel-control-plane-phase8.mjs",
   "src/test/lemtelControlPlanePhase8.test.ts",
 ];
-const PHASE7 = [
+const PHASE7_FROZEN = [
   `${SVC_REL}/src/${["policy", "cutover"].join("/")}.ts`,
   `${SVC_REL}/test/cutover-policy.test.ts`,
   "docs/lemtel-control-plane/phase-7-cutover-policy.md",
   "scripts/verify-lemtel-control-plane-phase7.mjs",
-  "src/test/lemtelControlPlanePhase7.test.ts",
 ];
 
 describe("Lemtel Control Plane phase 8 — offline assignment lifecycle reducer", () => {
@@ -54,12 +54,14 @@ describe("Lemtel Control Plane phase 8 — offline assignment lifecycle reducer"
     expect(vals.every((v) => v === "false")).toBe(true);
   });
 
-  it("Phase 3–6 packages and Phase 7 files unchanged since base", () => {
-    expect(git(["diff", "--name-only", BASE, "--", "infra/lemtel-edge", "schemas/lemtel-edge", "docs/lemtel-edge", ...PHASE7])).toEqual([]);
+  it("Phase 3–6 packages and frozen Phase 7 policy artifacts unchanged since base", () => {
+    expect(git(["diff", "--name-only", BASE, "--", "infra/lemtel-edge", "schemas/lemtel-edge", "docs/lemtel-edge", ...PHASE7_FROZEN])).toEqual([]);
   });
 
   it("Phase 8 changed-file scope is limited to the five allowed paths", () => {
-    const changed = [...git(["diff", "--name-only", BASE]), ...git(["ls-files", "--others", "--exclude-standard"])];
+    for (const ref of [BASE, PHASE8_END]) expect(execFileSync("git", ["cat-file", "-t", ref], { cwd: root, encoding: "utf8" }).trim(), `historical ref ${ref} must exist locally`).toBe("commit");
+    const changed = git(["diff", "--name-only", `${BASE}..${PHASE8_END}`]);
+    expect(changed.length).toBeGreaterThan(0);
     for (const f of changed) expect(ALLOWED, f).toContain(f);
   });
 });

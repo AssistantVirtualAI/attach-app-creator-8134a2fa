@@ -4,7 +4,7 @@
 export const ROUTING_MODES = ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"] as const;
 export const REQUESTED_MODES = ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"] as const;
 export const REASON_CODES = ["existing_route_required", "phase1_runtime_pending", "edge_disabled", "device_not_authorized", "capability_invalid", "pilot_not_approved", "prerequisites_incomplete", "rollback_required"] as const;
-export const PILOT_PREREQUISITES = ["phase1_runtime_passed", "edge_runtime_approved", "fusion\u0070bx_nonproduction_approved", "device_capability_approved", "pilot_approval_recorded", "existing_route_withdrawn", "rollback_path_verified"] as const;
+export const PILOT_PREREQUISITES = ["phase1_runtime_passed", "edge_runtime_approved", "upstream_nonproduction_approved", "device_capability_approved", "pilot_approval_recorded", "existing_route_withdrawn", "rollback_path_verified"] as const;
 
 export type RoutingMode = (typeof ROUTING_MODES)[number];
 export type ReasonCode = (typeof REASON_CODES)[number];

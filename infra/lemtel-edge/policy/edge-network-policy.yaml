@@ -1,0 +1,27 @@
+# Lemtel Edge network policy - static data only, not a firewall or runtime configuration.
+version: 1
+phase: 2
+default: deny
+phase2_state:
+  offline: true
+  no_listener: true
+  no_public_ingress: true
+  no_fusionpbx_egress: true
+  no_control_plane_egress: true
+  no_media_relay: true
+future_intent:
+  - flow: clients_to_edge
+    transport: [tls_wss, sip_tls]
+    status: future_disabled
+  - flow: edge_to_rtpengine
+    transport: [ng_control_internal_only]
+    status: future_disabled
+  - flow: edge_to_fusionpbx
+    transport: [allowlisted_private_sip]
+    status: future_disabled
+  - flow: edge_to_control_plane
+    transport: [signed_https_events]
+    status: future_disabled
+  - flow: rtp_media
+    transport: [udp_relay_range_policy_controlled]
+    status: future_disabled

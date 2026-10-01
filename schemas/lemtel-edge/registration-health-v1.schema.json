@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:registration-health-v1",
+  "title": "Lemtel Edge registration health payload v1 (future contract)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenant_ref", "extension_ref", "device_ref", "state"],
+  "properties": {
+    "tenant_ref": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" },
+    "extension_ref": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" },
+    "device_ref": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" },
+    "state": { "enum": ["registered", "unregistered", "failed"] }
+  }
+}

@@ -17,8 +17,7 @@ services:
     read_only: true
     tmpfs: ["/tmp"]
     network_mode: none
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["$$GUARD_SCRIPT"]
+    entrypoint: ["/bin/sh", "/guard/config-guard.sh"]
     environment:
       CONTROL_PLANE_SERVICE_TOKEN: ${CONTROL_PLANE_SERVICE_TOKEN:-}
       CONTROL_PLANE_DB_PASSWORD: ${CONTROL_PLANE_DB_PASSWORD:-}
@@ -26,7 +25,6 @@ services:
     configs:
       - source: guard
         target: /guard/config-guard.sh
-    x-note: GUARD_SCRIPT is provided below
 
   control-plane:
     <<: *hardening

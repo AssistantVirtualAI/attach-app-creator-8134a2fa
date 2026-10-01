@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:identity:tenant-extension-device-binding-v1",
+  "title": "Tenant / extension / device binding v1",
+  "description": "Future server-side binding declaration only. Phase 4 contract, not implemented.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "tenant_ref",
+    "extension_ref",
+    "device_ref",
+    "binding_state",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "extension_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "device_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "binding_state": {
+      "enum": [
+        "active",
+        "suspended",
+        "revoked"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    }
+  }
+}

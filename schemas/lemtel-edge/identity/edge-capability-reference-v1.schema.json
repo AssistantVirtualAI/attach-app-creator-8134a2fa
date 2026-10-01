@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:identity:edge-capability-reference-v1",
+  "title": "Edge capability reference v1",
+  "description": "Client-visible short-lived authorization reference, not a credential. expires_at is at most 12 hours after issued_at, enforced only by a future issuer and validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "capability_ref",
+    "tenant_ref",
+    "extension_ref",
+    "device_ref",
+    "edge_instance_ref",
+    "capabilities",
+    "issued_at",
+    "expires_at",
+    "state"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "capability_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "extension_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "device_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "edge_instance_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "enum": [
+          "sip_register",
+          "sip_call",
+          "call_control",
+          "device_status"
+        ]
+      }
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    },
+    "state": {
+      "enum": [
+        "active",
+        "expired",
+        "revoked"
+      ]
+    }
+  }
+}

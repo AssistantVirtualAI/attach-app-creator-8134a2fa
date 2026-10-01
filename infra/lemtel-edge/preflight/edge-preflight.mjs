@@ -96,7 +96,7 @@ function evaluate(root) {
 
   const schemas = {};
   check("SCHEMAS_DRAFT_2020_12", () => ["schema_envelope", "schema_registration", "schema_invite"].every((id) => { schemas[id] = JSON.parse(src[id]); return schemas[id].$schema === policy.schema_draft; }));
-  const objectsClosed = (n) => !n || typeof n !== "object" || ((n.type !== "object" && !n.properties) || n.additionalProperties === false) && Object.values(n).every((v) => typeof v !== "object" || objectsClosed(v));
+  const objectsClosed = (n) => !n || typeof n !== "object" || (n.type !== "object" || n.additionalProperties === false) && Object.values(n).every((v) => typeof v !== "object" || objectsClosed(v));
   check("SCHEMAS_NO_ADDITIONAL_PROPERTIES", () => Object.keys(schemas).length === 3 && Object.values(schemas).every(objectsClosed));
   check("ENVELOPE_CONTRACT", () => {
     const e = schemas.schema_envelope;

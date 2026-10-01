@@ -850,11 +850,38 @@ function EditProfileSheet({ profile, onClose, onSaved }: { profile: any; onClose
 }
 
 function HelpSheet({ onClose }: { onClose: () => void }) {
-  const { t } = useMplanipretLang();
+  const { t, lang } = useMplanipretLang();
+  const fr = lang === "fr";
+  const extra = fr ? [
+    { q: "Comment trouver un client avec AVA ?", a: "Demandez à AVA le nom ou le numéro du client. AVA affiche d'abord sa fiche Maestro vérifiée ; l'appel, le SMS ou le courriel ne sont proposés que si vous le demandez." },
+    { q: "Que faire après un appel ?", a: "Après chaque appel répondu (entrant ou sortant), choisissez Enregistrer ou Supprimer. Les appels manqués ou refusés n'affichent pas ce choix." },
+    { q: "Comment envoyer et recevoir des SMS ?", a: "Les SMS partent de votre numéro de courtier. Les réponses des clients apparaissent dans Messages, dans l'app et dans le portail, et vous pouvez y répondre directement." },
+    { q: "Comment voir mes commissions ?", a: "L'onglet Commissions affiche vos commissions mises à jour chaque nuit. Seules les nouvelles commissions sont chargées à chaque connexion." },
+    { q: "Comment gérer mes tâches Maestro ?", a: "Ouvrez Tâches pour voir vos tâches Maestro. Marquez une tâche terminée : elle disparaît une fois confirmée par Maestro." },
+    { q: "Comment utiliser le Marketing ?", a: "Dans Marketing, choisissez vos clients (cellulaire et courriel affichés) et écrivez votre message. Utilisez {prenom}, {nom} ou {nom_complet} pour le personnaliser." },
+    { q: "Comment changer mon statut ?", a: "Touchez votre photo de profil et choisissez Disponible, Occupé, En réunion, etc. Votre équipe voit votre statut en temps réel." },
+    { q: "Comment activer Ne pas déranger ?", a: "Dans Réglages > Ne pas déranger, activez-le maintenant ou programmez des heures automatiques." },
+    { q: "Comment ouvrir le portail AVA Statistic ?", a: "Dans Réglages, touchez Ouvrir mon portail AVA Statistic. Vous pouvez aussi aller sur avastatistic.ca/planipret dans votre navigateur." },
+    { q: "Comment changer la langue ?", a: "Dans Réglages, utilisez le sélecteur FR / EN. AVA répond dans la langue choisie sous Personnaliser AVA." },
+    { q: "Comment signaler un problème ?", a: "Utilisez Signaler un problème dans Réglages ou écrivez à AVA. Votre demande est transmise à l'équipe de soutien." },
+  ] : [
+    { q: "How do I find a client with AVA?", a: "Ask AVA for the client's name or number. AVA first shows the verified Maestro profile; calls, SMS or email are offered only when you ask." },
+    { q: "What happens after a call?", a: "After every answered call (inbound or outbound), choose Save or Delete. Missed or declined calls don't show this prompt." },
+    { q: "How do I send and receive SMS?", a: "SMS are sent from your broker number. Client replies appear in Messages, in the app and the portal, and you can reply directly." },
+    { q: "How do I see my commissions?", a: "The Commissions tab shows your commissions, updated every night. Only new commissions load each time you sign in." },
+    { q: "How do I manage my Maestro tasks?", a: "Open Tasks to see your Maestro tasks. Mark a task done: it disappears once Maestro confirms it." },
+    { q: "How do I use Marketing?", a: "In Marketing, pick your clients (mobile and email shown) and write your message. Use {prenom}, {nom} or {nom_complet} to personalize it." },
+    { q: "How do I change my status?", a: "Tap your profile picture and choose Available, Busy, In a meeting, etc. Your team sees your status in real time." },
+    { q: "How do I turn on Do Not Disturb?", a: "In Settings > Do Not Disturb, turn it on now or schedule automatic hours." },
+    { q: "How do I open the AVA Statistic portal?", a: "In Settings, tap Open my AVA Statistic portal. You can also go to avastatistic.ca/planipret in your browser." },
+    { q: "How do I change the language?", a: "In Settings, use the FR / EN switch. AVA replies in the language chosen under Customize AVA." },
+    { q: "How do I report a problem?", a: "Use Report a problem in Settings or write to AVA. Your request goes to the support team." },
+  ];
   const faq = [
     { q: t("more.helpFaqCallQ"), a: t("more.helpFaqCallA") },
     { q: t("more.helpFaqAvaQ"), a: t("more.helpFaqAvaA") },
     { q: t("more.helpFaqCallsQ"), a: t("more.helpFaqCallsA") },
+    ...extra,
   ];
   return (
     <Sheet title={t("more.helpCenter")} onClose={onClose}>

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:identity:edge-authorization-decision-v1",
+  "title": "Edge authorization decision v1",
+  "description": "Future server-to-server audit decision, not a client session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "decision_ref",
+    "tenant_ref",
+    "extension_ref",
+    "device_ref",
+    "capability_ref",
+    "decision",
+    "reason_code",
+    "decided_at"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "decision_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "extension_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "device_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "capability_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "decision": {
+      "enum": [
+        "allow",
+        "deny"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "binding_active",
+        "binding_suspended",
+        "binding_revoked",
+        "capability_expired",
+        "capability_revoked",
+        "edge_not_authorized",
+        "device_not_authorized",
+        "tenant_mismatch"
+      ]
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    }
+  }
+}

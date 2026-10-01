@@ -1,0 +1,100 @@
+{
+  "phase": 4,
+  "runtime": "not_started",
+  "phase1_docker_runtime": "pending",
+  "schemas": [
+    "tenant-extension-device-binding-v1.schema.json",
+    "edge-capability-reference-v1.schema.json",
+    "edge-authorization-decision-v1.schema.json",
+    "edge-credential-resolution-request-v1.schema.json",
+    "edge-credential-resolution-result-v1.schema.json",
+    "edge-revocation-notice-v1.schema.json"
+  ],
+  "opaque_ref_pattern": "^[A-Za-z0-9_-]{8,64}$",
+  "capabilities": [
+    "sip_register",
+    "sip_call",
+    "call_control",
+    "device_status"
+  ],
+  "binding_states": [
+    "active",
+    "suspended",
+    "revoked"
+  ],
+  "capability_states": [
+    "active",
+    "expired",
+    "revoked"
+  ],
+  "decisions": [
+    "allow",
+    "deny"
+  ],
+  "reason_codes": [
+    "binding_active",
+    "binding_suspended",
+    "binding_revoked",
+    "capability_expired",
+    "capability_revoked",
+    "edge_not_authorized",
+    "device_not_authorized",
+    "tenant_mismatch"
+  ],
+  "resolution_states": [
+    "granted",
+    "denied",
+    "expired",
+    "revoked"
+  ],
+  "revocation_scopes": [
+    "device",
+    "capability",
+    "binding"
+  ],
+  "denied_property_fragments": [
+    "password",
+    "secret",
+    "token",
+    "jwt",
+    "credential",
+    "auth",
+    "sip",
+    "pbx",
+    "host",
+    "url",
+    "uri",
+    "ip",
+    "caller",
+    "callee",
+    "number",
+    "phone",
+    "email",
+    "name",
+    "recording",
+    "voicemail",
+    "message",
+    "push",
+    "certificate",
+    "key",
+    "endpoint",
+    "transport"
+  ],
+  "checks": [
+    "P4_BASE_ATTESTATION",
+    "P4_DOCS_NO_CLAIMS",
+    "P4_DOCS_NO_COMMANDS",
+    "P4_DOCS_PHASE1_PENDING",
+    "P4_ENUMS_EXACT",
+    "P4_FILES_PRESENT",
+    "P4_NO_RUNTIME_ARTIFACTS",
+    "P4_OPAQUE_REF_PATTERN",
+    "P4_POLICY_STATIC",
+    "P4_PROTECTED_PHASE2_3_UNCHANGED",
+    "P4_REQUIRED_FIELDS_EXACT",
+    "P4_SCHEMAS_CLOSED",
+    "P4_SCHEMAS_DRAFT_2020_12",
+    "P4_SENSITIVE_FIELDS_ABSENT",
+    "P4_VERIFIER_IMPORTS_SAFE"
+  ]
+}

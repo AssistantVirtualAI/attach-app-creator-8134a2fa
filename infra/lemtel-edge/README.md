@@ -13,3 +13,7 @@ Pending gate: the Phase 1 Docker runtime validation from `docs/lemtel-control-pl
 ## Phase 3 - offline preflight
 
 `preflight/edge-preflight.mjs` is a static Node.js integrity check of the committed templates, policies and event schemas. It prints only stable check IDs or one compact JSON report to stdout and writes no file or persisted artifact. It starts nothing and connects to nothing. The package stays offline and default deny, and every gate stays `false`.
+
+## Phase 4 - identity contract
+
+`schemas/lemtel-edge/identity/` defines future tenant / extension / device bindings, capability references, authorization decisions, credential resolution and revocation, using opaque references only. Phase 4 is a contract only: it stores and uses no credential, and clients never receive a raw SIP or PBX credential or the PBX host.

@@ -28,7 +28,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return payload;
   });
 
-  app.setErrorHandler((err: { statusCode?: number }, _req, reply) => {
+  app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
     const code = err.statusCode && err.statusCode >= 400 && err.statusCode < 500 ? err.statusCode : 500;
     reply.code(code).send({ error: code === 500 ? "internal_error" : code === 413 ? "payload_too_large" : code === 415 ? "unsupported_media_type" : "bad_request" });
   });

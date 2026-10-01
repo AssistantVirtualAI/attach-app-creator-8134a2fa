@@ -134,7 +134,6 @@ export default function MobileProfileSheet({
             background: "var(--pp-bg-surface)",
             borderTopLeftRadius: 28, borderTopRightRadius: 28,
             color: "var(--pp-text-primary)",
-            paddingBottom: 28,
             boxShadow: "0 -8px 32px rgba(0,0,0,0.25)",
           }}
           initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}

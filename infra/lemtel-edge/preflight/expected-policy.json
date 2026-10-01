@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "checks": [
+    "EDGE_GATES_ALL_FALSE",
+    "ENVELOPE_CONTRACT",
+    "ENV_EXAMPLE_ALLOWED_SET",
+    "ENV_EXAMPLE_BLANK",
+    "KAMAILIO_CORS_DISABLED",
+    "KAMAILIO_LISTENER_LOOPBACK_GUARDED",
+    "KAMAILIO_NO_FORBIDDEN_BEHAVIOUR",
+    "KAMAILIO_RTPENGINE_SOCK",
+    "KAMAILIO_STATIC_503_ONLY",
+    "NETWORK_DEFAULT_DENY",
+    "NETWORK_PHASE2_STATE",
+    "PACKAGE_NO_KEY_MATERIAL",
+    "PACKAGE_NO_RUNTIME_ARTIFACTS",
+    "PAYLOAD_OPAQUE_REFS",
+    "RTPENGINE_LOCAL_BINDINGS",
+    "RTPENGINE_MAIN_BINDINGS",
+    "SCHEMAS_DRAFT_2020_12",
+    "SCHEMAS_NO_ADDITIONAL_PROPERTIES"
+  ],
+  "feature_gates": [
+    "edge_enabled",
+    "sip_registration_enabled",
+    "sip_proxy_enabled",
+    "rtp_relay_enabled",
+    "fusionpbx_upstream_enabled",
+    "control_plane_events_enabled",
+    "push_invite_events_enabled",
+    "recording_enabled",
+    "transcoding_enabled",
+    "media_forking_enabled"
+  ],
+  "network_phase2_state": ["offline", "no_listener", "no_public_ingress", "no_fusionpbx_egress", "no_control_plane_egress", "no_media_relay"],
+  "env_names": [
+    "LEMTEL_EDGE_INSTANCE_ID",
+    "LEMTEL_EDGE_EVENT_HMAC_KEY",
+    "LEMTEL_EDGE_TLS_CERT_PATH",
+    "LEMTEL_EDGE_TLS_KEY_PATH",
+    "LEMTEL_EDGE_ALLOWED_ORIGINS",
+    "LEMTEL_EDGE_FUSIONPBX_UPSTREAM"
+  ],
+  "kamailio": {
+    "cors_mode": "0",
+    "rtpengine_sock": "udp:rtpengine:2223",
+    "disabled_reason": "Lemtel Edge disabled",
+    "listener_guard": "LEMTEL_EDGE_LOCAL_VALIDATION"
+  },
+  "rtpengine": {
+    "interface": "127.0.0.1",
+    "listen-ng": "127.0.0.1:2223",
+    "port-min": "30000",
+    "port-max": "30010",
+    "final-timeout": "0"
+  },
+  "schema_draft": "https://json-schema.org/draft/2020-12/schema",
+  "envelope_required": ["edge_instance_ref", "event_id", "event_type", "occurred_at", "payload", "version"],
+  "event_types": ["invite_push", "registration_health"],
+  "required_refs": ["tenant_ref", "extension_ref", "device_ref"],
+  "prohibited_property_fragments": ["pass", "secret", "token", "credential", "uri", "ip_addr", "domain", "host", "user_agent", "useragent", "caller", "callee", "number", "phone", "email", "name", "recording", "voicemail", "message", "transcript", "cdr", "sip", "pbx", "error"]
+}

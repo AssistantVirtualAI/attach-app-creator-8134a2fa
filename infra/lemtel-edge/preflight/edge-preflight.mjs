@@ -116,7 +116,7 @@ function evaluate(root) {
   check("PACKAGE_NO_KEY_MATERIAL", () => !pkgNames.some((n) => KEY_FILE.test(n)) && Object.values(src).every((s) => s !== null && !KEY_MARKER.test(s)));
 
   if (Object.values(src).some((s) => s === null)) failed.add("INPUTS_PRESENT");
-  for (const id of policy.checks) if (!["EXPECTED_POLICY_READABLE", "INPUTS_PRESENT"].includes(id) && failed.has(id) === false && !evaluatedIds.has(id)) failed.add("EXPECTED_CHECK_MISSING");
+  if (JSON.stringify([...policy.checks].sort()) !== JSON.stringify([...evaluatedIds].sort())) failed.add("EXPECTED_CHECK_SET");
   return { failed: [...failed].sort(), src, policy };
 }
 const evaluatedIds = new Set(["EDGE_GATES_ALL_FALSE", "ENVELOPE_CONTRACT", "ENV_EXAMPLE_ALLOWED_SET", "ENV_EXAMPLE_BLANK", "KAMAILIO_CORS_DISABLED", "KAMAILIO_LISTENER_LOOPBACK_GUARDED", "KAMAILIO_NO_FORBIDDEN_BEHAVIOUR", "KAMAILIO_RTPENGINE_SOCK", "KAMAILIO_STATIC_503_ONLY", "NETWORK_DEFAULT_DENY", "NETWORK_PHASE2_STATE", "PACKAGE_NO_KEY_MATERIAL", "PACKAGE_NO_RUNTIME_ARTIFACTS", "PAYLOAD_OPAQUE_REFS", "RTPENGINE_LOCAL_BINDINGS", "RTPENGINE_MAIN_BINDINGS", "SCHEMAS_DRAFT_2020_12", "SCHEMAS_NO_ADDITIONAL_PROPERTIES"]);

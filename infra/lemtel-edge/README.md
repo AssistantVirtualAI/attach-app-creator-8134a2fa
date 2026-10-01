@@ -9,3 +9,7 @@ This folder is an offline, inert template package. It is not a deployable stack:
 - Event schemas live in `schemas/lemtel-edge/`; documentation in `docs/lemtel-edge/`.
 
 Pending gate: the Phase 1 Docker runtime validation from `docs/lemtel-control-plane/local-development.md` is still pending. It must pass before any Edge container, deployment, FusionPBX integration, client cutover or pilot call.
+
+## Phase 3 - offline preflight
+
+`preflight/edge-preflight.mjs` is a static Node.js integrity check of the committed templates, policies and event schemas. It prints only stable check IDs or one compact JSON report to stdout and writes no file or persisted artifact. It starts nothing and connects to nothing. The package stays offline and default deny, and every gate stays `false`.

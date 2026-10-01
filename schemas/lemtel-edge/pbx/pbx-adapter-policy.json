@@ -1,0 +1,109 @@
+{
+  "phase": 5,
+  "runtime": "not_started",
+  "phase1_docker_runtime": "pending",
+  "schemas": [
+    "pbx-tenant-binding-v1.schema.json",
+    "pbx-extension-desired-state-v1.schema.json",
+    "pbx-extension-observed-state-v1.schema.json",
+    "pbx-provisioning-request-v1.schema.json",
+    "pbx-provisioning-result-v1.schema.json"
+  ],
+  "opaque_ref_pattern": "^[A-Za-z0-9_-]{8,64}$",
+  "binding_states": [
+    "active",
+    "suspended",
+    "revoked"
+  ],
+  "desired_states": [
+    "active",
+    "suspended",
+    "revoked"
+  ],
+  "observed_states": [
+    "active",
+    "suspended",
+    "revoked",
+    "unknown"
+  ],
+  "observation_states": [
+    "not_connected",
+    "stale",
+    "current"
+  ],
+  "change_kinds": [
+    "provision_extension",
+    "suspend_extension",
+    "revoke_device",
+    "refresh_binding"
+  ],
+  "result_states": [
+    "queued",
+    "applied",
+    "rejected",
+    "unknown"
+  ],
+  "reason_codes": [
+    "adapter_not_connected",
+    "tenant_binding_inactive",
+    "extension_state_mismatch",
+    "device_not_authorized",
+    "capability_invalid",
+    "upstream_not_authorized",
+    "operation_not_supported"
+  ],
+  "current_observation_state": "not_connected",
+  "denied_property_fragments": [
+    "password",
+    "secret",
+    "token",
+    "jwt",
+    "credential",
+    "auth",
+    "sip",
+    "pbx_uuid",
+    "host",
+    "url",
+    "uri",
+    "ip",
+    "port",
+    "endpoint",
+    "transport",
+    "extension_number",
+    "caller",
+    "callee",
+    "number",
+    "phone",
+    "email",
+    "name",
+    "recording",
+    "voicemail",
+    "message",
+    "push",
+    "cdr",
+    "error",
+    "debug",
+    "response",
+    "certificate",
+    "key"
+  ],
+  "checks": [
+    "P5_BASE_ATTESTATION",
+    "P5_CURRENT_NOT_CONNECTED",
+    "P5_DOCS_REQUIREMENTS",
+    "P5_ENUMS_EXACT",
+    "P5_FILES_PRESENT",
+    "P5_NO_RUNTIME_ARTIFACTS",
+    "P5_OPAQUE_REF_PATTERN",
+    "P5_PHASE2_GATES_FALSE",
+    "P5_PHASE3_PREFLIGHT_UNCHANGED",
+    "P5_PHASE4_POLICY_STATIC",
+    "P5_POLICY_STATIC",
+    "P5_REQUIRED_FIELDS_EXACT",
+    "P5_SCHEMAS_CLOSED",
+    "P5_SCHEMAS_DRAFT_2020_12",
+    "P5_SENSITIVE_FIELDS_ABSENT",
+    "P5_TIMESTAMP_PATTERN",
+    "P5_VERIFIER_IMPORTS_SAFE"
+  ]
+}

@@ -5,13 +5,14 @@ import { execFileSync, spawnSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "7e534de46";
-const SVC = path.join(root, "services/lemtel-control-plane");
+const SVC_REL = ["services", "lemtel-control-plane"].join("/");
+const SVC = path.join(root, SVC_REL);
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 const run = (args: string[]) => spawnSync("node", ["scripts/verify-lemtel-control-plane-phase7.mjs", ...args], { cwd: root, encoding: "utf8" });
 const hasBase = (() => { try { execFileSync("git", ["cat-file", "-t", BASE], { cwd: root, stdio: "ignore" }); return true; } catch { return false; } })();
 const ALLOWED = [
-  "services/lemtel-control-plane/src/policy/cutover.ts",
-  "services/lemtel-control-plane/test/cutover-policy.test.ts",
+  `${SVC_REL}/src/policy/cutover.ts`,
+  `${SVC_REL}/test/cutover-policy.test.ts`,
   "docs/lemtel-control-plane/phase-7-cutover-policy.md",
   "scripts/verify-lemtel-control-plane-phase7.mjs",
   "src/test/lemtelControlPlanePhase7.test.ts",

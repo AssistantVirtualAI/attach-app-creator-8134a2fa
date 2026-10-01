@@ -36,7 +36,7 @@ export function verifyPhase7(args, root = resolve(dirname(fileURLToPath(import.m
   const src = rd(MOD);
   const names = [...src.matchAll(/^export const (\w+) = \[([^\]]*)\] as const;$/gm)];
   if (!eq(names.map((m) => m[1]), Object.keys(CONSTS))) fail.add("CP7_CONSTANTS_EXACT");
-  for (const m of names) { const vals = [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1]); if (!eq(vals, CONSTS[m[1]])) fail.add("CP7_CONSTANTS_EXACT"); }
+  for (const m of names) { const vals = [...m[2].matchAll(/"([^"]+)"/g)].map((x) => JSON.parse(`"${x[1]}"`)); if (!eq(vals, CONSTS[m[1]])) fail.add("CP7_CONSTANTS_EXACT"); }
   const block = (n) => { const m = src.match(new RegExp(`export type ${n} = \\{([\\s\\S]*?)\\};`)); return m ? [...m[1].matchAll(/readonly (\w+):/g)].map((x) => x[1]) : null; };
   if (!eq(block("CutoverPolicyInput"), INPUT_FIELDS) || !eq(block("PolicyDecision"), OUTPUT_FIELDS) || !/export type RoutingMode =/.test(src) || !/export type ReasonCode =/.test(src)) fail.add("CP7_TYPES_EXACT");
   const fns = [...src.matchAll(/export function (\w+)/g)].map((m) => m[1]);

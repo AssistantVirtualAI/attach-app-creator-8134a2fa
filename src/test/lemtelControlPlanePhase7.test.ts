@@ -4,7 +4,7 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
-const BASE = "7e534de46";
+const BASE = "338dfff53";
 const SVC_REL = ["services", "lemtel-control-plane"].join("/");
 const SVC = path.join(root, SVC_REL);
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
@@ -26,13 +26,23 @@ describe("Lemtel Control Plane phase 7 — offline cutover policy", () => {
     for (const a of [["--oops"], ["--base=xyz"], [`--base=${BASE}`, "x"]]) {
       const r = run(a);
       expect(r.status).toBe(2);
-      expect(r.stdout).toBe("CP7_USAGE: [--base=7e534de46]\n");
+      expect(r.stdout).toBe("CP7_USAGE: [--base=338dfff53]\n");
     }
   });
 
-  it.skipIf(!fs.existsSync(path.join(SVC, "node_modules/.bin/tsx")))("service cutover tests pass through the package test command", () => {
+  it("service cutover tests pass through the package test command", () => {
+    expect(fs.existsSync(path.join(SVC, "node_modules/.bin/tsx")), "local service test dependencies are required").toBe(true);
     const r = spawnSync("npm", ["test"], { cwd: SVC, encoding: "utf8" });
     expect(r.status).toBe(0);
+  });
+
+  it("verifier enforces the transparency and required-test protections", () => {
+    const v = read("scripts/verify-lemtel-control-plane-phase7.mjs");
+    expect(v).toContain("CP7_NO_OBFUSCATED_PROVIDER_LABEL");
+    expect(v).toContain("CP7_SERVICE_TEST_REQUIRED");
+    const policy = fs.readFileSync(path.join(SVC, "src/policy/cutover.ts"), "utf8");
+    expect(policy).toContain('"upstream_nonproduction_approved"');
+    expect(policy).not.toMatch(/fusion|\\u|\\x/i);
   });
 
   it("no Control Plane runtime file references the policy module", () => {

@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
 
-const BASE = "7e534de46";
-const USAGE = "CP7_USAGE: [--base=7e534de46]";
+const BASE = "338dfff53";
+const USAGE = "CP7_USAGE: [--base=338dfff53]";
 const PREFLIGHT_SHA = "30570405bc08eb9cc35daa82a0e8fd22069e4ff0f5353bc1a6bc33619d244864";
 const MOD = "services/lemtel-control-plane/src/policy/cutover.ts";
 const DOC = "docs/lemtel-control-plane/phase-7-cutover-policy.md";
@@ -14,7 +14,7 @@ const CONSTS = {
   ROUTING_MODES: ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"],
   REQUESTED_MODES: ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"],
   REASON_CODES: ["existing_route_required", "phase1_runtime_pending", "edge_disabled", "device_not_authorized", "capability_invalid", "pilot_not_approved", "prerequisites_incomplete", "rollback_required"],
-  PILOT_PREREQUISITES: ["phase1_runtime_passed", "edge_runtime_approved", "fusionpbx_nonproduction_approved", "device_capability_approved", "pilot_approval_recorded", "existing_route_withdrawn", "rollback_path_verified"],
+  PILOT_PREREQUISITES: ["phase1_runtime_passed", "edge_runtime_approved", "upstream_nonproduction_approved", "device_capability_approved", "pilot_approval_recorded", "existing_route_withdrawn", "rollback_path_verified"],
 };
 const INPUT_FIELDS = ["requestedMode", "currentActiveMode", "phase1Runtime", "edgeRuntime", "identityScope", "capability", "pilotApproval", "nonProductionApproval", "directRoute", "rollbackPath"];
 const OUTPUT_FIELDS = ["decision", "effectiveMode", "reasonCode"];
@@ -45,9 +45,13 @@ export function verifyPhase7(args, root = resolve(dirname(fileURLToPath(import.m
   for (const t of ORDER) { const i = src.indexOf(t, pos + 1); if (i <= pos) { fail.add("CP7_PRECEDENCE_ORDER"); break; } pos = i; }
   const banned = ["process" + ".", "Da" + "te", "Math" + ".random", "random" + "UUID", "fet" + "ch(", "require" + "(", "import" + "(", "set" + "Timeout", "set" + "Interval", "node" + ":", "fast" + "ify", "red" + "is", "child_" + "process", "read" + "File", "write" + "File", "ev" + "al(", "Func" + "tion("];
   if (/^\s*import\s/m.test(src) || banned.some((b) => src.includes(b)) || /\.(get|post|put|patch|delete|route)\(/.test(src)) fail.add("CP7_MODULE_PURE");
+  if (/fusion|\\u|\\x/i.test(src)) fail.add("CP7_NO_OBFUSCATED_PROVIDER_LABEL");
+  const rt = rd("src/test/lemtelControlPlanePhase7.test.ts");
+  const svcTest = rt.match(/it\("service cutover tests[\s\S]*?\n  \}\);/);
+  if (/skipIf|it\.skip|\.skip\(|\.todo|\btodo\(/.test(rt) || !svcTest || /\breturn\b|catch|\bif\s*\(/.test(svcTest[0])) fail.add("CP7_SERVICE_TEST_REQUIRED");
   const d = rd(DOC);
   const labels = [...d.matchAll(/\|([^|]+)\|/g)].map((m) => m[1]);
-  if (!/```mermaid/.test(d) || !labels.length || !labels.every((l) => l.includes("future / disabled")) || !["Safe Enum Input", "Offline Cutover Policy", "Safe Enum Decision", "Existing Direct Route", "Future Device Pilot"].every((x) => d.includes(x)) || !/not imported by the application, server or routes/.test(d) || !/Phase 1 Docker runtime validation/.test(d) || !/Phase 2 gate remains false/.test(d) || /https?:\/\/|```(bash|sh|shell)/.test(d)) fail.add("CP7_DOCS_REQUIREMENTS");
+  if (!/```mermaid/.test(d) || !labels.length || !labels.every((l) => l.includes("future / disabled")) || !["Safe Enum Input", "Offline Cutover Policy", "Safe Enum Decision", "Existing Direct Route", "Future Device Pilot"].every((x) => d.includes(x)) || !/not imported by the application, server or routes/.test(d) || !/Phase 1 Docker runtime validation/.test(d) || !/Phase 2 gate remains false/.test(d) || !/The policy is provider-neutral and contains no provider host, credential, endpoint or connectivity configuration\./.test(d) || /fusion/i.test(d) || /https?:\/\/|```(bash|sh|shell)/.test(d)) fail.add("CP7_DOCS_REQUIREMENTS");
   const vals = [...rd("infra/lemtel-edge/policy/edge-feature-gates.yaml").matchAll(/^\s+[a-z_]+:\s*(\S+)/gm)].map((m) => m[1]);
   if (vals.length !== 10 || !vals.every((v) => v === "false")) fail.add("CP7_PHASE2_GATES_FALSE");
   if (createHash("sha256").update(readFileSync(join(root, "infra/lemtel-edge/preflight/edge-preflight.mjs"))).digest("hex") !== PREFLIGHT_SHA) fail.add("CP7_PHASE3_PREFLIGHT_UNCHANGED");

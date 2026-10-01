@@ -175,7 +175,18 @@ Deno.serve(async (req) => {
       ...(body?.company ? { company: String(body.company).trim() } : {}),
     };
 
-    const res = await createClient_(cfg, payload, { token });
+    // Maestro's accepted mobile_number format is undocumented: try the common
+    // North-American formats only when Maestro rejects the phone field.
+    const d = maestroMobileNumber!;
+    const phoneFormats = [d, `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`, `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`, `+1${d}`, `1${d}`];
+    let res = await createClient_(cfg, payload, { token });
+    for (const fmt of phoneFormats.slice(1)) {
+      if (res.ok || Number(res.status) !== 422) break;
+      const errText = JSON.stringify((res as any).data ?? (res as any).error ?? "").toLowerCase();
+      if (!errText.includes("mobile")) break;
+      payload.mobile_number = fmt;
+      res = await createClient_(cfg, payload, { token });
+    }
     if (!res.ok) {
       await maestroAudit(admin, "client_create_failed", {
         status: res.status,

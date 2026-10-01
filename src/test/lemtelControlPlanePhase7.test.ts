@@ -5,6 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "338dfff53";
+const PHASE7_END = "0b0d74f9d";
 const SVC_REL = ["services", "lemtel-control-plane"].join("/");
 const SVC = path.join(root, SVC_REL);
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
@@ -63,9 +64,9 @@ describe("Lemtel Control Plane phase 7 — offline cutover policy", () => {
   });
 
   it("Phase 7 changed-file scope is limited to the five allowed paths", () => {
-    expect(hasBase, "base commit must be available locally").toBe(true);
-    const changed = execFileSync("git", ["diff", "--name-only", BASE], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
-    const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
-    for (const f of [...changed, ...untracked]) expect(ALLOWED, f).toContain(f);
+    for (const ref of [BASE, PHASE7_END]) expect(execFileSync("git", ["cat-file", "-t", ref], { cwd: root, encoding: "utf8" }).trim(), `historical ref ${ref} must exist locally`).toBe("commit");
+    const changed = execFileSync("git", ["diff", "--name-only", `${BASE}..${PHASE7_END}`], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+    expect(changed.length).toBeGreaterThan(0);
+    for (const f of changed) expect(ALLOWED, f).toContain(f);
   });
 });

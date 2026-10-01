@@ -1,0 +1,137 @@
+{
+  "phase": 6,
+  "runtime": "not_started",
+  "phase1_docker_runtime": "pending",
+  "current_default_routing_mode": "existing_direct",
+  "current_evidence_state": "not_started",
+  "phase2_all_gates_false": true,
+  "schemas": [
+    "device-routing-assignment-v1.schema.json",
+    "device-routing-decision-v1.schema.json",
+    "device-migration-evidence-v1.schema.json",
+    "device-rollback-notice-v1.schema.json"
+  ],
+  "opaque_ref_pattern": "^[A-Za-z0-9_-]{8,64}$",
+  "routing_modes": [
+    "existing_direct",
+    "shadow_observe",
+    "edge_pilot",
+    "existing_direct_rollback"
+  ],
+  "assignment_states": [
+    "pending",
+    "active",
+    "revoked",
+    "expired"
+  ],
+  "decisions": [
+    "allow",
+    "deny"
+  ],
+  "reason_codes": [
+    "phase1_runtime_pending",
+    "edge_disabled",
+    "existing_route_required",
+    "device_not_authorized",
+    "capability_invalid",
+    "pilot_not_approved",
+    "prerequisites_incomplete",
+    "rollback_required"
+  ],
+  "evidence_states": [
+    "not_started",
+    "collected",
+    "validated",
+    "rejected"
+  ],
+  "validation_scopes": [
+    "registration_control",
+    "inbound_control",
+    "outbound_control",
+    "media_control",
+    "rollback_control"
+  ],
+  "rollback_scopes": [
+    "edge_pilot",
+    "shadow_observe"
+  ],
+  "rollback_states": [
+    "requested",
+    "revoked",
+    "restored",
+    "unknown"
+  ],
+  "one_active_assignment_per_device": "future_required",
+  "edge_pilot_prerequisites": [
+    "phase1_runtime_passed",
+    "edge_runtime_approved",
+    "fusionpbx_nonproduction_approved",
+    "device_capability_approved",
+    "pilot_approval_recorded",
+    "existing_route_withdrawn",
+    "rollback_path_verified"
+  ],
+  "version_field_note": "version is the fixed schema-contract marker v1, not a client build field",
+  "denied_property_fragments": [
+    "password",
+    "secret",
+    "token",
+    "jwt",
+    "credential",
+    "auth",
+    "sip",
+    "pbx",
+    "host",
+    "url",
+    "uri",
+    "ip",
+    "port",
+    "endpoint",
+    "transport",
+    "extension_number",
+    "caller",
+    "callee",
+    "number",
+    "phone",
+    "email",
+    "name",
+    "recording",
+    "voicemail",
+    "message",
+    "push",
+    "cdr",
+    "error",
+    "debug",
+    "response",
+    "certificate",
+    "key",
+    "client_version",
+    "build",
+    "release",
+    "platform",
+    "device_name",
+    "model",
+    "os",
+    "app"
+  ],
+  "checks": [
+    "P6_BASE_ATTESTATION",
+    "P6_CURRENT_DEFAULTS",
+    "P6_DOCS_REQUIREMENTS",
+    "P6_ENUMS_EXACT",
+    "P6_FILES_PRESENT",
+    "P6_NO_RUNTIME_ARTIFACTS",
+    "P6_OPAQUE_REF_PATTERN",
+    "P6_PHASE2_GATES_FALSE",
+    "P6_PHASE3_PREFLIGHT_UNCHANGED",
+    "P6_PHASE4_POLICY_STATIC",
+    "P6_PHASE5_POLICY_STATIC",
+    "P6_POLICY_STATIC",
+    "P6_REQUIRED_FIELDS_EXACT",
+    "P6_SCHEMAS_CLOSED",
+    "P6_SCHEMAS_DRAFT_2020_12",
+    "P6_SENSITIVE_FIELDS_ABSENT",
+    "P6_TIMESTAMP_PATTERN",
+    "P6_VERIFIER_IMPORTS_SAFE"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lemtel-edge:cutover:device-rollback-notice-v1",
+  "title": "Device rollback notice v1",
+  "description": "Future contract only, no live app/route/PBX action in Phase 6. Authorization and audit notice only; cannot start any signalling, update or PBX mutation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "notice_ref",
+    "tenant_ref",
+    "extension_ref",
+    "device_ref",
+    "assignment_ref",
+    "rollback_scope",
+    "rollback_state",
+    "issued_at"
+  ],
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "notice_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "extension_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "device_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "assignment_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,64}$"
+    },
+    "rollback_scope": {
+      "enum": [
+        "edge_pilot",
+        "shadow_observe"
+      ]
+    },
+    "rollback_state": {
+      "enum": [
+        "requested",
+        "revoked",
+        "restored",
+        "unknown"
+      ]
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+    }
+  }
+}

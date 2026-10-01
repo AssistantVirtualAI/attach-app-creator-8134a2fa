@@ -18,29 +18,27 @@ test("constants have the exact ordered values", () => {
   assert.deepEqual([...ROUTING_MODES], ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"]);
   assert.deepEqual([...REQUESTED_MODES], [...ROUTING_MODES]);
   assert.deepEqual([...REASON_CODES], ["existing_route_required", "phase1_runtime_pending", "edge_disabled", "device_not_authorized", "capability_invalid", "pilot_not_approved", "prerequisites_incomplete", "rollback_required"]);
-  assert.deepEqual([...PILOT_PREREQUISITES], ["phase1_runtime_passed", "edge_runtime_approved", "fusionpbx_nonproduction_approved", "device_capability_approved", "pilot_approval_recorded", "existing_route_withdrawn", "rollback_path_verified"]);
+  assert.deepEqual([...PILOT_PREREQUISITES], ["phase1_runtime_passed", "edge_runtime_approved", "upstream_nonproduction_approved", "device_capability_approved", "pilot_approval_recorded", "existing_route_withdrawn", "rollback_path_verified"]);
 });
 
 test("existing_direct always allows with every prerequisite missing", () => {
   assert.deepEqual(evaluateCutoverPolicy(freeze({ ...BAD })), { decision: "allow", effectiveMode: "existing_direct", reasonCode: "existing_route_required" });
 });
 
-test("pilot precedence returns the first failing reason", () => {
+test("strict precedence under simultaneous failures", () => {
+  const gates: [Partial<CutoverPolicyInput>, string][] = [
+    [{ phase1Runtime: "pending" }, "phase1_runtime_pending"], [{ edgeRuntime: "disabled" }, "edge_disabled"],
+    [{ identityScope: "denied" }, "device_not_authorized"], [{ capability: "invalid" }, "capability_invalid"],
+    [{ pilotApproval: "missing" }, "pilot_not_approved"], [{ nonProductionApproval: "missing" }, "prerequisites_incomplete"],
+    [{ directRoute: "active" }, "existing_route_required"], [{ rollbackPath: "unverified" }, "rollback_required"],
+    [{ currentActiveMode: "existing_direct" }, "existing_route_required"],
+  ];
   for (const mode of ["edge_pilot", "shadow_observe"] as const) {
-    const steps: [Partial<CutoverPolicyInput>, string][] = [
-      [{ phase1Runtime: "pending" }, "phase1_runtime_pending"], [{ edgeRuntime: "disabled" }, "edge_disabled"],
-      [{ identityScope: "denied" }, "device_not_authorized"], [{ capability: "invalid" }, "capability_invalid"],
-      [{ pilotApproval: "missing" }, "pilot_not_approved"], [{ nonProductionApproval: "missing" }, "prerequisites_incomplete"],
-      [{ directRoute: "active" }, "existing_route_required"], [{ rollbackPath: "unverified" }, "rollback_required"],
-      [{ currentActiveMode: "existing_direct" }, "existing_route_required"],
-    ];
-    let acc: Partial<CutoverPolicyInput> = {};
-    for (const [k] of steps) acc = { ...acc, ...k };
-    for (const [k, reason] of steps) {
-      const r = evaluateCutoverPolicy(freeze({ ...OK, requestedMode: mode, ...k }));
-      assert.deepEqual(r, { decision: "deny", effectiveMode: mode, reasonCode: reason });
+    for (let i = 0; i < gates.length; i++) {
+      let input: CutoverPolicyInput = { ...OK, requestedMode: mode };
+      for (const [bad] of gates.slice(i)) input = { ...input, ...bad };
+      assert.deepEqual(evaluateCutoverPolicy(freeze(input)), { decision: "deny", effectiveMode: mode, reasonCode: gates[i][1] });
     }
-    assert.equal(evaluateCutoverPolicy(freeze({ ...OK, requestedMode: mode, ...acc })).reasonCode, "phase1_runtime_pending");
   }
 });
 
@@ -73,5 +71,6 @@ test("frozen input is unchanged and results are deterministic", () => {
 test("module source is pure", () => {
   const s = readFileSync(join(import.meta.dirname, "../src/policy/cutover.ts"), "utf8");
   assert.doesNotMatch(s, /^\s*import\s/m);
+  assert.doesNotMatch(s, /fusionpbx|\\u|\\x/i);
   assert.doesNotMatch(s, /require\(|import\(|process\.|Date\b|Math\.random|randomUUID|fetch\(|setTimeout|setInterval|node:|fastify|redis|\bpg\b|readFile|writeFile|\.(get|post|put|patch|delete|route)\(/i);
 });

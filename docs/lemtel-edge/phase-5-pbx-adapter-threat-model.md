@@ -1,6 +1,6 @@
 # Lemtel Edge - Phase 5 PBX adapter threat model
 
-Phase 5 only documents future requirements; no mitigation is live from this phase.
+Phase 5 only documents future requirements; this phase activates no mitigation.
 
 | Asset | Threat | Required future mitigation | Residual risk |
 |---|---|---|---|

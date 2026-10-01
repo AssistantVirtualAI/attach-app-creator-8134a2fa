@@ -76,8 +76,8 @@ export function verifyPhase5(args, root = resolve(dirname(fileURLToPath(import.m
   try { const p4 = JSON.parse(rd("schemas/lemtel-edge/identity/identity-contract-policy.json")); if (p4.runtime !== "not_started" || p4.phase1_docker_runtime !== "pending") fail.add("P5_PHASE4_POLICY_STATIC"); } catch { fail.add("P5_PHASE4_POLICY_STATIC"); }
   const self = rd("scripts/verify-lemtel-edge-phase5.mjs");
   const imports = [...self.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
-  const forbidden = ["child", "_process", "fetch(", "process.", "env", "writeFile", "execSync"].join("|").replace(/[.()]/g, "\\$&");
-  if (!imports.every((m) => ["node:fs", "node:path", "node:crypto", "node:url", "node:process"].includes(m)) || new RegExp(`(${forbidden.replace("process\\.", "process\\.e")})`).test(self.replace(/const forbidden[^\n]*\n/, ""))) fail.add("P5_VERIFIER_IMPORTS_SAFE");
+  const forbidden = ["child_" + "process", "fet" + "ch(", "process" + ".env", "write" + "File", "append" + "File", "exec" + "Sync", "sp" + "awn(", "node:" + "net", "node:" + "http"];
+  if (!imports.every((m) => ["node:fs", "node:path", "node:crypto", "node:url", "node:process"].includes(m)) || forbidden.some((f) => self.includes(f))) fail.add("P5_VERIFIER_IMPORTS_SAFE");
   return out(fail, args);
 }
 

@@ -716,6 +716,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollBoxRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
+  const loadingOlderRef = useRef(false);
   const [visibleCount, setVisibleCount] = useState(40);
   const [showJump, setShowJump] = useState(false);
   const [newCount, setNewCount] = useState(0);
@@ -911,11 +912,18 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
         onScroll={(e) => {
           const el = e.currentTarget;
           const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          atBottomRef.current = atBottom;
-          setShowJump(!atBottom);
-          if (atBottom) setNewCount(0);
-          // Chargement progressif de l'historique plus ancien.
-          if (el.scrollTop < 60 && messages.length > visibleCount) loadOlder();
+          if (atBottomRef.current !== atBottom) {
+            atBottomRef.current = atBottom;
+            setShowJump(!atBottom);
+            if (atBottom) setNewCount(0);
+          }
+          if (el.scrollTop < 60 && messages.length > visibleCount && !loadingOlderRef.current) {
+            loadingOlderRef.current = true;
+            window.setTimeout(() => {
+              loadOlder();
+              window.setTimeout(() => { loadingOlderRef.current = false; }, 400);
+            }, 120);
+          }
         }}
         className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-2"
         style={{

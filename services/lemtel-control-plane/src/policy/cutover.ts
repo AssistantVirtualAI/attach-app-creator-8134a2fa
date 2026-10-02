@@ -1,5 +1,5 @@
-// Phase 7 offline cutover policy. Pure, deterministic, unconnected library.
-// Not imported by the app, server or routes. Every result is hypothetical.
+// Phase 7 cutover policy. Pure deterministic policy library.
+// Phase 10 imports it only through the non-executable authenticated evaluator. Output remains a proposal with no side effect.
 
 export const ROUTING_MODES = ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"] as const;
 export const REQUESTED_MODES = ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"] as const;

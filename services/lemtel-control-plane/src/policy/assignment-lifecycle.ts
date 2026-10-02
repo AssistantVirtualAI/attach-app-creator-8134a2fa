@@ -1,5 +1,5 @@
-// Phase 8 offline device-assignment lifecycle reducer. Pure, deterministic, unconnected library.
-// Not imported by the app, server or routes. Every result is a hypothetical proposal.
+// Phase 8 device-assignment lifecycle reducer. Pure deterministic policy library.
+// Phase 10 imports it only through the non-executable authenticated evaluator. Output remains a proposal with no side effect.
 
 export const ROUTING_MODES = ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"] as const;
 export const ASSIGNMENT_STATES = ["pending", "active", "revoked", "expired"] as const;

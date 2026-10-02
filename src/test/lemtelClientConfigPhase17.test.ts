@@ -32,7 +32,7 @@ describe("Lemtel Phase 17 — offline configuration lifecycle", () => {
     expect(code.match(/CREATE TABLE/g)).toHaveLength(1);
     for (const r of [/ENABLE ROW LEVEL SECURITY/, /REVOKE ALL ON public\.lemtel_client_config_devices FROM anon/, /REVOKE ALL ON public\.lemtel_client_config_devices FROM authenticated/, /GRANT ALL ON public\.lemtel_client_config_devices TO service_role/,
       /UNIQUE \(device_ref\)/, /UNIQUE \(user_id, platform, installation_ref_hash\)/, /CHECK \(revision > 0\)/, /CHECK \(platform IN/, /CHECK \(state IN/, /\(user_id, platform\)/, /\(organization_id\)/, /lemtel_ccd_device_ref_idx/, /ON DELETE CASCADE/]) expect(code).toMatch(r);
-    for (const bad of [/CREATE POLICY/i, /CREATE (OR REPLACE )?FUNCTION/i, /TRIGGER/i, /cron/i, /\bDROP\b/i, /ALTER TABLE (?!public\.lemtel_client_config_devices)/i, /pbx_user_devices/, /GRANT [^;]* TO (anon|authenticated)/i, /\bUPDATE\b|\bINSERT\b|\bDELETE\b/i]) expect(code).not.toMatch(bad);
+    for (const bad of [/CREATE POLICY/i, /CREATE (OR REPLACE )?FUNCTION/i, /TRIGGER/i, /cron/i, /\bDROP\b/i, /ALTER TABLE (?!public\.lemtel_client_config_devices)/i, /pbx_user_devices/, /GRANT [^;]* TO (anon|authenticated)/i, /\bUPDATE\b|\bINSERT\b|(?<!ON )\bDELETE\b/i]) expect(code).not.toMatch(bad);
     expect(s).toMatch(/Only the authenticated lemtel-client-config server function owns lifecycle operations/);
   });
 

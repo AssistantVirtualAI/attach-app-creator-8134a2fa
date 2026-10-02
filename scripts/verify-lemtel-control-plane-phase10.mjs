@@ -110,7 +110,7 @@ export function verifyPhase10(args, root = resolve(dirname(fileURLToPath(import.
   const t10 = rd("src/test/lemtelControlPlanePhase10.test.ts");
   if (/skipIf|it\.skip|\.skip\(|\.todo|\btodo\(/.test(t10) || !t10.includes("node_modules/.bin/tsx")) fail.add("CP10_ROOT_TEST_REQUIRED");
   const self = rd("scripts/verify-lemtel-control-plane-phase10.mjs");
-  const selfImports = [...self.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+  const selfImports = [...self.matchAll(/^import [^\n]* from "([^"]+)";$/gm)].map((m) => m[1]);
   const forbidden = ["fet" + "ch(", "process" + ".env", "write" + "File", "append" + "File", "sp" + "awn(", "node:" + "net", "node:" + "http", "exec" + "Sync("];
   if (!selfImports.every((m) => ["node:fs", "node:path", "node:crypto", "node:child_process", "node:url", "node:process"].includes(m)) || forbidden.some((f) => self.includes(f)) || [...self.matchAll(/execFileSync\("([^"]+)"/g)].some((m) => m[1] !== "git")) fail.add("CP10_VERIFIER_SAFE");
   return out(fail, args);

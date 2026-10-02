@@ -42,7 +42,7 @@ const git = (root, args) => {
 };
 const lines = (s) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 
-// All paths touched between base and end (adds, copies, moves as add+delete via --no-renames flag, modifications, deletions), plus worktree changes.
+// All paths touched between base and end (adds, copies, moves as add+delete, modifications, deletions), plus worktree changes.
 export function changes(root, base, end) {
   const committed = git(root, ["diff", "--name-status", "--no-renames", base, end]);
   const worktree = end === "HEAD" ? git(root, ["diff", "--name-status", "--no-renames", "HEAD"]) : "";
@@ -54,7 +54,7 @@ export function changes(root, base, end) {
 }
 
 export function checkSelf(text) {
-  if (new RegExp("write" + "File|append" + "File|mkd" + "ir|rmS" + "ync|unl" + "ink|rena" + "me|cp" + "Sync|createWrite" + "Stream|fet" + "ch\\(|node:(ht" + "tp|ne" + "t|dg" + "ram|dn" + "s|tl" + "s)|\\bspa" + "wn|\\bexec\\(|\\bfo" + "rk\\(|proc" + "ess\\.env").test(text)) return false;
+  if (new RegExp("write" + "File|append" + "File|mkd" + "ir|rmS" + "ync|unl" + "ink|\\brena" + "me(Sync)?\\s*\\(|cp" + "Sync|createWrite" + "Stream|fet" + "ch\\(|node:(ht" + "tp|ne" + "t|dg" + "ram|dn" + "s|tl" + "s)|\\bspa" + "wn|\\bexec\\(|\\bfo" + "rk\\(|proc" + "ess\\.env").test(text)) return false;
   const imports = [...text.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]);
   if (!eq(imports, ["node:fs", "node:path", "node:url", "node:child_process", "node:process"])) return false;
   return [...text.matchAll(/\bexecFileSync\s*\(\s*([^,)]*)/g)].every((m) => m[1].trim() === '"git"');

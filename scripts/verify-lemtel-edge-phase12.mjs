@@ -7,7 +7,7 @@ import process from "node:process";
 // Static, offline verifier. Only local Git inspection is executed; never Docker.
 const BASE = "ca4c1fa61";
 const USAGE = "P12_USAGE: [--base=ca4c1fa61]";
-const D = "infra/lemtel-edge/phase12-closed";
+const D = "infra/lemtel-edge-phase12-closed";
 export const DOCKERFILE = `${D}/Dockerfile`;
 export const COMPOSE = `${D}/docker-compose.closed.yml`;
 export const CFG = `${D}/kamailio.cfg`;
@@ -15,7 +15,7 @@ export const IGNORE = `${D}/.dockerignore`;
 export const RUNNER = "scripts/run-lemtel-edge-phase12-closed.mjs";
 export const SELF = "scripts/verify-lemtel-edge-phase12.mjs";
 export const TEST = "src/test/lemtelEdgePhase12.test.ts";
-export const DOC = "docs/lemtel-edge/phase-12-closed-local-runtime-test.md";
+export const DOC = "docs/lemtel-edge-phase12-closed/phase-12-closed-local-runtime-test.md";
 export const ALLOWED = [DOCKERFILE, COMPOSE, CFG, IGNORE, RUNNER, SELF, TEST, DOC];
 export const GATES = ["edge_enabled", "sip_registration_enabled", "sip_proxy_enabled", "rtp_relay_enabled", "fusionpbx_upstream_enabled", "control_plane_events_enabled", "push_invite_events_enabled", "recording_enabled", "transcoding_enabled", "media_forking_enabled"];
 const FORBIDDEN_TOOLS = /\b(rtpengine|redis|postgres|mysql|mariadb|sqlite|nodejs|npm|curl|wget|dnsutils|bind9|openssl|stunnel|websocat|fusionpbx|freeswitch|asterisk|pjsua|sipp|kamailio-[a-z0-9-]+-modules)\b/i;
@@ -88,7 +88,7 @@ export function checkRunner(t) {
   return !shellish.test(t.replace(/control plane path exists/g, ""))
     && procCalls.length > 0 && procCalls.every((c) => c === "docker" || c === "git")
     && DOCKER_CMDS.every((c) => t.includes(c))
-    && t.includes('const COMPOSE = "infra/lemtel-edge/phase12-closed/docker-compose.closed.yml";')
+    && t.includes('const COMPOSE = "infra/lemtel-edge-phase12-closed/docker-compose.closed.yml";')
     && t.includes('const IMAGE = "lemtel-edge-phase12-closed:local";')
     && t.includes('const EXPECTED_STATUS = "SIP/2.0 503 Lemtel Edge disabled";')
     && /stdio: \["ignore", "ignore", "ignore"\]/.test(t)
@@ -123,14 +123,35 @@ export function classify(paths) {
   return [...f];
 }
 
-export function changedSinceBase(root) {
+export const PHASE12A_BASE = BASE;
+export const PHASE12A_END = "fce12a2b2";
+export const PHASE12_RELOCATION_BASE = "fce12a2b2";
+export const ORIGINAL = [
+  "infra/lemtel-edge/phase12-closed/.dockerignore", "infra/lemtel-edge/phase12-closed/Dockerfile",
+  "infra/lemtel-edge/phase12-closed/docker-compose.closed.yml", "infra/lemtel-edge/phase12-closed/kamailio.cfg",
+  "docs/lemtel-edge/phase-12-closed-local-runtime-test.md", RUNNER, SELF, TEST,
+];
+export const OLD_RUNTIME = ORIGINAL.slice(0, 5);
+export const RELOCATION_PATHS = [...OLD_RUNTIME, DOCKERFILE, COMPOSE, CFG, IGNORE, DOC, RUNNER, SELF, TEST];
+export const EXPECTED_RELOCATION = [
+  ...OLD_RUNTIME.map((p) => `D\t${p}`),
+  ...[IGNORE, DOCKERFILE, COMPOSE, CFG, DOC].map((p) => `A\t${p}`),
+  ...[RUNNER, SELF, TEST].map((p) => `M\t${p}`),
+].sort();
+
+// Exact historical ranges only; never an unbounded comparison of BASE against current HEAD.
+export function history(root) {
   const git = (a) => execFileSync("git", a, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  const lines = (s) => s.split("\n").filter(Boolean);
   try {
-    git(["cat-file", "-e", `${BASE}^{commit}`]);
-    const changed = git(["diff", "--name-only", BASE]).split("\n").filter(Boolean);
-    const untracked = git(["ls-files", "--others", "--exclude-standard", "--", D, ...ALLOWED.filter((p) => !p.startsWith(D))]).split("\n").filter(Boolean);
-    return { ok: true, changed: [...new Set([...changed, ...untracked])], untrackedOutside: untracked.filter((p) => !ALLOWED.includes(p)) };
-  } catch { return { ok: false, changed: [], untrackedOutside: [] }; }
+    for (const c of [PHASE12A_BASE, PHASE12A_END, PHASE12_RELOCATION_BASE]) git(["cat-file", "-e", `${c}^{commit}`]);
+    git(["merge-base", "--is-ancestor", PHASE12A_BASE, PHASE12A_END]);
+    const original = lines(git(["diff", "--name-only", `${PHASE12A_BASE}..${PHASE12A_END}`])).sort();
+    const tracked = lines(git(["diff", "--name-status", "--no-renames", PHASE12_RELOCATION_BASE, "--", ...RELOCATION_PATHS]));
+    const untracked = lines(git(["ls-files", "--others", "--exclude-standard", "--", ...RELOCATION_PATHS])).map((p) => `A\t${p}`);
+    const relocation = [...new Set([...tracked, ...untracked])].sort();
+    return { ok: true, original, relocation };
+  } catch { return { ok: false, original: [], relocation: [] }; }
 }
 
 export function verifyPhase12(args, root = resolve(dirname(fileURLToPath(import.meta.url)), "..")) {
@@ -139,10 +160,13 @@ export function verifyPhase12(args, root = resolve(dirname(fileURLToPath(import.
   const fail = new Set();
   const rd = (p) => readFileSync(join(root, p), "utf8");
   if (!ALLOWED.every((p) => existsSync(join(root, p)))) return out(new Set(["P12_FILES_PRESENT"]), args);
-  const h = changedSinceBase(root);
+  if (OLD_RUNTIME.some((p) => existsSync(join(root, p))) || existsSync(join(root, "infra/lemtel-edge/phase12-closed"))) fail.add("P12_OLD_PATHS_PRESENT");
+  const h = history(root);
   if (!h.ok) fail.add("P12_GIT_HISTORY");
-  for (const c of classify(h.changed)) fail.add(c);
-  if (h.untrackedOutside.length) fail.add("P12_UNTRACKED");
+  else {
+    if (JSON.stringify(h.original) !== JSON.stringify([...ORIGINAL].sort())) fail.add("P12A_HISTORICAL_SCOPE");
+    if (JSON.stringify(h.relocation) !== JSON.stringify(EXPECTED_RELOCATION)) fail.add("P12_RELOCATION_SCOPE");
+  }
   if (!checkDockerfile(rd(DOCKERFILE))) fail.add("P12_DOCKERFILE");
   if (!checkCfg(rd(CFG))) fail.add("P12_KAMAILIO_CFG");
   if (!checkCompose(rd(COMPOSE))) fail.add("P12_COMPOSE");

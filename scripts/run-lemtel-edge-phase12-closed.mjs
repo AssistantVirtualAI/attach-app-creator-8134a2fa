@@ -6,19 +6,19 @@ import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-const COMPOSE = "infra/lemtel-edge/phase12-closed/docker-compose.closed.yml";
+const COMPOSE = "infra/lemtel-edge-phase12-closed/docker-compose.closed.yml";
 const IMAGE = "lemtel-edge-phase12-closed:local";
 const SERVICE = "kamailio-closed";
 const GATES_FILE = "infra/lemtel-edge/policy/edge-feature-gates.yaml";
 const FILES = [
-  "infra/lemtel-edge/phase12-closed/Dockerfile",
+  "infra/lemtel-edge-phase12-closed/Dockerfile",
   COMPOSE,
-  "infra/lemtel-edge/phase12-closed/kamailio.cfg",
-  "infra/lemtel-edge/phase12-closed/.dockerignore",
+  "infra/lemtel-edge-phase12-closed/kamailio.cfg",
+  "infra/lemtel-edge-phase12-closed/.dockerignore",
   "scripts/run-lemtel-edge-phase12-closed.mjs",
   "scripts/verify-lemtel-edge-phase12.mjs",
   "src/test/lemtelEdgePhase12.test.ts",
-  "docs/lemtel-edge/phase-12-closed-local-runtime-test.md",
+  "docs/lemtel-edge-phase12-closed/phase-12-closed-local-runtime-test.md",
 ];
 const GATES = ["edge_enabled", "sip_registration_enabled", "sip_proxy_enabled", "rtp_relay_enabled", "fusionpbx_upstream_enabled", "control_plane_events_enabled", "push_invite_events_enabled", "recording_enabled", "transcoding_enabled", "media_forking_enabled"];
 const EXPECTED_STATUS = "SIP/2.0 503 Lemtel Edge disabled";

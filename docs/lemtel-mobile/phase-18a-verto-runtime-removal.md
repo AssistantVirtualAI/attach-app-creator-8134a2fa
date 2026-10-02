@@ -33,3 +33,9 @@ No PBX call, incoming/outgoing/background call, physical-device test, App Store 
 
 ## Next phase
 **Phase 18B — audited removal of dormant Verto source and native Verto-only transport**, only after Phase 18A is independently reviewed and accepted.
+
+## Phase 18A.1 test-path correction
+- The initial static source assertion used `new URL(..., import.meta.url)`, which is incompatible with the Vitest module URL scheme in the mobile package (`The URL must be of scheme file`).
+- Only the test's path resolution changed: it now resolves `src/hooks/useSoftphone.ts` from `process.cwd()` (mobile package or repository root) with `existsSync`.
+- No mobile runtime behavior changed; the Verto fail-closed mocks remain.
+- Re-run after the correction: `cd apps/ava-softphone-mobile && npx vitest run src/hooks/useSoftphone.runtime.test.tsx` → 4/4 passed.

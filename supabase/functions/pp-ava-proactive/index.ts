@@ -4,9 +4,9 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const admin = () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-async function push(supa: any, user_id: string, title: string, body: string, url = "/mplanipret", data: any = {}) {
+async function push(supa: any, user_id: string, title: string, body: string, url = "/mplanipret", data: any = {}, category = "info") {
   try {
-    await supa.functions.invoke("pp-push-notify", { body: { user_id, title, body, url, data } });
+    await supa.functions.invoke("pp-push-notify", { body: { user_id, title, body, url, data, category, deep_link: url } });
   } catch (e) { console.error("push fail", e); }
 }
 
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
         const l = leads[0];
         const contact = l.caller_number || l.callee_number || "Contact";
         const hours = Math.round((Date.now() - new Date(l.started_at).getTime()) / 3600000);
-        await push(supa, b.user_id, "🔥 Lead chaud sans suivi", `${contact} est un lead chaud sans suivi depuis ${hours}h. Voulez-vous appeler maintenant?`, `/mplanipret/calls?id=${l.id}`);
+        await push(supa, b.user_id, "🔥 Lead chaud sans suivi", `${contact} est un lead chaud sans suivi depuis ${hours}h. Voulez-vous appeler maintenant?`, `/mplanipret/calls?id=${l.id}`, {}, "hot_lead");
         await logAudit(supa, b.user_id, "PUSH_HOT_LEAD", { contact, hours });
         checks.push("hot_lead");
       }
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
         });
         const events = (r as any)?.events ?? [];
         for (const ev of events.slice(0, 1)) {
-          await push(supa, b.user_id, "📅 RDV imminent", `Votre RDV avec ${ev.subject ?? "votre contact"} commence dans 30 minutes. Préparez-vous!`);
+          await push(supa, b.user_id, "📅 RDV imminent", `Votre RDV avec ${ev.subject ?? "votre contact"} commence dans 30 minutes. Préparez-vous!`, "/mplanipret", {}, "appointment");
           await logAudit(supa, b.user_id, "PUSH_APPT_REMINDER", { event: ev.subject });
           checks.push("appt");
         }
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
       if (missed?.length) {
         const m = missed[0];
         const hours = Math.round((Date.now() - new Date(m.started_at).getTime()) / 3600000);
-        await push(supa, b.user_id, "📞 Appel manqué", `Appel manqué de ${m.caller_number} il y a ${hours}h. Rappeler maintenant?`, `/mplanipret/calls?id=${m.id}`);
+        await push(supa, b.user_id, "📞 Appel manqué", `Appel manqué de ${m.caller_number} il y a ${hours}h. Rappeler maintenant?`, `/mplanipret/calls?id=${m.id}`, {}, "missed_call");
         await logAudit(supa, b.user_id, "PUSH_MISSED_CALL", { number: m.caller_number, hours });
         checks.push("missed");
       }
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       const lastBrief = b.last_morning_brief_at ? new Date(b.last_morning_brief_at) : null;
       const sameDay = lastBrief && lastBrief.toDateString() === now.toDateString();
       if (!sameDay) {
-        await push(supa, b.user_id, "☀️ Bonjour", `Bonjour ${b.full_name?.split(" ")[0] ?? ""}! Votre brief AVA est prêt.`, "/mplanipret?brief=1");
+        await push(supa, b.user_id, "☀️ Bonjour", `Bonjour ${b.full_name?.split(" ")[0] ?? ""}! Votre brief AVA est prêt.`, "/mplanipret?brief=1", {}, "morning_brief");
         await supa.from("planipret_profiles").update({ last_morning_brief_at: now.toISOString() }).eq("id", b.id);
         await logAudit(supa, b.user_id, "PUSH_MORNING_BRIEF", {});
         checks.push("brief");
@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
         const { count: calls } = await supa.from("planipret_phone_calls").select("id", { count: "exact", head: true }).eq("user_id", b.id).gte("started_at", startDay.toISOString());
         const { count: leads } = await supa.from("planipret_phone_calls").select("id", { count: "exact", head: true }).eq("user_id", b.id).gte("lead_score", 7).gte("started_at", startDay.toISOString());
         const { count: tasks } = await supa.from("planipret_reminders").select("id", { count: "exact", head: true }).eq("user_id", b.id).eq("status", "done").gte("updated_at", startDay.toISOString());
-        await push(supa, b.user_id, "📊 Résumé de votre journée", `${calls ?? 0} appels, ${leads ?? 0} leads, ${tasks ?? 0} tâches complétées.`, "/mplanipret/stats");
+        await push(supa, b.user_id, "📊 Résumé de votre journée", `${calls ?? 0} appels, ${leads ?? 0} leads, ${tasks ?? 0} tâches complétées.`, "/mplanipret/stats", {}, "eod_summary");
         await supa.from("planipret_profiles").update({ last_eod_summary_at: now.toISOString() }).eq("id", b.id);
         await logAudit(supa, b.user_id, "PUSH_EOD_SUMMARY", { calls, leads, tasks });
         checks.push("eod");

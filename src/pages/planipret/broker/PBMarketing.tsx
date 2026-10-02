@@ -100,7 +100,7 @@ export default function PBMarketing() {
 
   return (
     <PAPage className="pp-marketing">
-      <PAPageHeader icon={<Megaphone className="w-5 h-5" />} title={L("Commercialisation", "Marketing")}
+      <PAPageHeader icon={<Megaphone className="w-5 h-5" />} title={L("Marketing", "Marketing")}
         subtitle={L("Envoyez un texto et/ou un courriel à vos clients Maestro.", "Send a text and/or email to your Maestro clients.")} />
 
       <div className="flex gap-2 mb-4">

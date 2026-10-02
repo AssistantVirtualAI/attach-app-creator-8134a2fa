@@ -32,6 +32,14 @@ export function checkDockerfile(t) {
   const froms = lines.filter((l) => /^FROM\b/i.test(l));
   const installs = [...t.matchAll(/apt-get install -y --no-install-recommends ([^\\\n&]+)/g)].map((m) => m[1].trim().split(/\s+/));
   const users = lines.filter((l) => /^USER\b/.test(l));
+  // Root-owned, world-traversable parent directory for the read-only config (non-root runtime must traverse it).
+  const DIR_LINE = "RUN install -d -m 0755 /opt/lemtel-closed";
+  const dirIdx = lines.indexOf(DIR_LINE);
+  const userIdx = lines.findIndex((l) => l.includes("useradd --system --uid 65532"));
+  const copyIdx = lines.findIndex((l) => /^COPY\b/.test(l));
+  const permCmds = t.split("\n").filter((l) => !l.trim().startsWith("#") && /\b(chmod|chown|install|mkdir|setfacl|umask)\b/.test(l.replace("--chown=root:root --chmod=0444", "")));
+  if (lines.filter((l) => l === DIR_LINE).length !== 1 || !(userIdx >= 0 && userIdx < dirIdx && dirIdx < copyIdx)
+    || permCmds.length !== 2 || !permCmds.some((l) => l.trim() === DIR_LINE) || !permCmds.some((l) => /apt-get install -y --no-install-recommends kamailio python3-minimal \\$/.test(l.trim()))) return false;
   return froms.length === 1 && froms[0] === "FROM debian:12.12-slim"
     && installs.length === 1 && JSON.stringify([...installs[0]].sort()) === JSON.stringify(["kamailio", "python3-minimal"])
     && /apt-get install[\s\S]*?&& rm -rf \/var\/lib\/apt\/lists\/\*/.test(t)

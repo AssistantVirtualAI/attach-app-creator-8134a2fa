@@ -5,6 +5,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 65532 lemtelclosed \
  && useradd --system --uid 65532 --gid 65532 --no-create-home --shell /usr/sbin/nologin lemtelclosed
+RUN install -d -m 0755 /opt/lemtel-closed
 COPY --chown=root:root --chmod=0444 kamailio.cfg /opt/lemtel-closed/kamailio.cfg
 RUN kamailio -c -f /opt/lemtel-closed/kamailio.cfg
 USER 65532:65532

@@ -41,3 +41,11 @@ Run `node scripts/verify-lemtel-planipret-isolation.mjs --base=a1bd41eba` and th
 ## Escalation rule
 
 A genuine shared-code change requires a separately written, explicitly approved compatibility phase with both products tested. Shared root dependencies or configuration may not be changed merely to satisfy a Lemtel-only phase.
+
+## Historical compatibility baseline — Phase 15C
+
+- The original Phase 15A range `a1bd41eba..87b6b8029` remains immutable.
+- Seven Planiprêt files were already changed in the separately audited interval `87b6b8029..2d933df2f`.
+- Their exact paths are frozen as a one-time compatibility record (see `phase-15c-historical-compatibility-baseline.md`).
+- The permanent "never modify Planiprêt" guard starts strictly after `2d933df2f`.
+- No Planiprêt source was changed by Phase 15C.

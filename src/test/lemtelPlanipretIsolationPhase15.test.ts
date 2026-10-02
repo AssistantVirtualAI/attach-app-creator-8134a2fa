@@ -9,10 +9,12 @@ const root = path.resolve(__dirname, "../..");
 const load = async () => await import(/* @vite-ignore */ pathToFileURL(path.join(root, "scripts/verify-lemtel-planipret-isolation.mjs")).href);
 const status = () => execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" });
 
-type Opts = { hist?: string[]; later?: string[]; mutate?: (tmp: string, g: (...a: string[]) => string) => void; refs?: (r: { base: string; end: string }) => { base: string; end: string } };
+type Refs = { base: string; end: string; compat: string };
+type Opts = { hist?: string[]; compatPaths?: string[]; later?: string[]; mutate?: (tmp: string, g: (...a: string[]) => string) => void; refs?: (r: Refs) => Refs };
 
 // Genuine temporary Git repository via local plumbing (real commit objects, command-local identity).
-// base = neutral file; end = base + four Phase 15A files (+ hist extras); optional later commit (+ later paths).
+// base = neutral file; end = base + four Phase 15A files (+ hist extras);
+// compat = end + compatibility paths (default: the seven approved); optional later commit (+ later paths).
 const run = async (o: Opts = {}) => {
   const m = await load();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "p15a-"));
@@ -30,9 +32,12 @@ const run = async (o: Opts = {}) => {
     for (const p of m.ALLOWED) put(p);
     for (const p of o.hist ?? []) put(p, "x\n");
     const end = commit("phase15a", base);
-    if (o.later) { for (const p of o.later) put(p, "y\n"); commit("later", end); }
+    for (const p of o.compatPaths ?? m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS) put(p, "c\n");
+    put("docs/lemtel-isolation/compat-note.md", "n\n");
+    const compat = commit("compat", end);
+    if (o.later) { for (const p of o.later) put(p, "y\n"); commit("later", compat); }
     o.mutate?.(tmp, g);
-    const refs = o.refs ? o.refs({ base, end }) : { base, end };
+    const refs = o.refs ? o.refs({ base, end, compat }) : { base, end, compat };
     return m.verify([], tmp, refs);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 };
@@ -87,7 +92,7 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
   it("missing commits and reversed ancestry fail", async () => {
     expect((await run({ refs: (r) => ({ ...r, base: "0".repeat(40) }) })).stdout).toMatch(/BASE_MISSING/);
     expect((await run({ refs: (r) => ({ ...r, end: "0".repeat(40) }) })).stdout).toMatch(/END_MISSING/);
-    expect((await run({ refs: (r) => ({ base: r.end, end: r.base }) })).stdout).toMatch(/BASE_NOT_ANCESTOR/);
+    expect((await run({ refs: (r) => ({ ...r, base: r.end, end: r.base }) })).stdout).toMatch(/BASE_NOT_ANCESTOR/);
   });
 
   it("malformed, narrowed, broadened or extended policy fails", async () => {
@@ -126,5 +131,53 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
       expect(m.checkSelf(src + "\n" + bad + "\n"), bad).toBe(false);
     const r = await run({ mutate: (t) => { const f = path.join(t, m.SELF); fs.writeFileSync(f, fs.readFileSync(f, "utf8") + "\nfet" + "ch(u)\n"); } });
     expect(r.stdout).toMatch(/VERIFIER_CAPABILITY/);
+  });
+});
+
+describe("Lemtel Phase 15C — one-time historical Planiprêt compatibility baseline", () => {
+  it("exports the exact, sorted seven-path list and the frozen cutoff", async () => {
+    const m = await load();
+    expect(m.PLANIPRET_COMPATIBILITY_END).toBe("2d933df2f");
+    const l = m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS as string[];
+    expect(l).toHaveLength(7);
+    expect([...l].sort()).toEqual(l);
+    for (const p of l) { expect(p).not.toMatch(/[*?]|\/$/); expect(m.isProtected(p)).toBe(true); }
+  });
+
+  it("the real repository passes and its status is unchanged", async () => {
+    const m = await load();
+    const before = status();
+    expect(m.verify([], root)).toEqual(PASS);
+    expect(status()).toBe(before);
+  });
+
+  it("exactly the seven approved paths in the compatibility interval pass", async () => {
+    expect(await run()).toEqual(PASS);
+  });
+
+  it("an extra protected path in the compatibility interval fails", async () => {
+    const m = await load();
+    const r = await run({ compatPaths: [...m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS, "src/lib/planipret/extra.ts"] });
+    expect(r.stdout).toMatch(/PLANIPRET_COMPATIBILITY_SCOPE_EXACT/);
+  });
+
+  it("a missing approved path in the compatibility interval fails", async () => {
+    const m = await load();
+    const r = await run({ compatPaths: m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS.slice(1) });
+    expect(r.stdout).toMatch(/PLANIPRET_COMPATIBILITY_SCOPE_EXACT/);
+  });
+
+  it("re-changing an approved path after the cutoff fails", async () => {
+    const r = await run({ later: ["src/pages/planipret/mobile/MCalls.tsx"] });
+    expect(r.stdout).toMatch(/PLANIPRET_PATH_CHANGED/);
+  });
+
+  it("a later non-Planiprêt Lemtel change passes", async () => {
+    expect(await run({ later: ["apps/ava-softphone-mobile/src/hooks/x.ts"] })).toEqual(PASS);
+  });
+
+  it("missing or reversed compatibility cutoff fails", async () => {
+    expect((await run({ refs: (r) => ({ ...r, compat: "0".repeat(40) }) })).stdout).toMatch(/COMPATIBILITY_END_MISSING/);
+    expect((await run({ refs: (r) => ({ ...r, compat: r.base }) })).stdout).toMatch(/COMPATIBILITY_NOT_ANCESTOR/);
   });
 });

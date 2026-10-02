@@ -7,6 +7,17 @@ import process from "node:process";
 // Static, read-only verifier. The only process run is read-only local Git inspection.
 export const BASE = "a1bd41eba";
 export const PHASE15A_END = "87b6b8029";
+// Phase 15C: one-time historical compatibility baseline (exact, sorted, frozen).
+export const PLANIPRET_COMPATIBILITY_END = "2d933df2f";
+export const APPROVED_COMPATIBILITY_PLANIPRET_PATHS = [
+  "apps/planipret-mobile/src/pages/planipret/PlanipretMobile.tsx",
+  "apps/planipret-mobile/src/pages/planipret/mobile/MCalls.tsx",
+  "apps/planipret-mobile/src/pages/planipret/mobile/MContacts.tsx",
+  "src/pages/planipret/PlanipretMobile.tsx",
+  "src/pages/planipret/broker/PBMarketing.tsx",
+  "src/pages/planipret/mobile/MCalls.tsx",
+  "src/pages/planipret/mobile/MContacts.tsx",
+];
 export const USAGE = "LEMTEL_ISOLATION_USAGE: [--base=a1bd41eba]";
 export const POLICY = "schemas/lemtel-isolation/planipret-protected-paths-v1.json";
 export const SELF = "scripts/verify-lemtel-planipret-isolation.mjs";
@@ -70,7 +81,7 @@ export function checkSelf(text) {
 
 export function verify(args, root = process.cwd(), opts = {}) {
   if (args.length > 1 || (args.length === 1 && args[0] !== `--base=${BASE}`)) return { code: 2, stdout: USAGE + "\n" };
-  const base = opts.base ?? BASE, end = opts.end ?? PHASE15A_END, head = opts.head ?? "HEAD";
+  const base = opts.base ?? BASE, end = opts.end ?? PHASE15A_END, compat = opts.compat ?? PLANIPRET_COMPATIBILITY_END, head = opts.head ?? "HEAD";
   const f = [];
   let policy = null;
   try { policy = JSON.parse(readFileSync(join(root, POLICY), "utf8")); } catch { policy = null; }
@@ -89,8 +100,18 @@ export function verify(args, root = process.cwd(), opts = {}) {
       if (hist.some((p) => !ALLOWED.includes(p) && isProtected(p))) f.push("PLANIPRET_PATH_CHANGED");
       if (!eq(hist, [...ALLOWED].sort())) f.push("HISTORICAL_SCOPE_EXACT");
     }
-    // B. Permanent global guard: later commits and current working tree.
-    const later = committedPaths(root, end, head);
+    // B. Phase 15C one-time compatibility interval: end..compat must contain exactly the approved paths.
+    if (!isCommit(root, compat)) { f.push("COMPATIBILITY_END_MISSING"); rangeOk = false; }
+    else if (git(root, ["merge-base", "--is-ancestor", end, compat]) === null || git(root, ["merge-base", "--is-ancestor", compat, head]) === null) { f.push("COMPATIBILITY_NOT_ANCESTOR"); rangeOk = false; }
+    else {
+      const cp = committedPaths(root, end, compat);
+      if (cp === null) f.push("GIT_READ_FAILED");
+      else if (!eq(cp.filter((p) => !ALLOWED.includes(p) && isProtected(p)), APPROVED_COMPATIBILITY_PLANIPRET_PATHS)) f.push("PLANIPRET_COMPATIBILITY_SCOPE_EXACT");
+    }
+  }
+  if (rangeOk) {
+    // C. Permanent global guard: commits strictly after the compatibility cutoff and current working tree.
+    const later = committedPaths(root, compat, head);
     const wt = worktreePaths(root);
     if (later === null || wt === null) f.push("GIT_READ_FAILED");
     else {

@@ -133,7 +133,7 @@ export function checkCapabilities(file, text) {
   const procs = [...text.matchAll(/\b(execFileSync|spawnSync)\s*\(\s*([^,)]*)/g)].map((m) => m[2].trim());
   if (!procs.every((c) => c === '"git"')) return false;
   if (file === SELF) {
-    if (new RegExp("write" + "File|append" + "File|mkd" + "ir|rmS" + "ync|\\brm\\(|cp" + "Sync|rena" + "me|unl" + "ink|createWrite" + "Stream").test(text)) return false;
+    if (new RegExp("write" + "File|append" + "File|mkd" + "ir|rmS" + "ync|\\brm\\(|cp" + "Sync|\\brena" + "me(Sync)?\\s*\\(|unl" + "ink|createWrite" + "Stream").test(text)) return false;
     const imports = [...text.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]);
     if (!eq(imports, ["node:fs", "node:path", "node:url", "node:child_process", "node:process"])) return false;
   }
@@ -150,8 +150,8 @@ export function checkDocs(doc, threat) {
     && !new RegExp("(ht" + "tps?|wss?)://|\\b\\d{1,3}(\\.\\d{1,3}){3}\\b|BEGIN [A-Z ]*PRIV" + "ATE").test(doc + threat);
 }
 
-const git = (root, args) => { try { return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch { return null; } };
-export function changedPaths(root, base) {
+const realGit = (root, args) => { try { return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch { return null; } };
+export function changedPaths(root, base, git = realGit) {
   const d = git(root, ["diff", "--name-only", "--no-renames", base]);
   const u = git(root, ["ls-files", "--others", "--exclude-standard"]);
   if (d === null || u === null) return null;
@@ -161,12 +161,14 @@ export function changedPaths(root, base) {
 export function verify(args, root = process.cwd(), opts = {}) {
   if (args.length > 1 || (args.length === 1 && args[0] !== `--base=${BASE}`)) return { code: 2, stdout: USAGE + "\n" };
   const base = opts.base ?? BASE;
+  // opts.git lets tests substitute a read-only Git view of a temporary copy; the CLI always uses local Git.
+  const git = opts.git ?? realGit;
   const f = [];
   const rd = (p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return null; } };
   const js = (p) => { try { return JSON.parse(rd(p)); } catch { return null; } };
   if (!ALLOWED.every((p) => existsSync(join(root, p)))) f.push("P14_PATHS_EXIST");
   if (git(root, ["cat-file", "-t", base]) === null) f.push("P14_BASE_MISSING");
-  const ch = changedPaths(root, base);
+  const ch = changedPaths(root, base, git);
   if (!ch || !eq(ch, [...ALLOWED].sort())) f.push("P14_SCOPE_EXACT");
   const rq = js(REQUEST), dc = js(DECISION), ev = js(EVIDENCE), po = js(POLICY);
   if (!rq || !checkRequestSchema(rq)) f.push("P14_REQUEST_SCHEMA");

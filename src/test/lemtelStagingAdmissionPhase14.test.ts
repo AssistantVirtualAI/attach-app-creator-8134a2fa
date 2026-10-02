@@ -11,15 +11,21 @@ const json = (p: string) => JSON.parse(read(p));
 const load = async () => await import(/* @vite-ignore */ pathToFileURL(path.join(root, "scripts/verify-lemtel-staging-admission-phase14.mjs")).href);
 const clone = (o: any) => JSON.parse(JSON.stringify(o));
 
+// Temporary copy with a read-only Git view: base = gates file only; every other file counts as changed.
 const tempRepo = (m: any) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "p14-"));
-  const g = (...a: string[]) => execFileSync("git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", ...a], { cwd: tmp, stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" });
-  fs.mkdirSync(path.join(tmp, path.dirname(m.GATES_FILE)), { recursive: true });
-  fs.copyFileSync(path.join(root, m.GATES_FILE), path.join(tmp, m.GATES_FILE));
-  g("init", "-q"); g("add", "-A"); g("commit", "-q", "-m", "base");
-  const base = g("rev-parse", "HEAD").trim();
-  for (const p of m.ALLOWED) { fs.mkdirSync(path.join(tmp, path.dirname(p)), { recursive: true }); fs.copyFileSync(path.join(root, p), path.join(tmp, p)); }
-  return { tmp, base };
+  for (const p of [m.GATES_FILE, ...m.ALLOWED]) { fs.mkdirSync(path.join(tmp, path.dirname(p)), { recursive: true }); fs.copyFileSync(path.join(root, p), path.join(tmp, p)); }
+  const baseGates = fs.readFileSync(path.join(tmp, m.GATES_FILE), "utf8");
+  const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.relative(tmp, path.join(d, e.name))]);
+  const git = (_r: string, args: string[]) => {
+    if (args[0] === "cat-file") return args[2] === "tmpbase0" ? "commit\n" : null;
+    const gatesChanged = fs.readFileSync(path.join(tmp, m.GATES_FILE), "utf8") !== baseGates;
+    if (args[0] === "diff" && args.includes("--")) return gatesChanged ? m.GATES_FILE + "\n" : "";
+    if (args[0] === "diff") return gatesChanged ? m.GATES_FILE + "\n" : "";
+    if (args[0] === "ls-files") return walk(tmp).filter((p) => p !== m.GATES_FILE).join("\n") + "\n";
+    return null;
+  };
+  return { tmp, base: "tmpbase0", git };
 };
 
 describe("Lemtel staging admission phase 14.0 — offline, denial-first", () => {
@@ -85,18 +91,18 @@ describe("Lemtel staging admission phase 14.0 — offline, denial-first", () => 
     for (const a of [["--base=0000000"], ["--oops"], ["e224f5449"], ["--base=e224f5449", "x"]]) expect(m.verify(a, root)).toEqual({ code: 2, stdout: "P14_USAGE: [--base=e224f5449]\n" });
   });
 
-  it("temporary Git copy: passes, then fails on out-of-scope file, true gate and added capability", async () => {
+  it("temporary copy with Git view: passes, then fails on out-of-scope file, true gate and added capability", async () => {
     const m = await load();
-    const { tmp, base } = tempRepo(m);
+    const { tmp, base, git } = tempRepo(m);
     try {
-      expect(m.verify([], tmp, { base })).toEqual({ code: 0, stdout: "P14_PASSED\n" });
+      expect(m.verify([], tmp, { base, git })).toEqual({ code: 0, stdout: "P14_PASSED\n" });
       fs.writeFileSync(path.join(tmp, "extra.md"), "x\n");
-      expect(m.verify([], tmp, { base }).stdout).toMatch(/P14_SCOPE_EXACT/);
+      expect(m.verify([], tmp, { base, git }).stdout).toMatch(/P14_SCOPE_EXACT/);
       fs.unlinkSync(path.join(tmp, "extra.md"));
       const gp = path.join(tmp, m.GATES_FILE), orig = fs.readFileSync(gp, "utf8");
       for (const gate of m.GATES) {
         fs.writeFileSync(gp, orig.replace(`${gate}: false`, `${gate}: true`));
-        const r = m.verify([], tmp, { base });
+        const r = m.verify([], tmp, { base, git });
         expect(r.code).toBe(1);
         expect(r.stdout).toMatch(/P14_GATES_FALSE_UNCHANGED/);
         expect(r.stdout.split("\n").filter(Boolean).every((l: string) => /^P14_FAILED: P14_[A-Z_]+$/.test(l))).toBe(true);
@@ -106,11 +112,11 @@ describe("Lemtel staging admission phase 14.0 — offline, denial-first", () => 
       for (const p of m.NON_DOC) {
         const fp = path.join(tmp, p), o = fs.readFileSync(fp, "utf8");
         fs.writeFileSync(fp, p.endsWith(".json") ? o.replace('"$schema"', `"x": "${bad}", "$schema"`).replace('"policy_version"', `"x": "${bad}", "policy_version"`) : o + "\n" + bad + "\n");
-        expect(m.verify([], tmp, { base }).stdout).toMatch(/P14_NO_RUNTIME_CAPABILITY/);
+        expect(m.verify([], tmp, { base, git }).stdout).toMatch(/P14_NO_RUNTIME_CAPABILITY/);
         fs.writeFileSync(fp, o);
       }
       fs.appendFileSync(path.join(tmp, m.DOC), "\nDo not run do" + "cker, ss" + "h or cu" + "rl, and never use a pass" + "word.\n");
-      expect(m.verify([], tmp, { base })).toEqual({ code: 0, stdout: "P14_PASSED\n" });
+      expect(m.verify([], tmp, { base, git })).toEqual({ code: 0, stdout: "P14_PASSED\n" });
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   });
 

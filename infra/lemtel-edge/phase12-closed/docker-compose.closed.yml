@@ -1,0 +1,18 @@
+name: lemtel-edge-phase12-closed
+services:
+  kamailio-closed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lemtel-edge-phase12-closed:local
+    network_mode: "none"
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+    restart: "no"

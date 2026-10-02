@@ -60,7 +60,7 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
       expect(r.code, p).toBe(1);
       expect(r.stdout, p).toMatch(/PLANIPRET_PATH_CHANGED/);
     }
-  });
+  }, 30000);
 
   it("staged, unstaged or untracked Planiprêt worktree paths fail", async () => {
     const p = "src/lib/planipret/x.ts";

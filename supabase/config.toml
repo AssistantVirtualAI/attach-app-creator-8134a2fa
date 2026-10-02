@@ -329,3 +329,6 @@ verify_jwt = true
 
 [functions.pp-marketing-track]
 verify_jwt = false
+
+[functions.lemtel-client-config]
+verify_jwt = true

@@ -42,3 +42,13 @@ No direct PBX, Edge, Verto, Maestro action, AVA action, SSO flow, DNS/TLS/VPS/Do
 ## Next
 
 A dedicated later portal reconciliation phase will connect portal controls/UI to this lifecycle model before client integration.
+
+## Phase 19B promotion
+
+- Phase 17 remains the historical design source; the offline draft is kept unchanged for audit.
+- Phase 19B promoted the migration and the function.
+- Real migration: `supabase/migrations/20261002220000_lemtel_client_config_lifecycle.sql` (executable SQL identical to the offline draft).
+- Real function: `lemtel-client-config`, JWT required (`verify_jwt = true`) and verified in code.
+- No client calls this function yet in this phase.
+- No FusionPBX or Edge connection is added.
+- Next phase: a Mobile client consumer, only after separate review.

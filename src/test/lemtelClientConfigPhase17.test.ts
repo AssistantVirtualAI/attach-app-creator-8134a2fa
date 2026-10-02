@@ -18,11 +18,16 @@ const guard = async () => await import(/* @vite-ignore */ pathToFileURL(path.joi
 const scopeOk = (paths: string[], isProtected: (p: string) => boolean) => paths.every((p) => FILES.includes(p)) && !paths.some(isProtected);
 
 describe("Lemtel Phase 17 — offline configuration lifecycle", () => {
-  it("the six Phase 17 paths are not Planiprêt-protected and nothing is placed where it would apply or deploy", async () => {
+  it("the six Phase 17 paths are not Planiprêt-protected and promoted artifacts match Phase 19B", async () => {
     const { isProtected } = await guard();
     for (const p of FILES) expect(isProtected(p), p).toBe(false);
-    expect(fs.existsSync(path.join(root, "supabase/functions/lemtel-client-config"))).toBe(false);
+    // Phase 19B promotion: real artifacts exist, JWT required, executable SQL identical to the offline source.
     expect(fs.existsSync(path.join(root, "supabase/migrations/20261002040000_lemtel_client_config_lifecycle.sql"))).toBe(false);
+    for (const p of ["supabase/migrations/20261002220000_lemtel_client_config_lifecycle.sql", "supabase/functions/lemtel-client-config/index.ts", "supabase/functions/lemtel-client-config/index_test.ts"]) expect(fs.existsSync(path.join(root, p)), p).toBe(true);
+    expect(rd("supabase/config.toml")).toMatch(/\[functions\.lemtel-client-config\]\nverify_jwt = true\n/);
+    const exec = (t: string) => t.replace(/--.*$/gm, "").replace(/\s+/g, " ").trim();
+    expect(exec(rd("supabase/migrations/20261002220000_lemtel_client_config_lifecycle.sql"))).toBe(exec(rd(SQL)));
+    expect(rd("supabase/functions/lemtel-client-config/index.ts")).not.toMatch(/org_members|pbx_user_devices/);
   });
 
   it("migration is table-only, additive, RLS on, service-role only", () => {

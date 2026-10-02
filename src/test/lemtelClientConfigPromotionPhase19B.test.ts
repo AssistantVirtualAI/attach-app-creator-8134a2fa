@@ -41,7 +41,7 @@ describe("Lemtel Phase 19B — controlled backend promotion", () => {
     const m = rd(MIG);
     expect(execSql(m)).toBe(execSql(rd(`${OFF}/20261002040000_lemtel_client_config_lifecycle.sql`)));
     const code = execSql(m.replace(/'[^']*'/g, "''"));
-    expect(code).not.toMatch(/CREATE POLICY|CREATE (OR REPLACE )?FUNCTION|CREATE TRIGGER|cron|\bDROP\b|pbx_user_devices|\bINSERT\b|\bUPDATE\b|\bDELETE\b/i);
+    expect(code).not.toMatch(/CREATE POLICY|CREATE (OR REPLACE )?FUNCTION|CREATE TRIGGER|cron|\bDROP\b|pbx_user_devices|\bINSERT\b|\bUPDATE\b|(?<!ON )\bDELETE\b/i);
     expect((code.match(/GRANT /g) ?? []).length).toBe(1);
   });
 

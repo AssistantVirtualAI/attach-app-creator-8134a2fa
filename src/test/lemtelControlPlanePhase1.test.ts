@@ -12,11 +12,17 @@ describe("Lemtel Control Plane phase 1 — repository boundary", () => {
     expect(read("package.json")).not.toMatch(/lemtel-control-plane/);
   });
 
-  it("static verifier passes against the Phase 0 acceptance commit", () => {
-    let hasBase = true;
-    try { execSync("git cat-file -t 6e512e962", { cwd: root, stdio: "ignore" }); } catch { hasBase = false; }
-    const out = execSync(`node scripts/verify-lemtel-control-plane.mjs ${hasBase ? "6e512e962" : ""}`, { cwd: root, encoding: "utf8" });
-    expect(out).toMatch(/passed/);
+  it("static verifier passes on the historical Phase 1 range and current static safety", () => {
+    const v = read("scripts/verify-lemtel-control-plane.mjs");
+    expect(v).toContain('const PHASE1_BASE = "6e512e962";');
+    expect(v).toContain('const PHASE1_END = "224da47b7";');
+    expect(execSync("node scripts/verify-lemtel-control-plane.mjs 6e512e962", { cwd: root, encoding: "utf8" })).toMatch(/passed/);
+    let wrong = 0;
+    try { execSync("node scripts/verify-lemtel-control-plane.mjs 0000000", { cwd: root, stdio: "ignore" }); } catch (e: any) { wrong = e.status; }
+    expect(wrong).toBe(1);
+    const allow = v.match(/const ALLOWED = new Set\((\[[^\]]*\])\);/);
+    expect(JSON.parse(allow![1])).toEqual(["GET /health/live", "GET /health/ready", "GET /v1/internal/status", "POST /v1/internal/audit", "POST /v1/internal/policy/evaluate"]);
+    expect(v).not.toMatch(/ALLOWED[^\n]*(\*|\.\*|RegExp)/);
   });
 
   it("no frontend code imports the control plane", () => {

@@ -12,6 +12,7 @@ const THREAT = "docs/lemtel-client-config/phase-19a-threat-model.md";
 const TEST = "src/test/lemtelPortalClientReconciliationPhase19.test.ts";
 const PHASE19A_FILES = [DOC, THREAT, SCHEMA, POLICY, TEST].sort();
 const BASE = "29db356b7";
+const PHASE19A_END = "ddd7211f2";
 
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 const json = (p: string) => JSON.parse(read(p));
@@ -95,7 +96,11 @@ describe("Lemtel Phase 19A — portal to client reconciliation contract (offline
 
   it("four future consumers are declared and no client code changed", () => {
     expect(json(POLICY).reconciliationMatrix.clientRequiredFutureWork).toEqual(["mobile_manifest_consumer", "desktop_manifest_consumer", "portal_device_controls", "portal_mutation_revision_hook"]);
-    const changed = execFileSync("git", ["diff", "--name-only", "--no-renames", `${BASE}..HEAD`], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+    const g = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "utf8" });
+    for (const c of [BASE, PHASE19A_END]) expect(g("cat-file", "-t", c).trim(), c).toBe("commit");
+    expect(() => g("merge-base", "--is-ancestor", BASE, PHASE19A_END)).not.toThrow();
+    const changed = [...new Set(g("diff", "--name-only", "--no-renames", `${BASE}..${PHASE19A_END}`).split("\n").filter(Boolean))].sort();
+    expect(changed).toEqual(PHASE19A_FILES);
     expect(changed.filter((f) => /^apps\/|^src\/(pages|components|hooks|lib)\/|^supabase\//.test(f))).toEqual([]);
   });
 

@@ -122,7 +122,7 @@ describe("Lemtel staging admission phase 14.0 — offline, denial-first", () => 
 
   it("each prohibited capability is rejected in non-document files", async () => {
     const m = await load();
-    const caps = ["node:ht" + "tp", "fet" + "ch(", "Web" + "Socket", "she" + "ll: true", "exec" + "Sync(", "spa" + "wn(", "np" + "m install", "proc" + "ess.env.X", "sup" + "abase", "ht" + "tps://example.invalid", "10.0" + ".0.1", "spawnSync(\"ba" + "sh\")"];
+    const caps = ["node:ht" + "tp", "fet" + "ch(", "Web" + "Socket", "she" + "ll: true", "exec" + "Sync(", "spa" + "wn(", "np" + "m install", "proc" + "ess.env.X", "sup" + "abase", "ht" + "tps://example.invalid", "10.0" + ".0.1", "spawn" + "Sync(\"ba" + "sh\")"];
     for (const p of m.NON_DOC) { const t = read(p); expect(m.checkCapabilities(p, t)).toBe(true); for (const c of caps) expect(m.checkCapabilities(p, t + "\n" + c + "\n")).toBe(false); }
     expect(m.checkCapabilities(m.SELF, read(m.SELF) + "\nwrite" + "FileSync(x)\n")).toBe(false);
   });

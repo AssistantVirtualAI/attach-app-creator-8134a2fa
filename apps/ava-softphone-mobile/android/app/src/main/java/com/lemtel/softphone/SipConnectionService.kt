@@ -25,7 +25,7 @@ import androidx.core.app.ServiceCompat
  *
  * This service is NOT a SIP client. It never opens a socket, never holds
  * credentials and never reports a SIP registration state. The only real
- * registration indicator is the JsSIP `registered` event in the WebView.
+ * registration indicator is the JsSIP registration event in the WebView.
  *
  * Responsibilities:
  *  - foreground lifecycle + WakeLock / WifiLock

@@ -5,6 +5,7 @@ import type { LogLevel } from "./config.js";
 import { loggerOptions } from "./logger.js";
 import { healthRoutes } from "./routes/health.js";
 import { internalRoutes } from "./routes/internal.js";
+import { policyEvaluationRoutes } from "./routes/policy-evaluation.js";
 
 export type AppDeps = { token: string; db: Pingable; redis: Pingable; audit: AuditStore; logLevel?: LogLevel | "silent"; readyTimeoutMs?: number };
 
@@ -36,5 +37,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.register(async (s) => healthRoutes(s, { db: deps.db, redis: deps.redis, timeoutMs: deps.readyTimeoutMs }));
   app.register(async (s) => internalRoutes(s, { token: deps.token, audit: deps.audit }));
+  app.register(async (s) => policyEvaluationRoutes(s, { token: deps.token }));
   return app;
 }

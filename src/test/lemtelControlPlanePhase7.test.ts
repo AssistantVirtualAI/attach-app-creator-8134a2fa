@@ -19,6 +19,9 @@ const ALLOWED = [
   "src/test/lemtelControlPlanePhase7.test.ts",
 ];
 
+const EVALUATOR = ["src", "routes", "policy-evaluation.ts"];
+const FORBIDDEN_EVALUATOR_DEPS = /from\s+"(?!fastify"|\.\.\/auth\.js"|\.\.\/policy\/(cutover|assignment-lifecycle)\.js")[^"]+"|\b(db|redis|audit|recordAudit|config|logger|server|migrations|readFile|writeFile|child_process|fetch|randomUUID|Date|setTimeout|setInterval)\b|Math\.random|process\.|node:/;
+
 describe("Lemtel Control Plane phase 7 — offline cutover policy", () => {
   it("verifier pass / wrong base / invalid argument", () => {
     expect(run([`--base=${BASE}`]).stdout).toBe(`CP7_PASSED (attested base ${BASE})\n`);
@@ -46,9 +49,14 @@ describe("Lemtel Control Plane phase 7 — offline cutover policy", () => {
     expect(policy).not.toMatch(/fusion|\\u|\\x/i);
   });
 
-  it("no Control Plane runtime file references the policy module", () => {
+  it("only the Phase 10 non-executable evaluator route references the policy module", () => {
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
-    for (const f of walk(path.join(SVC, "src")).filter((f) => !f.endsWith(path.join("policy", "cutover.ts")))) expect(fs.readFileSync(f, "utf8"), f).not.toMatch(/policy\/cutover/);
+    const evaluator = path.join(SVC, ...EVALUATOR);
+    const refs = walk(path.join(SVC, "src")).filter((f) => !f.endsWith(path.join("policy", "cutover.ts")) && /policy\/cutover/.test(fs.readFileSync(f, "utf8")));
+    expect(refs).toEqual([evaluator]);
+    const r = fs.readFileSync(evaluator, "utf8");
+    expect(r).toContain('execution: "non_executable"');
+    expect(r).not.toMatch(FORBIDDEN_EVALUATOR_DEPS);
   });
 
   it("all ten Phase 2 gates remain false", () => {

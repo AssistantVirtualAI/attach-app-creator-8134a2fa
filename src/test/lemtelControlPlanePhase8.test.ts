@@ -25,6 +25,9 @@ const PHASE7_FROZEN = [
   "scripts/verify-lemtel-control-plane-phase7.mjs",
 ];
 
+const EVALUATOR = ["src", "routes", "policy-evaluation.ts"];
+const FORBIDDEN_EVALUATOR_DEPS = /from\s+"(?!fastify"|\.\.\/auth\.js"|\.\.\/policy\/(cutover|assignment-lifecycle)\.js")[^"]+"|\b(db|redis|audit|recordAudit|config|logger|server|migrations|readFile|writeFile|child_process|fetch|randomUUID|Date|setTimeout|setInterval)\b|Math\.random|process\.|node:/;
+
 describe("Lemtel Control Plane phase 8 — offline assignment lifecycle reducer", () => {
   it("verifier pass / wrong base / invalid argument", () => {
     expect(run([`--base=${BASE}`]).stdout).toBe(`CP8_PASSED (attested base ${BASE})\n`);
@@ -43,9 +46,14 @@ describe("Lemtel Control Plane phase 8 — offline assignment lifecycle reducer"
     expect(r.status).toBe(0);
   });
 
-  it("no Control Plane runtime file references the lifecycle module", () => {
+  it("only the Phase 10 non-executable evaluator route references the lifecycle module", () => {
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
-    for (const f of walk(path.join(SVC, "src")).filter((f) => !f.endsWith(path.join("policy", "assignment-lifecycle.ts")))) expect(fs.readFileSync(f, "utf8"), f).not.toMatch(/policy\/assignment-lifecycle/);
+    const evaluator = path.join(SVC, ...EVALUATOR);
+    const refs = walk(path.join(SVC, "src")).filter((f) => !f.endsWith(path.join("policy", "assignment-lifecycle.ts")) && /policy\/assignment-lifecycle/.test(fs.readFileSync(f, "utf8")));
+    expect(refs).toEqual([evaluator]);
+    const r = fs.readFileSync(evaluator, "utf8");
+    expect(r).toContain('execution: "non_executable"');
+    expect(r).not.toMatch(FORBIDDEN_EVALUATOR_DEPS);
   });
 
   it("all ten Phase 2 gates remain false", () => {

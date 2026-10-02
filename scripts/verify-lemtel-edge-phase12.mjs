@@ -7,7 +7,7 @@ import process from "node:process";
 // Static, offline verifier. Only local Git inspection is executed; never Docker.
 const BASE = "ca4c1fa61";
 const USAGE = "P12_USAGE: [--base=ca4c1fa61]";
-const D = "infra/lemtel-edge/phase12-closed";
+const D = "infra/lemtel-edge-phase12-closed";
 export const DOCKERFILE = `${D}/Dockerfile`;
 export const COMPOSE = `${D}/docker-compose.closed.yml`;
 export const CFG = `${D}/kamailio.cfg`;
@@ -15,7 +15,7 @@ export const IGNORE = `${D}/.dockerignore`;
 export const RUNNER = "scripts/run-lemtel-edge-phase12-closed.mjs";
 export const SELF = "scripts/verify-lemtel-edge-phase12.mjs";
 export const TEST = "src/test/lemtelEdgePhase12.test.ts";
-export const DOC = "docs/lemtel-edge/phase-12-closed-local-runtime-test.md";
+export const DOC = "docs/lemtel-edge-phase12-closed/phase-12-closed-local-runtime-test.md";
 export const ALLOWED = [DOCKERFILE, COMPOSE, CFG, IGNORE, RUNNER, SELF, TEST, DOC];
 export const GATES = ["edge_enabled", "sip_registration_enabled", "sip_proxy_enabled", "rtp_relay_enabled", "fusionpbx_upstream_enabled", "control_plane_events_enabled", "push_invite_events_enabled", "recording_enabled", "transcoding_enabled", "media_forking_enabled"];
 const FORBIDDEN_TOOLS = /\b(rtpengine|redis|postgres|mysql|mariadb|sqlite|nodejs|npm|curl|wget|dnsutils|bind9|openssl|stunnel|websocat|fusionpbx|freeswitch|asterisk|pjsua|sipp|kamailio-[a-z0-9-]+-modules)\b/i;
@@ -88,7 +88,7 @@ export function checkRunner(t) {
   return !shellish.test(t.replace(/control plane path exists/g, ""))
     && procCalls.length > 0 && procCalls.every((c) => c === "docker" || c === "git")
     && DOCKER_CMDS.every((c) => t.includes(c))
-    && t.includes('const COMPOSE = "infra/lemtel-edge/phase12-closed/docker-compose.closed.yml";')
+    && t.includes('const COMPOSE = "infra/lemtel-edge-phase12-closed/docker-compose.closed.yml";')
     && t.includes('const IMAGE = "lemtel-edge-phase12-closed:local";')
     && t.includes('const EXPECTED_STATUS = "SIP/2.0 503 Lemtel Edge disabled";')
     && /stdio: \["ignore", "ignore", "ignore"\]/.test(t)

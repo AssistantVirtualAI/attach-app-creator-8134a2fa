@@ -133,3 +133,51 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
     expect(r.stdout).toMatch(/VERIFIER_CAPABILITY/);
   });
 });
+
+describe("Lemtel Phase 15C — one-time historical Planiprêt compatibility baseline", () => {
+  it("exports the exact, sorted seven-path list and the frozen cutoff", async () => {
+    const m = await load();
+    expect(m.PLANIPRET_COMPATIBILITY_END).toBe("2d933df2f");
+    const l = m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS as string[];
+    expect(l).toHaveLength(7);
+    expect([...l].sort()).toEqual(l);
+    for (const p of l) { expect(p).not.toMatch(/[*?]|\/$/); expect(m.isProtected(p)).toBe(true); }
+  });
+
+  it("the real repository passes and its status is unchanged", async () => {
+    const m = await load();
+    const before = status();
+    expect(m.verify([], root)).toEqual(PASS);
+    expect(status()).toBe(before);
+  });
+
+  it("exactly the seven approved paths in the compatibility interval pass", async () => {
+    expect(await run()).toEqual(PASS);
+  });
+
+  it("an extra protected path in the compatibility interval fails", async () => {
+    const m = await load();
+    const r = await run({ compatPaths: [...m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS, "src/lib/planipret/extra.ts"] });
+    expect(r.stdout).toMatch(/PLANIPRET_COMPATIBILITY_SCOPE_EXACT/);
+  });
+
+  it("a missing approved path in the compatibility interval fails", async () => {
+    const m = await load();
+    const r = await run({ compatPaths: m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS.slice(1) });
+    expect(r.stdout).toMatch(/PLANIPRET_COMPATIBILITY_SCOPE_EXACT/);
+  });
+
+  it("re-changing an approved path after the cutoff fails", async () => {
+    const r = await run({ later: ["src/pages/planipret/mobile/MCalls.tsx"] });
+    expect(r.stdout).toMatch(/PLANIPRET_PATH_CHANGED/);
+  });
+
+  it("a later non-Planiprêt Lemtel change passes", async () => {
+    expect(await run({ later: ["apps/ava-softphone-mobile/src/hooks/x.ts"] })).toEqual(PASS);
+  });
+
+  it("missing or reversed compatibility cutoff fails", async () => {
+    expect((await run({ refs: (r) => ({ ...r, compat: "0".repeat(40) }) })).stdout).toMatch(/COMPATIBILITY_END_MISSING/);
+    expect((await run({ refs: (r) => ({ ...r, compat: r.base }) })).stdout).toMatch(/COMPATIBILITY_NOT_ANCESTOR/);
+  });
+});

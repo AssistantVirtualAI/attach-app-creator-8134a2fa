@@ -24,6 +24,13 @@ A device is a server-issued opaque lifecycle record (`lemtel_client_config_devic
 
 `register`, `manifest`, `revoke_self`, `revoke_device`. Strict bodies; unknown fields are rejected before any database query. Users act only on their own devices; organization administrators revoke only inside their own organization; cross-organization revocation returns `forbidden`.
 
+## Phase 17.1 hardening
+
+- **Full own-device binding:** every own-device read and write is bound to the authenticated user, the current account organization and the current softphone account (`user_id`, `organization_id`, `softphone_user_id`). These internal IDs are never returned.
+- **Device reference format:** the database draft enforces `^dev_[0-9a-f]{32}$` (`lemtel_ccd_device_ref_format_check`), matching the server-generated default.
+- **Zero-row/stale rejection:** every update and revocation filters on the expected revision and state, returns the changed row, and fails safely when no row changed; a zero-row mutation never produces a success response.
+- **Offline only:** the offline source was deliberately retained outside `supabase/` and remains undeployed. In the final repository state, no applied migration path and no function path exist for it.
+
 ## Revocation
 
 Revocation blocks future manifest responses. Phase 19/20 later teach clients to clear local SIP state.

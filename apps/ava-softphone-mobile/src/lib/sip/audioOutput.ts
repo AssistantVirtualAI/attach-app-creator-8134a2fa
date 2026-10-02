@@ -55,15 +55,14 @@ export function registerRemoteAudioElement(el: HTMLAudioElement | null) {
 /**
  * Wire the remote WebRTC stream into the registered <audio> element.
  * Accepts either a RTCPeerConnection (JsSIP path — hooks ontrack) or a
- * MediaStream directly (Verto path — stream already resolved by the time
- * the 'media' event fires). Without this the remote party is not audible.
+ * MediaStream directly (stream already resolved). Without this the remote party is not audible.
  *
  * IMPORTANT: after attaching the stream we immediately force the audio
  * route to EARPIECE so Android WebView does not default to the loudspeaker.
  */
 export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
   if (input instanceof MediaStream) {
-    // Verto path: stream is already available, wire it directly.
+    // Stream is already available, wire it directly.
     if (!audioEl) {
       console.warn('[audioOutput] attachRemoteStream(stream): no audio element registered');
       return;
@@ -82,7 +81,7 @@ export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
     };
     // Wire the stream immediately (even if it has no tracks yet).
     if (audioEl.srcObject !== input) playStream();
-    // On Android WebView, pc.ontrack fires AFTER verto.answer is sent —
+    // On Android WebView, pc.ontrack can fire after the answer is sent —
     // sometimes 500 ms–2 s later. When a new audio track is added to the
     // already-attached stream we must re-play so the <audio> element picks
     // up the live track and the caller becomes audible.

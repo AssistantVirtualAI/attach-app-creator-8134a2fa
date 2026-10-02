@@ -11,13 +11,11 @@ class MainActivity : BridgeActivity() {
         registerPlugin(CapacitorPjsip::class.java)
         super.onCreate(savedInstanceState)
         enableOverLockscreen()
-        handleIncomingCallIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         enableOverLockscreen()
-        handleIncomingCallIntent(intent)
     }
 
     /**
@@ -36,20 +34,6 @@ class MainActivity : BridgeActivity() {
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
             )
-        }
-    }
-
-    /**
-     * When the Activity is launched (or brought to front) from an incoming-call
-     * notification / full-screen intent, ask SipConnectionService to re-broadcast
-     * the current invite so the JS side gets the Answer button even if it
-     * mounted after the original `verto.invite` was processed.
-     */
-    private fun handleIncomingCallIntent(intent: Intent?) {
-        val fromCall = intent?.getBooleanExtra("incoming_call", false) == true ||
-            intent?.getStringExtra("incoming_call_action") != null
-        if (fromCall) {
-            SipConnectionService.instance?.reEmitIncomingStatus()
         }
     }
 }

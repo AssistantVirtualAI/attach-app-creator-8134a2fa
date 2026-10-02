@@ -9,12 +9,10 @@ import android.util.Log
  * Receives notification action button taps (Answer / Decline / Hold / Resume)
  * from both the incoming-call notification and the ongoing-call notification.
  *
- * In JsSIP mode (the only active mode on Android), ALL actions are relayed
- * immediately to JavaScript via ACTION_CALL_ACTION_EVENT so that JsSIP can
- * call session.answer() / session.terminate() directly.
- * The old Verto native answer/hangup path has been removed — it was the root
- * cause of the "Answer button does nothing" and "hangup sends caller to
- * voicemail" bugs.
+ * ALL actions are relayed immediately to JavaScript via
+ * ACTION_CALL_ACTION_EVENT so that JsSIP calls session.answer() /
+ * session.terminate(). This receiver never performs SIP signaling and never
+ * creates a call session if the app process was killed.
  */
 class CallActionReceiver : BroadcastReceiver() {
 

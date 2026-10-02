@@ -72,7 +72,7 @@ export interface CapacitorSipPlugin {
 // IMPORTANT: the iOS bridge exports the plugin under the name `CapacitorPjsip`
 // (see CAP_PLUGIN(CapacitorPjsip, "CapacitorPjsip", ...) in CapacitorSip.m).
 // On Android the native class is intentionally NOT implemented — the app runs
-// JsSIP inside the WebView on that platform (kept alive by SipForegroundService).
+// JsSIP inside the WebView on that platform (supported by the Android foreground helper).
 // Calling the real plugin on Android throws
 //   "CapacitorPjsip plugin is not implemented on android"
 // which used to bubble into sipError and show "SIP indisponible" in the UI.
@@ -83,7 +83,7 @@ import { Capacitor as __Cap } from '@capacitor/core';
 const __NATIVE_FLAG = ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true';
 let __platform: string = 'web';
 try { __platform = __Cap.getPlatform(); } catch { /* ssr / tests */ }
-// NATIVE_SIP_ENABLED: iOS only — Android uses JsSIP over WSS (SipForegroundService keeps WebSocket alive).
+// NATIVE_SIP_ENABLED: iOS only — Android uses JsSIP over WSS (the foreground helper only holds WakeLock/WifiLock).
 // Setting this to true on Android routes through the no-op stub and leaves sipStatus stuck at 'idle'.
 export const NATIVE_SIP_ENABLED = __platform === 'ios' && __NATIVE_FLAG !== false;
 
@@ -116,49 +116,41 @@ export const CapacitorSipNative: CapacitorSipPlugin =
     : makeNoopPlugin();
 export const CapacitorPjsip = CapacitorSipNative;
 
-// Android-only: separately register the real CapacitorPjsip bridge so we can
-// invoke the SIP foreground service (WakeLock + WifiLock) without unlocking
-// the full native SIP path on Android.
+// Android-only: separately register the real CapacitorPjsip bridge as a
+// foreground helper / audio bridge. It is NOT a SIP engine: SIP signaling on
+// Android is owned exclusively by JsSIP in the WebView.
 interface AndroidSipServiceBridge {
-  startSipService?: (opts?: any) => Promise<{ ok: boolean }>;
+  startSipService?: (opts?: Record<string, never>) => Promise<AndroidSipServiceStatus & { ok: boolean }>;
   stopSipService?: () => Promise<{ ok: boolean }>;
   getSipServiceStatus?: () => Promise<AndroidSipServiceStatus & { ok: boolean }>;
-  answerNativeCall?: (opts: { sdp: string; dialogParams: any }) => Promise<{ ok: boolean }>;
-  hangupNativeCall?: () => Promise<{ ok: boolean }>;
-  registerOutboundCall?: (opts: { callID: string; destination: string }) => Promise<{ ok: boolean }>;
+  beginCallAudio?: () => Promise<{ ok: boolean }>;
+  endCallAudio?: () => Promise<{ ok: boolean }>;
   requestBatteryOptimizationExemption?: () => Promise<{ ok: boolean; ignored?: boolean; requested?: boolean }>;
   addListener?: (
     event: 'sipServiceStatus',
     callback: (data: AndroidSipServiceStatus) => void
   ) => Promise<{ remove: () => Promise<void> }>;
-  addVertoServerMessageListener?: (
-    event: 'vertoServerMessage',
-    callback: (data: { raw: string }) => void
-  ) => Promise<{ remove: () => Promise<void> }>;
   // Audio routing — real implementation in CapacitorPjsip.kt
   setAudioRoute?: (opts: { route: string }) => Promise<{ ok: boolean; route?: string }>;
   getAudioRoute?: () => Promise<{ route?: string; outputs?: any; inputs?: any }>;
-  // Incoming call notification (JsSIP mode)
+  // Incoming call notification (JsSIP path)
   showIncomingCallNotif?: (opts: { callerNumber: string; callerName: string }) => Promise<{ ok: boolean }>;
   dismissIncomingCallNotif?: () => Promise<{ ok: boolean }>;
 }
 
+/**
+ * Android foreground-helper health snapshot. This is NOT a SIP registration
+ * status: the real registration indicator is the JsSIP `registered` event.
+ * `running` only means the foreground helper is alive.
+ */
 export interface AndroidSipServiceStatus {
-  status?: 'idle' | 'connecting' | 'registered' | 'incoming' | 'reconnecting' | 'disconnected' | 'error' | 'unknown' | string;
+  status?: 'idle' | 'running' | 'stopped' | 'unknown' | string;
   reason?: string;
-  callerName?: string;
-  callerNumber?: string;
-  callId?: string;
-  inviteParams?: string | Record<string, any>;
   updatedAt?: number;
-  lastLoginAt?: number;
-  lastPingAt?: number;
-  lastFrameAt?: number;
-  reconnectAttempt?: number;
-  connecting?: boolean;
-  loggedIn?: boolean;
   wakeLockHeld?: boolean;
   wifiLockHeld?: boolean;
+  /** iOS PJSIP snapshot only (shared type via getIosSipServiceStatus); never set by Android. */
+  loggedIn?: boolean;
 }
 export const AndroidSipServicePlugin: AndroidSipServiceBridge =
   __platform === 'android'
@@ -182,12 +174,10 @@ export async function setAndroidAudioRoute(route: 'earpiece' | 'speaker' | 'blue
   }
 }
 
-export async function startAndroidSipService(creds?: {
-  host?: string; port?: number; login?: string;
-  password?: string; domain?: string; displayName?: string;
-}): Promise<AndroidSipServiceStatus | null> {
+/** Starts the Android foreground helper. Never sends credentials. */
+export async function startAndroidSipService(): Promise<AndroidSipServiceStatus | null> {
   if (__platform !== 'android') return null;
-  try { return await (AndroidSipServicePlugin as any).startSipService?.(creds ?? {}) ?? null; }
+  try { return await AndroidSipServicePlugin.startSipService?.({}) ?? null; }
   catch (e) { console.warn('[sip] startSipService failed', e); }
   return null;
 }
@@ -203,42 +193,18 @@ export async function getAndroidSipServiceStatus(): Promise<AndroidSipServiceSta
   catch (e) { console.warn('[sip] getSipServiceStatus failed', e); return null; }
 }
 
-export async function answerAndroidNativeCall(sdp: string, dialogParams: any): Promise<boolean> {
-  if (__platform !== 'android') return false;
-  try {
-    await AndroidSipServicePlugin.answerNativeCall?.({ sdp, dialogParams });
-    return true;
-  } catch (e) {
-    console.warn('[sip] answerNativeCall failed', e);
-    return false;
-  }
+/** Android: request call audio focus + communication mode. No SIP signaling. Safe to repeat. */
+export async function beginAndroidCallAudio(): Promise<void> {
+  if (__platform !== 'android') return;
+  try { await AndroidSipServicePlugin.beginCallAudio?.(); }
+  catch (e) { console.warn('[sip] beginCallAudio failed', e); }
 }
 
-export async function hangupAndroidNativeCall(): Promise<boolean> {
-  if (__platform !== 'android') return false;
-  try {
-    await AndroidSipServicePlugin.hangupNativeCall?.();
-    return true;
-  } catch (e) {
-    console.warn('[sip] hangupNativeCall failed', e);
-    return false;
-  }
-}
-
-/**
- * Register an outbound call's callID with the native SipConnectionService so
- * it can send verto.bye over the reliable Kotlin WebSocket when hangup() is
- * called — even if the JS WebSocket is disconnected.
- */
-export async function registerOutboundCallWithNative(callID: string, destination: string): Promise<boolean> {
-  if (__platform !== 'android') return false;
-  try {
-    await AndroidSipServicePlugin.registerOutboundCall?.({ callID, destination });
-    return true;
-  } catch (e) {
-    console.warn('[sip] registerOutboundCall failed', e);
-    return false;
-  }
+/** Android: release call audio focus and reset audio mode. No SIP signaling. Safe to repeat. */
+export async function endAndroidCallAudio(): Promise<void> {
+  if (__platform !== 'android') return;
+  try { await AndroidSipServicePlugin.endCallAudio?.(); }
+  catch (e) { console.warn('[sip] endCallAudio failed', e); }
 }
 
 /**
@@ -257,7 +223,7 @@ export async function getIosSipServiceStatus(): Promise<AndroidSipServiceStatus 
   }
 }
 
-/** Force a native re-REGISTER (iOS only; Android service handles its own loop). */
+/** Force a native re-REGISTER (iOS only). */
 export async function triggerIosReregister(): Promise<void> {
   if (__platform !== 'ios') return;
   try { await (CapacitorSipNative as any).triggerReregister?.(); }
@@ -274,28 +240,6 @@ export async function onAndroidSipServiceStatus(
     return () => { handle?.remove().catch(() => {}); };
   } catch (e) {
     console.warn('[sip] sipServiceStatus listener failed', e);
-    return () => {};
-  }
-}
-
-/**
- * Subscribe to raw Verto server messages relayed from the Kotlin WebSocket.
- * This bridges the dual-WebSocket gap: when the native socket receives
- * verto.answer (with SDP), verto.bye, or verto.media from FreeSWITCH,
- * it broadcasts the raw JSON here so the JS RTCPeerConnection can process it.
- */
-export async function onAndroidVertoServerMessage(
-  cb: (raw: string) => void,
-): Promise<() => void> {
-  if (__platform !== 'android') return () => {};
-  try {
-    const plugin = AndroidSipServicePlugin as any;
-    const handle = await plugin.addListener?.('vertoServerMessage', (data: { raw: string }) => {
-      if (data?.raw) cb(data.raw);
-    });
-    return () => { handle?.remove().catch(() => {}); };
-  } catch (e) {
-    console.warn('[sip] vertoServerMessage listener failed', e);
     return () => {};
   }
 }

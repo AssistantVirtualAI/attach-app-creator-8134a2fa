@@ -49,13 +49,10 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
       : `🔴 SIP indisponible${sipError ? ` (${sipError})` : ''}`;
   const startCall = async () => {
     if (!num || dialing || !isRegistered) return;
-    // On Android + Verto, calling getUserMedia here (via requestMicrophonePermission)
-    // opens a mic stream that conflicts with vertoProvider's own getUserMedia call,
-    // causing min_bitrate_bps=-1 and immediate call hang-up.
-    // vertoProvider.call() handles mic acquisition internally with a silent-track
-    // fallback — no pre-flight needed on Android.
+    // On Android, the JsSIP call path acquires the microphone itself; a
+    // pre-flight getUserMedia here would open a competing mic stream.
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
-      // Skip mic pre-check on Android — Verto handles it.
+      // Skip mic pre-check on Android — the call path handles it.
     } else if (micStatus !== 'granted') {
       if (micStatus === 'unknown' || micStatus === 'denied') {
         const next = await requestMicrophonePermission();

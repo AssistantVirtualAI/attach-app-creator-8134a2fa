@@ -149,6 +149,8 @@ export interface AndroidSipServiceStatus {
   updatedAt?: number;
   wakeLockHeld?: boolean;
   wifiLockHeld?: boolean;
+  /** iOS PJSIP snapshot only (shared type via getIosSipServiceStatus); never set by Android. */
+  loggedIn?: boolean;
 }
 export const AndroidSipServicePlugin: AndroidSipServiceBridge =
   __platform === 'android'

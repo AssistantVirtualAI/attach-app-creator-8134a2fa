@@ -53,8 +53,7 @@ const histGit = (...a: string[]) => execFileSync("git", a, { encoding: "utf8", s
 const frozenRange = (base: string, end: string): string[] => {
   for (const c of [base, end]) expect(histGit("cat-file", "-t", c).trim(), `missing commit ${c}`).toBe("commit");
   expect(() => histGit("merge-base", "--is-ancestor", base, end), `${base} not ancestor of ${end}`).not.toThrow();
-  return [...new Set(histGit("diff", "--name-only", "--no-renames", `${base}..${end}`).split("
-").map((x) => x.trim()).filter(Boolean))].sort();
+  return [...new Set(histGit("diff", "--name-only", "--no-renames", `${base}..${end}`).split("\n").map((x) => x.trim()).filter(Boolean))].sort();
 };
 const isProtectedPath = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
 const permanentGuardPasses = () => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { encoding: "utf8" });

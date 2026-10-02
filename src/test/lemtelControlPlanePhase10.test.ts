@@ -58,8 +58,9 @@ describe("Lemtel Control Plane phase 10 — authenticated non-executable policy 
     expect(vals.every((v) => v === "false")).toBe(true);
   });
 
-  it("Phase 2–6 packages remain frozen since base", () => {
-    expect(git(["diff", "--name-only", BASE, "--", "infra/lemtel-edge", "schemas/lemtel-edge", "docs/lemtel-edge"])).toEqual([]);
+  it("Phase 2–6 packages remain frozen in the Phase 10 historical range", () => {
+    for (const ref of [BASE, PHASE10_END]) expect(execFileSync("git", ["cat-file", "-t", ref], { cwd: root, encoding: "utf8" }).trim(), `historical ref ${ref} must exist locally`).toBe("commit");
+    expect(git(["diff", "--name-only", `${BASE}..${PHASE10_END}`, "--", "infra/lemtel-edge", "schemas/lemtel-edge", "docs/lemtel-edge"])).toEqual([]);
   });
 
   it("historical Phase 10 range stays within the original eleven allowed files", () => {

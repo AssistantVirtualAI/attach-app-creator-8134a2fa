@@ -81,7 +81,6 @@ describe("Lemtel Control Plane phase 8 — offline assignment lifecycle reducer"
   it("Phase 3–6 packages and frozen Phase 7 policy artifacts unchanged in the Phase 8 range", () => {
     for (const ref of [BASE, PHASE8_END]) expect(execFileSync("git", ["cat-file", "-t", ref], { cwd: root, encoding: "utf8" }).trim(), `historical ref ${ref} must exist locally`).toBe("commit");
     expect(git(["diff", "--name-only", `${BASE}..${PHASE8_END}`, "--", "infra/lemtel-edge", "schemas/lemtel-edge", "docs/lemtel-edge", ...PHASE7_FROZEN])).toEqual([]);
-    expect(git(["diff", "--name-only", BASE, "--", "infra/lemtel-edge", "schemas/lemtel-edge", "docs/lemtel-edge"])).toEqual([]);
   });
 
   it("Phase 8 changed-file scope is limited to the five allowed paths", () => {

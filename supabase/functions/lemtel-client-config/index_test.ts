@@ -129,3 +129,9 @@ Deno.test("mutations verify an affected row; zero-row, stale or errored mutation
   assert(src.includes('.eq("revision", target.revision).eq("state", target.state)'));
   assert(src.includes('.eq("revision", d.revision).eq("state", d.state)'));
 });
+
+Deno.test("Phase 19B: admin revocation fallback uses user_roles bound to the target organization", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assert(!src.includes("org_members"));
+  assert(src.includes('from("user_roles").select("role").eq("user_id", userId).eq("organization_id", target.organization_id).in("role", ["org_admin", "super_admin"])'));
+});

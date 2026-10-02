@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "ddd7211f2";
+const PHASE19B_END = "dc111644a";
 const OFF = "docs/lemtel-client-config/phase-17-offline";
 const MIG = "supabase/migrations/20261002220000_lemtel_client_config_lifecycle.sql";
 const FN = "supabase/functions/lemtel-client-config/index.ts";
@@ -31,9 +32,11 @@ const execSql = (t: string) => t.replace(/--.*$/gm, "").replace(/\s+/g, " ").tri
 describe("Lemtel Phase 19B — controlled backend promotion", () => {
   it("Planiprêt guard passes before", () => expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n"));
 
-  it("only the eight allowed files changed since the base; no Planiprêt path", () => {
-    const changed = [...new Set([...git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n"), ...git("diff", "--name-only", "HEAD").split("\n"), ...git("ls-files", "--others", "--exclude-standard").split("\n")].filter(Boolean))].sort();
-    expect(changed.filter((p) => !FILES.includes(p))).toEqual([]);
+  it("frozen Phase 19B interval contains exactly the eight original files; no Planiprêt path", () => {
+    for (const c of [BASE, PHASE19B_END]) expect(git("cat-file", "-t", c).trim(), c).toBe("commit");
+    expect(() => git("merge-base", "--is-ancestor", BASE, PHASE19B_END)).not.toThrow();
+    const changed = [...new Set(git("diff", "--name-only", "--no-renames", `${BASE}..${PHASE19B_END}`).split("\n").filter(Boolean))].sort();
+    expect(changed).toEqual(FILES);
     expect(changed.filter(isProtected)).toEqual([]);
   });
 

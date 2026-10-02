@@ -9,10 +9,12 @@ const root = path.resolve(__dirname, "../..");
 const load = async () => await import(/* @vite-ignore */ pathToFileURL(path.join(root, "scripts/verify-lemtel-planipret-isolation.mjs")).href);
 const status = () => execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" });
 
-type Opts = { hist?: string[]; later?: string[]; mutate?: (tmp: string, g: (...a: string[]) => string) => void; refs?: (r: { base: string; end: string }) => { base: string; end: string } };
+type Refs = { base: string; end: string; compat: string };
+type Opts = { hist?: string[]; compatPaths?: string[]; later?: string[]; mutate?: (tmp: string, g: (...a: string[]) => string) => void; refs?: (r: Refs) => Refs };
 
 // Genuine temporary Git repository via local plumbing (real commit objects, command-local identity).
-// base = neutral file; end = base + four Phase 15A files (+ hist extras); optional later commit (+ later paths).
+// base = neutral file; end = base + four Phase 15A files (+ hist extras);
+// compat = end + compatibility paths (default: the seven approved); optional later commit (+ later paths).
 const run = async (o: Opts = {}) => {
   const m = await load();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "p15a-"));
@@ -30,9 +32,12 @@ const run = async (o: Opts = {}) => {
     for (const p of m.ALLOWED) put(p);
     for (const p of o.hist ?? []) put(p, "x\n");
     const end = commit("phase15a", base);
-    if (o.later) { for (const p of o.later) put(p, "y\n"); commit("later", end); }
+    for (const p of o.compatPaths ?? m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS) put(p, "c\n");
+    put("docs/lemtel-isolation/compat-note.md", "n\n");
+    const compat = commit("compat", end);
+    if (o.later) { for (const p of o.later) put(p, "y\n"); commit("later", compat); }
     o.mutate?.(tmp, g);
-    const refs = o.refs ? o.refs({ base, end }) : { base, end };
+    const refs = o.refs ? o.refs({ base, end, compat }) : { base, end, compat };
     return m.verify([], tmp, refs);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 };

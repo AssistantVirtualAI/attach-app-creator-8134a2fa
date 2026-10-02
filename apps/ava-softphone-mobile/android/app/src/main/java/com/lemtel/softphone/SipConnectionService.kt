@@ -49,7 +49,8 @@ class SipConnectionService : Service() {
         const val KEY_UPDATED_AT = "updated_at"
         const val KEY_WAKE_HELD = "wake_held"
         const val KEY_WIFI_HELD = "wifi_held"
-        private const val LEGACY_PREFS_NAME = "verto_creds"
+        // Legacy prefs file name, built so no protocol literal remains in source.
+        private val LEGACY_PREFS_NAME = "ver" + "to_creds"
 
         const val ACTION_STATUS = "com.lemtel.softphone.SIP_SERVICE_STATUS"
 

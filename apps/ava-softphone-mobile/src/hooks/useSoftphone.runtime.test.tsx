@@ -15,6 +15,8 @@ vi.mock('../lib/sip/nativeSipProvider', () => ({
   get NATIVE_SIP_ENABLED() { return state.native; },
   startAndroidSipService: vi.fn(),
   stopAndroidSipService: vi.fn(),
+  beginAndroidCallAudio: vi.fn(async () => {}),
+  endAndroidCallAudio: vi.fn(async () => {}),
 }));
 vi.mock('./useSoftphoneNative', () => ({ useSoftphoneNative: nativeHook }));
 vi.mock('../lib/sip/bootSipGuard', () => ({ notifySipDispatcherLoaded: vi.fn() }));

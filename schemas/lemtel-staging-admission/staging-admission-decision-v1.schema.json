@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lemtel-staging-admission/staging-admission-decision-v1",
+  "title": "Lemtel staging admission decision v1 (offline, non-executable)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "request_id",
+    "decision_ref",
+    "decision",
+    "reason_codes",
+    "deployment_allowed",
+    "runtime_allowed",
+    "persistent_data_allowed",
+    "secrets_allowed",
+    "network_allowed"
+  ],
+  "properties": {
+    "kind": {
+      "const": "staging_admission_decision"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]{7,63}$"
+    },
+    "decision_ref": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]{7,63}$"
+    },
+    "decision": {
+      "enum": [
+        "denied",
+        "admitted"
+      ]
+    },
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 0,
+      "maxItems": 13,
+      "items": {
+        "enum": [
+          "unmet_dedicated_vps_hardened",
+          "unmet_key_only_ssh_verified",
+          "unmet_firewall_ssh_only_verified",
+          "unmet_weekly_hostinger_backup_enabled",
+          "unmet_fresh_prechange_snapshot_created",
+          "unmet_external_encrypted_backup_approved",
+          "unmet_offserver_restore_test_passed",
+          "unmet_monitoring_owner_named",
+          "unmet_logs_retention_approved",
+          "unmet_secrets_owner_named",
+          "unmet_private_dns_and_tls_approved",
+          "unmet_pbx_integration_approved",
+          "unmet_all_edge_gates_false"
+        ]
+      }
+    },
+    "deployment_allowed": {
+      "const": false
+    },
+    "runtime_allowed": {
+      "const": false
+    },
+    "persistent_data_allowed": {
+      "const": false
+    },
+    "secrets_allowed": {
+      "const": false
+    },
+    "network_allowed": {
+      "const": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "admitted"
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reason_codes": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "denied"
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reason_codes": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}

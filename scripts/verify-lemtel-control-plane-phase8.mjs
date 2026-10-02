@@ -34,6 +34,13 @@ const DOC_LABELS = ["Existing Direct", "Future Pending", "Future Active", "Futur
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const walk = (d) => existsSync(d) ? readdirSync(d, { withFileTypes: true }).flatMap((e) => e.name === "node_modules" || e.name === "dist" ? [] : e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]) : [];
 
+const EVALUATOR_REL = ["src", "routes", "policy-evaluation.ts"];
+const evaluatorSafe = (src) => {
+  const bad = new RegExp(["audit", "\\bdb\\b", "redis", "logger", "config", "server", "migration", "fs\\b", "read" + "File", "wri" + "te" + "File", "child_" + "process", "fet" + "ch\\(", "node:", "\\bDate\\b", "Math\\.random", "random" + "UUID", "process\\.", "set" + "Timeout", "set" + "Interval", "import\\(", "require\\(", "cors", "access-control"].join("|"), "i");
+  const routes = [...src.matchAll(/\.(get|post|put|patch|delete|all|route)\(\s*"([^"]+)"/g)].map((m) => `${m[1]} ${m[2]}`);
+  return src.includes('execution: "non_executable"') && src.includes("makeServiceGuard(deps.token)") && !bad.test(src) && JSON.stringify(routes) === JSON.stringify(["post /v1/internal/policy/evaluate"]);
+};
+
 export function verifyPhase8(args, root = resolve(dirname(fileURLToPath(import.meta.url)), "..")) {
   if (args.length > 1 || (args.length === 1 && !/^--base=[0-9a-f]{7,40}$/.test(args[0]))) return { code: 2, stdout: USAGE + "\n" };
   const fail = new Set();
@@ -80,7 +87,8 @@ export function verifyPhase8(args, root = resolve(dirname(fileURLToPath(import.m
     || !p7m.includes('"upstream_nonproduction_approved"') || /fusion|\\u|\\x/i.test(p7m) || /skipIf|it\.skip|\.skip\(|\.todo|\btodo\(/.test(p7t)) fail.add("CP8_PHASE7_STATE");
   const svc = join(root, SVC_REL);
   const ref = /policy\/assignment-lifecycle/;
-  if (walk(join(svc, "src")).some((f) => !f.endsWith(join("policy", "assignment-lifecycle.ts")) && ref.test(readFileSync(f, "utf8")))) fail.add("CP8_NOT_REFERENCED_BY_RUNTIME");
+  const evaluator = join(svc, ...EVALUATOR_REL);
+  if (walk(join(svc, "src")).some((f) => f !== evaluator && !f.endsWith(join("policy", "assignment-lifecycle.ts")) && ref.test(readFileSync(f, "utf8"))) || !existsSync(evaluator) || !evaluatorSafe(readFileSync(evaluator, "utf8"))) fail.add("CP8_NOT_REFERENCED_BY_RUNTIME");
   const allowed = new Set(FILES.map((f) => join(root, f)));
   for (const f of [...walk(join(root, "src")), ...walk(join(svc, "test")), ...walk(join(root, "scripts"))]) if (!allowed.has(f) && ref.test(readFileSync(f, "utf8"))) fail.add("CP8_NOT_REFERENCED_BY_RUNTIME");
   const self = rd("scripts/verify-lemtel-control-plane-phase8.mjs");

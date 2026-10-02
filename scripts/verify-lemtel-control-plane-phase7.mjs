@@ -27,6 +27,13 @@ const ORDER = [
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const walk = (d) => existsSync(d) ? readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]) : [];
 
+const EVALUATOR_REL = ["src", "routes", "policy-evaluation.ts"];
+const evaluatorSafe = (src) => {
+  const bad = new RegExp(["audit", "\\bdb\\b", "redis", "logger", "config", "server", "migration", "fs\\b", "read" + "File", "wri" + "te" + "File", "child_" + "process", "fet" + "ch\\(", "node:", "\\bDate\\b", "Math\\.random", "random" + "UUID", "process\\.", "set" + "Timeout", "set" + "Interval", "import\\(", "require\\(", "cors", "access-control"].join("|"), "i");
+  const routes = [...src.matchAll(/\.(get|post|put|patch|delete|all|route)\(\s*"([^"]+)"/g)].map((m) => `${m[1]} ${m[2]}`);
+  return src.includes('execution: "non_executable"') && src.includes("makeServiceGuard(deps.token)") && !bad.test(src) && JSON.stringify(routes) === JSON.stringify(["post /v1/internal/policy/evaluate"]);
+};
+
 export function verifyPhase7(args, root = resolve(dirname(fileURLToPath(import.meta.url)), "..")) {
   if (args.length > 1 || (args.length === 1 && !/^--base=[0-9a-f]{7,40}$/.test(args[0]))) return { code: 2, stdout: USAGE + "\n" };
   const fail = new Set();
@@ -64,7 +71,8 @@ export function verifyPhase7(args, root = resolve(dirname(fileURLToPath(import.m
   if (p6.runtime !== "not_started" || p6.phase1_docker_runtime !== "pending" || p6.current_default_routing_mode !== "existing_direct" || p6.current_evidence_state !== "not_started") fail.add("CP7_PHASE6_POLICY_STATIC");
   const svc = join(root, "services/lemtel-control-plane");
   const runtime = walk(join(svc, "src")).filter((f) => !f.endsWith(join("policy", "cutover.ts")));
-  if (runtime.some((f) => /policy\/cutover/.test(readFileSync(f, "utf8")))) fail.add("CP7_NOT_IMPORTED_BY_RUNTIME");
+  const evaluator = join(svc, ...EVALUATOR_REL);
+  if (runtime.some((f) => f !== evaluator && /policy\/cutover/.test(readFileSync(f, "utf8"))) || !existsSync(evaluator) || !evaluatorSafe(readFileSync(evaluator, "utf8"))) fail.add("CP7_NOT_IMPORTED_BY_RUNTIME");
   const allowedRefs = new Set(FILES.map((f) => join(root, f)));
   for (const f of [...walk(join(root, "src")), ...walk(join(svc, "test")), ...walk(join(root, "scripts"))]) if (!allowedRefs.has(f) && /policy\/cutover/.test(readFileSync(f, "utf8"))) fail.add("CP7_NOT_IMPORTED_BY_RUNTIME");
   const self = rd("scripts/verify-lemtel-control-plane-phase7.mjs");

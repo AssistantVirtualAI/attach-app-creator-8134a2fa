@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useOutletContext, useSearchParams } from "react-router-dom";
@@ -1220,6 +1221,13 @@ function CallDetailSheet({
   const [txReason, setTxReason] = useState<{ message?: string | null; hint?: string | null } | null>(null);
   const txRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (txRetryTimerRef.current) clearTimeout(txRetryTimerRef.current); }, []);
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+  }, [onClose]);
   const [aiLoading, setAiLoading] = useState(false);
   const [taskState, setTaskState] = useState<Record<string, { creating?: boolean; createdId?: string }>>({});
   const [eventState, setEventState] = useState<Record<string, { creating?: boolean; createdId?: string }>>({});
@@ -1477,16 +1485,20 @@ function CallDetailSheet({
   const score = call.lead_score ?? null;
   const scoreColor = score == null ? "var(--pp-text-muted)" : score >= 8 ? "var(--pp-success)" : score >= 5 ? "var(--pp-warning)" : "var(--pp-danger)";
 
-  return (
-    <div className="absolute inset-0 z-40 flex items-end" onClick={onClose}>
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)" }} />
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-end" onClick={onClose} role="dialog" aria-modal="true"
+      style={{ paddingTop: "max(env(safe-area-inset-top), 12px)", touchAction: "pan-y" }}>
+      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)" }} />
       <motion.div
         onClick={(e) => e.stopPropagation()}
         initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 280 }}
         className="relative w-full flex flex-col"
         style={{
-          height: "95%",
+          height: "100%",
+          maxHeight: "100%",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          willChange: "transform",
           background: "var(--pp-bg-base)",
           borderTop: "1px solid var(--pp-bg-border-2)",
           borderRadius: "24px 24px 0 0",
@@ -1496,7 +1508,7 @@ function CallDetailSheet({
         {/* Drag handle + close */}
         <div className="pt-3 pb-2 flex flex-col items-center relative shrink-0">
           <div style={{ width: 36, height: 4, background: "var(--pp-bg-border-2)", borderRadius: 2 }} />
-          <button onClick={onClose} className="absolute right-3 top-2 p-2.5 rounded-full" style={{ minWidth: 44, minHeight: 44, color: "var(--pp-text-secondary)" }} aria-label={t("common.close")}>
+          <button onClick={onClose} className="absolute right-3 top-1 p-2.5 rounded-full z-10" style={{ minWidth: 44, minHeight: 44, background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)" }} aria-label={t("common.close")}>
             <X className="w-5 h-5 mx-auto" />
           </button>
         </div>
@@ -1542,8 +1554,9 @@ function CallDetailSheet({
               return (
                 <button
                   key={t.k}
+                  type="button"
                   onClick={() => setActiveTab(t.k as any)}
-                  className="flex-1 py-2 rounded-full text-[11px] font-semibold transition"
+                  className="flex-1 py-2.5 rounded-full touch-manipulation text-[11px] font-semibold transition"
                   style={active
                     ? { background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))", color: "white", boxShadow: "0 2px 10px rgba(46,155,220,0.35)" }
                     : { color: "var(--pp-text-muted)" }}
@@ -1555,7 +1568,7 @@ function CallDetailSheet({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <div key={activeTab} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4" style={{ WebkitOverflowScrolling: "touch" }}>
 
           {/* ===== TAB AUDIO ===== */}
           {activeTab === "audio" && (
@@ -1728,7 +1741,7 @@ function CallDetailSheet({
         </div>
       </motion.div>
     </div>
-  );
+  , document.body);
 }
 
 function CallbackSuggestion({ call, onScheduled }: { call: Call; onScheduled: () => void }) {

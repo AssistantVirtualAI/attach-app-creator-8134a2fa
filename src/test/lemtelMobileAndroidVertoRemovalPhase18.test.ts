@@ -14,6 +14,13 @@ const MANIFEST = `${APP}/android/app/src/main/AndroidManifest.xml`;
 const HOOK = `${APP}/src/hooks/useSoftphone.ts`;
 const PROVIDER = `${APP}/src/lib/sip/nativeSipProvider.ts`;
 const BRIDGE = `${APP}/src/lib/sip/useCallActionBridge.ts`;
+const APPTSX = `${APP}/src/MobileApp.tsx`;
+const BASE_18B2 = "2d933df2f";
+const PHASE18B2_FILES = [
+  PLUGIN, PROVIDER, HOOK, APPTSX,
+  "src/test/lemtelMobileAndroidVertoRemovalPhase18.test.ts",
+  "docs/lemtel-mobile/phase-18b1-android-verto-removal.md",
+];
 const read = (p: string) => readFileSync(p, "utf8");
 
 const ALLOWED = new Set([
@@ -137,5 +144,69 @@ describe("Phase 18B-1 — dormant Android Verto stack removed", () => {
     // paths inside this phase's surface plus Planiprêt.
     const surface = changed.filter((p) => p.startsWith(`${APP}/`) || /planipret/i.test(p));
     expect(surface.filter((p) => !ALLOWED.has(p))).toEqual([]);
+  }, 30000);
+});
+
+describe("Phase 18B-2 — Android plugin is helper-only", () => {
+  it("CapacitorPjsip.kt declares no account or call-signaling method", () => {
+    const k = read(PLUGIN);
+    for (const m of ["initAccount", "makeCall", "startCall", "hangup", "answer", "disconnect", "sendDTMF", "transfer", "park", "addCall",
+      "microphonePermissionCallback", "setMute", "setHold", "setHeld", "getSnapshot", "snapshot", "startRecord", "stopRecord",
+      "startRecording", "stopRecording", "setLiveTranscriptionEnabled", "getRtpStats", "setLogLevel"]) {
+      expect(k, m).not.toMatch(new RegExp(`fun\\s+${m}\\s*\\(`));
+    }
+    expect(k).toContain("fun micPermCallback(");
+    expect(k).toContain('name = "CapacitorPjsip"');
+  });
+
+  it("CapacitorPjsip.kt reads no SIP account configuration", () => {
+    const k = read(PLUGIN);
+    for (const key of ["server", "password", "username", "extension", "domain", "transport", "target", "number", "callId", "sdp"]) {
+      expect(k, key).not.toContain(`getString("${key}"`);
+    }
+    expect(k).not.toContain('getInt("port"');
+    expect(k).not.toMatch(/wss:\/\/|Socket\(|REGISTER|INVITE/);
+  });
+
+  it("startSipService takes no options and only starts the helper", () => {
+    const k = read(PLUGIN);
+    const body = k.slice(k.indexOf("fun startSipService"), k.indexOf("fun getSipServiceStatus"));
+    expect(body).toContain("SipConnectionService.start(context)");
+    expect(body).not.toMatch(/call\.get(String|Int|Boolean|Object|Array)/);
+  });
+
+  it("TypeScript Android bridge exposes no account/call helpers", () => {
+    const p = read(PROVIDER);
+    const bridge = p.slice(p.indexOf("interface AndroidSipServiceBridge"), p.indexOf("export interface AndroidSipServiceStatus"));
+    expect(bridge).not.toMatch(/initAccount|makeCall|startCall|hangup|answer|disconnect|sendDTMF|transfer|park|addCall/);
+    expect(p).toMatch(/export async function startAndroidSipService\(\)/);
+    expect(p).toContain("never set by Android");
+  });
+
+  it("helper starts only after JsSIP registered and stops on hook cleanup", () => {
+    const s = read(HOOK);
+    const starts = [...s.matchAll(/\bstartAndroidSipService\(\)/g)].length;
+    expect(starts).toBe(1);
+    const reg = s.slice(s.indexOf("ua.on('registered'"));
+    expect(reg.slice(0, reg.indexOf("});"))).toContain("startAndroidSipService()");
+    expect(s).toMatch(/uaRef\.current = null;\s*\n\s*\/\/[^\n]*\n\s*if \(Capacitor\.getPlatform\(\) === 'android'\) void stopAndroidSipService\(\);/);
+  });
+
+  it("MobileApp.tsx does not claim the helper keeps a WebSocket alive", () => {
+    const s = read(APPTSX);
+    expect(s).not.toMatch(/keeps the WebView WebSocket alive/i);
+    expect(s).toContain("JsSIP is the only WebSocket and registration owner");
+  });
+
+  it("only the six permitted files changed since the 18B-2 baseline; no Planipret path", () => {
+    const git = (...a: string[]) => execFileSync("git", a, { encoding: "utf8" }).split("\n").filter(Boolean);
+    const changed = [...new Set([
+      ...git("diff", "--name-only", "--no-renames", `${BASE_18B2}..HEAD`),
+      ...git("diff", "--name-only", "HEAD"),
+      ...git("ls-files", "--others", "--exclude-standard"),
+    ])];
+    expect(changed.filter((p) => /planipret/i.test(p))).toEqual([]);
+    const surface = changed.filter((p) => p.startsWith(`${APP}/`) || PHASE18B2_FILES.includes(p) || p.startsWith("src/test/lemtel") || p.startsWith("docs/lemtel-"));
+    expect(surface.filter((p) => !PHASE18B2_FILES.includes(p))).toEqual([]);
   }, 30000);
 });

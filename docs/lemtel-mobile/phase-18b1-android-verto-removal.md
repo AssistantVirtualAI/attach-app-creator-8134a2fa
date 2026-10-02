@@ -38,3 +38,11 @@ Mobile build and `./gradlew :app:assembleDebug` could not run here (missing `@vi
 
 ## Remaining limitation
 JsSIP registration lives in the WebView: it works while the app process survives in background, but no SIP call can be received after force-stop or reboot. The fix is the later Push + Lemtel Edge work, not a native SIP stack.
+
+## Phase 18B-2 correction — dead Android native SIP APIs removed
+**Baseline:** `2d933df2f`. Six files only: `CapacitorPjsip.kt`, `nativeSipProvider.ts`, `useSoftphone.ts`, `MobileApp.tsx`, the Phase 18 guard test and this document.
+- `CapacitorPjsip.kt` (Android) deleted: `initAccount`, `microphonePermissionCallback`, `makeCall`, `startCall`, `hangup`, `answer`, `setMute`, `setHold`, `sendDTMF`, `disconnect`, `setLogLevel`, `getSnapshot`, `setHeld`, `startRecord`, `stopRecord`, `startRecording`, `stopRecording`, `snapshot`, `transfer`, `park`, `addCall`, `setLiveTranscriptionEnabled`, `getRtpStats`. Plugin name `CapacitorPjsip` kept (shared bridge name); on Android it is a foreground-helper, notification and audio bridge only. No SIP server/port/user/extension/password/domain/transport is read.
+- `nativeSipProvider.ts`: Android bridge lists only existing helper methods; `loggedIn` documented as iOS-only.
+- `useSoftphone.ts`: helper still starts only on the real JsSIP `registered` event; now stopped in the JsSIP effect cleanup (unmount, account change, credentials removed). Not stopped on background.
+- `MobileApp.tsx`: comment corrected — JsSIP is the only WebSocket/registration owner; the helper only reduces background suspension risk (WakeLock/WifiLock).
+- `AudioFocusHelper` and default speaker behaviour unchanged. No Gradle, `cap sync`, device, PBX, server, database, iOS, desktop or store action.

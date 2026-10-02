@@ -280,8 +280,8 @@ export function useSoftphoneJsSip(
             setSipStatus('registered');
             setSipErrorState('');
             log('register.ok', `ext=${config.extension}@${config.domain}`);
-            // Android: start foreground service to hold WakeLock + WifiLock
-            // so the WebSocket survives screen-off / background throttling.
+            // Android: start the foreground helper (WakeLock + WifiLock) only
+            // after a real JsSIP registration. JsSIP owns the WebSocket.
             startAndroidSipService();
           });
           // Silent re-register on expiry / soft unregister — keeps the
@@ -677,6 +677,8 @@ export function useSoftphoneJsSip(
       if (sessionRef.current && Capacitor.getPlatform() === 'android') void endAndroidCallAudio();
       try { uaRef.current?.stop(); } catch {}
       uaRef.current = null;
+      // JsSIP ownership ended (unmount, account change, credentials gone).
+      if (Capacitor.getPlatform() === 'android') void stopAndroidSipService();
       reconnectRef.current = () => {};
     };
   }, [config?.extension, config?.wssUrl, config?.domain, config?.password, opts.jsSipTimeoutMs, reconnectTick, log, setSipError, setSipStatus]);

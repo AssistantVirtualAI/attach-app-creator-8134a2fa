@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lemtel-edge/runtime/closed-local-edge-runtime-admission-v1",
+  "title": "Lemtel Edge closed local runtime admission v1 (offline, non-executable admission contract)",
+  "description": "Offline, non-executable admission contract for a future closed local validation. Starts nothing, approves nothing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "intent",
+    "runtimeState",
+    "featureGates",
+    "exposure",
+    "networkPolicy",
+    "signallingBehavior",
+    "mediaBehavior",
+    "upstreamBehavior",
+    "controlPlaneBehavior",
+    "clientBehavior",
+    "cleanupRequirement",
+    "approvalState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "closed_local_edge_runtime_admission_v1"
+    },
+    "intent": {
+      "const": "closed_local_validation"
+    },
+    "runtimeState": {
+      "const": "not_started"
+    },
+    "featureGates": {
+      "const": "all_false"
+    },
+    "exposure": {
+      "const": "loopback_only"
+    },
+    "networkPolicy": {
+      "const": "default_deny"
+    },
+    "signallingBehavior": {
+      "const": "static_503_only"
+    },
+    "mediaBehavior": {
+      "const": "not_started"
+    },
+    "upstreamBehavior": {
+      "const": "disabled"
+    },
+    "controlPlaneBehavior": {
+      "const": "disabled"
+    },
+    "clientBehavior": {
+      "const": "unchanged"
+    },
+    "cleanupRequirement": {
+      "const": "mandatory"
+    },
+    "approvalState": {
+      "const": "not_approved"
+    }
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lemtel-edge/runtime/closed-local-edge-runtime-report-v1",
+  "title": "Lemtel Edge closed local runtime report v1 (offline, redacted)",
+  "description": "Offline, redacted report contract for a future closed local validation. Enum values only; no raw logs, addresses, identifiers, packet content or user data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "result",
+    "configSyntax",
+    "closedResponse",
+    "externalEgress",
+    "upstreamConnection",
+    "controlPlaneConnection",
+    "mediaRelay",
+    "featureGates",
+    "cleanup",
+    "failureCode"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "closed_local_edge_runtime_report_v1"
+    },
+    "result": {
+      "enum": [
+        "not_run",
+        "passed",
+        "failed"
+      ]
+    },
+    "configSyntax": {
+      "enum": [
+        "not_run",
+        "passed",
+        "failed"
+      ]
+    },
+    "closedResponse": {
+      "enum": [
+        "not_run",
+        "passed",
+        "failed"
+      ]
+    },
+    "externalEgress": {
+      "enum": [
+        "not_run",
+        "blocked",
+        "failed"
+      ]
+    },
+    "upstreamConnection": {
+      "enum": [
+        "not_run",
+        "blocked",
+        "failed"
+      ]
+    },
+    "controlPlaneConnection": {
+      "enum": [
+        "not_run",
+        "blocked",
+        "failed"
+      ]
+    },
+    "mediaRelay": {
+      "enum": [
+        "not_run",
+        "blocked",
+        "failed"
+      ]
+    },
+    "featureGates": {
+      "const": "all_false"
+    },
+    "cleanup": {
+      "enum": [
+        "not_run",
+        "passed",
+        "failed"
+      ]
+    },
+    "failureCode": {
+      "enum": [
+        "none",
+        "local_validation_failed",
+        "cleanup_failed"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "not_run"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "properties": {
+          "configSyntax": {
+            "const": "not_run"
+          },
+          "closedResponse": {
+            "const": "not_run"
+          },
+          "externalEgress": {
+            "const": "not_run"
+          },
+          "upstreamConnection": {
+            "const": "not_run"
+          },
+          "controlPlaneConnection": {
+            "const": "not_run"
+          },
+          "mediaRelay": {
+            "const": "not_run"
+          },
+          "cleanup": {
+            "const": "not_run"
+          },
+          "failureCode": {
+            "const": "none"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "passed"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "properties": {
+          "failureCode": {
+            "const": "none"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "failed"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "properties": {
+          "failureCode": {
+            "enum": [
+              "local_validation_failed",
+              "cleanup_failed"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

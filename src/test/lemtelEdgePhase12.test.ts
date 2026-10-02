@@ -73,6 +73,19 @@ describe("Lemtel Edge phase 12A — closed local Kamailio package (static only)"
     expect(m.checkDockerfile(d.replace("RUN kamailio -c -f", "RUN true #"))).toBe(false);
     expect(m.checkDockerfile(d.replace("USER 65532:65532", "USER root"))).toBe(false);
     expect(m.checkDockerfile(d + "EXPOSE 5060\n")).toBe(false);
+    const DIR = "RUN install -d -m 0755 /opt/lemtel-closed\n";
+    const COPY = "COPY --chown=root:root --chmod=0444 kamailio.cfg /opt/lemtel-closed/kamailio.cfg\n";
+    expect(d).toContain(DIR + COPY);
+    expect(d.indexOf(DIR)).toBeGreaterThan(d.indexOf("useradd --system --uid 65532"));
+    expect(m.checkDockerfile(d.replace(DIR, ""))).toBe(false);
+    expect(m.checkDockerfile(d.replace("install -d -m 0755", "install -d -m 0777"))).toBe(false);
+    expect(m.checkDockerfile(d.replace("install -d -m 0755 /opt/lemtel-closed", "install -d -m 0755 /opt/other"))).toBe(false);
+    expect(m.checkDockerfile(d.replace(DIR + COPY, COPY + DIR))).toBe(false);
+    expect(m.checkDockerfile(d.replace(DIR, DIR + DIR))).toBe(false);
+    expect(m.checkDockerfile(d.replace("--chmod=0444", "--chmod=0644"))).toBe(false);
+    expect(m.checkDockerfile(d.replace("--chown=root:root", "--chown=65532:65532"))).toBe(false);
+    for (const extra of ["RUN chmod -R 0777 /opt/lemtel-closed\n", "RUN chown -R 65532:65532 /opt/lemtel-closed\n", "RUN chmod u+w /opt/lemtel-closed/kamailio.cfg\n", "RUN mkdir -p /var/run/x\n"]) expect(m.checkDockerfile(d.replace(COPY, COPY + extra))).toBe(false);
+    expect(d.trim().split("\n").filter((l) => l.startsWith("USER"))).toEqual(["USER 65532:65532"]);
   });
 
   it("Compose: one hardened service, no port/network/mount/env/secret/privilege", async () => {

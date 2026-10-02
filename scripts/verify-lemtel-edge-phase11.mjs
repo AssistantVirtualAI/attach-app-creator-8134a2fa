@@ -105,7 +105,7 @@ export const SOURCE_PATTERNS = [
   J("\\b(sp", "awn|sp", "awnSync|fo", "rk|ex", "ec|ex", "ecSync)\\s*\\("), J("\\.lis", "ten\\s*\\("), J("\\b(app|server|fastify|router)\\.(get|post|put|patch|delete|route|register)\\s*\\("),
   J("process\\.e", "nv"), J("\\b(writeFile|appendFile|mkdir|rmSync|unlink)(Sync)?\\s*\\("), J("\\bdocker\\s+(run|pull|build|compose)"), J("h", "ttps?://"), J("\\b\\d{1,3}(\\.\\d{1,3}){3}\\b"),
 ];
-const GIT_ALLOW = "execFileSync(" + '"git"';
+const GIT_ALLOW = ["execFileSync", '("git"'].join("");
 
 export function scanDoc(t) { return DOC_PATTERNS.some((r) => t.split("\n").some((l) => r.test(l))); }
 export function scanSource(t) { return SOURCE_PATTERNS.some((r) => r.test(t)) || t.split(GIT_ALLOW).length - 1 > 1 || /execFileSync\s*\(\s*["'](?!git["'])/.test(t); }

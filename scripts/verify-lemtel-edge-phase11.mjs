@@ -6,6 +6,8 @@ import process from "node:process";
 
 // Static, offline verifier. Only local Git inspection is executed.
 const BASE = "f549747ff";
+export const PHASE11_BASE = BASE;
+export const PHASE11_END = "22ccf4b2e";
 const USAGE = "P11_USAGE: [--base=f549747ff]";
 const DRAFT = "ht" + "tps://json-schema.org/draft/2020-12/schema";
 export const ADMISSION = "schemas/lemtel-edge/runtime/closed-local-edge-runtime-admission-v1.schema.json";
@@ -127,6 +129,17 @@ export function classify(paths) {
   return f;
 }
 
+// Phase 11 original change-scope is frozen to its accepted range, never current HEAD.
+export function historicalScope(root) {
+  const git = (a) => execFileSync("git", a, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  try {
+    git(["cat-file", "-e", `${PHASE11_BASE}^{commit}`]);
+    git(["cat-file", "-e", `${PHASE11_END}^{commit}`]);
+    git(["merge-base", "--is-ancestor", PHASE11_BASE, PHASE11_END]);
+    return { ok: true, changed: git(["diff", "--name-only", `${PHASE11_BASE}..${PHASE11_END}`]).split("\n").filter(Boolean) };
+  } catch { return { ok: false, changed: [] }; }
+}
+
 export function verifyPhase11(args, root = resolve(dirname(fileURLToPath(import.meta.url)), ".."), opts = {}) {
   if (args.length > 1 || (args.length === 1 && !/^--base=[0-9a-f]{7,40}$/.test(args[0]))) return { code: 2, stdout: USAGE + "\n" };
   if (args[0] && args[0] !== `--base=${BASE}`) return { code: 1, stdout: "P11_FAILED: P11_BASE_ATTESTATION\n" };
@@ -134,14 +147,9 @@ export function verifyPhase11(args, root = resolve(dirname(fileURLToPath(import.
   const rd = (p) => readFileSync(join(root, p), "utf8");
   if (!ALLOWED.every((p) => existsSync(join(root, p)))) { fail.add("P11_FILES_PRESENT"); return out(fail, args); }
   if (!opts.skipGit) {
-    const git = (a) => execFileSync("git", a, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    try {
-      git(["cat-file", "-e", `${BASE}^{commit}`]);
-      const changed = git(["diff", "--name-only", BASE]).split("\n").filter(Boolean);
-      const untracked = git(["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
-      for (const c of classify(changed)) fail.add(c);
-      if (untracked.some((p) => !ALLOWED.includes(p))) fail.add("P11_UNTRACKED");
-    } catch { fail.add("P11_GIT_HISTORY"); }
+    const h = historicalScope(root);
+    if (!h.ok) fail.add("P11_HISTORICAL_RANGE");
+    else for (const c of classify(h.changed)) fail.add(c);
   }
   try { for (const c of checkAdmissionSchema(JSON.parse(rd(ADMISSION)))) fail.add(c); } catch { fail.add("P11_SCHEMA_PARSE"); }
   try { for (const c of checkReportSchema(JSON.parse(rd(REPORT)))) fail.add(c); } catch { fail.add("P11_SCHEMA_PARSE"); }

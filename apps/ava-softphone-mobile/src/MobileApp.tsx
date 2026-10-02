@@ -243,7 +243,8 @@ function AuthenticatedShell({
 
   // Build SIP config from the same backend credentials used by desktop/portal.
   // iOS uses native PJSIP (CapacitorPjsip). Android uses JsSIP over WSS 7443,
-  // and SipForegroundService keeps the WebView WebSocket alive in background.
+  // where JsSIP is the only WebSocket and registration owner; the foreground
+  // helper only reduces Android background suspension risk (WakeLock/WifiLock).
   //
   // All connection parameters are derived from the credentials returned by the
   // backend — no hardcoded hostnames or domains. This makes the app work on any

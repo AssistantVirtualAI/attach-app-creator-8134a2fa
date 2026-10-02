@@ -16,11 +16,47 @@ const PROVIDER = `${APP}/src/lib/sip/nativeSipProvider.ts`;
 const BRIDGE = `${APP}/src/lib/sip/useCallActionBridge.ts`;
 const APPTSX = `${APP}/src/MobileApp.tsx`;
 const BASE_18B2 = "2d933df2f";
-const PHASE18B2_FILES = [
-  PLUGIN, PROVIDER, HOOK, APPTSX,
-  "src/test/lemtelMobileAndroidVertoRemovalPhase18.test.ts",
+const PHASE18B2_END = "7708653c4";
+const PHASE18B2_CHANGED_FILES = [
+  "apps/ava-softphone-mobile/android/app/src/main/java/com/lemtel/softphone/CapacitorPjsip.kt",
+  "apps/ava-softphone-mobile/src/MobileApp.tsx",
+  "apps/ava-softphone-mobile/src/hooks/useSoftphone.ts",
   "docs/lemtel-mobile/phase-18b1-android-verto-removal.md",
+  "src/test/lemtelMobileAndroidVertoRemovalPhase18.test.ts",
 ];
+const PHASE18B1_END = "a1ecca276";
+const PHASE18B1_CHANGED_FILES = [
+  "apps/ava-softphone-mobile/android/app/src/main/AndroidManifest.xml",
+  "apps/ava-softphone-mobile/android/app/src/main/java/com/lemtel/softphone/BootReceiver.kt",
+  "apps/ava-softphone-mobile/android/app/src/main/java/com/lemtel/softphone/CallActionReceiver.kt",
+  "apps/ava-softphone-mobile/android/app/src/main/java/com/lemtel/softphone/CapacitorPjsip.kt",
+  "apps/ava-softphone-mobile/android/app/src/main/java/com/lemtel/softphone/MainActivity.kt",
+  "apps/ava-softphone-mobile/android/app/src/main/java/com/lemtel/softphone/SipConnectionService.kt",
+  "apps/ava-softphone-mobile/src/MobileApp.tsx",
+  "apps/ava-softphone-mobile/src/hooks/useSoftphone.runtime.test.tsx",
+  "apps/ava-softphone-mobile/src/hooks/useSoftphone.ts",
+  "apps/ava-softphone-mobile/src/hooks/useSoftphoneVerto.ts",
+  "apps/ava-softphone-mobile/src/lib/sip/audioOutput.ts",
+  "apps/ava-softphone-mobile/src/lib/sip/iceServers.ts",
+  "apps/ava-softphone-mobile/src/lib/sip/jssipProvider.ts",
+  "apps/ava-softphone-mobile/src/lib/sip/nativeSipProvider.ts",
+  "apps/ava-softphone-mobile/src/lib/sip/vertoProvider.test.ts",
+  "apps/ava-softphone-mobile/src/lib/sip/vertoProvider.ts",
+  "apps/ava-softphone-mobile/src/screens/DialerScreen.tsx",
+  "apps/ava-softphone-mobile/src/screens/SipDebugScreen.tsx",
+  "docs/lemtel-mobile/phase-18b1-android-verto-removal.md",
+  "src/test/lemtelMobileAndroidVertoRemovalPhase18.test.ts",
+];
+
+// Read-only historical helper: only git cat-file, merge-base and diff --name-only --no-renames.
+const histGit = (...a: string[]) => execFileSync("git", a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const frozenRange = (base: string, end: string): string[] => {
+  for (const c of [base, end]) expect(histGit("cat-file", "-t", c).trim(), `missing commit ${c}`).toBe("commit");
+  expect(() => histGit("merge-base", "--is-ancestor", base, end), `${base} not ancestor of ${end}`).not.toThrow();
+  return [...new Set(histGit("diff", "--name-only", "--no-renames", `${base}..${end}`).split("\n").map((x) => x.trim()).filter(Boolean))].sort();
+};
+const isProtectedPath = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
+const permanentGuardPasses = () => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { encoding: "utf8" });
 const read = (p: string) => readFileSync(p, "utf8");
 
 const ALLOWED = new Set([
@@ -131,19 +167,14 @@ describe("Phase 18B-1 — dormant Android Verto stack removed", () => {
     expect(plugin).toContain("fun endCallAudio");
   });
 
-  it("only allowed files changed since the phase baseline; Planiprêt untouched", () => {
-    const out = execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { encoding: "utf8" });
-    expect(out).toContain("LEMTEL_ISOLATION_PASSED");
-    const git = (...a: string[]) => execFileSync("git", a, { encoding: "utf8" }).split("\n").filter(Boolean);
-    const changed = [
-      ...git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`),
-      ...git("diff", "--name-only", "HEAD"),
-      ...git("ls-files", "--others", "--exclude-standard"),
-    ];
-    // Scope: phase files only; later phases may add other files, so check only
-    // paths inside this phase's surface plus Planiprêt.
-    const surface = changed.filter((p) => p.startsWith(`${APP}/`) || /planipret/i.test(p));
-    expect(surface.filter((p) => !ALLOWED.has(p))).toEqual([]);
+  it("frozen Phase 18B-1 interval is exact and the permanent Planiprêt guard passes", () => {
+    expect(permanentGuardPasses()).toBe("LEMTEL_ISOLATION_PASSED\n");
+    expect(PHASE18B1_CHANGED_FILES).toHaveLength(20);
+    expect([...PHASE18B1_CHANGED_FILES].sort()).toEqual(PHASE18B1_CHANGED_FILES);
+    const hist = frozenRange(BASE, PHASE18B1_END);
+    expect(hist).toEqual(PHASE18B1_CHANGED_FILES);
+    expect(hist.filter(isProtectedPath)).toEqual([]);
+    expect(hist.filter((p) => p.startsWith(`${APP}/`) && !ALLOWED.has(p))).toEqual([]);
   }, 30000);
 });
 
@@ -198,15 +229,12 @@ describe("Phase 18B-2 — Android plugin is helper-only", () => {
     expect(s).toContain("JsSIP is the only WebSocket and registration owner");
   });
 
-  it("only the six permitted files changed since the 18B-2 baseline; no Planipret path", () => {
-    const git = (...a: string[]) => execFileSync("git", a, { encoding: "utf8" }).split("\n").filter(Boolean);
-    const changed = [...new Set([
-      ...git("diff", "--name-only", "--no-renames", `${BASE_18B2}..HEAD`),
-      ...git("diff", "--name-only", "HEAD"),
-      ...git("ls-files", "--others", "--exclude-standard"),
-    ])];
-    expect(changed.filter((p) => /planipret/i.test(p))).toEqual([]);
-    const surface = changed.filter((p) => p.startsWith(`${APP}/`) || PHASE18B2_FILES.includes(p) || p.startsWith("src/test/lemtel") || p.startsWith("docs/lemtel-"));
-    expect(surface.filter((p) => !PHASE18B2_FILES.includes(p))).toEqual([]);
+  it("frozen Phase 18B-2 interval is exact and the permanent Planiprêt guard passes", () => {
+    expect(permanentGuardPasses()).toBe("LEMTEL_ISOLATION_PASSED\n");
+    expect(PHASE18B2_CHANGED_FILES).toHaveLength(5);
+    expect([...PHASE18B2_CHANGED_FILES].sort()).toEqual(PHASE18B2_CHANGED_FILES);
+    const hist = frozenRange(BASE_18B2, PHASE18B2_END);
+    expect(hist).toEqual(PHASE18B2_CHANGED_FILES);
+    expect(hist.filter(isProtectedPath)).toEqual([]);
   }, 30000);
 });

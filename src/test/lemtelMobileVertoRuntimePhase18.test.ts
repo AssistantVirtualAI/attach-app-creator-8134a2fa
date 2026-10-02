@@ -9,7 +9,24 @@ const FORBIDDEN = ["useSoftphone" + "Verto", "repair-verto" + "-extension-routin
 const REQUIRED_PREFIXES = ["apps/planipret-mobile/", "src/pages/planipret/", "src/components/planipret/", "src/lib/planipret/", "src/hooks/useMplanipretSoftphone.ts"];
 const REQUIRED_PATTERNS = ["**/planipret/**", "**/*planipret*", "**/PpPjsip/**", "**/PpSipKeepAlive/**", "**/PpVoipCall/**"];
 
-const git = (...a: string[]) => execFileSync("git", a, { encoding: "utf8" });
+const PHASE18A_END = "0370df76d";
+const PHASE18A_CHANGED_FILES = [
+  "apps/ava-softphone-mobile/src/MobileApp.tsx",
+  "apps/ava-softphone-mobile/src/hooks/useSoftphone.runtime.test.tsx",
+  "apps/ava-softphone-mobile/src/hooks/useSoftphone.ts",
+  "docs/lemtel-mobile/phase-18a-verto-runtime-removal.md",
+  "src/test/lemtelMobileVertoRuntimePhase18.test.ts",
+];
+
+// Read-only historical helper: only git cat-file, merge-base and diff --name-only --no-renames.
+const histGit = (...a: string[]) => execFileSync("git", a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const frozenRange = (base: string, end: string): string[] => {
+  for (const c of [base, end]) expect(histGit("cat-file", "-t", c).trim(), `missing commit ${c}`).toBe("commit");
+  expect(() => histGit("merge-base", "--is-ancestor", base, end), `${base} not ancestor of ${end}`).not.toThrow();
+  return [...new Set(histGit("diff", "--name-only", "--no-renames", `${base}..${end}`).split("\n").map((x) => x.trim()).filter(Boolean))].sort();
+};
+const isProtectedPath = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
+const permanentGuardPasses = () => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { encoding: "utf8" });
 
 describe("Phase 18A — Verto removed from active mobile runtime", () => {
   it("isolation policy still protects all required Planiprêt paths", () => {
@@ -33,15 +50,11 @@ describe("Phase 18A — Verto removed from active mobile runtime", () => {
     expect(android.slice(0, android.indexOf("}"))).toContain("return useSoftphoneJsSip(config, opts)");
   });
 
-  it("no protected Planiprêt path changed since the phase baseline", () => {
-    const out = execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { encoding: "utf8" });
-    expect(out).toContain("LEMTEL_ISOLATION_PASSED");
-    const changed = [
-      ...git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n"),
-      ...git("diff", "--name-only", "HEAD").split("\n"),
-      ...git("ls-files", "--others", "--exclude-standard").split("\n"),
-    ].filter(Boolean);
-    const bad = changed.filter((p) => /planipret/i.test(p) || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p) || p === "src/hooks/useMplanipretSoftphone.ts");
-    expect(bad).toEqual([]);
+  it("frozen Phase 18A interval is exact and the permanent Planiprêt guard passes", () => {
+    expect(permanentGuardPasses()).toBe("LEMTEL_ISOLATION_PASSED\n");
+    expect([...PHASE18A_CHANGED_FILES].sort()).toEqual(PHASE18A_CHANGED_FILES);
+    const hist = frozenRange(BASE, PHASE18A_END);
+    expect(hist).toEqual(PHASE18A_CHANGED_FILES);
+    expect(hist.filter(isProtectedPath)).toEqual([]);
   }, 30000);
 });

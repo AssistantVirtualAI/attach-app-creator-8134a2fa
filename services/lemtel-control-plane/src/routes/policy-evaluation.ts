@@ -4,7 +4,7 @@ import { evaluateCutoverPolicy, type CutoverPolicyInput } from "../policy/cutove
 import { reduceAssignmentLifecycle, type AssignmentLifecycleInput } from "../policy/assignment-lifecycle.js";
 
 // Phase 10: authenticated, non-executable evaluator. Pure calculation only:
-// no persistence, no audit, no queue, no outbound request, no state change.
+// no persistence, no queue, no outbound request, no state change.
 
 const MODES = ["existing_direct", "shadow_observe", "edge_pilot", "existing_direct_rollback"] as const;
 

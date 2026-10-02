@@ -166,13 +166,10 @@ export default function SipDebugScreen({ sp }: { sp: any }) {
         <>
           <SectionTitle eyebrow="ANDROID" title={tx('Service natif background', 'Native background service')} />
           <Card padded={false} style={{ marginBottom: 14 }}>
-            <SettingsRow label={tx('Statut natif', 'Native status')} icon="◆" value={nativeStatus?.status || 'unknown'} />
+            <SettingsRow label={tx('Service Android (santé)', 'Android service (health)')} icon="◆" value={nativeStatus?.status || 'unknown'} />
             <SettingsRow label={tx('Dernière raison', 'Last reason')} icon="!" value={nativeStatus?.reason || '—'} />
             <SettingsRow label="WakeLock" icon="◉" value={nativeStatus?.wakeLockHeld ? 'held' : 'not held'} />
             <SettingsRow label="WifiLock" icon="≋" value={nativeStatus?.wifiLockHeld ? 'held' : 'not held'} />
-            <SettingsRow label={tx('Dernier login', 'Last login')} icon="✓" value={nativeStatus?.lastLoginAt ? new Date(nativeStatus.lastLoginAt).toLocaleTimeString() : '—'} />
-            <SettingsRow label={tx('Dernier ping', 'Last ping')} icon="↔" value={nativeStatus?.lastPingAt ? new Date(nativeStatus.lastPingAt).toLocaleTimeString() : '—'} />
-            <SettingsRow label={tx('Tentatives', 'Attempts')} icon="#" value={String(nativeStatus?.reconnectAttempt ?? 0)} />
           </Card>
         </>
       )}

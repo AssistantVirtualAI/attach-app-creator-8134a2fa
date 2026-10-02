@@ -32,7 +32,7 @@ const LIFECYCLE_FIELDS: Record<string, readonly string[]> = {
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const sameKeys = (o: Record<string, unknown>, keys: readonly string[]) => {
   const k = Object.keys(o);
-  return k.length === keys.length && keys.every((x) => Object.prototype.hasOwnProperty.call(o, x));
+  return k.length === keys.length && keys.every((x) => k.includes(x));
 };
 
 export async function policyEvaluationRoutes(app: FastifyInstance, deps: { token: string }) {

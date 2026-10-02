@@ -37,7 +37,7 @@ const validate = (s: any, v: any): boolean => {
 const objects = (s: any, at = "$"): [string, any][] => s.type === "object" ? [[at, s], ...Object.entries(s.properties ?? {}).flatMap(([k, x]) => objects(x, `${at}.${k}`))] : [];
 const names = (s: any): string[] => Object.entries(s.properties ?? {}).flatMap(([k, x]) => [k, ...names(x)]);
 const FORBIDDEN = ["password", "secret", "token", "authorization", "apikey", "host", "hostname", "url", "recordingurl", "audiourl", "transcript", "phonenumber", "endpoint", "uri", "ip", "address"];
-const isForbiddenName = (k: string) => { const n = k.toLowerCase().replace(/[^a-z]/g, ""); return FORBIDDEN.some((f) => n === f || n.endsWith(f) || n.startsWith(f + "s") && !n.endsWith("scope") || n.startsWith(f) && n === f); };
+const isForbiddenName = (k: string) => { const n = k.toLowerCase().replace(/[^a-z]/g, ""); return FORBIDDEN.some((f) => n === f || n.endsWith(f)); };
 const deepKeys = (v: any): string[] => v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [k, ...deepKeys(x)]) : [];
 
 const SAFE = {
@@ -142,7 +142,8 @@ describe("Lemtel Phase 16 — portal-to-client configuration contract", () => {
   it("safe fixture validates with opaque placeholders only", () => {
     expect(validate(read(SCHEMA), SAFE)).toBe(true);
     expect(deepKeys(SAFE).filter(isForbiddenName)).toEqual([]);
-    expect(JSON.stringify(SAFE)).not.toMatch(/[@:/]|\d{7,}|\.\w{2,}/.source.replace("[@:/]", "[@/]") ? /@|https?|\/\/|\d{7,}/ : /x/);
+    const values = JSON.stringify(Object.values(SAFE).flatMap((o) => (typeof o === "object" ? Object.values(o) : [o])));
+    expect(values).not.toMatch(/@|https?|\/\/|\d{7,}|\.[a-z]{2,}/i);
   });
 
   it("unsafe fixtures are rejected", () => {

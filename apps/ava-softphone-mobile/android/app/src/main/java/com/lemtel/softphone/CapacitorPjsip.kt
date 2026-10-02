@@ -38,7 +38,6 @@ class CapacitorPjsip : Plugin() {
     private var sipStatusReceiver: BroadcastReceiver? = null
     private var callActionReceiver: BroadcastReceiver? = null
     private var scoReceiver: BroadcastReceiver? = null
-    private var vertoServerMessageReceiver: BroadcastReceiver? = null
 
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -54,14 +53,6 @@ class CapacitorPjsip : Plugin() {
                 val action = intent.getStringExtra(CallActionReceiver.EXTRA_ACTION) ?: return
                 val payload = JSObject().put("action", action)
                 notifyListeners("sipCallAction", payload, true)
-            }
-        }
-        vertoServerMessageReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                if (intent?.action != SipConnectionService.ACTION_VERTO_SERVER_MESSAGE) return
-                val raw = intent.getStringExtra("raw") ?: return
-                val payload = JSObject().put("raw", raw)
-                notifyListeners("vertoServerMessage", payload, true)
             }
         }
         scoReceiver = object : BroadcastReceiver() {
@@ -82,16 +73,13 @@ class CapacitorPjsip : Plugin() {
             val filter = IntentFilter(SipConnectionService.ACTION_STATUS)
             val callFilter = IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
             val scoFilter = IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
-            val vertoFilter = IntentFilter(SipConnectionService.ACTION_VERTO_SERVER_MESSAGE)
             val receiver = sipStatusReceiver ?: return
             val callRecv = callActionReceiver ?: return
             val scoRecv = scoReceiver ?: return
-            val vertoRecv = vertoServerMessageReceiver ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
                 context.registerReceiver(callRecv, callFilter, Context.RECEIVER_NOT_EXPORTED)
                 context.registerReceiver(scoRecv, scoFilter, Context.RECEIVER_NOT_EXPORTED)
-                context.registerReceiver(vertoRecv, vertoFilter, Context.RECEIVER_NOT_EXPORTED)
             } else {
                 @Suppress("DEPRECATION")
                 context.registerReceiver(receiver, filter)
@@ -99,8 +87,6 @@ class CapacitorPjsip : Plugin() {
                 context.registerReceiver(callRecv, callFilter)
                 @Suppress("DEPRECATION")
                 context.registerReceiver(scoRecv, scoFilter)
-                @Suppress("DEPRECATION")
-                context.registerReceiver(vertoRecv, vertoFilter)
             }
         } catch (_: Exception) {}
     }
@@ -109,11 +95,9 @@ class CapacitorPjsip : Plugin() {
         try { sipStatusReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         try { callActionReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         try { scoReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
-        try { vertoServerMessageReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         sipStatusReceiver = null
         callActionReceiver = null
         scoReceiver = null
-        vertoServerMessageReceiver = null
         try { AudioFocusHelper.releaseCallAudioFocus(context) } catch (_: Exception) {}
         super.handleOnDestroy()
     }
@@ -173,36 +157,28 @@ class CapacitorPjsip : Plugin() {
         call.resolve(JSObject().apply { put("ok", true) })
     }
 
+    /** Request call audio focus + communication mode. Never signals SIP. Safe to repeat. */
     @PluginMethod
-    fun answerNativeCall(call: PluginCall) {
-        val sdp = call.getString("sdp") ?: ""
-        val dialogParams = call.getObject("dialogParams")?.toString() ?: ""
-        context.sendBroadcast(Intent(SipConnectionService.ACTION_NATIVE_VERTO_ANSWER).apply {
-            setPackage(context.packageName)
-            putExtra("sdp", sdp)
-            putExtra("dialogParams", dialogParams)
-        })
-        call.resolve(JSObject().apply { put("ok", true) })
+    fun beginCallAudio(call: PluginCall) {
+        try {
+            AudioFocusHelper.requestCallAudioFocus(context)
+            audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+            call.resolve(JSObject().apply { put("ok", true) })
+        } catch (e: Exception) {
+            call.reject("beginCallAudio failed")
+        }
     }
 
+    /** Release call audio focus, reset mode, stop SCO if on. Never signals SIP. Safe to repeat. */
     @PluginMethod
-    fun hangupNativeCall(call: PluginCall) {
-        context.sendBroadcast(Intent(SipConnectionService.ACTION_NATIVE_VERTO_HANGUP).apply {
-            setPackage(context.packageName)
-        })
-        call.resolve(JSObject().apply { put("ok", true) })
-    }
-
-    @PluginMethod
-    fun registerOutboundCall(call: PluginCall) {
-        val callID = call.getString("callID") ?: ""
-        val destination = call.getString("destination") ?: ""
-        context.sendBroadcast(Intent(SipConnectionService.ACTION_REGISTER_OUTBOUND_CALL).apply {
-            setPackage(context.packageName)
-            putExtra("callID", callID)
-            putExtra("destination", destination)
-        })
-        call.resolve(JSObject().apply { put("ok", true) })
+    fun endCallAudio(call: PluginCall) {
+        try {
+            AudioFocusHelper.releaseCallAudioFocus(context)
+            try { if (audioManager?.isBluetoothScoOn == true) { audioManager?.isBluetoothScoOn = false; audioManager?.stopBluetoothSco() } } catch (_: Exception) {}
+            call.resolve(JSObject().apply { put("ok", true) })
+        } catch (e: Exception) {
+            call.reject("endCallAudio failed")
+        }
     }
 
     @PluginMethod fun setMute(call: PluginCall) { val m = call.getBoolean("muted", false) ?: false; audioManager?.isMicrophoneMute = m; call.resolve(JSObject().apply { put("ok", true); put("muted", m) }) }
@@ -228,24 +204,9 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun startSipService(call: PluginCall) {
+        // Foreground helper only: accepts no credentials, host, port or extension.
         try {
-            // Save credentials so the native Verto WebSocket can re-register
-            // independently of the WebView when the screen is locked.
-            // host, port, domain MUST be provided by the JS layer (derived from
-            // SIPConfig.wssUrl / SIPConfig.vertoHost). No hardcoded fallbacks so
-            // the service works on any PBX/domain.
-            val host = call.getString("host") ?: ""
-            val port = call.getInt("port") ?: 8082
-            val login = call.getString("login") ?: call.getString("extension") ?: ""
-            val password = call.getString("password") ?: ""
-            val domain = call.getString("domain") ?: ""
-            val displayName = call.getString("displayName") ?: login
-            if (login.isNotEmpty() && password.isNotEmpty()) {
-                SipConnectionService.saveCredentials(context, host, port, login, password, domain, displayName)
-            }
-            // Start in JsSIP mode: WakeLock + WifiLock only, no native Verto WebSocket.
-            // The WebView handles SIP over WSS 7443 via JsSIP directly.
-            SipConnectionService.start(context, mode = "jssip")
+            SipConnectionService.start(context)
             call.resolve(readSipServiceStatus().apply { put("ok", true) })
         } catch (e: Exception) {
             call.reject(e.message ?: "startSipService failed")
@@ -399,17 +360,7 @@ class CapacitorPjsip : Plugin() {
         return JSObject().apply {
             put("status", intent.getStringExtra("status") ?: "unknown")
             put("reason", intent.getStringExtra("reason") ?: "")
-            put("callId", intent.getStringExtra("callId") ?: "")
-            put("callerName", intent.getStringExtra("callerName") ?: "")
-            put("callerNumber", intent.getStringExtra("callerNumber") ?: "")
-            put("inviteParams", intent.getStringExtra("inviteParams") ?: "")
             put("updatedAt", intent.getLongExtra("updatedAt", 0L))
-            put("lastLoginAt", intent.getLongExtra("lastLoginAt", 0L))
-            put("lastPingAt", intent.getLongExtra("lastPingAt", 0L))
-            put("lastFrameAt", intent.getLongExtra("lastFrameAt", 0L))
-            put("reconnectAttempt", intent.getIntExtra("reconnectAttempt", 0))
-            put("connecting", intent.getBooleanExtra("connecting", false))
-            put("loggedIn", intent.getBooleanExtra("loggedIn", false))
             put("wakeLockHeld", intent.getBooleanExtra("wakeLockHeld", false))
             put("wifiLockHeld", intent.getBooleanExtra("wifiLockHeld", false))
         }
@@ -424,8 +375,8 @@ class CapacitorPjsip : Plugin() {
             if (svc != null) {
                 svc.showIncomingCallNotification(callerName, callerNumber)
             } else {
-                // Service not running yet — start it in jssip mode then ring
-                SipConnectionService.start(context, mode = "jssip")
+                // Helper not running yet — start it, then ring
+                SipConnectionService.start(context)
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     SipConnectionService.instance?.showIncomingCallNotification(callerName, callerNumber)
                 }, 500)
@@ -449,19 +400,9 @@ class CapacitorPjsip : Plugin() {
     private fun readSipServiceStatus(): JSObject {
         val p = context.getSharedPreferences(SipConnectionService.PREFS_NAME, Context.MODE_PRIVATE)
         return JSObject().apply {
-            put("status", p.getString(SipConnectionService.KEY_STATUS, "unknown") ?: "unknown")
+            put("status", p.getString(SipConnectionService.KEY_SERVICE_STATUS, "idle") ?: "idle")
             put("reason", p.getString(SipConnectionService.KEY_REASON, "") ?: "")
-            put("callId", p.getString("verto_current_call_id", "") ?: "")
-            put("callerName", p.getString("verto_current_caller_name", "") ?: "")
-            put("callerNumber", p.getString("verto_current_caller_number", "") ?: "")
-            put("inviteParams", p.getString("verto_current_invite_params", "") ?: "")
             put("updatedAt", p.getLong(SipConnectionService.KEY_UPDATED_AT, 0L))
-            put("lastLoginAt", p.getLong(SipConnectionService.KEY_LAST_LOGIN_AT, 0L))
-            put("lastPingAt", p.getLong(SipConnectionService.KEY_LAST_PING_AT, 0L))
-            put("lastFrameAt", p.getLong(SipConnectionService.KEY_LAST_FRAME_AT, 0L))
-            put("reconnectAttempt", p.getInt(SipConnectionService.KEY_RECONNECT_ATTEMPT, 0))
-            put("connecting", p.getBoolean(SipConnectionService.KEY_CONNECTING, false))
-            put("loggedIn", p.getBoolean(SipConnectionService.KEY_LOGGED_IN, false))
             put("wakeLockHeld", p.getBoolean(SipConnectionService.KEY_WAKE_HELD, false))
             put("wifiLockHeld", p.getBoolean(SipConnectionService.KEY_WIFI_HELD, false))
         }

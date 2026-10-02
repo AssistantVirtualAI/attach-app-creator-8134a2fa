@@ -71,9 +71,10 @@ export function composeHardened(y) {
     /^    image: lemtel-edge-phase12-closed:local$/m, /^    network_mode: "none"$/m, /^    user: "65532:65532"$/m,
     /^    read_only: true$/m, /^    cap_drop: \["ALL"\]$/m, /^    security_opt: \["no-new-privileges:true"\]$/m,
     /^    pids_limit: 64$/m, /^    mem_limit: 128m$/m, /^    restart: "no"$/m, /^      context: \.$/m, /^      dockerfile: Dockerfile$/m,
-    /^    tmpfs:\n      - \/tmp\n      - \/run\n/m,
+    /^    tmpfs:\n      - \/tmp\n      - \/run:mode=0755,uid=65532,gid=65532\n    cap_drop:/m,
   ];
-  return names.length === 1 && names[0] === SERVICE && required.every((r) => r.test(y));
+  return names.length === 1 && names[0] === SERVICE && required.every((r) => r.test(y))
+    && (y.match(/tmpfs/g) || []).length === 1 && (y.match(/^      - /gm) || []).length === 2;
 }
 
 const QUIET = { stdio: ["ignore", "ignore", "ignore"] };
@@ -83,11 +84,24 @@ const read = (args) => {
 };
 const compose = (...a) => ["compose", "-f", COMPOSE, ...a];
 
+export function tmpfsOk(t) {
+  if (!t || typeof t !== "object" || Array.isArray(t)) return false;
+  if (JSON.stringify(Object.keys(t).sort()) !== JSON.stringify(["/run", "/tmp"])) return false;
+  const opts = String(t["/run"] ?? "").split(",").filter(Boolean);
+  const modes = opts.filter((o) => o.startsWith("mode="));
+  const uids = opts.filter((o) => o.startsWith("uid="));
+  const gids = opts.filter((o) => o.startsWith("gid="));
+  return modes.length === 1 && (modes[0] === "mode=0755" || modes[0] === "mode=755")
+    && uids.length === 1 && uids[0] === "uid=65532"
+    && gids.length === 1 && gids[0] === "gid=65532";
+}
+
 export function inspectOk(info) {
   const hc = info?.HostConfig ?? {};
   const ports = info?.NetworkSettings?.Ports ?? {};
   const nets = info?.NetworkSettings?.Networks ?? {};
   return info?.State?.Running === true
+    && tmpfsOk(hc.Tmpfs)
     && hc.NetworkMode === "none"
     && Object.values(ports).every((v) => !v || v.length === 0)
     && (!hc.PortBindings || Object.keys(hc.PortBindings).length === 0)

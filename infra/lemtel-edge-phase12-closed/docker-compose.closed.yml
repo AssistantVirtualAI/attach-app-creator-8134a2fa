@@ -10,7 +10,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /run
+      - /run:mode=0755,uid=65532,gid=65532
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     pids_limit: 64

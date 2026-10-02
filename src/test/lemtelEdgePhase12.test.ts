@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { spawnSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "ca4c1fa61";
@@ -20,13 +21,40 @@ describe("Lemtel Edge phase 12A — closed local Kamailio package (static only)"
     for (const a of [["--x"], ["--base=zz"], [`--base=${BASE}`, "y"]]) expect(verifyPhase12(a)).toEqual({ code: 2, stdout: "P12_USAGE: [--base=ca4c1fa61]\n" });
   });
 
-  it("only the eight Phase 12 paths changed since base; other paths are frozen", async () => {
+  it("relocation: old paths absent, targets present, exact historical and relocation ranges", async () => {
     const m = await v12();
     expect(m.ALLOWED).toHaveLength(8);
-    const h = m.changedSinceBase(root);
+    expect(m.PHASE12A_BASE).toBe("ca4c1fa61");
+    expect(m.PHASE12A_END).toBe("fce12a2b2");
+    expect(m.PHASE12_RELOCATION_BASE).toBe("fce12a2b2");
+    for (const p of m.OLD_RUNTIME) expect(fs.existsSync(path.join(root, p)), p).toBe(false);
+    expect(m.OLD_RUNTIME).toHaveLength(5);
+    for (const p of m.ALLOWED) expect(fs.existsSync(path.join(root, p)), p).toBe(true);
+    for (const p of m.ALLOWED) expect(p.startsWith("infra/lemtel-edge/") || p.startsWith("docs/lemtel-edge/")).toBe(false);
+    const h = m.history(root);
     expect(h.ok).toBe(true);
-    expect(h.changed.every((p: string) => m.ALLOWED.includes(p))).toBe(true);
-    expect(m.classify(h.changed)).toEqual([]);
+    expect(h.original).toEqual([...m.ORIGINAL].sort());
+    expect(h.relocation).toEqual(m.EXPECTED_RELOCATION);
+    expect(h.relocation.filter((l: string) => l.startsWith("D\t"))).toHaveLength(5);
+    expect(h.relocation.filter((l: string) => l.startsWith("A\t"))).toHaveLength(5);
+    expect(h.relocation.filter((l: string) => l.startsWith("M\t"))).toHaveLength(3);
+    expect(m.classify(m.ALLOWED)).toEqual([]);
+  });
+
+  it("Phase 2 and preflight still reject runtime files under infra/lemtel-edge, and pass now", () => {
+    const p2 = read("scripts/verify-lemtel-edge-phase2.mjs");
+    const rule = /\(\^\|\\\/\)\(Dockerfile\|docker-compose\[\^\/\]\*\|compose\\\.ya\?ml\|\[\^\/\]\+\\\.\(sh\|service\)\)\$/;
+    expect(rule.test(p2)).toBe(true);
+    const re = /(^|\/)(Dockerfile|docker-compose[^/]*|compose\.ya?ml|[^/]+\.(sh|service))$/i;
+    expect(re.test("infra/lemtel-edge/phase12-closed/Dockerfile")).toBe(true);
+    expect(re.test("infra/lemtel-edge/x/docker-compose.closed.yml")).toBe(true);
+    expect(read("infra/lemtel-edge/preflight/edge-preflight.mjs")).toContain("PACKAGE_NO_RUNTIME_ARTIFACTS");
+    const node = (a: string[]) => spawnSync(process.execPath, a, { cwd: root, encoding: "utf8" });
+    for (const a of [["scripts/verify-lemtel-edge-phase2.mjs", "--invariants"], ["scripts/verify-lemtel-edge-phase2.mjs", "--historical-acceptance"], ["infra/lemtel-edge/preflight/edge-preflight.mjs", "--verify"], ["infra/lemtel-edge/preflight/edge-preflight.mjs", "--report"], ["--test", "infra/lemtel-edge/preflight/edge-preflight.test.mjs"]]) expect(node(a).status, a.join(" ")).toBe(0);
+  });
+
+  it("other paths remain frozen", async () => {
+    const m = await v12();
     expect(m.classify(["docs/lemtel-edge/phase-11-closed-local-runtime-admission.md"])).toContain("P12_EDGE_FROZEN");
     expect(m.classify(["schemas/lemtel-edge/runtime/closed-local-edge-runtime-report-v1.schema.json"])).toContain("P12_EDGE_FROZEN");
     expect(m.classify(["infra/lemtel-edge/policy/edge-feature-gates.yaml"])).toContain("P12_EDGE_FROZEN");

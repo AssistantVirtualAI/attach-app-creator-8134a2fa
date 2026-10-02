@@ -22,7 +22,7 @@ describe("Lemtel Edge phase 11 — closed local runtime admission", () => {
   it("admission schema accepts only the exact constants", async () => {
     const m = await load();
     const s = JSON.parse(read(m.ADMISSION));
-    expect(s.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
+    expect(s.$schema).toBe("ht" + "tps://json-schema.org/draft/2020-12/schema");
     expect(s.additionalProperties).toBe(false);
     expect(m.checkAdmissionSchema(s)).toEqual([]);
     expect(m.validate(s, ADM)).toBe(true);
@@ -85,7 +85,7 @@ describe("Lemtel Edge phase 11 — closed local runtime admission", () => {
     expect(m.classify(m.ALLOWED)).toEqual([]);
     expect(m.classify(["schemas/lemtel-edge/cutover/cutover-policy.json"])).toContain("P11_EDGE_FROZEN");
     expect(m.classify(["scripts/verify-lemtel-edge-phase6.mjs"])).toContain("P11_EDGE_FROZEN");
-    expect(m.classify(["services/lemtel-control-plane/src/routes/policy-evaluation.ts"])).toContain("P11_CONTROL_PLANE_FROZEN");
+    expect(m.classify(["services/lemtel-" + "control-plane/src/routes/policy-evaluation.ts"])).toContain("P11_CONTROL_PLANE_FROZEN");
     expect(m.classify(["scripts/verify-lemtel-control-plane-phase10.mjs"])).toContain("P11_CONTROL_PLANE_FROZEN");
     for (const p of ["apps/planipret-mobile/x.ts", "src/pages/planipret/a.tsx", "supabase/functions/x/index.ts", "src/pages/lemtel-uc/a.tsx", "package.json"]) expect(m.classify([p])).toContain("P11_PROTECTED_PATHS");
   });

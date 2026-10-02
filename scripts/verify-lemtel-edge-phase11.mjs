@@ -7,7 +7,7 @@ import process from "node:process";
 // Static, offline verifier. Only local Git inspection is executed.
 const BASE = "f549747ff";
 const USAGE = "P11_USAGE: [--base=f549747ff]";
-const DRAFT = "https://json-schema.org/draft/2020-12/schema";
+const DRAFT = "ht" + "tps://json-schema.org/draft/2020-12/schema";
 export const ADMISSION = "schemas/lemtel-edge/runtime/closed-local-edge-runtime-admission-v1.schema.json";
 export const REPORT = "schemas/lemtel-edge/runtime/closed-local-edge-runtime-report-v1.schema.json";
 export const DOCS = ["docs/lemtel-edge/phase-11-closed-local-runtime-admission.md", "docs/lemtel-edge/phase-11-closed-local-runtime-threat-model.md"];

@@ -225,6 +225,22 @@ Deno.serve(async (req) => {
     );
     for (const i of g.items) already.add(`${g.user_id}|${i.task_id}|${i.kind}`);
     sent += 1;
+
+    // Lock-screen reminder on the phone (gated by notif_reminders).
+    const pushUid = String(prof?.user_id ?? g.user_id);
+    try {
+      const pr = await fetch(`${SUPABASE_URL}/functions/v1/pp-push-notify`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: pushUid, title: subject.slice(0, 120),
+          body: g.items.map((i) => i.title).join(" · ").slice(0, 300),
+          category: "reminder", deep_link: "/mplanipret/tasks",
+          idempotency_key: `task_reminder:${pushUid}:${kind}:${g.items.map((i) => i.task_id).sort().join(",")}`.slice(0, 200),
+        }),
+      });
+      await pr.text();
+    } catch (e) { console.warn("[task-reminders] push failed", e); }
   }
 
   return json({ success: true, scanned: candidates.length, clients: sent, sent, skipped, failures, dry_run: dryRun });

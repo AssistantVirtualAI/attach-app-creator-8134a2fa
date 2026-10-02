@@ -954,7 +954,6 @@ export function useSoftphoneJsSip(
 // ---------------------------------------------------------------------------
 import { NATIVE_SIP_ENABLED, startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
 import { useSoftphoneNative } from './useSoftphoneNative';
-import { useSoftphoneVerto } from './useSoftphoneVerto';
 import { notifySipDispatcherLoaded } from '../lib/sip/bootSipGuard';
 export function useSoftphone(
   config: SIPConfig | null,
@@ -969,11 +968,8 @@ export function useSoftphone(
   }
   if (platform === 'android') {
     // Android → JsSIP over WSS (port 7443).
-    // Migrated from Verto (port 8082) because the Verto sessid changes on
-    // every WebSocket reconnect, causing FreeSWITCH to reject verto.answer
-    // and leaving the caller ringing with no audio established.
-    // JsSIP uses standard SIP over WSS which handles reconnections correctly
-    // and is confirmed working with FusionPBX wss-binding :7443.
+    // Standard SIP over WSS handles reconnections correctly and is the
+    // only selected Android transport (FusionPBX wss-binding :7443).
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return useSoftphoneJsSip(config, opts);
   }

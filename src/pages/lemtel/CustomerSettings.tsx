@@ -12,6 +12,7 @@ import { Palette, Phone, Users, CreditCard, Save, UserPlus, Globe, Copy, CheckCi
 import { toast } from "sonner";
 import { InviteUserDialog } from "@/components/portal/InviteUserDialog";
 import { Switch } from "@/components/ui/switch";
+import { LemtelClientDeviceControls } from "@/components/lemtel/LemtelClientDeviceControls";
 
 export default function CustomerSettings() {
   const { slug } = useParams();
@@ -133,6 +134,7 @@ export default function CustomerSettings() {
           <TabsTrigger value="numbers"><Phone className="h-4 w-4 mr-1" />Numbers</TabsTrigger>
           <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" />Users</TabsTrigger>
           <TabsTrigger value="billing"><CreditCard className="h-4 w-4 mr-1" />Billing</TabsTrigger>
+          <TabsTrigger value="client-devices"><Smartphone className="h-4 w-4 mr-1" />Client devices</TabsTrigger>
         </TabsList>
 
         <TabsContent value="branding">
@@ -308,6 +310,10 @@ export default function CustomerSettings() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="client-devices">
+          {org?.id && <LemtelClientDeviceControls organizationId={org.id} />}
         </TabsContent>
 
       </Tabs>

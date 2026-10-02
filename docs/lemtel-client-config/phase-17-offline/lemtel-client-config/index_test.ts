@@ -125,7 +125,7 @@ Deno.test("mutations verify an affected row; zero-row, stale or errored mutation
   assertEquals(updates, 4);
   assertEquals((src.match(/\.select\("id"\)\.maybeSingle\(\)/g) ?? []).length, 4);
   assertEquals((src.match(/if \(!mutationApplied\(/g) ?? []).length, 4);
-  for (const rev of src.split("\n").filter((l) => l.includes('state: "revoked", revision:'))) assert(rev.includes("const { data: changed"), rev.trim());
+  for (const rev of src.split("\n").filter((l) => l.includes('.update({ state: "revoked", revision:'))) assert(rev.includes("const { data: changed"), rev.trim());
   assert(src.includes('.eq("revision", target.revision).eq("state", target.state)'));
   assert(src.includes('.eq("revision", d.revision).eq("state", d.state)'));
 });

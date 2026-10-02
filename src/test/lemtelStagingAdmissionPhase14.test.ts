@@ -11,21 +11,22 @@ const json = (p: string) => JSON.parse(read(p));
 const load = async () => await import(/* @vite-ignore */ pathToFileURL(path.join(root, "scripts/verify-lemtel-staging-admission-phase14.mjs")).href);
 const clone = (o: any) => JSON.parse(JSON.stringify(o));
 
-// Temporary copy with a read-only Git view: base = gates file only; every other file counts as changed.
+// Genuine temporary Git repository: the base commit holds only the gates file; Phase 14 files are untracked.
+// Uses local Git plumbing (update-index, write-tree, commit-tree, update-ref) with command-local identity.
 const tempRepo = (m: any) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "p14-"));
-  for (const p of [m.GATES_FILE, ...m.ALLOWED]) { fs.mkdirSync(path.join(tmp, path.dirname(p)), { recursive: true }); fs.copyFileSync(path.join(root, p), path.join(tmp, p)); }
-  const baseGates = fs.readFileSync(path.join(tmp, m.GATES_FILE), "utf8");
-  const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.relative(tmp, path.join(d, e.name))]);
-  const git = (_r: string, args: string[]) => {
-    if (args[0] === "cat-file") return args[2] === "tmpbase0" ? "commit\n" : null;
-    const gatesChanged = fs.readFileSync(path.join(tmp, m.GATES_FILE), "utf8") !== baseGates;
-    if (args[0] === "diff" && args.includes("--")) return gatesChanged ? m.GATES_FILE + "\n" : "";
-    if (args[0] === "diff") return gatesChanged ? m.GATES_FILE + "\n" : "";
-    if (args[0] === "ls-files") return walk(tmp).filter((p) => p !== m.GATES_FILE).join("\n") + "\n";
-    return null;
-  };
-  return { tmp, base: "tmpbase0", git };
+  const g = (...a: string[]) => execFileSync("git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...a], { cwd: tmp, stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" }).trim();
+  fs.mkdirSync(path.join(tmp, path.dirname(m.GATES_FILE)), { recursive: true });
+  fs.copyFileSync(path.join(root, m.GATES_FILE), path.join(tmp, m.GATES_FILE));
+  g("init", "-q");
+  g("update-index", "--add", m.GATES_FILE);
+  const tree = g("write-tree");
+  const base = g("commit-tree", tree, "-m", "base");
+  g("update-ref", "HEAD", base);
+  expect(g("cat-file", "-t", base)).toBe("commit");
+  expect(g("ls-tree", "-r", "--name-only", base)).toBe(m.GATES_FILE);
+  for (const p of m.ALLOWED) { fs.mkdirSync(path.join(tmp, path.dirname(p)), { recursive: true }); fs.copyFileSync(path.join(root, p), path.join(tmp, p)); }
+  return { tmp, base };
 };
 
 describe("Lemtel staging admission phase 14.0 — offline, denial-first", () => {
@@ -91,18 +92,18 @@ describe("Lemtel staging admission phase 14.0 — offline, denial-first", () => 
     for (const a of [["--base=0000000"], ["--oops"], ["e224f5449"], ["--base=e224f5449", "x"]]) expect(m.verify(a, root)).toEqual({ code: 2, stdout: "P14_USAGE: [--base=e224f5449]\n" });
   });
 
-  it("temporary copy with Git view: passes, then fails on out-of-scope file, true gate and added capability", async () => {
+  it("real temporary Git repository: passes, then fails on out-of-scope file, true gate and added capability", async () => {
     const m = await load();
-    const { tmp, base, git } = tempRepo(m);
+    const { tmp, base } = tempRepo(m);
     try {
-      expect(m.verify([], tmp, { base, git })).toEqual({ code: 0, stdout: "P14_PASSED\n" });
+      expect(m.verify([], tmp, { base })).toEqual({ code: 0, stdout: "P14_PASSED\n" });
       fs.writeFileSync(path.join(tmp, "extra.md"), "x\n");
-      expect(m.verify([], tmp, { base, git }).stdout).toMatch(/P14_SCOPE_EXACT/);
+      expect(m.verify([], tmp, { base }).stdout).toMatch(/P14_SCOPE_EXACT/);
       fs.unlinkSync(path.join(tmp, "extra.md"));
       const gp = path.join(tmp, m.GATES_FILE), orig = fs.readFileSync(gp, "utf8");
       for (const gate of m.GATES) {
         fs.writeFileSync(gp, orig.replace(`${gate}: false`, `${gate}: true`));
-        const r = m.verify([], tmp, { base, git });
+        const r = m.verify([], tmp, { base });
         expect(r.code).toBe(1);
         expect(r.stdout).toMatch(/P14_GATES_FALSE_UNCHANGED/);
         expect(r.stdout.split("\n").filter(Boolean).every((l: string) => /^P14_FAILED: P14_[A-Z_]+$/.test(l))).toBe(true);
@@ -112,11 +113,11 @@ describe("Lemtel staging admission phase 14.0 — offline, denial-first", () => 
       for (const p of m.NON_DOC) {
         const fp = path.join(tmp, p), o = fs.readFileSync(fp, "utf8");
         fs.writeFileSync(fp, p.endsWith(".json") ? o.replace('"$schema"', `"x": "${bad}", "$schema"`).replace('"policy_version"', `"x": "${bad}", "policy_version"`) : o + "\n" + bad + "\n");
-        expect(m.verify([], tmp, { base, git }).stdout).toMatch(/P14_NO_RUNTIME_CAPABILITY/);
+        expect(m.verify([], tmp, { base }).stdout).toMatch(/P14_NO_RUNTIME_CAPABILITY/);
         fs.writeFileSync(fp, o);
       }
       fs.appendFileSync(path.join(tmp, m.DOC), "\nDo not run do" + "cker, ss" + "h or cu" + "rl, and never use a pass" + "word.\n");
-      expect(m.verify([], tmp, { base, git })).toEqual({ code: 0, stdout: "P14_PASSED\n" });
+      expect(m.verify([], tmp, { base })).toEqual({ code: 0, stdout: "P14_PASSED\n" });
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   });
 
@@ -131,6 +132,8 @@ describe("Lemtel staging admission phase 14.0 — offline, denial-first", () => 
     const m = await load();
     const before = execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" });
     m.verify([], root);
+    const { tmp, base } = tempRepo(m);
+    try { m.verify([], tmp, { base }); } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     expect(execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" })).toBe(before);
     const src = read(m.SELF);
     expect([...src.matchAll(/\b(execFileSync|spawnSync)\s*\(\s*([^,)]*)/g)].map((x) => x[2])).toEqual(['"git"']);

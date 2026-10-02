@@ -92,7 +92,7 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
   it("missing commits and reversed ancestry fail", async () => {
     expect((await run({ refs: (r) => ({ ...r, base: "0".repeat(40) }) })).stdout).toMatch(/BASE_MISSING/);
     expect((await run({ refs: (r) => ({ ...r, end: "0".repeat(40) }) })).stdout).toMatch(/END_MISSING/);
-    expect((await run({ refs: (r) => ({ base: r.end, end: r.base }) })).stdout).toMatch(/BASE_NOT_ANCESTOR/);
+    expect((await run({ refs: (r) => ({ ...r, base: r.end, end: r.base }) })).stdout).toMatch(/BASE_NOT_ANCESTOR/);
   });
 
   it("malformed, narrowed, broadened or extended policy fails", async () => {

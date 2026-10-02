@@ -205,12 +205,14 @@ async function processEvent(event: any) {
     }
   }
 
+  // Must be kept alive with waitUntil: a bare fetch is killed when the
+  // webhook returns, which silently dropped SMS/voicemail lock-screen alerts.
   const sendPush = (uid: string, payload: any) => {
-    fetch(`${SUPABASE_URL}/functions/v1/pp-push-notify`, {
+    runBackground("alert push", fetch(`${SUPABASE_URL}/functions/v1/pp-push-notify`, {
       method: "POST",
       headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: uid, ...payload }),
-    }).catch((e) => console.warn("[ns-webhook-receiver] sendPush failed", e));
+    }).then((r) => r.text()));
   };
 
   const sendVoipPush = async (uid: string, payload: any) => {

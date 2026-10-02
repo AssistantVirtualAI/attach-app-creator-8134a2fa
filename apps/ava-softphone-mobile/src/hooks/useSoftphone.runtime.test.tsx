@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const state = vi.hoisted(() => ({ native: false, platform: 'web' }));
 const nativeSentinel = vi.hoisted(() => ({ sipStatus: 'idle', __impl: 'native' }));
@@ -51,7 +51,13 @@ describe('Phase 18A useSoftphone dispatch', () => {
   });
 
   it('dispatch source does not reference the Verto hook', () => {
-    const src = readFileSync(fileURLToPath(new URL('./useSoftphone.ts', import.meta.url)), 'utf8');
+    const candidates = [
+      resolve(process.cwd(), 'src/hooks/useSoftphone.ts'),
+      resolve(process.cwd(), 'apps/ava-softphone-mobile/src/hooks/useSoftphone.ts'),
+    ];
+    const file = candidates.find((c) => existsSync(c));
+    if (!file) throw new Error('useSoftphone.ts not found from ' + process.cwd());
+    const src = readFileSync(file, 'utf8');
     expect(src).not.toContain('useSoftphone' + 'Verto');
   });
 });

@@ -9,9 +9,13 @@ const root = path.resolve(__dirname, "../..");
 const load = async () => await import(/* @vite-ignore */ pathToFileURL(path.join(root, "scripts/verify-lemtel-historical-delta-phase15b.mjs")).href);
 const status = () => execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" });
 const ISO = "scripts/verify-lemtel-planipret-isolation.mjs";
+const P15A1 = [ISO, "src/test/lemtelPlanipretIsolationPhase15.test.ts", "docs/lemtel-isolation/phase-15a-planipret-freeze.md"];
 
-// Real temporary Git repository via local plumbing; the 15A verifier is part of the base commit.
-const repo = (m: any, extra: string[] = []) => {
+type Opts = { hist?: string[]; later?: string[]; mutate?: (t: string) => void; refs?: (r: { base: string; end: string }) => { base: string; end: string } };
+
+// Real temporary Git repository via local plumbing: base (15A verifier) -> frozen 15B end -> optional later commit.
+const run = async (o: Opts = {}) => {
+  const m = await load();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "p15b-"));
   const g = (...a: string[]) => execFileSync("git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...a], { cwd: tmp, stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" }).trim();
   const put = (p: string, src?: string) => {
@@ -20,55 +24,61 @@ const repo = (m: any, extra: string[] = []) => {
     g("update-index", "--add", p);
   };
   const commit = (msg: string, parent?: string) => { const c = g("commit-tree", g("write-tree"), ...(parent ? ["-p", parent] : []), "-m", msg); g("update-ref", "HEAD", c); expect(g("cat-file", "-t", c)).toBe("commit"); return c; };
-  g("init", "-q");
-  put(ISO);
-  const base = commit("phase15a-end");
-  for (const p of m.ALLOWED) put(p);
-  for (const p of extra) put(p, "x\n");
-  commit("phase15b", base);
-  return { tmp, base };
+  try {
+    g("init", "-q");
+    put(ISO);
+    const base = commit("phase15a-end");
+    for (const p of m.ALLOWED) put(p);
+    for (const p of o.hist ?? []) put(p, "x\n");
+    const end = commit("phase15b", base);
+    if (o.later) { for (const p of o.later) put(p, "later\n"); commit("later", end); }
+    o.mutate?.(tmp);
+    return m.verify([], tmp, o.refs ? o.refs({ base, end }) : { base, end });
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 };
-const run = async (extra: string[] = [], mutate?: (t: string) => void) => {
-  const m = await load();
-  const r = repo(m, extra);
-  try { mutate?.(r.tmp); return m.verify([], r.tmp, { base: r.base }); }
-  finally { fs.rmSync(r.tmp, { recursive: true, force: true }); }
-};
+const PASS = { code: 0, stdout: "LEMTEL_P15B_PASSED\n" };
 
-describe("Lemtel Phase 15B — historical delta inventory (review only)", () => {
-  it("exact three-file scope passes", async () => {
-    expect(await run()).toEqual({ code: 0, stdout: "LEMTEL_P15B_PASSED\n" });
-  });
-
-  it("a current Lemtel app file change fails", async () => {
-    const r = await run(["apps/ava-softphone-mobile/src/hooks/useSoftphone.ts"]);
-    expect(r.stdout).toMatch(/APP_OR_BACKEND_CHANGED/);
-  });
-
-  it("a backend change fails", async () => {
-    expect((await run(["supabase/functions/x/index.ts"])).stdout).toMatch(/APP_OR_BACKEND_CHANGED/);
-  });
-
-  it("historical code copy paths fail", async () => {
-    for (const p of ["lemtel_historical_attach_app_creator_main/apps/x.ts", "vendor/historical-mobile/a.ts", "imports/attach-app-creator-dd351dc5/b.ts"]) {
-      expect((await run([p])).stdout, p).toMatch(/HISTORICAL_COPY/);
-    }
-  });
-
-  it("any Planiprêt path fails", async () => {
-    for (const p of ["apps/planipret-mobile/a.ts", "src/pages/planipret/A.tsx", "x/PpVoipCall/a.m"]) {
-      expect((await run([p])).stdout, p).toMatch(/PLANIPRET_PATH_CHANGED/);
-    }
-  });
-
-  it("an untracked file fails", async () => {
-    expect((await run([], (t) => fs.writeFileSync(path.join(t, "stray.txt"), "x\n"))).stdout).toMatch(/UNTRACKED_FILE/);
-  });
-
-  it("an incomplete inventory fails", async () => {
+describe("Lemtel Phase 15B.1 — frozen historical inventory verifier", () => {
+  it("exports the frozen end and the real repository passes", async () => {
     const m = await load();
-    const r = await run([], (t) => fs.writeFileSync(path.join(t, m.DOC), "# empty\n"));
-    expect(r.stdout).toMatch(/INVENTORY_INCOMPLETE/);
+    expect(m.PHASE15B_END).toBe("d3b6b687f");
+    expect(m.verify(["--base=87b6b8029"], root)).toEqual(PASS);
+  });
+
+  it("exact frozen three-file interval passes", async () => {
+    expect(await run()).toEqual(PASS);
+  });
+
+  it("a later Phase 15A.1-style commit passes", async () => {
+    expect(await run({ later: P15A1 })).toEqual(PASS);
+  });
+
+  it("later non-Planiprêt Lemtel client/backend/doc files and untracked files pass", async () => {
+    expect(await run({ later: ["apps/ava-softphone-mobile/src/App.tsx", "supabase/functions/luc-x/index.ts", "docs/lemtel-x/a.md"], mutate: (t) => fs.writeFileSync(path.join(t, "stray.txt"), "x\n") })).toEqual(PASS);
+  });
+
+  it("a Planiprêt path inside the frozen range fails", async () => {
+    for (const p of ["src/pages/planipret/A.tsx", "x/PpVoipCall/a.m"]) {
+      const r = await run({ hist: [p] });
+      expect(r.stdout, p).toMatch(/PLANIPRET_PATH_CHANGED/);
+      expect(r.stdout, p).toMatch(/HISTORICAL_SCOPE_EXACT/);
+    }
+  });
+
+  it("app, backend or historical-copy paths inside the frozen range fail", async () => {
+    for (const [p, code] of [["apps/ava-softphone-mobile/x.ts", /APP_OR_BACKEND_CHANGED/], ["supabase/functions/x/index.ts", /APP_OR_BACKEND_CHANGED/], ["vendor/historical-mobile/a.ts", /HISTORICAL_COPY/], ["imports/attach-app-creator-dd351dc5/b.ts", /HISTORICAL_COPY/]] as const) {
+      const r = await run({ hist: [p] });
+      expect(r.stdout, p).toMatch(code);
+      expect(r.stdout, p).toMatch(/HISTORICAL_SCOPE_EXACT/);
+    }
+  });
+
+  it("missing commits, reversed ancestry and incomplete inventory fail", async () => {
+    const m = await load();
+    expect((await run({ refs: (r) => ({ ...r, base: "0".repeat(40) }) })).stdout).toMatch(/BASE_MISSING/);
+    expect((await run({ refs: (r) => ({ ...r, end: "0".repeat(40) }) })).stdout).toMatch(/END_MISSING/);
+    expect((await run({ refs: (r) => ({ base: r.end, end: r.base }) })).stdout).toMatch(/BASE_NOT_ANCESTOR/);
+    expect((await run({ mutate: (t) => fs.writeFileSync(path.join(t, m.DOC), "# empty\n") })).stdout).toMatch(/INVENTORY_INCOMPLETE/);
   });
 
   it("invalid CLI arguments return code 2 and the usage line", async () => {
@@ -76,14 +86,15 @@ describe("Lemtel Phase 15B — historical delta inventory (review only)", () => 
     for (const a of [["x"], ["--base=0000000"], ["--base=87b6b8029", "y"]]) expect(m.verify(a, root)).toEqual({ code: 2, stdout: "LEMTEL_P15B_USAGE: [--base=87b6b8029]\n" });
   });
 
-  it("real repository status is unchanged and verifier is read-only", async () => {
+  it("unsafe capabilities fail and the real repository is unchanged", async () => {
     const m = await load();
     const before = status();
     m.verify([], root);
-    await run(["apps/ava-softphone-mobile/x"]);
+    await run({ later: ["apps/ava-softphone-mobile/x"] });
     expect(status()).toBe(before);
     const src = fs.readFileSync(path.join(root, m.SELF), "utf8");
     expect(m.checkSelf(src)).toBe(true);
-    expect(m.checkSelf(src + "\nwrite" + "FileSync(x)\n")).toBe(false);
+    for (const bad of ["write" + "FileSync(x)", "fet" + "ch(u)", "proc" + "ess.env.X"]) expect(m.checkSelf(src + "\n" + bad + "\n"), bad).toBe(false);
+    expect((await run({ mutate: (t) => fs.appendFileSync(path.join(t, m.SELF), "\nfet" + "ch(u)\n") })).stdout).toMatch(/VERIFIER_CAPABILITY/);
   });
 });

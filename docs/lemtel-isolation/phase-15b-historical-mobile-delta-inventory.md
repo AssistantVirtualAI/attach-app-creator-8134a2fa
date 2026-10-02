@@ -68,3 +68,10 @@ A and B differ in exactly one file: `android/app/src/main/java/com/lemtel/softph
 ## 6. Conclusion
 
 The current app remains authoritative. No historical source is copied. Historical B is an incomplete subset of A, and A's AVA identity is obsolete. Only two items warrant a future, separately approved, targeted manual review; both are listed above with their tests.
+
+## Verification scope (Phase 15B.1)
+
+- This inventory is attested only over `87b6b8029..d3b6b687f` (`PHASE15B_END`), which must contain exactly the three Phase 15B files.
+- Later Lemtel documentation, verifier, test or application files do not invalidate this historical review.
+- Permanent Planiprêt protection comes from the Phase 15A.1 guard (`verify-lemtel-planipret-isolation.mjs`) and is not duplicated here. Every future phase runs both that guard and its own strict phase-scope verifier.
+- No historical source has been copied.

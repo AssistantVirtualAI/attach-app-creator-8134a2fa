@@ -7,6 +7,7 @@ import { isProtected } from "./verify-lemtel-planipret-isolation.mjs";
 
 // Static, read-only verifier for the review-only Phase 15B inventory. Only read-only local Git inspection is run.
 export const BASE = "87b6b8029";
+export const PHASE15B_END = "d3b6b687f";
 export const USAGE = "LEMTEL_P15B_USAGE: [--base=87b6b8029]";
 export const DOC = "docs/lemtel-isolation/phase-15b-historical-mobile-delta-inventory.md";
 export const SELF = "scripts/verify-lemtel-historical-delta-phase15b.mjs";
@@ -25,15 +26,15 @@ const lines = (s) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 export const isAppOrBackend = (p) => /^(apps|supabase)\//i.test(p);
 export const isHistoricalCopy = (p) => /(^|\/)(lemtel_historical[^/]*|historical[-_]?(mobile|source|copy)?|attach-app-creator[^/]*)(\/|$)/i.test(p);
 
-export function changes(root, base, end) {
-  const committed = git(root, ["diff", "--name-status", "--no-renames", base, end]);
-  const worktree = end === "HEAD" ? git(root, ["diff", "--name-status", "--no-renames", "HEAD"]) : "";
-  const untracked = git(root, ["ls-files", "--others", "--exclude-standard"]);
-  if (committed === null || worktree === null || untracked === null) return null;
+// Paths changed between two fixed commits only (never the current HEAD or worktree).
+export function historicalPaths(root, base, end) {
+  const out = git(root, ["diff", "--name-status", "--no-renames", base, end]);
+  if (out === null) return null;
   const paths = new Set();
-  for (const l of lines(committed + "\n" + worktree)) for (const p of l.split("\t").slice(1)) paths.add(p);
-  return { paths: [...paths].sort(), untracked: lines(untracked) };
+  for (const l of lines(out)) for (const p of l.split("\t").slice(1)) paths.add(p);
+  return [...paths].sort();
 }
+const isCommit = (root, ref) => { const t = git(root, ["cat-file", "-t", ref]); return t !== null && t.trim() === "commit"; };
 
 export function checkDoc(t) {
   return typeof t === "string" && /Lemtel Softphone/.test(t) && /com\.lemtel\.softphone/.test(t) && /com\.assistantvirtualai\.softphone/.test(t)
@@ -51,20 +52,24 @@ export function checkSelf(text) {
 
 export function verify(args, root = process.cwd(), opts = {}) {
   if (args.length > 1 || (args.length === 1 && args[0] !== `--base=${BASE}`)) return { code: 2, stdout: USAGE + "\n" };
-  const base = opts.base ?? BASE, end = opts.end ?? "HEAD";
+  const base = opts.base ?? BASE, end = opts.end ?? PHASE15B_END;
   const f = [];
-  const bt = git(root, ["cat-file", "-t", base]);
-  if (bt === null || bt.trim() !== "commit") f.push("BASE_MISSING");
-  else if (git(root, ["merge-base", "--is-ancestor", base, end]) === null) f.push("BASE_NOT_ANCESTOR");
-  const ch = changes(root, base, end);
-  if (!ch) f.push("GIT_READ_FAILED");
-  else {
-    const all = [...new Set([...ch.paths, ...ch.untracked])].filter((p) => !ALLOWED.includes(p));
-    if (all.some(isProtected)) f.push("PLANIPRET_PATH_CHANGED");
-    if (all.some(isAppOrBackend)) f.push("APP_OR_BACKEND_CHANGED");
-    if (all.some(isHistoricalCopy)) f.push("HISTORICAL_COPY");
-    if (all.length) f.push("OUTSIDE_ALLOWLIST");
-    if (ch.untracked.some((p) => !ALLOWED.includes(p))) f.push("UNTRACKED_FILE");
+  const bOk = isCommit(root, base), eOk = isCommit(root, end);
+  if (!bOk) f.push("BASE_MISSING");
+  if (!eOk) f.push("END_MISSING");
+  if (bOk && eOk) {
+    if (git(root, ["merge-base", "--is-ancestor", base, end]) === null) f.push("BASE_NOT_ANCESTOR");
+    else {
+      const hist = historicalPaths(root, base, end);
+      if (hist === null) f.push("GIT_READ_FAILED");
+      else {
+        const extra = hist.filter((p) => !ALLOWED.includes(p));
+        if (extra.some(isProtected)) f.push("PLANIPRET_PATH_CHANGED");
+        if (extra.some(isAppOrBackend)) f.push("APP_OR_BACKEND_CHANGED");
+        if (extra.some(isHistoricalCopy)) f.push("HISTORICAL_COPY");
+        if (!eq(hist, [...ALLOWED].sort())) f.push("HISTORICAL_SCOPE_EXACT");
+      }
+    }
   }
   const rd = (p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return null; } };
   if (!checkDoc(rd(DOC))) f.push("INVENTORY_INCOMPLETE");

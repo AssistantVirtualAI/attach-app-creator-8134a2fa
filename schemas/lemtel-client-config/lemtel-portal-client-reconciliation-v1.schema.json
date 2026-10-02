@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lemtel_portal_client_reconciliation_v1",
+  "title": "Lemtel portal to client reconciliation matrix (offline contract only)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "authority",
+    "executionMode",
+    "credentialDelivery",
+    "routingMode",
+    "edgeFeatureGate",
+    "portalEntities",
+    "reconciliationRules",
+    "clientDataAccess",
+    "clientRequiredFutureWork",
+    "prohibitedCapabilities"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "lemtel_portal_client_reconciliation_v1"
+    },
+    "authority": {
+      "const": "existing_lemtel_portal"
+    },
+    "executionMode": {
+      "const": "offline_contract_only"
+    },
+    "credentialDelivery": {
+      "const": "separate_authenticated_server_flow"
+    },
+    "routingMode": {
+      "const": "direct_current"
+    },
+    "edgeFeatureGate": {
+      "const": false
+    },
+    "portalEntities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "organization",
+          "domain",
+          "softphone_user",
+          "extension",
+          "device",
+          "call_history",
+          "recording",
+          "voicemail",
+          "message"
+        ]
+      }
+    },
+    "reconciliationRules": {
+      "type": "array",
+      "minItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "authoritativeSource",
+          "portalAction",
+          "revisionConsequence",
+          "sensitiveDataTransported"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^r[0-9]{2}_[a-z_]+$"
+          },
+          "authoritativeSource": {
+            "const": "existing_lemtel_portal"
+          },
+          "portalAction": {
+            "enum": [
+              "organization_create",
+              "organization_disable",
+              "domain_create",
+              "domain_disable",
+              "user_create",
+              "user_disable",
+              "extension_create",
+              "extension_disable",
+              "app_access_change",
+              "mobile_access_change",
+              "desktop_access_change",
+              "sip_secret_rotation",
+              "dnd_change",
+              "forwarding_change",
+              "recording_policy_change",
+              "voicemail_policy_change",
+              "device_register",
+              "device_manifest_request",
+              "device_revoke_owner",
+              "device_revoke_org_admin"
+            ]
+          },
+          "revisionConsequence": {
+            "enum": [
+              "manifestRevision",
+              "deviceRevision",
+              "credentialRevisionRef",
+              "none"
+            ]
+          },
+          "sensitiveDataTransported": {
+            "const": false
+          }
+        }
+      }
+    },
+    "clientDataAccess": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entity",
+          "transport",
+          "inManifest",
+          "privacyScope"
+        ],
+        "properties": {
+          "entity": {
+            "enum": [
+              "call_history",
+              "recording",
+              "voicemail",
+              "message",
+              "device"
+            ]
+          },
+          "transport": {
+            "const": "existing_authorized_flow"
+          },
+          "inManifest": {
+            "const": false
+          },
+          "privacyScope": {
+            "const": "own_extension_only"
+          }
+        }
+      }
+    },
+    "clientRequiredFutureWork": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "mobile_manifest_consumer",
+          "desktop_manifest_consumer",
+          "portal_device_controls",
+          "portal_mutation_revision_hook"
+        ]
+      }
+    },
+    "prohibitedCapabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "secret",
+          "credential",
+          "password",
+          "token",
+          "api_key",
+          "endpoint",
+          "hostname",
+          "url",
+          "sip_signaling",
+          "pbx_connection",
+          "edge_activation",
+          "dns",
+          "tls",
+          "docker",
+          "deployment",
+          "auto_dial",
+          "speaker_auto_enable"
+        ]
+      }
+    }
+  }
+}

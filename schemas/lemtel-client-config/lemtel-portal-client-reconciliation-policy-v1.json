@@ -1,0 +1,234 @@
+{
+  "schemaVersion": "lemtel_portal_client_reconciliation_policy_v1",
+  "executionMode": "offline_contract_only",
+  "speakerAutoEnableAllowed": false,
+  "vertoAllowed": false,
+  "nativeAndroidSipAllowed": false,
+  "pbxConnectionAllowed": false,
+  "databaseApplyAllowed": false,
+  "functionPublishAllowed": false,
+  "clientModificationAllowed": false,
+  "portalModificationAllowed": false,
+  "edgeFeatureGate": false,
+  "ownExtensionOnlyRequired": true,
+  "manifestContainsCredentials": false,
+  "manifestContainsCallData": false,
+  "reconciliationMatrix": {
+    "schemaVersion": "lemtel_portal_client_reconciliation_v1",
+    "authority": "existing_lemtel_portal",
+    "executionMode": "offline_contract_only",
+    "credentialDelivery": "separate_authenticated_server_flow",
+    "routingMode": "direct_current",
+    "edgeFeatureGate": false,
+    "portalEntities": [
+      "organization",
+      "domain",
+      "softphone_user",
+      "extension",
+      "device",
+      "call_history",
+      "recording",
+      "voicemail",
+      "message"
+    ],
+    "reconciliationRules": [
+      {
+        "id": "r01_organization_create",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "organization_create",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r02_organization_disable",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "organization_disable",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r03_domain_create",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "domain_create",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r04_domain_disable",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "domain_disable",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r05_user_create",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "user_create",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r06_user_disable",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "user_disable",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r07_extension_create",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "extension_create",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r08_extension_disable",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "extension_disable",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r09_app_access_change",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "app_access_change",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r10_mobile_access_change",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "mobile_access_change",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r11_desktop_access_change",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "desktop_access_change",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r12_sip_secret_rotation",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "sip_secret_rotation",
+        "revisionConsequence": "credentialRevisionRef",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r13_dnd_change",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "dnd_change",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r14_forwarding_change",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "forwarding_change",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r15_recording_policy_change",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "recording_policy_change",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r16_voicemail_policy_change",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "voicemail_policy_change",
+        "revisionConsequence": "manifestRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r17_device_register",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "device_register",
+        "revisionConsequence": "deviceRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r18_device_manifest_request",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "device_manifest_request",
+        "revisionConsequence": "none",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r19_device_revoke_owner",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "device_revoke_owner",
+        "revisionConsequence": "deviceRevision",
+        "sensitiveDataTransported": false
+      },
+      {
+        "id": "r20_device_revoke_org_admin",
+        "authoritativeSource": "existing_lemtel_portal",
+        "portalAction": "device_revoke_org_admin",
+        "revisionConsequence": "deviceRevision",
+        "sensitiveDataTransported": false
+      }
+    ],
+    "clientDataAccess": [
+      {
+        "entity": "call_history",
+        "transport": "existing_authorized_flow",
+        "inManifest": false,
+        "privacyScope": "own_extension_only"
+      },
+      {
+        "entity": "recording",
+        "transport": "existing_authorized_flow",
+        "inManifest": false,
+        "privacyScope": "own_extension_only"
+      },
+      {
+        "entity": "voicemail",
+        "transport": "existing_authorized_flow",
+        "inManifest": false,
+        "privacyScope": "own_extension_only"
+      },
+      {
+        "entity": "message",
+        "transport": "existing_authorized_flow",
+        "inManifest": false,
+        "privacyScope": "own_extension_only"
+      },
+      {
+        "entity": "device",
+        "transport": "existing_authorized_flow",
+        "inManifest": false,
+        "privacyScope": "own_extension_only"
+      }
+    ],
+    "clientRequiredFutureWork": [
+      "mobile_manifest_consumer",
+      "desktop_manifest_consumer",
+      "portal_device_controls",
+      "portal_mutation_revision_hook"
+    ],
+    "prohibitedCapabilities": [
+      "secret",
+      "credential",
+      "password",
+      "token",
+      "api_key",
+      "endpoint",
+      "hostname",
+      "url",
+      "sip_signaling",
+      "pbx_connection",
+      "edge_activation",
+      "dns",
+      "tls",
+      "docker",
+      "deployment",
+      "auto_dial",
+      "speaker_auto_enable"
+    ]
+  }
+}

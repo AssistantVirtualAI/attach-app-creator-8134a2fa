@@ -4,6 +4,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const COMPOSE = "infra/lemtel-edge/phase12-closed/docker-compose.closed.yml";
 const IMAGE = "lemtel-edge-phase12-closed:local";
@@ -147,4 +148,4 @@ export function main() {
   return r.result === "passed" ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) process.exitCode = main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();

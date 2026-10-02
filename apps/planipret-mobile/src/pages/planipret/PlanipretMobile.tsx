@@ -170,7 +170,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
   const autoDialKeyRef = useRef("");
   useEffect(() => {
     if (open) { setNumber(initial ?? ""); setMode("keypad"); setQuery(""); }
-    else autoDialKeyRef.current = "";
+    else { setNumber(""); autoDialKeyRef.current = ""; }
   }, [open, initial]);
   const append = (c: string) => setNumber((n) => (n + c).slice(0, 20));
   const back = () => setNumber((n) => n.slice(0, -1));
@@ -1219,7 +1219,7 @@ export default function PlanipretMobile() {
 
         {/* Right FAB — uniquement sur Home et Calls */}
         {(/^\/mplanipret(\/(home|calls)(\/|$)?)?$/.test(location.pathname) || location.pathname === "/mplanipret") && (
-        <button onClick={activeCallId ? hangupActive : () => setDialerOpen(true)}
+        <button onClick={activeCallId ? hangupActive : () => openDialer()}
           className="absolute z-20 rounded-full flex items-center justify-center text-white active:scale-95 transition"
           style={{
             right: 18, bottom: "calc(env(safe-area-inset-bottom, 0px) + 116px)",
@@ -1313,7 +1313,7 @@ export default function PlanipretMobile() {
 
 
 
-        <Dialer open={dialerOpen} autoDial={dialerAutoDial} onClose={() => { setDialerOpen(false); setDialerAutoDial(false); }} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} maestroConfigured={Boolean(profile?.maestro_broker_id)} />
+        <Dialer open={dialerOpen} autoDial={dialerAutoDial} onClose={() => { setDialerOpen(false); setDialerAutoDial(false); setDialerInit(undefined); }} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} maestroConfigured={Boolean(profile?.maestro_broker_id)} />
         <PpActiveCallScreen softphone={softphone} />
         <PostCallConsentSheet />
         {/* A live WebRTC session owns the UI: PpActiveCallScreen already shows

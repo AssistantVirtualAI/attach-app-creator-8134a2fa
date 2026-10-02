@@ -42,7 +42,7 @@ const git = (root, args) => {
 };
 const lines = (s) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 
-// All paths touched between base and end (adds, copies, renames as add+delete, modifications, deletions), plus worktree changes.
+// All paths touched between base and end (adds, copies, moves as add+delete via --no-renames flag, modifications, deletions), plus worktree changes.
 export function changes(root, base, end) {
   const committed = git(root, ["diff", "--name-status", "--no-renames", base, end]);
   const worktree = end === "HEAD" ? git(root, ["diff", "--name-status", "--no-renames", "HEAD"]) : "";

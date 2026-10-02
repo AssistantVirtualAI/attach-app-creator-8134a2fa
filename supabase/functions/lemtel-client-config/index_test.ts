@@ -135,3 +135,39 @@ Deno.test("Phase 19B: admin revocation fallback uses user_roles bound to the tar
   assert(!src.includes("org_members"));
   assert(src.includes('from("user_roles").select("role").eq("user_id", userId).eq("organization_id", target.organization_id).in("role", ["org_admin", "super_admin"])'));
 });
+
+Deno.test("Phase 20A: list_devices requires exactly a UUID organizationId and never echoes input", () => {
+  const ORG = "22222222-2222-4222-8222-222222222222";
+  assertEquals(m.validateBody({ action: "list_devices", organizationId: ORG }), { action: "list_devices", organizationId: ORG });
+  const bad: [unknown, string][] = [
+    [{ action: "list_devices" }, "invalid_body"],
+    [{ action: "list_devices", organizationId: ORG, extra: 1 }, "invalid_body"],
+    [{ action: "list_devices", organizationId: ORG, platform: "mobile" }, "invalid_body"],
+    [{ action: "list_devices", organizationId: "not-a-uuid-value" }, "invalid_organization_id"],
+    [{ action: "list_devices", organizationId: 42 }, "invalid_organization_id"],
+  ];
+  for (const [b, code] of bad) {
+    const r = m.validateBody(b) as { error: string };
+    assertEquals(r.error, code);
+    assert(!JSON.stringify(r).includes("not-a-uuid-value"));
+  }
+});
+
+Deno.test("Phase 20A: list response exposes only safe metadata", () => {
+  const row = { device_ref: DEVICE.device_ref, platform: "mobile" as const, state: "approved" as const, revision: 2, created_at: "a", updated_at: "b", last_seen_at: null, revoked_at: null, id: "secret-id", user_id: "u", organization_id: "o", softphone_user_id: "s", installation_ref_hash: "h" };
+  const out = m.toListResponse([row]);
+  assertEquals(Object.keys(out), ["devices"]);
+  assertEquals(Object.keys(out.devices[0]).sort(), ["createdAt", "deviceRef", "lastSeenAt", "platform", "revision", "revokedAt", "state", "updatedAt"]);
+  assertEquals(m.LIST_COLUMNS.split(",").sort(), ["created_at", "device_ref", "last_seen_at", "platform", "revision", "revoked_at", "state", "updated_at"]);
+  assert(m.LIST_LIMIT <= 200);
+});
+
+Deno.test("Phase 20A: list_devices is authorized server-side and filtered by organization", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const block = src.slice(src.indexOf('if (v.action === "list_devices")'), src.indexOf('if (v.action === "revoke_device")'));
+  assert(block.includes('admin.rpc("is_lemtel_admin"'));
+  assert(block.includes('.eq("organization_id", v.organizationId).in("role", ["org_admin", "super_admin"])'));
+  assert(block.includes('respond({ error: "forbidden" }, 403)'));
+  assert(block.includes('.select(LIST_COLUMNS).eq("organization_id", v.organizationId)'));
+  assert(src.indexOf('auth.getUser()') < src.indexOf('if (v.action === "list_devices")'));
+});

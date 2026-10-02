@@ -48,10 +48,10 @@ describe("Lemtel Phase 19B — controlled backend promotion", () => {
     expect((code.match(/GRANT /g) ?? []).length).toBe(1);
   });
 
-  it("real function equals the offline source except the authorized admin fallback fragment", () => {
+  it("historical Phase 19B function (dc111644a) equals the offline source except the authorized admin fallback fragment", () => {
     const off = rd(`${OFF}/lemtel-client-config/index.ts`);
     expect(off.split(OLD_FRAGMENT).length).toBe(2);
-    expect(rd(FN)).toBe(off.replace(OLD_FRAGMENT, NEW_FRAGMENT));
+    expect(git("show", `${PHASE19B_END}:${FN}`)).toBe(off.replace(OLD_FRAGMENT, NEW_FRAGMENT));
   });
 
   it("real function avoids forbidden dependencies and outputs", () => {

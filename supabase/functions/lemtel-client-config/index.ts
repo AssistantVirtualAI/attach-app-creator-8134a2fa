@@ -1,4 +1,4 @@
-// OFFLINE SOURCE (not deployed). Lemtel Phase 17: configuration manifest and device lifecycle (source-only, not connected to any client).
+// Lemtel client configuration: published, authenticated manifest and device lifecycle function (Phase 17, portal device list Phase 20A).
 // Returns only the safe Phase 16 manifest. Never returns credentials, endpoints, extension numbers,
 // forwarding targets, call data or audio. Credential delivery stays in the existing separate function.
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -9,7 +9,7 @@ export const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-export const ACTIONS = ["register", "manifest", "revoke_self", "revoke_device"] as const;
+export const ACTIONS = ["register", "manifest", "revoke_self", "revoke_device", "list_devices"] as const;
 export type Action = typeof ACTIONS[number];
 export type Platform = "mobile" | "desktop";
 const FIELDS: Record<Action, string[]> = {
@@ -17,7 +17,12 @@ const FIELDS: Record<Action, string[]> = {
   manifest: ["action", "platform", "deviceRef"],
   revoke_self: ["action", "platform", "deviceRef"],
   revoke_device: ["action", "deviceRef"],
+  list_devices: ["action", "organizationId"],
 };
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const LIST_LIMIT = 200;
+// Only these safe metadata columns are ever selected for the portal device list.
+export const LIST_COLUMNS = "device_ref,platform,state,revision,created_at,updated_at,last_seen_at,revoked_at";
 const INSTALLATION_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_REF_RE = /^dev_[0-9a-f]{32}$/;
 export const MANIFEST_TTL_SECONDS = 15 * 60;
@@ -28,7 +33,8 @@ export type Failure = { error: string; status: number };
 export type Request17 =
   | { action: "register"; platform: Platform; installationRef: string }
   | { action: "manifest" | "revoke_self"; platform: Platform; deviceRef: string }
-  | { action: "revoke_device"; deviceRef: string };
+  | { action: "revoke_device"; deviceRef: string }
+  | { action: "list_devices"; organizationId: string };
 
 export const fail = (error: string, status: number): Failure => ({ error, status });
 export const respond = (body: unknown, status = 200) =>
@@ -43,6 +49,10 @@ export function validateBody(body: unknown): Request17 | Failure {
   const action = b.action as Action;
   const keys = Object.keys(b);
   if (keys.some((k) => !FIELDS[action].includes(k)) || FIELDS[action].some((k) => !(k in b))) return fail("invalid_body", 400);
+  if (action === "list_devices") {
+    if (typeof b.organizationId !== "string" || !UUID_RE.test(b.organizationId)) return fail("invalid_organization_id", 400);
+    return { action, organizationId: b.organizationId.toLowerCase() };
+  }
   if (action !== "revoke_device" && b.platform !== "mobile" && b.platform !== "desktop") return fail("invalid_platform", 400);
   if (action === "register") {
     if (typeof b.installationRef !== "string" || !INSTALLATION_RE.test(b.installationRef)) return fail("invalid_installation_ref", 400);
@@ -129,6 +139,17 @@ export async function buildManifest(a: Account, d: Device, now: Date = new Date(
   };
 }
 
+export type ListRow = { device_ref: string; platform: Platform; state: "approved" | "pending" | "revoked"; revision: number; created_at: string; updated_at: string; last_seen_at: string | null; revoked_at: string | null };
+// Strict list response mapping: only safe metadata fields are copied.
+export function toListResponse(rows: ListRow[]) {
+  return {
+    devices: rows.map((r) => ({
+      deviceRef: r.device_ref, platform: r.platform, state: r.state, revision: r.revision,
+      createdAt: r.created_at, updatedAt: r.updated_at, lastSeenAt: r.last_seen_at ?? null, revokedAt: r.revoked_at ?? null,
+    })),
+  };
+}
+
 // Optimistic concurrency: a mutation succeeds only when exactly one row was returned and no error occurred.
 export function mutationApplied(data: unknown, error: unknown): boolean {
   return !error && typeof data === "object" && data !== null && typeof (data as { id?: unknown }).id === "string";
@@ -159,6 +180,19 @@ export async function handler(req: Request): Promise<Response> {
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
 
   try {
+    if (v.action === "list_devices") {
+      const { data: lemtelAdmin } = await admin.rpc("is_lemtel_admin", { _user_id: userId });
+      let allowed = lemtelAdmin === true;
+      if (!allowed) {
+        const { data: r } = await admin.from("user_roles").select("role").eq("user_id", userId).eq("organization_id", v.organizationId).in("role", ["org_admin", "super_admin"]).limit(1);
+        allowed = Array.isArray(r) && r.length === 1;
+      }
+      if (!allowed) return respond({ error: "forbidden" }, 403);
+      const { data: rows, error } = await admin.from("lemtel_client_config_devices").select(LIST_COLUMNS).eq("organization_id", v.organizationId).order("updated_at", { ascending: false }).limit(LIST_LIMIT);
+      if (error) return respond({ error: "list_failed" }, 500);
+      return respond(toListResponse((rows ?? []) as ListRow[]));
+    }
+
     if (v.action === "revoke_device") {
       const { data: target } = await admin.from("lemtel_client_config_devices").select(DEVICE_COLUMNS).eq("device_ref", v.deviceRef).maybeSingle();
       if (!target) return respond({ error: "forbidden" }, 403);

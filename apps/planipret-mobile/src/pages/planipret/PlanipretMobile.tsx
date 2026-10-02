@@ -170,8 +170,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
   const autoDialKeyRef = useRef("");
   useEffect(() => {
     if (open) { setNumber(initial ?? ""); setMode("keypad"); setQuery(""); }
-    else setNumber("");
-    else autoDialKeyRef.current = "";
+    else { setNumber(""); autoDialKeyRef.current = ""; }
   }, [open, initial]);
   const append = (c: string) => setNumber((n) => (n + c).slice(0, 20));
   const back = () => setNumber((n) => n.slice(0, -1));

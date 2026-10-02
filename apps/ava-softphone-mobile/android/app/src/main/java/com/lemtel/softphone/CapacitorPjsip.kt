@@ -102,61 +102,6 @@ class CapacitorPjsip : Plugin() {
         super.handleOnDestroy()
     }
 
-    @PluginMethod
-    fun initAccount(call: PluginCall) {
-        // server and domain MUST be provided by the JS layer — no hardcoded fallbacks
-        // so the plugin works on any PBX/domain.
-        val server = call.getString("server") ?: ""
-        val port = call.getInt("port") ?: 5060
-        val username = call.getString("username") ?: call.getString("extension") ?: ""
-        val password = call.getString("password") ?: ""
-        val domain = call.getString("domain") ?: ""
-        val transport = call.getString("transport") ?: "TCP"
-
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            requestPermissionForAlias("microphone", call, "microphonePermissionCallback")
-            return
-        }
-        audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
-        call.resolve(JSObject().apply {
-            put("ok", true)
-            put("status", "ok")
-            put("server", server)
-            put("port", port)
-            put("username", username)
-            put("domain", domain)
-            put("transport", transport)
-        })
-    }
-
-    @PermissionCallback
-    fun microphonePermissionCallback(call: PluginCall) {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
-            call.resolve(JSObject().apply { put("ok", true); put("status", "ok") })
-        } else {
-            call.reject("Microphone permission denied")
-        }
-    }
-
-    @PluginMethod fun makeCall(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true); put("status", "calling") }) }
-    @PluginMethod
-    fun startCall(call: PluginCall) {
-        AudioFocusHelper.requestCallAudioFocus(context)
-        call.resolve(JSObject().apply { put("ok", true) })
-    }
-    @PluginMethod fun hangup(call: PluginCall) {
-        AudioFocusHelper.releaseCallAudioFocus(context)
-        try { if (audioManager?.isBluetoothScoOn == true) { audioManager?.isBluetoothScoOn = false; audioManager?.stopBluetoothSco() } } catch (_: Exception) {}
-        call.resolve(JSObject().apply { put("ok", true) })
-    }
-    @PluginMethod fun answer(call: PluginCall) {
-        AudioFocusHelper.requestCallAudioFocus(context)
-        call.resolve(JSObject().apply { put("ok", true) })
-    }
-
     /** Request call audio focus + communication mode. Never signals SIP. Safe to repeat. */
     @PluginMethod
     fun beginCallAudio(call: PluginCall) {
@@ -180,27 +125,6 @@ class CapacitorPjsip : Plugin() {
             call.reject("endCallAudio failed")
         }
     }
-
-    @PluginMethod fun setMute(call: PluginCall) { val m = call.getBoolean("muted", false) ?: false; audioManager?.isMicrophoneMute = m; call.resolve(JSObject().apply { put("ok", true); put("muted", m) }) }
-    @PluginMethod fun setHold(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun sendDTMF(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun disconnect(call: PluginCall) {
-        AudioFocusHelper.releaseCallAudioFocus(context)
-        try { if (audioManager?.isBluetoothScoOn == true) { audioManager?.isBluetoothScoOn = false; audioManager?.stopBluetoothSco() } } catch (_: Exception) {}
-        call.resolve(JSObject().apply { put("ok", true) })
-    }
-    @PluginMethod fun setLogLevel(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun getSnapshot(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun setHeld(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun startRecord(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun stopRecord(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun startRecording(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun stopRecording(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun snapshot(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun transfer(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun park(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun addCall(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun setLiveTranscriptionEnabled(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
 
     @PluginMethod
     fun startSipService(call: PluginCall) {
@@ -297,15 +221,6 @@ class CapacitorPjsip : Plugin() {
             put("ok", true)
             put("outputs", outputs)
             put("inputs", inputs)
-        })
-    }
-
-    @PluginMethod
-    fun getRtpStats(call: PluginCall) {
-        call.resolve(JSObject().apply {
-            put("running", false)
-            put("audioBackend", "jssip-webrtc")
-            put("ok", true)
         })
     }
 

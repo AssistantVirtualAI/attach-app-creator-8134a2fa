@@ -131,8 +131,44 @@ describe("Lemtel Edge phase 12A — closed local Kamailio package (static only)"
     expect(JSON.stringify(pass)).toBe('{"schemaVersion":"closed_local_edge_runtime_report_v1","result":"passed","configSyntax":"passed","closedResponse":"passed","externalEgress":"blocked","upstreamConnection":"blocked","controlPlaneConnection":"blocked","mediaRelay":"blocked","featureGates":"all_false","cleanup":"passed","failureCode":"none"}');
     for (const o of [pass, r.report("failed", "local_validation_failed", {}), r.report("failed", "local_validation_failed", { configSyntax: "failed", cleanup: "passed" }), r.report("failed", "cleanup_failed", { configSyntax: "passed", cleanup: "failed" })]) expect(v.validate(schema, o)).toBe(true);
     expect(v.validate(schema, r.report("failed", "none", {}))).toBe(false);
-    expect(r.inspectOk({ State: { Running: true }, HostConfig: { NetworkMode: "none", ReadonlyRootfs: true, SecurityOpt: ["no-new-privileges:true"], CapDrop: ["ALL"], Privileged: false }, NetworkSettings: { Ports: {}, Networks: { none: {} } }, Config: { User: "65532:65532" }, Mounts: [] })).toBe(true);
+    expect(r.inspectOk({ State: { Running: true }, HostConfig: { NetworkMode: "none", ReadonlyRootfs: true, SecurityOpt: ["no-new-privileges:true"], CapDrop: ["ALL"], Privileged: false, Tmpfs: { "/tmp": "", "/run": "mode=0755,uid=65532,gid=65532" } }, NetworkSettings: { Ports: {}, Networks: { none: {} } }, Config: { User: "65532:65532" }, Mounts: [] })).toBe(true);
     expect(r.inspectOk({ State: { Running: true }, HostConfig: { NetworkMode: "bridge", ReadonlyRootfs: true, SecurityOpt: ["no-new-privileges:true"], CapDrop: ["ALL"], Privileged: false }, NetworkSettings: { Ports: {} }, Config: { User: "65532:65532" }, Mounts: [] })).toBe(false);
+  });
+
+  it("phase 12.3: /run tmpfs must be user-owned 0755 in Compose and in inspection", async () => {
+    const m = await v12();
+    const r = await runner();
+    const y = read("infra/lemtel-edge-phase12-closed/docker-compose.closed.yml");
+    const good = "      - /run:mode=0755,uid=65532,gid=65532\n";
+    expect(y.includes(good)).toBe(true);
+    expect(m.checkCompose(y)).toBe(true);
+    expect(r.composeHardened(y)).toBe(true);
+    const bads = [
+      y.replace(good, "      - /run\n"),
+      y.replace(good, "      - /run:mode=0777,uid=65532,gid=65532\n"),
+      y.replace(good, "      - /run:mode=0700,uid=65532,gid=65532\n"),
+      y.replace(good, "      - /run:mode=0755,uid=0,gid=65532\n"),
+      y.replace(good, "      - /run:mode=0755,uid=65532,gid=0\n"),
+      y.replace("      - /tmp\n" + good, good + "      - /tmp\n"),
+      y.replace(good, good + "      - /var/tmp\n"),
+      y.replace(good, "      - /run:mode=0755,uid=65532,gid=65532,size=1m\n"),
+      y.replace(good, "      - /run:mode=0755,uid=65532,gid=65532,exec\n"),
+      y + "    volumes:\n      - ./x:/x\n",
+      y.replace("    tmpfs:", "    volumes:\n      - type: bind\n        source: .\n        target: /x\n    tmpfs:"),
+      y + "    networks: [a]\n",
+      y + "    ports: [\"1:1\"]\n",
+    ];
+    for (const b of bads) { expect(m.checkCompose(b)).toBe(false); expect(r.composeHardened(b)).toBe(false); }
+    const base = (tmpfs) => ({ State: { Running: true }, HostConfig: { NetworkMode: "none", ReadonlyRootfs: true, SecurityOpt: ["no-new-privileges:true"], CapDrop: ["ALL"], Privileged: false, ...(tmpfs === undefined ? {} : { Tmpfs: tmpfs }) }, NetworkSettings: { Ports: {}, Networks: { none: {} } }, Config: { User: "65532:65532" }, Mounts: [] });
+    expect(r.inspectOk(base({ "/tmp": "", "/run": "mode=0755,uid=65532,gid=65532" }))).toBe(true);
+    expect(r.inspectOk(base({ "/tmp": "", "/run": "mode=755,uid=65532,gid=65532" }))).toBe(true);
+    for (const t of [undefined, null, {}, { "/tmp": "" }, { "/run": "mode=0755,uid=65532,gid=65532" }, { "/tmp": "", "/run": "mode=0755,uid=65532,gid=65532", "/x": "" },
+      { "/tmp": "", "/run": "" }, { "/tmp": "", "/run": "uid=65532,gid=65532" }, { "/tmp": "", "/run": "mode=0755,gid=65532" }, { "/tmp": "", "/run": "mode=0755,uid=65532" },
+      { "/tmp": "", "/run": "mode=0777,uid=65532,gid=65532" }, { "/tmp": "", "/run": "mode=755,uid=0,gid=65532" }, { "/tmp": "", "/run": "mode=755,uid=65532,gid=0" },
+      { "/tmp": "", "/run": "mode=755,mode=777,uid=65532,gid=65532" }]) expect(r.inspectOk(base(t))).toBe(false);
+    const rt = read(m.RUNNER);
+    expect(m.checkRunner(rt.replace("&& tmpfsOk(hc.Tmpfs)", ""))).toBe(false);
+    expect(m.checkRunner(rt.replace('uids[0] === "uid=65532"', 'uids[0] === "uid=0"'))).toBe(false);
   });
 
   it("doc, Phase 11 shape and gates preserved; Phase 11 verifier still passes", async () => {

@@ -76,9 +76,10 @@ export function checkCompose(y) {
     /^services:$/m, /^    image: lemtel-edge-phase12-closed:local$/m, /^    network_mode: "none"$/m, /^    user: "65532:65532"$/m,
     /^    read_only: true$/m, /^    cap_drop: \["ALL"\]$/m, /^    security_opt: \["no-new-privileges:true"\]$/m,
     /^    pids_limit: 64$/m, /^    mem_limit: 128m$/m, /^    restart: "no"$/m, /^      context: \.$/m, /^      dockerfile: Dockerfile$/m,
-    /^    tmpfs:\n      - \/tmp\n      - \/run\n/m,
+    /^    tmpfs:\n      - \/tmp\n      - \/run:mode=0755,uid=65532,gid=65532\n    cap_drop:/m,
   ];
-  return JSON.stringify(names) === JSON.stringify(["kamailio-closed"]) && req.every((r) => r.test(y));
+  return JSON.stringify(names) === JSON.stringify(["kamailio-closed"]) && req.every((r) => r.test(y))
+    && (y.match(/tmpfs/g) || []).length === 1 && (y.match(/^      - /gm) || []).length === 2;
 }
 
 export function checkIgnore(t) {
@@ -96,6 +97,9 @@ export function checkRunner(t) {
   return !shellish.test(t.replace(/control plane path exists/g, ""))
     && procCalls.length > 0 && procCalls.every((c) => c === "docker" || c === "git")
     && DOCKER_CMDS.every((c) => t.includes(c))
+    && t.includes("&& tmpfsOk(hc.Tmpfs)") && t.includes('JSON.stringify(["/run", "/tmp"])')
+    && t.includes('(modes[0] === "mode=0755" || modes[0] === "mode=755")')
+    && t.includes('uids[0] === "uid=65532"') && t.includes('gids[0] === "gid=65532"')
     && t.includes('const COMPOSE = "infra/lemtel-edge-phase12-closed/docker-compose.closed.yml";')
     && t.includes('const IMAGE = "lemtel-edge-phase12-closed:local";')
     && t.includes('const EXPECTED_STATUS = "SIP/2.0 503 Lemtel Edge disabled";')

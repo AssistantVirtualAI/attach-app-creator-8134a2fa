@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lemtel-staging-admission/staging-admission-request-v1",
+  "title": "Lemtel staging admission request v1 (offline, non-executable)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "request_id",
+    "evidence_ref",
+    "checks"
+  ],
+  "properties": {
+    "kind": {
+      "const": "staging_admission"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]{7,63}$"
+    },
+    "evidence_ref": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]{7,63}$"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dedicated_vps_hardened",
+        "key_only_ssh_verified",
+        "firewall_ssh_only_verified",
+        "weekly_hostinger_backup_enabled",
+        "fresh_prechange_snapshot_created",
+        "external_encrypted_backup_approved",
+        "offserver_restore_test_passed",
+        "monitoring_owner_named",
+        "logs_retention_approved",
+        "secrets_owner_named",
+        "private_dns_and_tls_approved",
+        "pbx_integration_approved",
+        "all_edge_gates_false"
+      ],
+      "properties": {
+        "dedicated_vps_hardened": {
+          "type": "boolean"
+        },
+        "key_only_ssh_verified": {
+          "type": "boolean"
+        },
+        "firewall_ssh_only_verified": {
+          "type": "boolean"
+        },
+        "weekly_hostinger_backup_enabled": {
+          "type": "boolean"
+        },
+        "fresh_prechange_snapshot_created": {
+          "type": "boolean"
+        },
+        "external_encrypted_backup_approved": {
+          "type": "boolean"
+        },
+        "offserver_restore_test_passed": {
+          "type": "boolean"
+        },
+        "monitoring_owner_named": {
+          "type": "boolean"
+        },
+        "logs_retention_approved": {
+          "type": "boolean"
+        },
+        "secrets_owner_named": {
+          "type": "boolean"
+        },
+        "private_dns_and_tls_approved": {
+          "type": "boolean"
+        },
+        "pbx_integration_approved": {
+          "type": "boolean"
+        },
+        "all_edge_gates_false": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lemtel-staging-admission/staging-admission-evidence-v1",
+  "title": "Lemtel staging admission evidence v1 (offline, enum states only)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "request_id",
+    "evidence_ref",
+    "evidence"
+  ],
+  "properties": {
+    "kind": {
+      "const": "staging_admission_evidence"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]{7,63}$"
+    },
+    "evidence_ref": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]{7,63}$"
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dedicated_vps_hardened",
+        "key_only_ssh_verified",
+        "firewall_ssh_only_verified",
+        "weekly_hostinger_backup_enabled",
+        "fresh_prechange_snapshot_created",
+        "external_encrypted_backup_approved",
+        "offserver_restore_test_passed",
+        "monitoring_owner_named",
+        "logs_retention_approved",
+        "secrets_owner_named",
+        "private_dns_and_tls_approved",
+        "pbx_integration_approved",
+        "all_edge_gates_false"
+      ],
+      "properties": {
+        "dedicated_vps_hardened": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "key_only_ssh_verified": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "firewall_ssh_only_verified": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "weekly_hostinger_backup_enabled": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "fresh_prechange_snapshot_created": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "external_encrypted_backup_approved": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "offserver_restore_test_passed": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "monitoring_owner_named": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "logs_retention_approved": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "secrets_owner_named": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "private_dns_and_tls_approved": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "pbx_integration_approved": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        },
+        "all_edge_gates_false": {
+          "enum": [
+            "not_provided",
+            "verified",
+            "rejected"
+          ]
+        }
+      }
+    }
+  }
+}

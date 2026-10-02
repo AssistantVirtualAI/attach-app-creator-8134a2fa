@@ -1,0 +1,38 @@
+{
+  "policy_version": "staging_admission_policy_v1",
+  "offline_only": true,
+  "deployment_allowed": false,
+  "runtime_allowed": false,
+  "persistent_data_allowed": false,
+  "secrets_allowed": false,
+  "network_allowed": false,
+  "allowed_decisions": [
+    "denied",
+    "admitted"
+  ],
+  "default_decision": "denied",
+  "current_decision": "denied",
+  "current_reason_codes": [
+    "unmet_fresh_prechange_snapshot_created",
+    "unmet_monitoring_owner_named",
+    "unmet_logs_retention_approved",
+    "unmet_secrets_owner_named",
+    "unmet_private_dns_and_tls_approved",
+    "unmet_pbx_integration_approved"
+  ],
+  "prerequisites": {
+    "dedicated_vps_hardened": true,
+    "key_only_ssh_verified": true,
+    "firewall_ssh_only_verified": true,
+    "weekly_hostinger_backup_enabled": true,
+    "fresh_prechange_snapshot_created": false,
+    "external_encrypted_backup_approved": true,
+    "offserver_restore_test_passed": true,
+    "monitoring_owner_named": false,
+    "logs_retention_approved": false,
+    "secrets_owner_named": false,
+    "private_dns_and_tls_approved": false,
+    "pbx_integration_approved": false,
+    "all_edge_gates_false": true
+  }
+}

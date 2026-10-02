@@ -500,7 +500,7 @@ Deno.serve(async (req) => {
             body: hasRecording
               ? "L’enregistrement, le résumé AVA et le dossier Maestro sont prêts."
               : "Le résumé AVA et le dossier Maestro sont prêts.",
-            category: "call",
+            category: "ai",
             deep_link: `/mplanipret/calls?call_id=${encodeURIComponent(String(call_id))}`,
             data: { type: "call", call_id, maestro_synced: true, recording_available: hasRecording },
             idempotency_key: `post_call_ready:${call_id}`,

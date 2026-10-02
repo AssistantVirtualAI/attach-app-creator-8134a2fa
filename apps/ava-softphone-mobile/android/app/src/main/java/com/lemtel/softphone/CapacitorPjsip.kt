@@ -204,7 +204,7 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun startSipService(call: PluginCall) {
-        // Foreground helper only: accepts no credentials, host, port or extension.
+        // Foreground helper only: takes no SIP account data of any kind.
         try {
             SipConnectionService.start(context)
             call.resolve(readSipServiceStatus().apply { put("ok", true) })

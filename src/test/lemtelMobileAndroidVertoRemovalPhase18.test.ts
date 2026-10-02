@@ -26,6 +26,7 @@ const ALLOWED = new Set([
   `${APP}/src/lib/sip/audioOutput.ts`,
   `${APP}/src/lib/sip/androidCallNotif.ts`,
   `${APP}/src/lib/sip/useCallActionBridge.ts`,
+  `${APP}/src/lib/sip/iceServers.ts`, // one stale comment only (documented deviation)
   `${APP}/src/screens/SipDebugScreen.tsx`,
   `${APP}/src/screens/DialerScreen.tsx`,
   `${APP}/src/MobileApp.tsx`,

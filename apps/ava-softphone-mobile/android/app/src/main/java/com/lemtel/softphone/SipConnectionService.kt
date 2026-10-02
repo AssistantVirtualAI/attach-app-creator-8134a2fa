@@ -29,7 +29,7 @@ import androidx.core.app.ServiceCompat
  *
  * Responsibilities:
  *  - foreground lifecycle + WakeLock / WifiLock
- *  - persistent low-priority notification (no "registered" claim)
+ *  - persistent low-priority notification (never claims a SIP state)
  *  - incoming-call notification + ringtone, ongoing-call notification
  *  - stop the ringtone when a notification action is relayed to JS
  *  - service-health snapshot for diagnostics only

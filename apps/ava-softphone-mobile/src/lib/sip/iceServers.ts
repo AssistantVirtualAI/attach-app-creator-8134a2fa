@@ -48,7 +48,7 @@ function resolveHostToIp(servers: RTCIceServer[]): RTCIceServer[] {
 }
 
 export async function fetchIceServers(): Promise<RTCIceServer[]> {
-  // Android uses JsSIP over WSS (migrated from Verto) and requires ICE
+  // Android uses JsSIP over WSS and requires ICE
   // servers for NAT traversal — do NOT skip on Android.
   if (cache && Date.now() - cache.at < TTL_MS) return cache.servers;
   try {

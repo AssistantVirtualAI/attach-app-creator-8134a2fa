@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "lemtel_planipret_protected_paths_v1",
+  "mode": "deny",
+  "protectedPathPrefixes": [
+    "apps/planipret-mobile/",
+    "src/pages/planipret/",
+    "src/components/planipret/",
+    "src/lib/planipret/",
+    "src/hooks/useMplanipretSoftphone.ts"
+  ],
+  "protectedPathPatterns": [
+    "**/planipret/**",
+    "**/*planipret*",
+    "**/PpPjsip/**",
+    "**/PpSipKeepAlive/**",
+    "**/PpVoipCall/**"
+  ],
+  "lemtelAllowedRoots": [
+    "apps/ava-softphone-mobile/",
+    "apps/ava-softphone-desktop/",
+    "src/pages/lemtel/",
+    "src/components/lemtel/",
+    "src/pages/telephony/",
+    "src/components/telephony/",
+    "supabase/functions/",
+    "infra/lemtel-",
+    "services/lemtel-",
+    "schemas/lemtel-",
+    "docs/lemtel-",
+    "scripts/verify-lemtel-",
+    "src/test/lemtel"
+  ],
+  "policy": "Lemtel changes must never modify Planipret. Any genuine shared-code change requires a separately written, explicitly approved compatibility phase with both products tested. No bulk source copy is allowed."
+}

@@ -461,6 +461,22 @@ async function processEvent(event: any) {
         console.warn("[ns-webhook] CDR ignored: broker owner or CDR id unresolved", { cdr_id: cdrId, candidates: cdrExtensions });
       }
 
+      // Missed inbound call → lock-screen alert (gated by notif_missed_call).
+      const talk = Number(data["call-talking-duration-seconds"] ?? data.duration ?? data.duration_seconds ?? 0);
+      const dir = normalizeCallDirection(data.direction ?? data["call-direction"]) ?? existing?.direction ?? null;
+      const ownerUid = userId ?? null;
+      if (ownerUid && dir === "inbound" && !(talk > 0)) {
+        const from = String(data.from_number ?? data.caller_number ?? data.from ?? data["call-orig-from-user"] ?? "Inconnu");
+        sendPush(ownerUid, {
+          title: "📵 Appel manqué",
+          body: from,
+          category: "missed_call",
+          data: { url: "/mplanipret/calls" },
+          deep_link: "/mplanipret/calls",
+          idempotency_key: `missed_call:${cdrId ?? parentCallId ?? origCallId ?? identities[0]}`,
+        });
+      }
+
       const authH = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
       // Resolve the local UUID and enter the single consent-aware orchestrator.
       // It returns `consent_pending` without fetching audio, invoking AI or
@@ -538,6 +554,7 @@ async function processEvent(event: any) {
         runBackground("Android incoming-call push", sendAndroidCallPush(userId, inboundPushPayload));
         sendPush(userId, {
           title: "📞 Appel entrant",
+          category: "call",
           body: data.from_number ?? data.from ?? "Inconnu",
           data: { url: "/mplanipret/calls", call_id: callId },
           actions: [{ action: "answer", title: "Répondre" }],
@@ -590,6 +607,7 @@ async function processEvent(event: any) {
       if (brokerProfile?.notif_sms !== false) {
         sendPush(userId, {
           title: `💬 ${data.from_number ?? data.from ?? "SMS"}`,
+          category: "sms",
           body: String(data.body ?? data.message ?? "").slice(0, 140),
           data: { url: "/mplanipret/messages" },
           idempotency_key: `inbound_sms:${messageId}`,
@@ -618,6 +636,7 @@ async function processEvent(event: any) {
       if (brokerProfile?.notif_voicemails !== false) {
         sendPush(userId, {
           title: "📬 Nouveau voicemail",
+          category: "voicemail",
           body: `De ${data.from_number ?? data.from ?? "inconnu"}`,
           data: { url: "/mplanipret/voicemail" },
           actions: [{ action: "listen", title: "Écouter" }],

@@ -1,0 +1,338 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lemtel-client-config-manifest-v1",
+  "title": "Lemtel client configuration manifest v1 (offline, non-executable)",
+  "description": "Opaque references, revisions, enums and booleans only. No endpoint, credential, contact or call data is permitted. Capability labels such as 'ready' or 'requires_user_confirmation' are configuration labels only: they do not send SMS, place a call, provision SSO or create a network connection.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "identity",
+    "access",
+    "revision",
+    "device",
+    "telephonyPolicy",
+    "routing",
+    "capabilities",
+    "observability"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "lemtel_client_config_manifest_v1"
+    },
+    "identity": {
+      "type": "object",
+      "description": "Opaque identity references.",
+      "additionalProperties": false,
+      "required": [
+        "organizationRef",
+        "domainRef",
+        "extensionRef",
+        "userRef",
+        "privacyScope"
+      ],
+      "properties": {
+        "organizationRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "domainRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "extensionRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "userRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "privacyScope": {
+          "const": "own_extension_only"
+        }
+      }
+    },
+    "access": {
+      "type": "object",
+      "description": "Capability/configuration reference only; not a live SSO implementation.",
+      "additionalProperties": false,
+      "required": [
+        "mobileEnabled",
+        "desktopEnabled",
+        "accountState",
+        "signInMode"
+      ],
+      "properties": {
+        "mobileEnabled": {
+          "type": "boolean"
+        },
+        "desktopEnabled": {
+          "type": "boolean"
+        },
+        "accountState": {
+          "type": "string",
+          "enum": [
+            "active",
+            "suspended",
+            "disabled"
+          ]
+        },
+        "signInMode": {
+          "type": "string",
+          "enum": [
+            "portal_password",
+            "microsoft_sso",
+            "portal_password_or_microsoft_sso"
+          ]
+        }
+      }
+    },
+    "revision": {
+      "type": "object",
+      "description": "Manifest revision and lifetime.",
+      "additionalProperties": false,
+      "required": [
+        "manifestRevision",
+        "issuedAt",
+        "expiresAt",
+        "refreshMode",
+        "revocationBehavior"
+      ],
+      "properties": {
+        "manifestRevision": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "issuedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+        },
+        "expiresAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+        },
+        "refreshMode": {
+          "type": "string",
+          "enum": [
+            "foreground_and_revision_check",
+            "manual_only",
+            "disabled"
+          ]
+        },
+        "revocationBehavior": {
+          "type": "string",
+          "enum": [
+            "stop_sip_and_clear_local_session",
+            "require_reauthentication"
+          ]
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "description": "Device approval state.",
+      "additionalProperties": false,
+      "required": [
+        "deviceRef",
+        "deviceState",
+        "deviceRevision",
+        "deviceAction"
+      ],
+      "properties": {
+        "deviceRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "deviceState": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "pending",
+            "revoked"
+          ]
+        },
+        "deviceRevision": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "deviceAction": {
+          "type": "string",
+          "enum": [
+            "none",
+            "refresh_required",
+            "revoke_required"
+          ]
+        }
+      }
+    },
+    "telephonyPolicy": {
+      "type": "object",
+      "description": "Policy labels; credentials are delivered by a separate authenticated server flow.",
+      "additionalProperties": false,
+      "required": [
+        "credentialRevisionRef",
+        "dndState",
+        "forwardingState",
+        "recordingPolicy",
+        "voicemailPolicy",
+        "callsPrivacyScope",
+        "recordingsPrivacyScope",
+        "voicemailPrivacyScope",
+        "transcriptsPrivacyScope"
+      ],
+      "properties": {
+        "credentialRevisionRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "dndState": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "forwardingState": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "recordingPolicy": {
+          "type": "string",
+          "enum": [
+            "not_allowed",
+            "user_allowed",
+            "portal_managed"
+          ]
+        },
+        "voicemailPolicy": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        "callsPrivacyScope": {
+          "const": "own_extension_only"
+        },
+        "recordingsPrivacyScope": {
+          "const": "own_extension_only"
+        },
+        "voicemailPrivacyScope": {
+          "const": "own_extension_only"
+        },
+        "transcriptsPrivacyScope": {
+          "const": "own_extension_only"
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "description": "Safe routing state only; never endpoint data.",
+      "additionalProperties": false,
+      "required": [
+        "routingMode",
+        "routingAssignmentRef",
+        "fallbackMode",
+        "edgeFeatureGate"
+      ],
+      "properties": {
+        "routingMode": {
+          "type": "string",
+          "enum": [
+            "direct_current",
+            "edge_not_authorized",
+            "edge_not_ready",
+            "edge_denied",
+            "edge_assigned"
+          ]
+        },
+        "routingAssignmentRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "fallbackMode": {
+          "const": "direct_current"
+        },
+        "edgeFeatureGate": {
+          "const": false
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "Configuration labels only; nothing here is executable.",
+      "additionalProperties": false,
+      "required": [
+        "maestroSyncState",
+        "avaCallActionState",
+        "avaSmsActionState",
+        "microsoftSsoState"
+      ],
+      "properties": {
+        "maestroSyncState": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "not_ready",
+            "ready"
+          ]
+        },
+        "avaCallActionState": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "not_ready",
+            "requires_user_confirmation"
+          ]
+        },
+        "avaSmsActionState": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "not_ready",
+            "requires_user_confirmation"
+          ]
+        },
+        "microsoftSsoState": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "not_ready",
+            "ready"
+          ]
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "description": "Diagnostic settings only; no diagnostic content.",
+      "additionalProperties": false,
+      "required": [
+        "diagnosticLevel",
+        "redactionPolicyRef",
+        "supportBundleAllowed"
+      ],
+      "properties": {
+        "diagnosticLevel": {
+          "type": "string",
+          "enum": [
+            "off",
+            "error_only",
+            "standard"
+          ]
+        },
+        "redactionPolicyRef": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "supportBundleAllowed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "lemtel_client_config_policy_v1",
+  "defaultPrivacyScope": "own_extension_only",
+  "extensionAdminBypassAllowed": false,
+  "privateCallDataCrossExtensionAllowed": false,
+  "recordingAudioCrossExtensionAllowed": false,
+  "transcriptCrossExtensionAllowed": false,
+  "credentialDelivery": "separate_authenticated_server_flow",
+  "directRouteIsCurrentDefault": true,
+  "edgeRouteEnabled": false,
+  "vertoAllowed": false,
+  "speakerAutoEnableAllowed": false,
+  "backgroundRefreshMinimumIntervalSeconds": 900,
+  "repeatedFullPageReloadAllowed": false,
+  "aiDuplicateProcessingAllowed": false,
+  "maestroEventsExecutable": false,
+  "avaActionsExecutable": false
+}

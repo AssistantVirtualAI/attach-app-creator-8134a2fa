@@ -6,6 +6,8 @@ import process from "node:process";
 
 // Static, offline verifier. The only process run is local Git inspection.
 export const BASE = "e224f5449";
+export const PHASE14_BASE = BASE;
+export const PHASE14_END = "56af2db13";
 const USAGE = "P14_USAGE: [--base=e224f5449]";
 const DRAFT = "ht" + "tps://json-schema.org/draft/2020-12/schema";
 const DIR = "schemas/lemtel-staging-admission";
@@ -17,9 +19,7 @@ export const DOC = "docs/lemtel-staging-admission/phase-14-0-offline-admission.m
 export const THREAT = "docs/lemtel-staging-admission/phase-14-0-threat-model.md";
 export const SELF = "scripts/verify-lemtel-staging-admission-phase14.mjs";
 export const TEST = "src/test/lemtelStagingAdmissionPhase14.test.ts";
-export const DECISIONS_DOC = "docs/lemtel-staging-admission/phase-14-2-governance-decisions.md";
-export const EMAIL_DOC = "docs/lemtel-staging-admission/lemtel_email_kenny_phil_fusionpbx_staging_request.md";
-export const ALLOWED = [REQUEST, DECISION, EVIDENCE, POLICY, DOC, THREAT, SELF, TEST, DECISIONS_DOC, EMAIL_DOC];
+export const ALLOWED = [REQUEST, DECISION, EVIDENCE, POLICY, DOC, THREAT, SELF, TEST];
 export const NON_DOC = [REQUEST, DECISION, EVIDENCE, POLICY, SELF, TEST];
 export const GATES_FILE = "infra/lemtel-edge/policy/edge-feature-gates.yaml";
 export const GATES = ["edge_enabled", "sip_registration_enabled", "sip_proxy_enabled", "rtp_relay_enabled", "fusionpbx_upstream_enabled", "control_plane_events_enabled", "push_invite_events_enabled", "recording_enabled", "transcoding_enabled", "media_forking_enabled"];
@@ -153,25 +153,32 @@ export function checkDocs(doc, threat) {
 }
 
 const realGit = (root, args) => { try { return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch { return null; } };
-export function changedPaths(root, base) {
-  const git = realGit;
-  const d = git(root, ["diff", "--name-only", "--no-renames", base]);
-  const u = git(root, ["ls-files", "--others", "--exclude-standard"]);
-  if (d === null || u === null) return null;
-  return [...new Set([...d.split("\n"), ...u.split("\n")].map((x) => x.trim()).filter(Boolean))].sort();
+// Frozen historical range: changed paths over base..end, never compared to HEAD.
+export function historicalPaths(root, base, end) {
+  const d = realGit(root, ["diff", "--name-only", "--no-renames", base, end]);
+  if (d === null) return null;
+  return [...new Set(d.split("\n").map((x) => x.trim()).filter(Boolean))].sort();
+}
+export function untrackedPaths(root) {
+  const u = realGit(root, ["ls-files", "--others", "--exclude-standard"]);
+  return u === null ? null : u.split("\n").map((x) => x.trim()).filter(Boolean);
 }
 
 export function verify(args, root = process.cwd(), opts = {}) {
   if (args.length > 1 || (args.length === 1 && args[0] !== `--base=${BASE}`)) return { code: 2, stdout: USAGE + "\n" };
-  const base = opts.base ?? BASE;
+  const base = opts.base ?? PHASE14_BASE;
+  const end = opts.end ?? PHASE14_END;
   const git = realGit;
   const f = [];
   const rd = (p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return null; } };
   const js = (p) => { try { return JSON.parse(rd(p)); } catch { return null; } };
   if (!ALLOWED.every((p) => existsSync(join(root, p)))) f.push("P14_PATHS_EXIST");
-  if (git(root, ["cat-file", "-t", base]) === null) f.push("P14_BASE_MISSING");
-  const ch = changedPaths(root, base);
-  if (!ch || !eq(ch, [...ALLOWED].sort())) f.push("P14_SCOPE_EXACT");
+  const bt = git(root, ["cat-file", "-t", base]), et = git(root, ["cat-file", "-t", end]);
+  if (bt === null || bt.trim() !== "commit") f.push("P14_BASE_MISSING");
+  if (et === null || et.trim() !== "commit") f.push("P14_END_MISSING");
+  if (git(root, ["merge-base", "--is-ancestor", base, end]) === null) f.push("P14_RANGE_ORDER");
+  const ch = historicalPaths(root, base, end), un = untrackedPaths(root);
+  if (!ch || !eq(ch, [...ALLOWED].sort()) || !un || un.length !== 0) f.push("P14_SCOPE_EXACT");
   const rq = js(REQUEST), dc = js(DECISION), ev = js(EVIDENCE), po = js(POLICY);
   if (!rq || !checkRequestSchema(rq)) f.push("P14_REQUEST_SCHEMA");
   if (!dc || !checkDecisionSchema(dc)) f.push("P14_DECISION_SCHEMA");
@@ -182,7 +189,7 @@ export function verify(args, root = process.cwd(), opts = {}) {
     if (decisionConsistent(dc, admitted, po.prerequisites || {})) f.push("P14_ADMITTED_REJECTED");
   }
   const g = rd(GATES_FILE);
-  const gd = git(root, ["diff", "--name-only", base, "--", GATES_FILE]);
+  const gd = git(root, ["diff", "--name-only", base, end, "--", GATES_FILE]);
   if (!g || !gatesAllFalse(g) || gd === null || gd.trim() !== "") f.push("P14_GATES_FALSE_UNCHANGED");
   for (const p of NON_DOC) { const t = rd(p); if (t === null || !checkCapabilities(p, t)) { f.push("P14_NO_RUNTIME_CAPABILITY"); break; } }
   const d1 = rd(DOC), d2 = rd(THREAT);

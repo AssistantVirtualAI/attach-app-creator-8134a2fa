@@ -81,6 +81,26 @@ describe("Lemtel Phase 17 — offline configuration lifecycle", () => {
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   });
 
+  it("Phase 17.1 hardening: ref format, ownership binding, affected-row checks, no raw IDs in manifest", () => {
+    for (const p of FILES) expect(fs.existsSync(path.join(root, p)), p).toBe(true);
+    expect(rd(SQL)).toContain("CONSTRAINT lemtel_ccd_device_ref_format_check CHECK (device_ref ~ '^dev_[0-9a-f]{32}$')");
+    expect(rd(SQL)).toContain("DEFAULT ('dev_' || replace(gen_random_uuid()::text, '-', ''))");
+    const s = rd(FN);
+    const cols = s.match(/DEVICE_COLUMNS = "([^"]+)"/)![1].split(",");
+    for (const c of ["organization_id", "user_id", "softphone_user_id"]) expect(cols).toContain(c);
+    const own = s.slice(s.indexOf("const a = account as Account;"));
+    const bind = '.eq("organization_id", a.organization_id).eq("softphone_user_id", a.id)';
+    const lines = own.split("\n").filter((l) => l.includes('.eq("user_id", userId)'));
+    expect(lines.length).toBeGreaterThanOrEqual(5);
+    for (const l of lines) expect(l, l.trim()).toContain(bind);
+    expect((s.match(/\.update\(/g) ?? []).length).toBe(4);
+    expect((s.match(/\.select\("id"\)\.maybeSingle\(\)/g) ?? []).length).toBe(4);
+    expect((s.match(/if \(!mutationApplied\(/g) ?? []).length).toBe(4);
+    const man = s.slice(s.indexOf("export async function buildManifest"), s.indexOf("export function mutationApplied"));
+    for (const raw of ["d.id", "d.organization_id", "d.user_id", "d.softphone_user_id", "organization_id:", "user_id:", "softphone_user_id:"]) expect(man, raw).not.toContain(raw);
+    expect(s).not.toMatch(/respond\(\{[^}]*(organization_id|user_id|softphone_user_id|device_ref)/);
+  });
+
   it("real repository worktree is unchanged", () => {
     const st = () => execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" });
     const before = st();

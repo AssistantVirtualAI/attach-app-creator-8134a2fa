@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS public.lemtel_client_config_devices (
   CONSTRAINT lemtel_ccd_platform_check CHECK (platform IN ('mobile', 'desktop')),
   CONSTRAINT lemtel_ccd_state_check CHECK (state IN ('approved', 'pending', 'revoked')),
   CONSTRAINT lemtel_ccd_revision_check CHECK (revision > 0),
+  CONSTRAINT lemtel_ccd_device_ref_format_check CHECK (device_ref ~ '^dev_[0-9a-f]{32}$'),
   CONSTRAINT lemtel_ccd_hash_check CHECK (installation_ref_hash ~ '^[0-9a-f]{64}$')
 );
 

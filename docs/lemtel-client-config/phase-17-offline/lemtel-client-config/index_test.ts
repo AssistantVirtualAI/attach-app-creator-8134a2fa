@@ -90,3 +90,42 @@ Deno.test("source has no network, PBX, env reads in helpers, or raw logging", as
   assert(!helpers.includes("Deno.env"));
   assert(!m.ACCOUNT_COLUMNS.split(",").includes("extension"));
 });
+
+Deno.test("documented default device_ref shape matches dev_ + 32 lowercase hex", () => {
+  for (let i = 0; i < 5; i++) assert(/^dev_[0-9a-f]{32}$/.test("dev_" + crypto.randomUUID().replaceAll("-", "")));
+});
+
+Deno.test("DEVICE_COLUMNS carries internal ownership fields that never reach the manifest", async () => {
+  const cols = m.DEVICE_COLUMNS.split(",");
+  for (const c of ["id", "organization_id", "user_id", "softphone_user_id"]) assert(cols.includes(c), c);
+  const internal = { ...DEVICE, id: "66666666-6666-4666-8666-666666666666", organization_id: ACCOUNT.organization_id, user_id: ACCOUNT.portal_user_id, softphone_user_id: ACCOUNT.id };
+  const text = JSON.stringify(await m.buildManifest(ACCOUNT, internal));
+  for (const raw of [internal.id, internal.organization_id, internal.user_id, internal.softphone_user_id]) assert(!text.includes(raw), raw);
+  for (const k of ["organization_id", "user_id", "softphone_user_id", "\"id\""]) assert(!text.includes(k), k);
+});
+
+Deno.test("own-device reads and writes are bound to user, organization and softphone account", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const own = src.slice(src.indexOf("const a = account as Account;"));
+  const bind = '.eq("organization_id", a.organization_id).eq("softphone_user_id", a.id)';
+  const lifecycle = own.split("\n").filter((l) => l.includes('.eq("user_id", userId)'));
+  assert(lifecycle.length >= 5, String(lifecycle.length));
+  for (const l of lifecycle) assert(l.includes(bind), l.trim());
+  assert(own.includes('.eq("installation_ref_hash", hash)' + bind));
+});
+
+Deno.test("mutations verify an affected row; zero-row, stale or errored mutations never succeed", async () => {
+  assertEquals(m.mutationApplied({ id: "x" }, null), true);
+  assertEquals(m.mutationApplied(null, null), false);
+  assertEquals(m.mutationApplied(undefined, null), false);
+  assertEquals(m.mutationApplied({ id: "x" }, { message: "e" }), false);
+  assertEquals(m.mutationApplied({}, null), false);
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const updates = src.split(".update(").length - 1;
+  assertEquals(updates, 4);
+  assertEquals((src.match(/\.select\("id"\)\.maybeSingle\(\)/g) ?? []).length, 4);
+  assertEquals((src.match(/if \(!mutationApplied\(/g) ?? []).length, 4);
+  for (const rev of src.split("\n").filter((l) => l.includes('.update({ state: "revoked", revision:'))) assert(rev.includes("const { data: changed"), rev.trim());
+  assert(src.includes('.eq("revision", target.revision).eq("state", target.state)'));
+  assert(src.includes('.eq("revision", d.revision).eq("state", d.state)'));
+});

@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "f23191c71";
+const PHASE16_END = "0f95bbbce";
 const SCHEMA = "schemas/lemtel-client-config/lemtel-client-config-manifest-v1.schema.json";
 const POLICY = "schemas/lemtel-client-config/lemtel-client-config-policy-v1.json";
 const FILES = [SCHEMA, POLICY, "docs/lemtel-client-config/phase-16-portal-client-contract.md", "docs/lemtel-client-config/phase-16-threat-model.md", "src/test/lemtelClientConfigPhase16.test.ts"];
@@ -64,10 +65,14 @@ const policyOk = (p: any) => typeof p === "object" && p !== null
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 
 describe("Lemtel Phase 16 — portal-to-client configuration contract", () => {
-  it("only the five Phase 16 paths differ from the base, none Planiprêt-protected (permanent guard matcher)", async () => {
+  it("frozen range f23191c71..0f95bbbce contains exactly the five Phase 16 paths, none Planiprêt-protected", async () => {
     const { isProtected } = await guard();
-    const paths = changed(root, BASE);
-    expect(paths.every((p) => FILES.includes(p)), paths.join(",")).toBe(true);
+    for (const c of [BASE, PHASE16_END]) expect(git(root, "cat-file", "-t", c).trim(), `commit ${c} must exist`).toBe("commit");
+    let ancestor = true;
+    try { git(root, "merge-base", "--is-ancestor", BASE, PHASE16_END); } catch { ancestor = false; }
+    expect(ancestor, "BASE must be an ancestor of PHASE16_END").toBe(true);
+    const paths = git(root, "diff", "--name-only", "--no-renames", BASE, PHASE16_END).split("\n").map((x) => x.trim()).filter(Boolean).sort();
+    expect(paths).toEqual([...FILES].sort());
     expect(paths.some(isProtected)).toBe(false);
   });
 

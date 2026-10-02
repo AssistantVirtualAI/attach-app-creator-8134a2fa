@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "f549747ff";
+const PHASE11_END = "22ccf4b2e";
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 const load = async () => import(/* @vite-ignore */ pathToFileURL(path.join(root, "scripts/verify-lemtel-edge-phase11.mjs")).href);
 
@@ -83,6 +84,14 @@ describe("Lemtel Edge phase 11 — closed local runtime admission", () => {
     const m = await load();
     expect(m.ALLOWED).toHaveLength(6);
     expect(m.classify(m.ALLOWED)).toEqual([]);
+    expect(m.PHASE11_BASE).toBe(BASE);
+    expect(m.PHASE11_END).toBe(PHASE11_END);
+    const h = m.historicalScope(root);
+    expect(h.ok, "f549747ff and 22ccf4b2e must exist locally, base ancestor of end").toBe(true);
+    expect([...h.changed].sort()).toEqual([...m.ALLOWED].sort());
+    expect(m.classify(h.changed)).toEqual([]);
+    expect(m.classify(["docs/lemtel-edge/phase-12-later.md"])).toContain("P11_SCOPE_EXACT");
+    expect(m.ALLOWED).not.toContain("docs/lemtel-edge/phase-12-later.md");
     expect(m.classify(["schemas/lemtel-edge/cutover/cutover-policy.json"])).toContain("P11_EDGE_FROZEN");
     expect(m.classify(["scripts/verify-lemtel-edge-phase6.mjs"])).toContain("P11_EDGE_FROZEN");
     expect(m.classify(["services/lemtel-" + "control-plane/src/routes/policy-evaluation.ts"])).toContain("P11_CONTROL_PLANE_FROZEN");

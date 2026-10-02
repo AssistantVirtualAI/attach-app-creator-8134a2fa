@@ -1,30 +1,61 @@
-# Email draft — FusionPBX staging technical-information request
+# Email draft — Lemtel self-hosted staging
 
 To: Kenny; Phil
-Subject: Lemtel staging — FusionPBX technical information request (no credentials needed)
+Subject: Lemtel self-hosted staging — confirmation required for the new integration layer
 
 ---
 
 Hi Kenny, hi Phil,
 
-We are preparing an isolated staging environment for the Lemtel telephony stack. Before anything is connected, we need a written description of the current FusionPBX setup so we can draft an integration contract for your review. Nothing will be connected or changed at this stage.
+A quick status and a narrow request.
 
-Please do NOT send passwords, API keys, tokens, or any credentials. We only need descriptive information.
+## Where things stand today
 
-Could you tell us:
+- Lemtel is already connected to FusionPBX today.
+- The production architecture already uses an authenticated server-side FusionPBX v7 API proxy for tenant administration, extension/device management, CDRs, voicemail, recordings, registration status, call controls and synchronisation.
+- The existing desktop and browser softphones obtain user-scoped SIP credentials from the Lemtel backend and register directly to the existing secure WSS/SIP service.
+- The existing direct route remains active and unchanged.
+- The Hostinger staging infrastructure is separate and is not connected to FusionPBX, DNS, client traffic or production calling.
 
-1. **FusionPBX version and topology** — which version is running, how many servers, and whether there is a separate database server.
-2. **Domains and tenants** — how domains/tenants are organized today, and how a new tenant is normally created.
-3. **Extensions and devices** — how extensions are provisioned (manually, by script, by API), and which device types are in use.
-4. **DID routing** — how incoming phone numbers are routed to destinations, and who manages those routes.
-5. **SIP trunks and carriers** — which carriers are configured, and how trunks are authenticated (registration vs IP-based), described without secrets.
-6. **Recording and retention** — whether calls are recorded, where recordings are stored, and how long they are kept.
-7. **Backup and restore** — how the FusionPBX servers are backed up today, and whether a restore has been tested.
-8. **Change process** — who approves configuration changes, and how changes are normally applied and rolled back.
-9. **Monitoring** — what monitoring exists today (service health, call failures, disk space), and who receives alerts.
-10. **Staging options** — whether a separate FusionPBX instance or a dedicated test tenant is possible for staging, and what you would recommend.
+## Preparation already completed
 
-Once we have your answers, we will draft a written integration design and send it back to you for approval before any technical work begins.
+- The existing Lemtel apps, portal, direct route and Planiprêt were preserved.
+- Offline tenant, device, routing, credential, provisioning, rollback and PBX-adapter contracts were created.
+- An inert local Edge test was validated with no external egress, no PBX, no Control Plane, no media relay and no enabled gate.
+- The dedicated staging VPS was hardened: non-root key-only administration, firewall, security updates, Docker, weekly provider backups and a fresh-pre-change-snapshot procedure.
+- A separate encrypted off-server backup target and a recovery test were prepared.
+- A monitoring owner, a log-retention decision and a secrets owner were defined. The staging admission policy remains denied.
 
-Thanks,
-Mohamad
+## What we need from you — written approvals/decisions only
+
+1. Approval for a **separate least-privilege non-production service account** to use the established FusionPBX v7 REST/API model from the future staging adapter.
+2. A dedicated non-production domain/tenant, two test extensions, an optional test DID and a restricted test outbound dial plan, with no production customer data.
+3. The required network boundary for the new VPS: IP allowlisting, VPN, mTLS or another approved method; any allowed callbacks/events; and the emergency revocation/rollback procedure.
+4. Choice of first adapter scope:
+   - **Option A — data/provisioning only** (recommended): non-production tenant, extensions/devices, and authorised CDR/voicemail/recording metadata, while existing direct WSS/SIP calling remains unchanged.
+   - **Option B — future signaling/media pilot**: requires a separate design/security approval and is not part of this request.
+5. The approved non-production data scope for registration status, CDRs, voicemail, recordings and any events, including consent, retention, deletion, AI/transcript and access-control conditions.
+6. The PBX-side technical owner, the rollback contact and the non-production pilot acceptance criteria: registration, inbound/outbound calls, two-way audio, DTMF, hold, transfer, decline/hangup, voicemail behaviour and direct-route rollback.
+
+## Security rule
+
+Please do not send SIP passwords, API keys, SSH credentials, database credentials, private keys, production files or customer data by email. Any future staging credential will be created separately with least privilege and exchanged through an approved secure channel.
+
+## Next steps after your reply
+
+1. Document the approved non-production adapter contract against the existing integration.
+2. Keep existing applications and direct WSS/SIP unchanged.
+3. Prepare the staging configuration offline, with no credentials in Git, Lovable, email or client code.
+4. Obtain separate private DNS/TLS approval.
+5. Create a fresh Hostinger snapshot immediately before any approved deployment change.
+6. Privately deploy the Control Plane and validate health, monitoring, logs and encrypted backup recovery.
+7. Run a disabled Edge-only test with no PBX traffic.
+8. Connect only the explicitly approved non-production API/service account and validate revocation, audits and rollback.
+9. Conduct a two-extension staging test.
+10. Seek separate written approval before any signaling/media pilot, client routing change, customer migration, store release or production rollout.
+
+Thank you,
+
+Mohamad Hassoun
+AVA
+mhassoun@assistantvirtualai.com

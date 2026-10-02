@@ -10,7 +10,7 @@ Status: static record of governance decisions only. Nothing is deployed, started
 | Log retention | 30 days operational logs; 90 days security logs | Retention selected; implementation is not yet deployed |
 | Secrets owner | Mohamad Hassoun | Owner named; no runtime secret store or service secret created |
 | Fresh Hostinger snapshot | Create only immediately before an approved deployment change | Still false until the actual pre-change snapshot is created |
-| PBX method | Continue software preparation without connecting FusionPBX | Still false pending written FusionPBX design approval |
+| PBX method | Reuse the established server-side FusionPBX v7 API model only if Kenny and Phil approve a separate least-privilege non-production staging service account. | Still false pending written approval of the new staging boundary; the existing production integration remains unchanged. |
 | Private DNS and TLS | Not yet selected or approved | Still false; recommended future choice is a dedicated staging FQDN plus Caddy and automated Let's Encrypt TLS in a separately approved deployment phase |
 
 ## Effect on the admission policy
@@ -21,4 +21,4 @@ These decisions do not enable Docker workloads, ports, DNS, TLS, secrets, an Edg
 
 ## Next action
 
-Send the English technical-information request for Kenny and Phil: `docs/lemtel-staging-admission/lemtel_email_kenny_phil_fusionpbx_staging_request.md`. Their response will be transformed into an offline integration contract. No credentials or connection information may be pasted into Lovable, source control, or chat.
+Send the revised, narrow English request to Kenny and Phil: `docs/lemtel-staging-admission/lemtel_email_kenny_phil_fusionpbx_staging_request.md`. It seeks decisions about the new staging adapter only, not facts already established by the existing integration. Their responses must be converted into an offline contract; no credentials or connection data may be placed in Lovable, source control or chat.

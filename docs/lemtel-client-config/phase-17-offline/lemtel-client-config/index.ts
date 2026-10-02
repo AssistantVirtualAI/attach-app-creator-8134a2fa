@@ -67,11 +67,12 @@ export type Account = {
   app_access_enabled: boolean; mobile_access_enabled: boolean; desktop_access_enabled: boolean;
   account_status: string | null; dnd_enabled: boolean; forward_enabled: boolean; updated_at: string | null;
 };
-export type Device = { device_ref: string; state: "approved" | "pending" | "revoked"; revision: number; platform: Platform };
+// Internal ownership IDs (id, organization_id, user_id, softphone_user_id) are never placed in a response, manifest, error or log.
+export type Device = { device_ref: string; state: "approved" | "pending" | "revoked"; revision: number; platform: Platform; id?: string; organization_id?: string; user_id?: string; softphone_user_id?: string };
 
 // Only these columns are ever selected from the existing softphone account table.
 export const ACCOUNT_COLUMNS = "id,organization_id,domain_uuid,extension_id,portal_user_id,app_access_enabled,mobile_access_enabled,desktop_access_enabled,account_status,dnd_enabled,forward_enabled,updated_at";
-export const DEVICE_COLUMNS = "id,device_ref,state,revision,platform,organization_id,user_id";
+export const DEVICE_COLUMNS = "id,device_ref,state,revision,platform,organization_id,user_id,softphone_user_id";
 
 export function accessFailure(a: Account | null, platform?: Platform): Failure | null {
   if (!a) return fail("no_softphone_account", 404);
@@ -128,6 +129,11 @@ export async function buildManifest(a: Account, d: Device, now: Date = new Date(
   };
 }
 
+// Optimistic concurrency: a mutation succeeds only when exactly one row was returned and no error occurred.
+export function mutationApplied(data: unknown, error: unknown): boolean {
+  return !error && typeof data === "object" && data !== null && typeof (data as { id?: unknown }).id === "string";
+}
+
 // deno-lint-ignore no-explicit-any
 async function audit(admin: any, userId: string, orgId: string, action: string, meta: Record<string, unknown>) {
   try {
@@ -164,9 +170,9 @@ export async function handler(req: Request): Promise<Response> {
       }
       if (!allowed) return respond({ error: "forbidden" }, 403);
       if (target.state !== "revoked") {
-        const { error } = await admin.from("lemtel_client_config_devices").update({ state: "revoked", revision: target.revision + 1, revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq("id", target.id).eq("organization_id", target.organization_id).eq("revision", target.revision);
-        if (error) return respond({ error: "forbidden" }, 409);
+        const { data: changed, error } = await admin.from("lemtel_client_config_devices").update({ state: "revoked", revision: target.revision + 1, revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq("id", target.id).eq("organization_id", target.organization_id).eq("revision", target.revision).eq("state", target.state).select("id").maybeSingle();
+        if (!mutationApplied(changed, error)) return respond({ error: "forbidden" }, 409);
         await audit(admin, userId, target.organization_id, "revoke_device", { action: "revoke_device", platform: target.platform, state: "revoked", revision: target.revision + 1 });
       }
       return respond({ revoked: true, deviceAction: "revoke_required" });
@@ -180,7 +186,7 @@ export async function handler(req: Request): Promise<Response> {
 
     if (v.action === "register") {
       const hash = await sha256Hex(v.installationRef);
-      const { data: existing } = await admin.from("lemtel_client_config_devices").select(DEVICE_COLUMNS).eq("user_id", userId).eq("platform", v.platform).eq("installation_ref_hash", hash).maybeSingle();
+      const { data: existing } = await admin.from("lemtel_client_config_devices").select(DEVICE_COLUMNS).eq("user_id", userId).eq("platform", v.platform).eq("installation_ref_hash", hash).eq("organization_id", a.organization_id).eq("softphone_user_id", a.id).maybeSingle();
       const decision = resolveRegistration(existing as Device | null);
       if (decision === "revoked") return respond({ error: "device_revoked" }, 403);
       let device = existing as Device | null;
@@ -190,25 +196,29 @@ export async function handler(req: Request): Promise<Response> {
         device = created as Device;
         await audit(admin, userId, a.organization_id, "register", { action: "register", platform: v.platform, state: device.state, revision: device.revision });
       } else {
-        await admin.from("lemtel_client_config_devices").update({ last_seen_at: new Date().toISOString() }).eq("device_ref", (device as Device).device_ref).eq("user_id", userId);
+        const { data: seen, error: seenErr } = await admin.from("lemtel_client_config_devices").update({ last_seen_at: new Date().toISOString() })
+          .eq("device_ref", (device as Device).device_ref).eq("user_id", userId).eq("organization_id", a.organization_id).eq("softphone_user_id", a.id).neq("state", "revoked").select("id").maybeSingle();
+        if (!mutationApplied(seen, seenErr)) return respond({ error: "device_not_found" }, 409);
       }
       return respond(await buildManifest(a, device as Device));
     }
 
-    const { data: own } = await admin.from("lemtel_client_config_devices").select(DEVICE_COLUMNS).eq("device_ref", v.deviceRef).eq("user_id", userId).eq("platform", v.platform).maybeSingle();
+    const { data: own } = await admin.from("lemtel_client_config_devices").select(DEVICE_COLUMNS).eq("device_ref", v.deviceRef).eq("user_id", userId).eq("platform", v.platform).eq("organization_id", a.organization_id).eq("softphone_user_id", a.id).maybeSingle();
     if (!own) return respond({ error: "device_not_found" }, 404);
     const d = own as Device & { id: string; organization_id: string };
     if (d.state === "revoked") return respond({ error: "device_revoked" }, 403);
 
     if (v.action === "manifest") {
-      await admin.from("lemtel_client_config_devices").update({ last_seen_at: new Date().toISOString() }).eq("id", d.id).eq("user_id", userId);
+      const { data: seen, error: seenErr } = await admin.from("lemtel_client_config_devices").update({ last_seen_at: new Date().toISOString() })
+        .eq("id", d.id).eq("user_id", userId).eq("platform", v.platform).eq("organization_id", a.organization_id).eq("softphone_user_id", a.id).neq("state", "revoked").select("id").maybeSingle();
+      if (!mutationApplied(seen, seenErr)) return respond({ error: "device_not_found" }, 409);
       const m = await buildManifest(a, d);
       return m ? respond(m) : respond({ error: "device_revoked" }, 403);
     }
 
-    const { error } = await admin.from("lemtel_client_config_devices").update({ state: "revoked", revision: d.revision + 1, revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", d.id).eq("user_id", userId).eq("revision", d.revision);
-    if (error) return respond({ error: "device_not_found" }, 409);
+    const { data: changed, error } = await admin.from("lemtel_client_config_devices").update({ state: "revoked", revision: d.revision + 1, revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", d.id).eq("user_id", userId).eq("organization_id", a.organization_id).eq("softphone_user_id", a.id).eq("revision", d.revision).eq("state", d.state).select("id").maybeSingle();
+    if (!mutationApplied(changed, error)) return respond({ error: "device_not_found" }, 409);
     await audit(admin, userId, d.organization_id, "revoke_self", { action: "revoke_self", platform: v.platform, state: "revoked", revision: d.revision + 1 });
     return respond({ revoked: true, deviceAction: "revoke_required" });
   } catch (_e) {

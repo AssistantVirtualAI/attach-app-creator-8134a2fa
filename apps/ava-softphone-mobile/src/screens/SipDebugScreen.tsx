@@ -43,19 +43,6 @@ const KEEP = new Set([
   'probe.ok',
   'probe.fail',
   'sdp.fallback-rewritten',
-  'verto.connecting',
-  'verto.registered',
-  'verto.error',
-  'verto.disconnected',
-  'verto.incoming',
-  'verto.reconnect',
-  'verto.call.error',
-  'verto.native.status',
-  'verto.native.poll',
-  'verto.native.error',
-  'verto.disconnected.native-held',
-  'verto.app.background.native-hold',
-  'verto.app.foreground.sync',
 ]);
 
 function pad(n: number, l = 2) { return String(n).padStart(l, '0'); }

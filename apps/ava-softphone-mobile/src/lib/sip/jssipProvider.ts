@@ -35,15 +35,6 @@ export interface SIPConfig {
   transport?: string;
   /** Forces a clean registration cycle after credentials are refreshed. */
   refreshNonce?: string | number;
-  /**
-   * Verto WebSocket host for Android. If omitted, derived from `wssUrl`
-   * (same hostname, port replaced with `vertoPort`). Set explicitly when
-   * the Verto WS endpoint is on a different host than the JsSIP WSS endpoint.
-   * Example: "pbxnode.example.com"
-   */
-  vertoHost?: string;
-  /** Verto WebSocket port for Android. Defaults to 8082. */
-  vertoPort?: number;
 }
 
 export class JsSIPUnavailableError extends Error {

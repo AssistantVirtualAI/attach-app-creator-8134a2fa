@@ -14,6 +14,7 @@ import { showMobileToast } from '../lib/mobileToast';
 import { PC_CONFIG, instrumentPeerConnection, watchCallEstablishment, isSipDebugEnabled, sipDebug } from '../lib/sip/rtcConfig';
 import { fetchIceServers, FALLBACK_ICE_SERVERS } from '../lib/sip/iceServers';
 import type { AndroidSipServiceStatus } from '../lib/sip/nativeSipProvider';
+import { beginAndroidCallAudio, endAndroidCallAudio } from '../lib/sip/nativeSipProvider';
 import { showAndroidIncomingCallNotif, dismissAndroidIncomingCallNotif } from '../lib/sip/androidCallNotif';
 
 export type SIPStatus = 'idle' | 'connecting' | 'registered' | 'retrying' | 'error';
@@ -67,11 +68,9 @@ export interface UseSoftphoneReturn {
   parkCall?: (code?: string) => void | Promise<void>;
   park?: (code?: string) => void | Promise<void>;
   addCall?: (target: string) => void | Promise<void>;
-  /** Directly inject a native SIP service status snapshot (Android only). */
-  setNativeStatusDirectly?: (native: AndroidSipServiceStatus) => void;
-  /** Caller display name for the current/incoming call (Android Verto). */
+  /** Caller display name for the current/incoming call. */
   callerName?: string;
-  /** Caller number for the current/incoming call (Android Verto). */
+  /** Caller number for the current/incoming call. */
   callerNumber?: string;
 }
 
@@ -544,6 +543,7 @@ export function useSoftphoneJsSip(
               // ringtone when the session ends (covers the case where the remote
               // party cancels before we answer).
               dismissIncomingNotif();
+              endCallAudio();
               answeringRef.current = false;
               if (timerRef.current) clearInterval(timerRef.current);
               stopStats();
@@ -566,6 +566,7 @@ export function useSoftphoneJsSip(
               // Dismiss native Android notification/ringtone on failure (CANCEL,
               // timeout, busy, etc.) so the phone stops ringing.
               dismissIncomingNotif();
+              endCallAudio();
               answeringRef.current = false;
               callStateRef.current = 'idle'; setCallState('idle');
               if (timerRef.current) clearInterval(timerRef.current);
@@ -673,6 +674,7 @@ export function useSoftphoneJsSip(
       if (statsTimerRef.current) { clearInterval(statsTimerRef.current); statsTimerRef.current = null; }
       retryAttemptRef.current = 0;
       if (timerRef.current) clearInterval(timerRef.current);
+      if (sessionRef.current && Capacitor.getPlatform() === 'android') void endAndroidCallAudio();
       try { uaRef.current?.stop(); } catch {}
       uaRef.current = null;
       reconnectRef.current = () => {};
@@ -832,10 +834,12 @@ export function useSoftphoneJsSip(
       sipDebug('placeCallInternal pcConfig', PC_CONFIG);
       // Android: switch audio mode to MODE_IN_COMMUNICATION before INVITE so
       // the earpiece / speaker routing is armed when the remote track arrives.
+      if (Capacitor.getPlatform() === 'android') await beginAndroidCallAudio();
       uaRef.current.call(`sip:${number}@${config.domain}`, callOpts);
       return true;
     } catch (err: any) {
       console.error('[AVA keypad] SIP call exception', err);
+      endCallAudio();
       callStateRef.current = 'idle'; setCallState('idle');
       setActiveCallNumber('');
       setSipError(classifySipFailure({ cause: err?.message }));
@@ -849,6 +853,9 @@ export function useSoftphoneJsSip(
     callAttemptRef.current = 1;
     return placeCallInternal(number, false);
   };
+  const endCallAudio = () => {
+    if (Capacitor.getPlatform() === 'android') void endAndroidCallAudio();
+  };
   const dismissIncomingNotif = () => {
     if (Capacitor.getPlatform() === 'android') {
       dismissAndroidIncomingCallNotif();
@@ -861,6 +868,7 @@ export function useSoftphoneJsSip(
     callAttemptRef.current = 0;
     try { sessionRef.current?.terminate(); } catch {}
     sessionRef.current = null;
+    endCallAudio();
     callStateRef.current = 'idle'; setCallState('idle');
     if (timerRef.current) clearInterval(timerRef.current);
     setCallTimer(0);
@@ -905,6 +913,7 @@ export function useSoftphoneJsSip(
       sessionRef.current.once('icecandidate', iceCandidateHandler);
     }
     try {
+      if (isAndroid) await beginAndroidCallAudio();
       sessionRef.current?.answer({
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
         sessionDescriptionHandlerModifiers: [sdpModifier],

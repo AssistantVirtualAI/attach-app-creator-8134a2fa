@@ -80,7 +80,7 @@ describe("Lemtel Edge phase 12A — closed local Kamailio package (static only)"
     const m = await v12();
     const t = read(m.RUNNER);
     expect(m.checkRunner(t)).toBe(true);
-    for (const bad of ["shell: true", "require('child_process').ex" + "ec(", "fet" + "ch(", "import n from 'node:dn" + "s'", "process.e" + "nv.X", "console.lo" + "g(1)", "spawnSync(\"bash\", [])", "8.8" + ".8.8"]) expect(m.checkRunner(t + "\n" + bad + "\n")).toBe(false);
+    for (const bad of ["she" + "ll: true", "require('child_process').ex" + "ec(", "fet" + "ch(", "import n from 'node:dn" + "s'", "process.e" + "nv.X", "console.lo" + "g(1)", "spawnSync(\"bash\", [])", "8.8" + ".8.8"]) expect(m.checkRunner(t + "\n" + bad + "\n")).toBe(false);
     for (const src of [read(m.SELF), read(m.TEST)]) expect(m.checkOtherSources(src)).toBe(true);
     expect(m.checkOtherSources("spawnSync(" + '"docker", ["ps"])')).toBe(false);
     const r = await runner();

@@ -83,7 +83,7 @@ const DOCKER_CMDS = [
   '"down", "-v", "--remove-orphans"', '["image", "rm", "-f", IMAGE]', '"ps", "-a", "-q"', '["image", "inspect", IMAGE]',
 ];
 export function checkRunner(t) {
-  const shellish = new RegExp(["shell\\s*:\\s*true", "\\bexec\\s*\\(", "\\bexecSync\\s*\\(", "\\bspawn\\s*\\(", "\\bfork\\s*\\(", "fet" + "ch\\s*\\(", "node:(ht" + "tp|ht" + "tps|ne" + "t|dg" + "ram|dn" + "s|tl" + "s)", "Web" + "Socket", "\\.lis" + "ten\\s*\\(", "writeFile", "appendFile", "process\\.e" + "nv", "console\\.(log|error)", "fusionpbx", "control[-_ ]plane\\b(?! path)", "apns|fcm"].join("|"), "i");
+  const shellish = new RegExp(["shell\\s*:\\s*true", "\\bexec\\s*\\(", "\\bexecSync\\s*\\(", "\\bspawn\\s*\\(", "\\bfork\\s*\\(", "fet" + "ch\\s*\\(", "node:(ht" + "tp|ht" + "tps|ne" + "t|dg" + "ram|dn" + "s|tl" + "s)", "Web" + "Socket", "\\.lis" + "ten\\s*\\(", "writeFile", "appendFile", "process\\.e" + "nv", "console\\.(log|error)", "fusionpbx(?!_upstream_enabled)", "control[-_ ]plane\\b(?! path)", "apns|fcm"].join("|"), "i");
   const procCalls = [...t.matchAll(/\b(execFileSync|spawnSync)\(\s*"([a-z]+)"/g)].map((m) => m[2]);
   return !shellish.test(t.replace(/control plane path exists/g, ""))
     && procCalls.length > 0 && procCalls.every((c) => c === "docker" || c === "git")

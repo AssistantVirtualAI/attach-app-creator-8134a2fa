@@ -151,7 +151,8 @@ export function checkDocs(doc, threat) {
 }
 
 const realGit = (root, args) => { try { return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch { return null; } };
-export function changedPaths(root, base, git = realGit) {
+export function changedPaths(root, base) {
+  const git = realGit;
   const d = git(root, ["diff", "--name-only", "--no-renames", base]);
   const u = git(root, ["ls-files", "--others", "--exclude-standard"]);
   if (d === null || u === null) return null;
@@ -161,14 +162,13 @@ export function changedPaths(root, base, git = realGit) {
 export function verify(args, root = process.cwd(), opts = {}) {
   if (args.length > 1 || (args.length === 1 && args[0] !== `--base=${BASE}`)) return { code: 2, stdout: USAGE + "\n" };
   const base = opts.base ?? BASE;
-  // opts.git lets tests substitute a read-only Git view of a temporary copy; the CLI always uses local Git.
-  const git = opts.git ?? realGit;
+  const git = realGit;
   const f = [];
   const rd = (p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return null; } };
   const js = (p) => { try { return JSON.parse(rd(p)); } catch { return null; } };
   if (!ALLOWED.every((p) => existsSync(join(root, p)))) f.push("P14_PATHS_EXIST");
   if (git(root, ["cat-file", "-t", base]) === null) f.push("P14_BASE_MISSING");
-  const ch = changedPaths(root, base, git);
+  const ch = changedPaths(root, base);
   if (!ch || !eq(ch, [...ALLOWED].sort())) f.push("P14_SCOPE_EXACT");
   const rq = js(REQUEST), dc = js(DECISION), ev = js(EVIDENCE), po = js(POLICY);
   if (!rq || !checkRequestSchema(rq)) f.push("P14_REQUEST_SCHEMA");

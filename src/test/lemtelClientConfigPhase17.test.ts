@@ -43,7 +43,7 @@ describe("Lemtel Phase 17 — offline configuration lifecycle", () => {
     expect(s).toContain("lemtel_client_config_manifest_v1");
     expect(s).toContain('edgeFeatureGate: false');
     for (const bad of ["fet" + "ch(", "functions.in" + "voke", "Fusion" + "PBX", "Ver" + "to", "PJ" + "SIP", "Web" + "Socket", "ws" + "s://", "SI" + "P", "pbx_user_devices", "console."]) expect(s, bad).not.toContain(bad);
-    expect(s.indexOf("validateBody(raw)")).toBeLessThan(s.indexOf('from("'));
+    { const h = s.slice(s.indexOf("export async function handler")); expect(h.indexOf("validateBody(raw)")).toBeGreaterThan(0); expect(h.indexOf("validateBody(raw)")).toBeLessThan(h.indexOf('from("')); }
   });
 
   it("no prohibited fields are selected, returned or logged", () => {

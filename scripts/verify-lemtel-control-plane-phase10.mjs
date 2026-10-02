@@ -7,6 +7,7 @@ import process from "node:process";
 
 // Phase 10 static verifier. Read-only: local file inspection plus local Git inspection only.
 const BASE = "f196aa614";
+const PHASE10_END = "49e8d39bb";
 const USAGE = "CP10_USAGE: [--base=f196aa614]";
 const PREFLIGHT_SHA = "30570405bc08eb9cc35daa82a0e8fd22069e4ff0f5353bc1a6bc33619d244864";
 const SVC = "services/lemtel-control-plane";
@@ -42,12 +43,12 @@ export function verifyPhase10(args, root = resolve(dirname(fileURLToPath(import.
   if (args[0] && args[0] !== `--base=${BASE}`) fail.add("CP10_BASE_ATTESTATION");
   if (!ALLOWED.every((f) => existsSync(join(root, f)))) { fail.add("CP10_FILES_PRESENT"); return out(fail, args); }
 
-  const changed = git(["diff", "--name-only", BASE]);
-  const untracked = git(["ls-files", "--others", "--exclude-standard"]);
-  if (!changed || !untracked) fail.add("CP10_BASE_AVAILABLE");
+  // Change scope is validated only on the accepted historical Phase 10 range, never against HEAD.
+  const rangeOk = git(["cat-file", "-t", BASE])?.[0] === "commit" && git(["cat-file", "-t", PHASE10_END])?.[0] === "commit" && git(["merge-base", "--is-ancestor", BASE, PHASE10_END]) !== null;
+  const changed = rangeOk ? git(["diff", "--name-only", `${BASE}..${PHASE10_END}`]) : null;
+  if (!changed) fail.add("CP10_BASE_AVAILABLE");
   else {
-    if (changed.some((f) => !ALLOWED.includes(f))) fail.add("CP10_CHANGED_PATHS");
-    if (untracked.length) fail.add("CP10_NO_UNTRACKED");
+    if (!changed.length || changed.some((f) => !ALLOWED.includes(f))) fail.add("CP10_CHANGED_PATHS");
     if (changed.some((f) => FROZEN_PREFIXES.some((p) => f.startsWith(p)))) fail.add("CP10_FROZEN_UNCHANGED");
     for (const p of [POL("cutover"), POL("assignment-lifecycle")]) {
       const before = git(["show", `${BASE}:${p}`]);

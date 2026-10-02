@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
@@ -21,6 +22,15 @@ const ALLOWED = [
 
 const EVALUATOR = ["src", "routes", "policy-evaluation.ts"];
 const FORBIDDEN_EVALUATOR_DEPS = /from\s+"(?!fastify"|\.\.\/auth\.js"|\.\.\/policy\/(cutover|assignment-lifecycle)\.js")[^"]+"|\b(db|redis|audit|recordAudit|config|logger|server|migrations|readFile|writeFile|child_process|fetch|randomUUID|Date|setTimeout|setInterval)\b|Math\.random|process\.|node:/;
+
+const secondImporterRun = (verifier: string, mod: string) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cp-second-importer-"));
+  try {
+    for (const rel of ["scripts", `${SVC_REL}/src`, `${SVC_REL}/test`, "docs/lemtel-control-plane", "infra/lemtel-edge", "schemas/lemtel-edge", "src/test"]) fs.cpSync(path.join(root, rel), path.join(tmp, rel), { recursive: true });
+    fs.writeFileSync(path.join(tmp, SVC_REL, "src", "routes", "second-importer.ts"), `import "../${["policy", mod].join("/")}.js";\n`);
+    return spawnSync("node", [path.join(tmp, "scripts", verifier)], { cwd: tmp, encoding: "utf8" });
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+};
 
 describe("Lemtel Control Plane phase 7 — offline cutover policy", () => {
   it("verifier pass / wrong base / invalid argument", () => {
@@ -57,6 +67,12 @@ describe("Lemtel Control Plane phase 7 — offline cutover policy", () => {
     const r = fs.readFileSync(evaluator, "utf8");
     expect(r).toContain('execution: "non_executable"');
     expect(r).not.toMatch(FORBIDDEN_EVALUATOR_DEPS);
+  });
+
+  it("a second runtime reference to the cutover module fails closed", () => {
+    const r = secondImporterRun("verify-lemtel-control-plane-phase7.mjs", "cutover");
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("CP7_NOT_IMPORTED_BY_RUNTIME");
   });
 
   it("all ten Phase 2 gates remain false", () => {

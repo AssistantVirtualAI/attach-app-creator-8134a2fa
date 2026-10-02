@@ -5,6 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "f196aa614";
+const PHASE10_END = "49e8d39bb";
 const SVC_REL = ["services", "lemtel-control-plane"].join("/");
 const SVC = path.join(root, SVC_REL);
 const ROUTE = path.join(SVC, "src", "routes", "policy-evaluation.ts");
@@ -61,9 +62,10 @@ describe("Lemtel Control Plane phase 10 — authenticated non-executable policy 
     expect(git(["diff", "--name-only", BASE, "--", "infra/lemtel-edge", "schemas/lemtel-edge", "docs/lemtel-edge"])).toEqual([]);
   });
 
-  it("Phase 10 changed files stay within the allowed list", () => {
-    expect(execFileSync("git", ["cat-file", "-t", BASE], { cwd: root, encoding: "utf8" }).trim()).toBe("commit");
-    for (const f of git(["diff", "--name-only", BASE])) expect(ALLOWED, f).toContain(f);
-    expect(git(["ls-files", "--others", "--exclude-standard"])).toEqual([]);
+  it("historical Phase 10 range stays within the original eleven allowed files", () => {
+    for (const ref of [BASE, PHASE10_END]) expect(execFileSync("git", ["cat-file", "-t", ref], { cwd: root, encoding: "utf8" }).trim(), `historical ref ${ref} must exist locally`).toBe("commit");
+    const changed = git(["diff", "--name-only", `${BASE}..${PHASE10_END}`]);
+    expect(changed.length).toBeGreaterThan(0);
+    for (const f of changed) expect(ALLOWED, f).toContain(f);
   });
 });

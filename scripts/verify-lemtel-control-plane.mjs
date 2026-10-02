@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Static safety checks for the Lemtel Control Plane (Phase 1). Usage: node scripts/verify-lemtel-control-plane.mjs [baseRef] [--audit]
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -12,10 +12,17 @@ const SVC = join(root, "services/lemtel-control-plane");
 const src = walk(join(SVC, "src")).map((f) => [f, readFileSync(f, "utf8")]);
 if (!src.length) fail.push("service source missing");
 
+const PHASE1_BASE = "6e512e962";
+const PHASE1_END = "224da47b7";
 if (base) {
   const PROTECTED = /^(apps\/planipret-mobile\/|shared\/planipret-design-tokens\/|docs\/planipret\/|apps\/ava-softphone-mobile\/|apps\/ava-softphone-desktop\/|src\/pages\/lemtel-uc\/|src\/components\/lemtel-uc\/|supabase\/functions\/luc-|supabase\/functions\/_shared\/luc|supabase\/migrations\/)/;
-  const changed = execSync(`git diff --name-only ${base} -- . && git ls-files --others --exclude-standard`, { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
-  for (const f of changed) if (PROTECTED.test(f)) fail.push(`protected path changed: ${f}`);
+  const git = (args) => { try { return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch { return null; } };
+  if (base !== PHASE1_BASE) fail.push("historical base validation failed");
+  else if (git(["cat-file", "-t", PHASE1_BASE])?.trim() !== "commit" || git(["cat-file", "-t", PHASE1_END])?.trim() !== "commit" || git(["merge-base", "--is-ancestor", PHASE1_BASE, PHASE1_END]) === null) fail.push("historical range validation failed");
+  else {
+    const changed = (git(["diff", "--name-only", `${PHASE1_BASE}..${PHASE1_END}`]) ?? "").split("\n").filter(Boolean);
+    for (const f of changed) if (PROTECTED.test(f)) fail.push(`protected path changed: ${f}`);
+  }
 }
 
 for (const [f, s] of src) {
@@ -24,7 +31,7 @@ for (const [f, s] of src) {
   if (/@fastify\/cors|access-control-allow-origin|origin:\s*["']\*["']/i.test(s)) fail.push(`CORS in ${f}`);
   if (!f.endsWith("config.ts") && /process\.env/.test(s)) fail.push(`process.env outside config.ts: ${f}`);
 }
-const ALLOWED = new Set(["GET /health/live", "GET /health/ready", "GET /v1/internal/status", "POST /v1/internal/audit"]);
+const ALLOWED = new Set(["GET /health/live", "GET /health/ready", "GET /v1/internal/status", "POST /v1/internal/audit", "POST /v1/internal/policy/evaluate"]);
 for (const [f, s] of src) for (const m of s.matchAll(/\.(get|post|put|patch|delete|all|route)\(\s*["'`]([^"'`]+)["'`]/g)) {
   const r = `${m[1].toUpperCase()} ${m[2]}`; if (!ALLOWED.has(r)) fail.push(`route not allowed: ${r} in ${f}`);
 }

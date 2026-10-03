@@ -49,3 +49,12 @@ A genuine shared-code change requires a separately written, explicitly approved 
 - Their exact paths are frozen as a one-time compatibility record (see `phase-15c-historical-compatibility-baseline.md`).
 - The permanent "never modify Planiprêt" guard starts strictly after `2d933df2f`.
 - No Planiprêt source was changed by Phase 15C.
+
+## Phase 15D — shared repository, per-phase scope guard
+
+- Lemtel and Planiprêt share one Lovable project, one GitHub repository and the synchronized `Planipret` branch. Neither the shared repository nor the branch name authorizes a Lemtel prompt to modify Planiprêt.
+- The historical guards are immutable: `BASE = a1bd41eba`, `PHASE15A_END = 87b6b8029`, `PLANIPRET_COMPATIBILITY_END = 2d933df2f`, the four Phase 15A files and the seven Phase 15C paths.
+- No-argument mode (`node scripts/verify-lemtel-planipret-isolation.mjs`) checks the frozen 15A/15C ranges, the policy, the verifier's own read-only capabilities and the current working tree: any staged, unstaged or untracked Planiprêt path fails with `PLANIPRET_WORKTREE_CHANGED`. It no longer fails on Planiprêt commits made by the other product before the current Lemtel phase.
+- `--scope=<commit>` is mandatory before and after every future Lemtel phase, with the phase's starting commit. It must be a commit and an ancestor of `HEAD` (`SCOPE_MISSING`, `SCOPE_NOT_ANCESTOR`). Any protected path committed in `scope..HEAD`, except the Phase 15 technical files in `ALLOWED`, fails with `PLANIPRET_SCOPE_CHANGED`.
+- Usage: `LEMTEL_ISOLATION_USAGE: [--base=a1bd41eba] [--scope=<commit>]`. `--base` and `--scope` are never combined.
+- Planiprêt commits that precede a Lemtel phase's scope base are not approved, examined or validated by Lemtel; they are simply outside that phase's range. There is no permanent Planiprêt exception.

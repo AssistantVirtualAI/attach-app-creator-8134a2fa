@@ -36,3 +36,6 @@ This is not a source merge, copy, rollback, or approval for any future Planiprê
 
 ## Rollback
 Revert this phase only if the existing Planiprêt source is separately reviewed and the compatibility baseline must be replaced by a newly approved boundary.
+
+## Phase 15D update
+The seven-path interval `87b6b8029..2d933df2f` stays frozen and exact. The former "permanent rule" (fail on every Planiprêt commit after `2d933df2f`) is replaced by two checks: the working-tree guard (`PLANIPRET_WORKTREE_CHANGED`, always on) and the per-phase `--scope=<commit>` guard (`PLANIPRET_SCOPE_CHANGED` for any Planiprêt path inside a Lemtel phase's own `scope..HEAD`). Planiprêt changes committed after `2d933df2f` by Planiprêt work are not approved, compatible or examined by this baseline.

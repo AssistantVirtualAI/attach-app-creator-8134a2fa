@@ -546,12 +546,12 @@ export default function PlanipretMobile() {
     setAvaMode("voice");
     setAvaOpen(true);
   };
-  const refreshFn = useRef<(() => Promise<void> | void) | null>(null);
-  const registerRefresh = (fn: (() => Promise<void> | void) | null) => { refreshFn.current = fn; };
+  const refreshRegistry = useRef(createRefreshRegistry()).current;
+  const registerRefresh = useCallback((fn: (() => Promise<void> | void) | null) => refreshRegistry.register(fn), [refreshRegistry]);
   const pullGen = useRef(0);
   useEffect(() => { pullGen.current += 1; }, [location.pathname]);
   const handlePull = async () => {
-    const fn = refreshFn.current; if (!fn) return;
+    const fn = refreshRegistry.current(); if (!fn) return;
     const gen = pullGen.current;
     const regGen = refreshRegistry.generation;
     await new Promise<void>((resolve) => {
@@ -559,7 +559,7 @@ export default function PlanipretMobile() {
       Promise.resolve().then(fn).catch(() => {}).finally(() => { clearInterval(iv); resolve(); });
     });
   };
-  const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull);
+  const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull, 70, () => refreshRegistry.current() != null);
 
   // Remember each page's scroll position so returning to a tab reopens it
   // where the broker left it instead of jumping back to the top.

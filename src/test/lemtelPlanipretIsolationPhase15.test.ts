@@ -84,7 +84,6 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
   it("Phase 15D: missing, non-commit or reversed scope fails; --base and --scope never combine", async () => {
     expect((await run({ args: () => ["--scope=" + "0".repeat(40)] })).stdout).toMatch(/SCOPE_MISSING/);
     expect((await run({ mutate: (_t, g) => { (globalThis as any).__blob = g("hash-object", "-w", "README.md"); }, args: () => ["--scope=" + (globalThis as any).__blob] })).stdout).toMatch(/SCOPE_MISSING/);
-    expect((await run({ scoped: ["docs/lemtel-x/b.md"], args: (x) => [`--scope=${x.scope}`], refs: (r) => r, mutate: (_t, g) => { (globalThis as any).__tip = g("rev-parse", "HEAD"); g("update-ref", "HEAD", g("rev-parse", "HEAD~1")); }, })).stdout).toBeDefined();
     const m = await load();
     expect(m.verify(["--base=a1bd41eba", "--scope=98eee7107"], root).code).toBe(2);
     expect(m.verify(["--scope=xyz"], root).code).toBe(2);

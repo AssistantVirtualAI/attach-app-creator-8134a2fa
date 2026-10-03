@@ -195,6 +195,7 @@ function AuthenticatedShell({
   // configuration without a portal session stays allowed ("legacy").
   const clientConfig = useLemtelMobileClientConfig(creds?.accessToken || null);
   const sipAllowed = clientConfig.sipAllowed;
+  const portalTelephonyPolicy = clientConfig.manifest?.telephonyPolicy ?? null;
   const [freshCredentialToken, setFreshCredentialToken] = useState('boot');
   const [authExpired, setAuthExpired] = useState(false);
   const passwordHealRef = useRef('');
@@ -628,8 +629,8 @@ function AuthenticatedShell({
             {tab === 'home'       && <DashboardScreen onNavigate={setTab as any} haptic={haptic} onOpenProfile={() => setProfileOpen(true)} />}
             {tab === 'ava'        && <AVAChatScreen />}
             {tab === 'messages'   && <MessagesHubScreen accessToken={creds.accessToken || null} userId={creds.userId} sp={sp} haptic={haptic} channelUnread={notif.channelUnread} />}
-            {tab === 'settings'   && <SettingsScreen creds={creds} sp={sp} onSignOut={onSignOut} onNavigate={setTab as any} preferClickToCall={preferClickToCall} togglePreferC2C={onTogglePreferC2C} />}
-            {tab === 'more'       && <MoreScreen creds={creds} sp={sp} onSignOut={onSignOut} haptic={haptic} />}
+            {tab === 'settings'   && <SettingsScreen creds={creds} sp={sp} onSignOut={onSignOut} onNavigate={setTab as any} preferClickToCall={preferClickToCall} togglePreferC2C={onTogglePreferC2C} portalTelephonyPolicy={portalTelephonyPolicy} />}
+            {tab === 'more'       && <MoreScreen creds={creds} sp={sp} onSignOut={onSignOut} haptic={haptic} portalTelephonyPolicy={portalTelephonyPolicy} />}
             {tab === 'voicemail'  && <VoicemailScreen haptic={haptic} />}
             {tab === 'sms'        && <MessagesScreen haptic={haptic} />}
             {tab === 'queues'     && <QueuesScreen />}

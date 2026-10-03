@@ -14,6 +14,7 @@ export type LemtelMobileClientConfig = {
   status: LemtelClientConfigStatus;
   sipAllowed: boolean;
   deviceRef: string | null;
+  manifest: LemtelManifest | null;
   refresh: (opts?: { force?: boolean }) => Promise<void>;
   finalizeBlock: () => void;
   clearCachedManifest: () => Promise<void>;
@@ -25,6 +26,7 @@ export function useLemtelMobileClientConfig(accessToken: string | null | undefin
   const hasPortalSession = !!accessToken;
   const [status, setStatus] = useState<LemtelClientConfigStatus>(hasPortalSession ? 'checking' : 'legacy');
   const [deviceRef, setDeviceRef] = useState<string | null>(null);
+  const [manifest, setManifest] = useState<LemtelManifest | null>(null);
   const tokenRef = useRef(accessToken);
   const deviceRefRef = useRef<string | null>(null);
   const lastSuccessRef = useRef<number | null>(null);
@@ -42,9 +44,11 @@ export function useLemtelMobileClientConfig(accessToken: string | null | undefin
       deviceRefRef.current = m.device.deviceRef;
       lastSuccessRef.current = Date.now();
       setDeviceRef(m.device.deviceRef);
+      setManifest(m);
       setStatus('allowed');
       return true;
     }
+    setManifest(null);
     if (decision === 'expired_manifest') { setStatus('unavailable'); return false; }
     setStatus('pending_block');
     return false;
@@ -52,18 +56,21 @@ export function useLemtelMobileClientConfig(accessToken: string | null | undefin
 
   const handleFailure = useCallback(async (err: unknown) => {
     const kind = classifyError(err);
-    if (kind === 'unauthorized') { setStatus('unavailable'); return; }
+    if (kind === 'unauthorized') { setManifest(null); setStatus('unavailable'); return; }
     if (kind === 'transient_failure') {
       const cached = await loadCachedManifest();
       if (cacheUsableAfterTransient(cached)) {
         deviceRefRef.current = cached!.manifest.device.deviceRef;
         setDeviceRef(cached!.manifest.device.deviceRef);
+        setManifest(cached!.manifest);
         setStatus('allowed');
       } else {
+        setManifest(null);
         setStatus('unavailable');
       }
       return;
     }
+    setManifest(null);
     setStatus('pending_block');
   }, []);
 
@@ -88,7 +95,7 @@ export function useLemtelMobileClientConfig(accessToken: string | null | undefin
 
   // Mandatory register at the start of an authenticated session (once per session).
   useEffect(() => {
-    if (!hasPortalSession) { setStatus((s) => (s === 'blocked' ? s : 'legacy')); return; }
+    if (!hasPortalSession) { setManifest(null); setStatus((s) => (s === 'blocked' ? s : 'legacy')); return; }
     if (registeredRef.current || statusRef.current === 'blocked') return;
     setStatus((s) => (s === 'legacy' ? 'checking' : s));
     void run('register');
@@ -108,9 +115,10 @@ export function useLemtelMobileClientConfig(accessToken: string | null | undefin
     deviceRefRef.current = null;
     lastSuccessRef.current = null;
     setDeviceRef(null);
+    setManifest(null);
     void clearManifestCache();
   }, []);
 
   const sipAllowed = status === 'legacy' || status === 'allowed';
-  return { status, sipAllowed, deviceRef, refresh, finalizeBlock, clearCachedManifest };
+  return { status, sipAllowed, deviceRef, manifest, refresh, finalizeBlock, clearCachedManifest };
 }

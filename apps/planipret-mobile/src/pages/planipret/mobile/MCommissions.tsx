@@ -516,8 +516,6 @@ export default function MCommissions() {
         <div className="fixed inset-0 z-[70] flex items-end" style={{ background: "rgba(4,11,22,0.7)" }} onClick={() => setFiltersOpen(false)}>
           <div data-pp-sheet role="dialog" aria-modal="true" className="w-full rounded-t-2xl p-5 min-h-0 overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}
             style={{ maxHeight: "calc(100dvh - env(safe-area-inset-top, 0px) - 16px)", paddingBottom: "calc(2rem + env(safe-area-inset-bottom, 0px))", background: "var(--pp-bg-surface, #0A1628)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))" }}>
-            <span hidden
-            style={{ background: "var(--pp-bg-surface, #0A1628)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))" }}>
             <div className="flex justify-between items-center mb-4">
               <span className="text-[15px] font-bold" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>{fr ? "Filtres" : "Filters"}</span>
               <button onClick={() => setFiltersOpen(false)} aria-label={fr ? "Fermer" : "Close"}><X className="w-4 h-4" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }} /></button>

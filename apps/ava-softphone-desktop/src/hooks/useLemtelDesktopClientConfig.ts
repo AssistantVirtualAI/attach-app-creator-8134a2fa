@@ -1,6 +1,6 @@
 // Lemtel Phase 21B — Desktop lifecycle hook consuming the pure lifecycle module.
 // Only talks to the authenticated lifecycle function. It never fetches telephony
-// credentials and never opens any telephony connection itself. No legacy mode.
+// credentials and never opens any telephony connection itself. Without a session it is unavailable.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SB_URL, SB_KEY } from '../lib/supabaseClient';
 import {

@@ -1,7 +1,7 @@
 // MCommissions — rapports de commissions Planiprêt (API officielle Maestro).
 // Données financières sensibles : lecture seule, aucune donnée mise en cache
 // hors de la session, aucun jeton Maestro côté client.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, RefreshCw, SlidersHorizontal, TrendingUp, Wallet,
@@ -198,8 +198,14 @@ export default function MCommissions() {
     return data;
   }, []);
 
+  // Latest request wins: a response for an older filter key is never published.
+  const loadGen = useRef(0);
+  const moreInflight = useRef<string | null>(null);
+  useEffect(() => () => { loadGen.current += 1; }, []);
   const load = useCallback(async (force = false) => {
     if (!allowed || !rangeReady) return;
+    const gen = ++loadGen.current;
+    const stale = () => gen !== loadGen.current;
     const cached = readStatsCache(reportCacheKey);
     const cachedReport = cached?.value as { summary?: Summary; rows?: DepositRow[]; total?: number } | undefined;
     if (cachedReport) {
@@ -217,6 +223,7 @@ export default function MCommissions() {
         call({ action: "summary", filters }),
         call({ action: "deposits", filters: { ...filters, page: 1, per_page: PER_PAGE } }),
       ]);
+      if (stale()) return;
       setScopeNotice(isAdmin && !agentId && s?.scope?.mode === "own"
         ? "Accès Maestro administrateur manquant : seules vos commissions personnelles sont affichées, pas celles de tous les courtiers."
         : null);
@@ -231,12 +238,13 @@ export default function MCommissions() {
       });
       if (force) setChartRefreshToken((value) => value + 1);
     } catch (e) {
+      if (stale()) return;
       setError((e as Error).message);
       // Keep the last known report on screen. A temporary Maestro outage must
       // never turn a populated commissions page into an empty error screen.
       if (!cachedReport) { setSummary(null); setRows([]); setTotal(0); }
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   }, [allowed, rangeReady, filters, call, reportCacheKey, isAdmin, agentId]);
 
@@ -283,16 +291,21 @@ export default function MCommissions() {
   };
 
   const loadMore = async () => {
-    if (loadingMore || rows.length >= total) return;
+    const key = `${reportCacheKey}|${page + 1}`;
+    if (moreInflight.current === key || rows.length >= total) return;
+    moreInflight.current = key;
+    const gen = loadGen.current;
     setLoadingMore(true);
     try {
       const d = await call({ action: "deposits", filters: { ...filters, page: page + 1, per_page: PER_PAGE } });
+      if (gen !== loadGen.current) return;
       setRows((prev) => [...prev, ...(d.rows ?? [])]);
       setPage((p) => p + 1);
     } catch (e) {
-      setError((e as Error).message);
+      if (gen === loadGen.current) setError((e as Error).message);
     } finally {
-      setLoadingMore(false);
+      if (moreInflight.current === key) moreInflight.current = null;
+      if (gen === loadGen.current) setLoadingMore(false);
     }
   };
 

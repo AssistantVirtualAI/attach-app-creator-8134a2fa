@@ -499,6 +499,7 @@ const handler = async (req: Request): Promise<Response> => {
       voicemail_enabled: e.voicemail_enabled === "true" || e.voicemail_enabled === true,
       call_recording: e.user_record ?? "none",
       do_not_disturb: e.do_not_disturb === "true" || e.do_not_disturb === true,
+      forward_all_enabled: e.forward_all_enabled === "true" || e.forward_all_enabled === true,
       forward_all_destination: e.forward_all_destination ?? null,
       enabled: e.enabled === "true" || e.enabled === true || e.enabled === undefined,
       description: e.description ?? null,
@@ -1209,7 +1210,25 @@ const handler = async (req: Request): Promise<Response> => {
       return json({ ok: true, filename, bytes: bytes.length, status: upStatus, location: upLoc });
     }
 
-    if (action === "update-extension") return json(await writeCollection("extensions", "extensions", params), 200);
+    if (action === "update-extension") {
+      const pbxResult: any = await writeCollection("extensions", "extensions", params);
+      if (!pbxResult?.ok) return json(pbxResult, 200);
+      // Phase 22A: restricted policy mirror, only after PBX success, bound to organization_id + extension_uuid.
+      const bool = (v: unknown) => v === true || v === "true";
+      const mirror: Record<string, unknown> = {};
+      if (params && "do_not_disturb" in params) mirror.do_not_disturb = bool(params.do_not_disturb);
+      if (params && "forward_all_enabled" in params) mirror.forward_all_enabled = bool(params.forward_all_enabled);
+      if (params && "voicemail_enabled" in params) mirror.voicemail_enabled = bool(params.voicemail_enabled);
+      if (params && "user_record" in params && ["none", "inbound", "outbound", "all"].includes(String(params.user_record))) mirror.call_recording = String(params.user_record);
+      const extUuid = typeof params?.extension_uuid === "string" ? params.extension_uuid : "";
+      if (Object.keys(mirror).length === 0 || !extUuid || !organization_id) return json(pbxResult, 200);
+      try {
+        const { error: mirrorErr } = await admin.from("pbx_extensions").update(mirror).eq("organization_id", organization_id).eq("pbx_uuid", extUuid);
+        return json({ ...pbxResult, policyMirror: mirrorErr ? "pending_sync" : "updated" }, 200);
+      } catch (_e) {
+        return json({ ...pbxResult, policyMirror: "pending_sync" }, 200);
+      }
+    }
 
     if (action === "repair-verto-extension-routing") {
       const extNum = String(params.extension || body.extension || "").trim();

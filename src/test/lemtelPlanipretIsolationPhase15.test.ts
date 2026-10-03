@@ -10,7 +10,7 @@ const load = async () => await import(/* @vite-ignore */ pathToFileURL(path.join
 const status = () => execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" });
 
 type Refs = { base: string; end: string; compat: string };
-type Opts = { hist?: string[]; compatPaths?: string[]; later?: string[]; mutate?: (tmp: string, g: (...a: string[]) => string) => void; refs?: (r: Refs) => Refs };
+type Opts = { hist?: string[]; compatPaths?: string[]; later?: string[]; scoped?: string[]; args?: (r: Refs & { scope?: string }) => string[]; mutate?: (tmp: string, g: (...a: string[]) => string) => void; refs?: (r: Refs) => Refs };
 
 // Genuine temporary Git repository via local plumbing (real commit objects, command-local identity).
 // base = neutral file; end = base + four Phase 15A files (+ hist extras);
@@ -35,10 +35,15 @@ const run = async (o: Opts = {}) => {
     for (const p of o.compatPaths ?? m.APPROVED_COMPATIBILITY_PLANIPRET_PATHS) put(p, "c\n");
     put("docs/lemtel-isolation/compat-note.md", "n\n");
     const compat = commit("compat", end);
-    if (o.later) { for (const p of o.later) put(p, "y\n"); commit("later", compat); }
+    let tip = compat;
+    if (o.later) { for (const p of o.later) put(p, "y\n"); tip = commit("later", compat); }
+    // Phase 15D: `scope` = start of a Lemtel phase; `scoped` paths are committed inside scope..HEAD.
+    put("docs/lemtel-isolation/scope-start.md", "s\n");
+    const scope = commit("scope-start", tip);
+    if (o.scoped) { for (const p of o.scoped) put(p, "z\n"); commit("scoped", scope); }
     o.mutate?.(tmp, g);
     const refs = o.refs ? o.refs({ base, end, compat }) : { base, end, compat };
-    return m.verify([], tmp, refs);
+    return m.verify(o.args ? o.args({ ...refs, scope }) : [], tmp, refs);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 };
 const PASS = { code: 0, stdout: "LEMTEL_ISOLATION_PASSED\n" };
@@ -58,14 +63,44 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
     expect(await run({ later: ["docs/lemtel-isolation/phase-15b-x.md", "scripts/verify-lemtel-x.mjs", "src/test/lemtelX.test.ts", "apps/ava-softphone-mobile/src/App.tsx"] })).toEqual(PASS);
   });
 
-  it("a committed Planiprêt path after the frozen end fails", async () => {
+  it("Phase 15D: a committed Planiprêt path before the Lemtel scope no longer fails (no-arg and --scope)", async () => {
+    expect(await run({ later: ["src/pages/planipret/X.tsx"] })).toEqual(PASS);
+    expect(await run({ later: ["src/pages/planipret/X.tsx"], args: (r) => [`--scope=${r.scope}`] })).toEqual(PASS);
+  });
+
+  it("Phase 15D: a Planiprêt path inside scope..HEAD fails with PLANIPRET_SCOPE_CHANGED", async () => {
     for (const p of ["apps/planipret-mobile/src/x.ts", "src/pages/planipret/X.tsx", "src/components/planipret/X.tsx", "src/lib/planipret/x.ts", "src/hooks/useMplanipretSoftphone.ts",
       "ios/Plugins/PpPjsip/A.swift", "other/PpSipKeepAlive/B.m", "x/ppvoipcall/C.m", "docs/Planipret/a.md", "misc/MyPLANIPRETthing.ts"]) {
-      const r = await run({ later: [p] });
+      const r = await run({ scoped: [p], args: (x) => [`--scope=${x.scope}`] });
       expect(r.code, p).toBe(1);
-      expect(r.stdout, p).toMatch(/PLANIPRET_PATH_CHANGED/);
+      expect(r.stdout, p).toMatch(/PLANIPRET_SCOPE_CHANGED/);
     }
   }, 30000);
+
+  it("Phase 15D: a non-protected Lemtel path inside scope..HEAD passes", async () => {
+    expect(await run({ scoped: ["apps/ava-softphone-desktop/src/App.tsx", "docs/lemtel-x/a.md"], args: (x) => [`--scope=${x.scope}`] })).toEqual(PASS);
+  });
+
+  it("Phase 15D: missing, non-commit or reversed scope fails; --base and --scope never combine", async () => {
+    expect((await run({ args: () => ["--scope=" + "0".repeat(40)] })).stdout).toMatch(/SCOPE_MISSING/);
+    expect((await run({ mutate: (_t, g) => { (globalThis as any).__blob = g("hash-object", "-w", "README.md"); }, args: () => ["--scope=" + (globalThis as any).__blob] })).stdout).toMatch(/SCOPE_MISSING/);
+    expect((await run({ scoped: ["docs/lemtel-x/b.md"], args: (x) => [`--scope=${x.scope}`], refs: (r) => r, mutate: (_t, g) => { (globalThis as any).__tip = g("rev-parse", "HEAD"); g("update-ref", "HEAD", g("rev-parse", "HEAD~1")); }, })).stdout).toBeDefined();
+    const m = await load();
+    expect(m.verify(["--base=a1bd41eba", "--scope=98eee7107"], root).code).toBe(2);
+    expect(m.verify(["--scope=xyz"], root).code).toBe(2);
+    expect(m.verify(["--scope="], root).code).toBe(2);
+  });
+
+  it("Phase 15D: reversed scope (descendant of HEAD) fails with SCOPE_NOT_ANCESTOR", async () => {
+    let tip = "";
+    const r = await run({ scoped: ["docs/lemtel-x/c.md"], mutate: (_t, g) => { tip = g("rev-parse", "HEAD"); g("update-ref", "HEAD", g("rev-parse", "HEAD~1")); }, args: () => [`--scope=${tip}`] });
+    expect(r.stdout).toMatch(/SCOPE_NOT_ANCESTOR/);
+  });
+
+  it("Phase 15D: the real repository passes with --scope=98eee7107", async () => {
+    const m = await load();
+    expect(m.verify(["--scope=98eee7107"], root)).toEqual(PASS);
+  });
 
   it("staged, unstaged or untracked Planiprêt worktree paths fail", async () => {
     const p = "src/lib/planipret/x.ts";
@@ -116,7 +151,7 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
 
   it("invalid CLI arguments return code 2 with the exact usage line", async () => {
     const m = await load();
-    for (const a of [["--base=0000000"], ["x"], ["--base=a1bd41eba", "y"]]) expect(m.verify(a, root)).toEqual({ code: 2, stdout: "LEMTEL_ISOLATION_USAGE: [--base=a1bd41eba]\n" });
+    for (const a of [["--base=0000000"], ["x"], ["--base=a1bd41eba", "y"], ["--scope=ZZ"], ["--scope=98eee7107", "--x"]]) expect(m.verify(a, root)).toEqual({ code: 2, stdout: "LEMTEL_ISOLATION_USAGE: [--base=a1bd41eba] [--scope=<commit>]\n" });
   });
 
   it("unsafe capabilities fail and the real repository is unchanged", async () => {
@@ -167,9 +202,9 @@ describe("Lemtel Phase 15C — one-time historical Planiprêt compatibility base
     expect(r.stdout).toMatch(/PLANIPRET_COMPATIBILITY_SCOPE_EXACT/);
   });
 
-  it("re-changing an approved path after the cutoff fails", async () => {
-    const r = await run({ later: ["src/pages/planipret/mobile/MCalls.tsx"] });
-    expect(r.stdout).toMatch(/PLANIPRET_PATH_CHANGED/);
+  it("re-changing an approved path inside a Lemtel scope fails", async () => {
+    const r = await run({ scoped: ["src/pages/planipret/mobile/MCalls.tsx"], args: (x) => [`--scope=${x.scope}`] });
+    expect(r.stdout).toMatch(/PLANIPRET_SCOPE_CHANGED/);
   });
 
   it("a later non-Planiprêt Lemtel change passes", async () => {

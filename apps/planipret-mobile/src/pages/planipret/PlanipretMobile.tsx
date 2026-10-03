@@ -545,10 +545,16 @@ export default function PlanipretMobile() {
     setAvaMode("voice");
     setAvaOpen(true);
   };
-  const refreshFn = useRef<(() => Promise<void> | void) | null>(null);
-  const registerRefresh = (fn: (() => Promise<void> | void) | null) => { refreshFn.current = fn; };
-  const handlePull = async () => { if (refreshFn.current) await refreshFn.current(); };
-  const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull, 70, () => refreshFn.current != null);
+  // Stack of refresh handlers: the most recently mounted page/sub-tab owns the
+  // pull gesture; its cleanup pops only its own entry. Stable identity so page
+  // effects do not re-register on every shell render. Cleared on route change.
+  const refreshStack = useRef<Array<() => Promise<void> | void>>([]);
+  const registerRefresh = useCallback((fn: (() => Promise<void> | void) | null) => {
+    if (fn) refreshStack.current.push(fn); else refreshStack.current.pop();
+  }, []);
+  const currentRefresh = () => refreshStack.current[refreshStack.current.length - 1] ?? null;
+  const handlePull = async () => { const fn = currentRefresh(); if (fn) await fn(); };
+  const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull, 70, () => currentRefresh() != null);
 
   // Remember each page's scroll position so returning to a tab reopens it
   // where the broker left it instead of jumping back to the top.

@@ -14,7 +14,8 @@ export function recurrenceLabel(
   const p = String(task.recurring_pattern ?? "").trim().toLowerCase() as keyof typeof UNITS;
   const u = UNITS[p];
   if (!u) return null;
-  const raw = task.recurring_value == null ? 1 : Number(task.recurring_value);
+  if (task.recurring_value == null) return null;
+  const raw = Number(task.recurring_value);
   if (!Number.isInteger(raw) || raw < 1) return null;
   if (raw === 1) return lang === "en" ? u.en1 : u.fr1;
   return lang === "en" ? u.enN(raw) : u.frN(raw);

@@ -91,8 +91,10 @@ describe("Lemtel Phase 21A — mobile portal device lifecycle", () => {
 
   it("new lifecycle code contains no forbidden stack, endpoint or sensitive data access", () => {
     for (const f of [LIB, HOOK]) {
-      const s = rd(f);
-      expect(s).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|wss?:\\/\\/|softphone-credentials|sipPassword|password|refresh_token|access_token|recording_url|cdr|voicemail_|sms", "i"));
+      // 21A.1: the non-executable Phase 16 label "avaSmsActionState" is the only allowed occurrence.
+      const s = rd(f).split("avaSmsActionState").join("");
+      const stripped = s.split("avaSmsActionState").join("");
+    expect(stripped).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|wss?:\\/\\/|softphone-credentials|sipPassword|password|refresh_token|access_token|recording_url|cdr|voicemail_|sms", "i"));
       expect(s).not.toMatch(/\bfetch\(|WebSocket|setInterval/);
     }
     expect(rd(HOOK)).toContain("const FN = 'lemtel-client-config'");

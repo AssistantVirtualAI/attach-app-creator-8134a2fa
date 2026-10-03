@@ -100,3 +100,85 @@ describe('lemtelClientConfig', () => {
     expect(parseManifest({ ...validManifest(), sipPassword: 'x' })).toBeNull();
   });
 });
+
+describe('lemtelClientConfig — Phase 21A.1 strict manifest matrix', () => {
+  const inv = (over: Record<string, any>) => expect(evaluateManifest(validManifest(over), NOW), JSON.stringify(over)).toBe('invalid_manifest');
+  const REFS = ['identity.organizationRef', 'identity.domainRef', 'identity.extensionRef', 'identity.userRef', 'revision.manifestRevision', 'device.deviceRevision', 'telephonyPolicy.credentialRevisionRef', 'routing.routingAssignmentRef', 'observability.redactionPolicyRef'];
+  const BAD_REFS = ['Org_ABC', 'ab', 'org abc', 'https://x.example/a', 'a@b.example', '', '_abc', 'a'.repeat(65), 12345, null];
+
+  it('conforming manifest stays allowed', () => {
+    expect(evaluateManifest(validManifest(), NOW)).toBe('allowed');
+    expect(parseManifest(validManifest())).not.toBeNull();
+    expect(evaluateManifest(validManifest({ 'revision.issuedAt': '2026-10-03T11:55:00.1Z', 'revision.expiresAt': '2026-10-03T12:10:00.123Z' }), NOW)).toBe('allowed');
+  });
+
+  it('rejects every invalid opaque reference in every position', () => {
+    for (const k of REFS) for (const v of BAD_REFS) inv({ [k]: v });
+    for (const v of ['dev_' + 'A'.repeat(32), 'dev_' + 'a'.repeat(31), 'dev-' + 'a'.repeat(32)]) inv({ 'device.deviceRef': v });
+  });
+
+  it('rejects non-strict UTC dates', () => {
+    for (const k of ['revision.issuedAt', 'revision.expiresAt']) {
+      for (const v of ['2026-10-03T12:10:00', '2026-10-03T12:10:00+00:00', '2026-10-03T08:10:00-04:00', '2026-02-30T12:00:00Z', '2026-13-01T12:00:00Z', '2026-10-03T24:00:00Z', '2026-10-03T12:10:00.1234Z', '2026-10-03 12:10:00Z', 'nope', '', 1791000000000, null]) inv({ [k]: v });
+    }
+  });
+
+  it('rejects unknown enum values', () => {
+    for (const [k, v] of [['access.signInMode', 'magic_link'], ['access.accountState', 'locked'], ['revision.refreshMode', 'always'], ['device.deviceState', 'unknown'], ['device.deviceAction', 'wipe'], ['telephonyPolicy.dndState', 'on'], ['telephonyPolicy.forwardingState', 'on'], ['telephonyPolicy.recordingPolicy', 'always'], ['telephonyPolicy.voicemailPolicy', 'on'], ['observability.diagnosticLevel', 'verbose'], ['access.mobileEnabled', 'true'], ['access.desktopEnabled', 1]] as const) inv({ [k]: v });
+  });
+
+  it('capabilities require exactly four keys with known enums', () => {
+    const caps = validManifest().capabilities;
+    for (const k of Object.keys(caps)) {
+      const { [k]: _omit, ...rest } = caps;
+      inv({ capabilities: rest });
+      inv({ capabilities: { ...caps, [k]: 'enabled_now' } });
+    }
+    inv({ capabilities: {} });
+    inv({ capabilities: { ...caps, extraState: 'disabled' } });
+    inv({ capabilities: { maestroSyncState: 'disabled' } });
+  });
+
+  it('every sub-object rejects a missing or an extra key', () => {
+    const base = validManifest();
+    for (const obj of ['identity', 'access', 'revision', 'device', 'telephonyPolicy', 'routing', 'capabilities', 'observability']) {
+      inv({ [obj]: { ...base[obj], unexpectedKey: 'x' } });
+      for (const k of Object.keys(base[obj])) {
+        const { [k]: _omit, ...rest } = base[obj];
+        inv({ [obj]: rest });
+      }
+      inv({ [obj]: [] });
+      inv({ [obj]: null });
+    }
+  });
+
+  it('every privacy scope must be own_extension_only', () => {
+    for (const k of ['identity.privacyScope', 'telephonyPolicy.callsPrivacyScope', 'telephonyPolicy.recordingsPrivacyScope', 'telephonyPolicy.voicemailPrivacyScope', 'telephonyPolicy.transcriptsPrivacyScope']) {
+      for (const v of ['organization', 'domain', '', null]) inv({ [k]: v });
+    }
+  });
+
+  it('routing must be direct_current with edge gate false', () => {
+    for (const v of ['edge', 'edge_shadow', '', null]) { inv({ 'routing.routingMode': v }); inv({ 'routing.fallbackMode': v }); }
+    for (const v of [true, 'false', 0, null]) inv({ 'routing.edgeFeatureGate': v });
+  });
+
+  it('observability: supportBundleAllowed boolean and valid redaction ref', () => {
+    for (const v of ['false', 0, null]) inv({ 'observability.supportBundleAllowed': v });
+    inv({ 'observability.redactionPolicyRef': 'Redact Default' });
+  });
+
+  it('parseManifest returns null for every rejected mutation (never reaches allowed)', () => {
+    expect(parseManifest(validManifest({ 'access.signInMode': 'x' }))).toBeNull();
+    expect(parseManifest(validManifest({ 'revision.expiresAt': '2026-10-03T12:10:00+00:00' }))).toBeNull();
+  });
+
+  it('conforming cache stays usable only after a transient error; invalid cache is never loaded', async () => {
+    localStorage.clear();
+    await saveCachedManifest(validManifest(), NOW);
+    expect(cacheUsableAfterTransient(await loadCachedManifest(), NOW)).toBe(true);
+    await saveCachedManifest(validManifest({ 'capabilities.maestroSyncState': 'go' }), NOW);
+    localStorage.setItem('lemtel.mobile.client_config.v1', JSON.stringify({ manifest: validManifest({ 'observability.diagnosticLevel': 'verbose' }), checkedAt: NOW }));
+    expect(await loadCachedManifest()).toBeNull();
+  });
+});

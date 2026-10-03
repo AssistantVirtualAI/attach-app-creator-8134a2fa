@@ -38,3 +38,9 @@ No FusionPBX, PBX, Edge, VPS, DNS/TLS, desktop, portal, backend, native code or 
 
 ## Next step
 Equivalent Desktop phase, after separate approval.
+
+## Phase 21A.1 hardening
+
+- `parseManifest()` now validates every Phase 16 key, opaque reference pattern (`^[a-z0-9][a-z0-9_-]{2,63}$`), strict UTC `Z` dates (0–3 decimals, real calendar date) and every enum, including the four exact `capabilities` keys and `observability`.
+- Any ambiguous, incomplete or out-of-contract manifest returns `invalid_manifest` and is refused before SIP; capability values remain non-executable labels.
+- No change to the portal, backend, FusionPBX, Android/iOS native, Desktop or Planiprêt.

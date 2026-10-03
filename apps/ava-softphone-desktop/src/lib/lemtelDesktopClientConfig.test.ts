@@ -1,4 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
+
+// Phase 21B.1 — local mocks only; no real Supabase, PBX or device is ever contacted.
+const h = vi.hoisted(() => {
+  const methods = ['init', 'call', 'answer', 'hangup', 'mute', 'unmute', 'hold', 'unhold', 'sendDTMF', 'blindTransfer',
+    'startAttendedConsult', 'completeAttendedTransfer', 'cancelAttendedConsult', 'hasConsult', 'retryNow', 'restart'];
+  const sip: any = { listeners: new Set<any>(), snap: { status: 'idle', callState: 'idle' } };
+  for (const m of methods) sip[m] = vi.fn(async () => undefined);
+  sip.getSnapshot = () => sip.snap;
+  sip.subscribe = (cb: any) => { sip.listeners.add(cb); return () => sip.listeners.delete(cb); };
+  sip.emit = (s: any) => { sip.snap = s; sip.listeners.forEach((cb: any) => cb(s)); };
+  sip.unavailableReason = () => null;
+  const auth = {
+    setSession: vi.fn(async () => ({})),
+    getSession: vi.fn(async () => ({ data: { session: { access_token: 'mock-token' } } })),
+  };
+  const update = () => ({ eq: async () => ({}) });
+  return { sip, auth, supabase: { auth, from: () => ({ update }), functions: { invoke: vi.fn() } } };
+});
+vi.mock('@/lib/sip/jssipProvider', () => ({ sipProvider: h.sip }));
+vi.mock('@/lib/sip/ringtonePlayer', () => ({ ringtone: { start: vi.fn(), stop: vi.fn() } }));
+vi.mock('@/lib/supabaseClient', () => ({ supabase: h.supabase, SB_URL: 'https://mock.invalid', SB_KEY: 'mock-key' }));
+import { useSoftphone } from '../hooks/useSoftphone';
 
 import {
   generateInstallationRef, getInstallationRef, evaluateManifest, parseManifest, saveCachedManifest, loadCachedManifest,
@@ -201,5 +224,73 @@ describe('lemtelDesktopClientConfig — Phase 21B desktop specifics', () => {
   it('storage failures never throw', async () => {
     const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
     try { expect(await loadCachedManifest()).toBeNull(); } finally { spy.mockRestore(); }
+  });
+});
+
+function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
+const okJson = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
+const CREDS = { extension: '100', display_name: 'X', sip_domain: 'mock.invalid', wss_url: 'wss://mock.invalid', password: 'mock' };
+
+describe('Phase 21B.1 — useSoftphone async races during revocation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h.sip.snap = { status: 'idle', callState: 'idle' };
+    h.sip.listeners.clear();
+  });
+
+  it('credential fetch in flight: revocation before resolve never reaches sipProvider.init nor retries', async () => {
+    const d = deferred<Response>();
+    const fetchMock = vi.fn(() => d.promise);
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { rerender } = renderHook((p: { allow: boolean }) => useSoftphone({ extension: '100', accessToken: 't', allowNewActions: p.allow }), { initialProps: { allow: true } });
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      expect(String(fetchMock.mock.calls[0][0])).toContain('softphone-credentials');
+      rerender({ allow: false });
+      await act(async () => { d.resolve(okJson(CREDS)); await Promise.resolve(); });
+      await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+      expect(h.sip.init).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('auto-heal in flight: revocation before resolve schedules no retry / re-registration', async () => {
+    const heal = deferred<Response>();
+    const fetchMock = vi.fn((url: string) => (String(url).includes('softphone-sync-password') ? heal.promise : Promise.resolve(okJson(CREDS))));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { rerender } = renderHook((p: { allow: boolean }) => useSoftphone({ extension: '100', accessToken: 't', allowNewActions: p.allow }), { initialProps: { allow: true } });
+      await waitFor(() => expect(h.sip.init).toHaveBeenCalledTimes(1));
+      act(() => h.sip.emit({ status: 'error', callState: 'idle', errorCause: '403 Forbidden' }));
+      await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('softphone-sync-password'))).toBe(true));
+      rerender({ allow: false });
+      const credCallsBefore = fetchMock.mock.calls.filter((c) => String(c[0]).includes('softphone-credentials')).length;
+      await act(async () => { heal.resolve(okJson({ ok: true })); await new Promise((r) => setTimeout(r, 20)); });
+      expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes('softphone-credentials')).length).toBe(credCallsBefore);
+      expect(h.sip.init).toHaveBeenCalledTimes(1);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('blocked: transfers refused; existing-call controls still routed to the provider', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { result } = renderHook(() => useSoftphone({ extension: '100', accessToken: 't', allowNewActions: false }));
+      act(() => {
+        result.current.blindTransfer('200');
+        result.current.startAttendedConsult('200');
+        result.current.completeAttendedTransfer();
+      });
+      expect(h.sip.blindTransfer).not.toHaveBeenCalled();
+      expect(h.sip.startAttendedConsult).not.toHaveBeenCalled();
+      expect(h.sip.completeAttendedTransfer).not.toHaveBeenCalled();
+      act(() => {
+        result.current.answer(); result.current.hangup(); result.current.mute(); result.current.unmute();
+        result.current.hold(); result.current.unhold(); result.current.sendDTMF('1'); result.current.cancelAttendedConsult();
+      });
+      for (const m of ['answer', 'hangup', 'mute', 'unmute', 'hold', 'unhold', 'sendDTMF', 'cancelAttendedConsult']) expect(h.sip[m], m).toHaveBeenCalledTimes(1);
+      expect(h.sip.init).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
   });
 });

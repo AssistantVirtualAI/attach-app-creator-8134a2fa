@@ -36,3 +36,11 @@ Token/JWT, SIP identifier, password, WSS URL, host, number, CDR, recording, voic
 
 ## Non-goals
 No migration, Supabase function, portal, PBX, FusionPBX, Edge, Electron main/preload, package or lockfile change. No change to the JsSIP provider, credential URLs or SDP rules. Verto and PJSIP stay forbidden. No automatic speaker. Desktop build and physical Mac validation are a separate step, without publication.
+
+## Phase 21B.1 — closing async races during revocation
+Sub-phase base: `313f86c1f`. Scope: `useSoftphone.ts`, the Desktop lib test, the root regression test and this document.
+- Every existing async action that could create new telephony re-checks authorization right before its effect (`cancelled || !allowRef.current` after `setSession`, `getSession`, the credential fetch, and before `setConfig`/`sipProvider.init`).
+- A revocation during a credential fetch or an auto-heal cannot trigger an init or re-registration after the block (auto-heal re-checks after `getSession` and after the response, before `setRetryTick`).
+- Blind transfer, attended consult and complete transfer are refused during `pending_block`.
+- Cancelling a consultation and existing-call controls (answer, hangup, mute, unmute, hold, unhold, DTMF) remain manual and available.
+- No backend, PBX, FusionPBX, JsSIP provider or Planiprêt change.

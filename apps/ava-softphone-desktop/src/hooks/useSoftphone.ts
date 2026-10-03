@@ -116,6 +116,7 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     (async () => {
       try {
         const { data: sess } = await supabase.auth.getSession();
+        if (!allowRef.current) return;
         const token = sess.session?.access_token || args.accessToken;
         if (!token) return;
         const res = await fetch(`${SB_URL}/functions/v1/softphone-sync-password`, {
@@ -128,6 +129,8 @@ export function useSoftphone(args: UseSoftphoneArgs) {
           body: JSON.stringify({ force_local_to_pbx: true }),
         });
         if (!res.ok) return;
+        // Phase 21B.1: access may have been revoked while the request was in flight.
+        if (!allowRef.current) return;
         // Re-fetch creds and re-init SIP with the now-aligned password.
         setRetryTick((n) => n + 1);
       } catch { /* noop */ }
@@ -160,8 +163,10 @@ export function useSoftphone(args: UseSoftphoneArgs) {
             access_token: args.accessToken,
             refresh_token: args.refreshToken || '',
           }).catch(() => { /* noop */ });
+          if (cancelled || !allowRef.current) return;
         }
         const { data: sess } = await supabase.auth.getSession();
+        if (cancelled || !allowRef.current) return;
         const token = sess.session?.access_token || args.accessToken;
         if (!token) {
           setCredError('No session token. Re-sign-in.');
@@ -172,7 +177,8 @@ export function useSoftphone(args: UseSoftphoneArgs) {
           sipDomain: args.sipDomain,
           wssUrl: args.wssUrl,
         });
-        if (cancelled) return;
+        // Phase 21B.1: re-check after the async credential fetch.
+        if (cancelled || !allowRef.current) return;
         if (!fetched || !fetched.password) {
           setCredError(fetched ? 'No SIP password on file. Contact your admin.' : 'Failed to load SIP credentials.');
           return;
@@ -185,9 +191,11 @@ export function useSoftphone(args: UseSoftphoneArgs) {
           password: fetched.password,
           authUsername: fetched.auth_username || fetched.authUsername || fetched.extension || args.extension,
         };
+        if (cancelled || !allowRef.current) return;
         setConfig(cfg);
         await sipProvider.init(cfg);
       } catch (e: any) {
+        if (cancelled || !allowRef.current) return;
         setCredError(String(e?.message || e));
       } finally {
         if (!cancelled) setLoading(false);
@@ -273,9 +281,9 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     hold: useCallback(() => sipProvider.hold(), []),
     unhold: useCallback(() => sipProvider.unhold(), []),
     sendDTMF: useCallback((k: string) => sipProvider.sendDTMF(k), []),
-    blindTransfer: useCallback((t: string) => sipProvider.blindTransfer(t), []),
-    startAttendedConsult: useCallback((t: string) => sipProvider.startAttendedConsult(t), []),
-    completeAttendedTransfer: useCallback(() => sipProvider.completeAttendedTransfer(), []),
+    blindTransfer: useCallback((t: string) => { if (!allowRef.current) return; sipProvider.blindTransfer(t); }, []),
+    startAttendedConsult: useCallback((t: string) => { if (!allowRef.current) return; sipProvider.startAttendedConsult(t); }, []),
+    completeAttendedTransfer: useCallback(() => { if (!allowRef.current) return; sipProvider.completeAttendedTransfer(); }, []),
     cancelAttendedConsult: useCallback(() => sipProvider.cancelAttendedConsult(), []),
     hasConsult: useCallback(() => sipProvider.hasConsult(), []),
     setAudioEl: useCallback((el: HTMLAudioElement | null) => { sipProvider.audioEl = el; }, []),

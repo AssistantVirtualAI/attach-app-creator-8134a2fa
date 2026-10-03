@@ -1140,7 +1140,7 @@ function ContactDetailSheet({
   return (
     <div className="absolute inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-4"
+        className="w-full sm:max-w-md max-h-[88dvh] overflow-y-auto overscroll-contain pb-[calc(1rem+env(safe-area-inset-bottom))] rounded-t-3xl sm:rounded-3xl p-4"
         style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)" }}
         onClick={(e) => e.stopPropagation()}
       >

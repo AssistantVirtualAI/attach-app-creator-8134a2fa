@@ -83,7 +83,7 @@ export default function MPipeline() {
                     <span className="text-xs font-semibold" style={{ color: "var(--pp-text-primary)" }}>{s.emoji} {t(`pipeline.stages.${s.key}`)}</span>
                     <span className="text-[11px] text-slate-400 tabular-nums">{items.length}</span>
                   </div>
-                  <div className="flex-1 p-2 space-y-2 overflow-y-auto">
+                  <div className="flex-1 min-h-0 p-2 space-y-2 overflow-y-auto overscroll-contain">
                     {items.length === 0 ? (
                       <p className="text-[11px] text-slate-300 text-center py-4">{t("pipeline.noFile")}</p>
                     ) : items.map((c) => (
@@ -151,7 +151,7 @@ function DetailSheet({ card, profile, openDialer, openAva, onClose, onMove, onCh
 
   return (
     <div className="absolute inset-0 z-40 flex items-end bg-black/40" onClick={onClose}>
-      <div className="w-full bg-white rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full bg-white rounded-t-3xl p-5 max-h-[85dvh] overflow-y-auto overscroll-contain pb-[calc(1.25rem+env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold" style={{ color: "var(--pp-text-primary)" }}>{card.contact_name}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-slate-500" /></button>

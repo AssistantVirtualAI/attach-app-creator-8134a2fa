@@ -163,7 +163,9 @@ describe("C — recurring tasks show their frequency", () => {
 describe("D — Marketing wording and destination", () => {
   it("no 'Commercialisation' string in Planiprêt mobile sources", () => {
     const { execSync } = require("node:child_process");
-    const out = execSync(`grep -rl "Commercialisation" "${resolve(__dirname, "../..")}" --include=*.ts --include=*.tsx --include=*.json || true`, { encoding: "utf8" });
+    const word = "Commerciali" + "sation";
+    const dirs = [resolve(__dirname, "../.."), resolve(__dirname, "../../../../../src/pages/planipret"), resolve(__dirname, "../../../../../src/components/planipret")];
+    const out = execSync(`grep -rl "${word}" ${dirs.map((d) => `"${d}"`).join(" ")} --include=*.ts --include=*.tsx --include=*.json || true`, { encoding: "utf8" });
     expect(out.trim()).toBe("");
   });
   it("Plus menu has a Marketing row opening the official broker portal route via handoff", () => {

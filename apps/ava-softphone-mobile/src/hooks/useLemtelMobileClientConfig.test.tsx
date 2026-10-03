@@ -18,7 +18,12 @@ function manifest(over: Record<string, any> = {}) {
     device: { deviceRef: 'dev_' + 'b'.repeat(32), deviceState: 'approved', deviceRevision: 'devrev_a', deviceAction: 'none' },
     telephonyPolicy: { credentialRevisionRef: 'credrev_a', dndState: 'disabled', forwardingState: 'disabled', recordingPolicy: 'portal_managed', voicemailPolicy: 'enabled', callsPrivacyScope: 'own_extension_only', recordingsPrivacyScope: 'own_extension_only', voicemailPrivacyScope: 'own_extension_only', transcriptsPrivacyScope: 'own_extension_only' },
     routing: { routingMode: 'direct_current', routingAssignmentRef: 'route_direct_current_v1', fallbackMode: 'direct_current', edgeFeatureGate: false },
-    capabilities: { maestroSyncState: 'disabled' },
+    capabilities: {
+      maestroSyncState: 'disabled',
+      avaCallActionState: 'disabled',
+      avaSmsActionState: 'disabled',
+      microsoftSsoState: 'not_ready',
+    },
     observability: { diagnosticLevel: 'error_only', redactionPolicyRef: 'redact_lemtel_default_v1', supportBundleAllowed: false },
   };
   for (const [p, v] of Object.entries(over)) { const [a, b] = p.split('.'); m[a][b] = v; }

@@ -1,3 +1,4 @@
+import { consumeMs365ReturnTo, clearMs365ReturnTo } from "@/lib/planipret/ms365ReturnTo";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -111,6 +112,7 @@ export default function Ms365Callback() {
   };
 
   const failWithGuard = async (message: string) => {
+    clearMs365ReturnTo();
     if (await homeIfSignedIn()) return;
     setStatus("error");
     setError(message);
@@ -205,7 +207,7 @@ export default function Ms365Callback() {
         }).catch((err) => console.warn("ms365 webhook setup skipped", err?.message ?? err));
         try { void supabase.functions.invoke("ms365-full-import", { body: { mode: "initial" } }).catch(() => {}); } catch {}
         setStatus("ok");
-        navigate("/mplanipret/home?ms365=ok", { replace: true });
+        navigate(`${consumeMs365ReturnTo()}?ms365=ok`, { replace: true });
       } finally {
         exchangeInFlight = false;
       }

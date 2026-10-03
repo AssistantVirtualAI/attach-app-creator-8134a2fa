@@ -548,7 +548,7 @@ export default function PlanipretMobile() {
   const refreshFn = useRef<(() => Promise<void> | void) | null>(null);
   const registerRefresh = (fn: (() => Promise<void> | void) | null) => { refreshFn.current = fn; };
   const handlePull = async () => { if (refreshFn.current) await refreshFn.current(); };
-  const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull);
+  const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull, 70, () => refreshFn.current != null);
 
   // Remember each page's scroll position so returning to a tab reopens it
   // where the broker left it instead of jumping back to the top.

@@ -1,3 +1,4 @@
+import { rememberMs365ReturnTo } from "@/lib/planipret/ms365ReturnTo";
 /**
  * Microsoft 365 end-to-end test + auto-reconnect helper.
  * Used by "Tester maintenant" buttons on status/Teams/Mail/Calendar pages.
@@ -115,6 +116,7 @@ export async function startMs365Reconnect(reason?: string): Promise<void> {
       state: userData?.user?.id ?? "",
       prompt: "select_account",
     });
+    rememberMs365ReturnTo(typeof window !== "undefined" ? window.location.pathname : null);
     window.location.href = url;
   } catch (e: any) {
     toast.error("Reconnexion impossible", { description: e?.message });

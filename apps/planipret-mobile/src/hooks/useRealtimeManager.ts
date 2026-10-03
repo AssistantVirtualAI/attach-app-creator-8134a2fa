@@ -13,12 +13,23 @@ type Handlers = {
  * Subscribes to phone_calls / phone_messages / voicemails for the current user,
  * surfaces toasts and triggers callbacks for inbound ringing + AI insights.
  */
+/** Non-sensitive channel counters (created/removed) used by tests to verify the budget. */
+export const realtimeManagerStats = { created: 0, removed: 0 };
+
 export function useRealtimeManager(userId: string | undefined, handlers: Handlers = {}) {
   const navigate = useNavigate();
   const seenInsights = useRef<Set<string>>(new Set());
+  // Current callbacks live in refs so re-renders never resubscribe.
+  const handlersRef = useRef(handlers);
+  const navigateRef = useRef(navigate);
+  handlersRef.current = handlers;
+  navigateRef.current = navigate;
 
   useEffect(() => {
     if (!userId) return;
+    const handlers = { get onInboundRinging() { return handlersRef.current.onInboundRinging; }, get onAiInsight() { return handlersRef.current.onAiInsight; } };
+    const navigate = (to: string) => navigateRef.current(to);
+    realtimeManagerStats.created += 1;
     const ch = supabase
       .channel(`pp-rt:${userId}:${Math.random().toString(36).slice(2, 8)}`)
       .on(
@@ -74,7 +85,8 @@ export function useRealtimeManager(userId: string | undefined, handlers: Handler
       )
       .subscribe();
     return () => {
+      realtimeManagerStats.removed += 1;
       supabase.removeChannel(ch);
     };
-  }, [userId, navigate, handlers]);
+  }, [userId]);
 }

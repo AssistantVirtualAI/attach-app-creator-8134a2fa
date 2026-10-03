@@ -206,6 +206,7 @@ export default function MCommissions() {
     if (!allowed || !rangeReady) return;
     const gen = ++loadGen.current;
     const stale = () => gen !== loadGen.current;
+    moreInflight.current = null; setLoadingMore(false);
     const cached = readStatsCache(reportCacheKey);
     const cachedReport = cached?.value as { summary?: Summary; rows?: DepositRow[]; total?: number } | undefined;
     if (cachedReport) {

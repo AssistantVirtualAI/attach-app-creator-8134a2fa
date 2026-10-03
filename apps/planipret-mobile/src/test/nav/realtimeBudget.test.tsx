@@ -20,6 +20,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     storage: { from: () => chain },
   },
 }));
+vi.mock("@/hooks/useMplanipretLang", () => ({ useMplanipretLang: () => ({ lang: "fr", t: (k: string) => k }) }));
 vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 

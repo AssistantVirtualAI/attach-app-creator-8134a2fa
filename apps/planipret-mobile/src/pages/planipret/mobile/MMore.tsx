@@ -11,6 +11,9 @@ import {
   LogOut, Trash2, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages, ExternalLink, Database,
 } from "lucide-react";
 import { openBrokerPortal } from "@/lib/planipret/openBrokerPortal";
+import { useDndToggle } from "@/lib/planipret/useDndToggle";
+
+export const MARKETING_PORTAL_PATH = "/planipret/broker/marketing";
 import { getAppVersionInfo } from "@/lib/planipret/appVersion";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
@@ -28,7 +31,7 @@ import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { startMs365Authorize } from "@/lib/planipret/ms365Start";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
-import { Radio, Wallet, Users as UsersIcon, ListChecks } from "lucide-react";
+import { Radio, Wallet, Users as UsersIcon, ListChecks, Megaphone } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
 const initials = (name?: string) =>
@@ -42,6 +45,12 @@ export default function MMore() {
   const [params] = useSearchParams();
   const [editOpen, setEditOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // DND: only the confirmed profile value is the source of truth; no optimistic success.
+  const { busy: dndBusy, pending: dndPending, toggle: toggleDnd } = useDndToggle(profile, reloadProfile, {
+    onSuccess: (v) => toast.success(v ? t("more.dndEnabled") : t("home.dndDisabled")),
+    onError: () => toast.error(t("common.failed")),
+  });
+  const dndShown = dndPending ?? !!profile?.dnd_enabled;
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [dndOpen, setDndOpen] = useState(false);
   const [taskDiagOpen, setTaskDiagOpen] = useState(false);
@@ -300,6 +309,20 @@ export default function MMore() {
           }}
           right={openingPortal ? <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>…</span> : undefined}
           chevron />
+        {/* Marketing lives only in the broker portal: open it there via the approved handoff. */}
+        <Row icon={<Megaphone className="w-4 h-4" />} label="Marketing"
+          sub={lang === "en" ? "Opens in your broker portal" : "S'ouvre dans votre portail courtier"}
+          onClick={async () => {
+            if (openingPortal) return;
+            setOpeningPortal(true);
+            try {
+              const res = await openBrokerPortal(MARKETING_PORTAL_PATH);
+              if (res.ok === false) toast.error(res.error);
+            } finally {
+              setOpeningPortal(false);
+            }
+          }}
+          chevron />
         <Row icon={<User className="w-4 h-4" />} label={t("more.myProfile")} onClick={() => setEditOpen(true)} chevron />
         <Row icon={<Lock className="w-4 h-4" />} label={t("more.changePassword")} onClick={() => navigate("/mplanipret/change-password")} chevron />
         <Row icon={<Download className="w-4 h-4" />} label={t("more.myData")} sub={t("more.myDataSub")}
@@ -348,11 +371,7 @@ export default function MMore() {
           icon={<BellOff className="w-4 h-4" style={profile?.dnd_enabled ? { color: "var(--pp-color-danger)" } : undefined} />}
           label={t("more.dnd")}
           sub={profile?.dnd_enabled ? t("more.dndActiveSub") : t("more.inactive")}
-          right={<Toggle on={!!profile?.dnd_enabled} onChange={async (v) => {
-            await supabase.from("planipret_profiles").update({ dnd_enabled: v }).eq("user_id", profile.user_id);
-            await reloadProfile();
-            toast.success(v ? t("more.dndEnabled") : t("home.dndDisabled"));
-          }} />}
+          right={<Toggle testId="dnd-toggle" on={dndShown} busy={dndBusy} onChange={toggleDnd} />}
         />
         <Row icon={<SettingsIcon className="w-4 h-4" />} label={t("more.configureDnd")} onClick={() => setDndOpen(true)} chevron />
       </Section>
@@ -691,10 +710,16 @@ function Row({
   );
 }
 
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ on, onChange, busy = false, testId }: { on: boolean; onChange: (v: boolean) => void; busy?: boolean; testId?: string }) {
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onChange(!on); }}
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-busy={busy || undefined}
+      disabled={busy}
+      data-testid={testId}
+      onClick={(e) => { e.stopPropagation(); if (!busy) onChange(!on); }}
       className="rounded-full p-0.5 transition"
       style={{
         width: 40, height: 24,

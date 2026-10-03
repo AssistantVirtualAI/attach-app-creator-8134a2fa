@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const SCOPE = "128b45ebb";
+const SUB = "313f86c1f";
 const APP = "apps/ava-softphone-desktop/src";
 const LIB = `${APP}/lib/lemtelDesktopClientConfig.ts`;
 const HOOK = `${APP}/hooks/useLemtelDesktopClientConfig.ts`;
@@ -22,6 +23,7 @@ const FILES = [
   "src/test/lemtelDesktopPortalLifecyclePhase21.test.ts",
   "docs/lemtel-desktop/phase-21b-portal-device-lifecycle.md",
 ].sort();
+const SUB_FILES = [SOFT, `${APP}/lib/lemtelDesktopClientConfig.test.ts`, "src/test/lemtelDesktopPortalLifecyclePhase21.test.ts", "docs/lemtel-desktop/phase-21b-portal-device-lifecycle.md"].sort();
 
 const rd = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 const git = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "utf8" });
@@ -39,7 +41,54 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
   it("guards pass before (no-arg and --scope)", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(guard(`--scope=${SCOPE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
+    expect(guard(`--scope=${SUB}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
   });
+
+  it("Phase 21B.1 sub-phase range contains only the four allowed paths", () => {
+    expect(SUB_FILES.length).toBe(4);
+    for (const f of SUB_FILES) expect(FILES).toContain(f);
+    execFileSync("git", ["merge-base", "--is-ancestor", SUB, "HEAD"], { cwd: root });
+    const committed = git("diff", "--name-only", "--no-renames", `${SUB}..HEAD`).split("\n").filter(Boolean);
+    expect(committed.filter(isProtected)).toEqual([]);
+    for (const f of committed) expect(SUB_FILES, f).toContain(f);
+  });
+
+  it("Phase 21B.1: async credential / auto-heal flows re-check access; transfers guarded; existing-call controls not", () => {
+    const s = rd(SOFT);
+    const cred = between(s, "const fetched = await fetchSoftphoneCredentials(", "await sipProvider.init(cfg);");
+    expect(cred).toContain("if (cancelled || !allowRef.current) return;");
+    expect(cred.lastIndexOf("if (cancelled || !allowRef.current) return;")).toBeGreaterThan(cred.indexOf("const cfg"));
+    expect(between(s, "const { data: sess } = await supabase.auth.getSession();\n        if (cancelled", "const fetched")).toContain("if (cancelled || !allowRef.current) return;");
+    const heal = between(s, "if (!res.ok) return;", "setRetryTick((n) => n + 1);");
+    expect(heal).toContain("if (!allowRef.current) return;");
+    for (const k of ["blindTransfer", "startAttendedConsult", "completeAttendedTransfer"]) {
+      const seg = s.slice(s.indexOf(`    ${k}: useCallback`), s.indexOf("\n", s.indexOf(`    ${k}: useCallback`)));
+      expect(seg, k).toContain("if (!allowRef.current) return;");
+    }
+    for (const k of ["cancelAttendedConsult", "answer", "hangup", "mute", "unmute", "hold", "unhold", "sendDTMF"]) {
+      const seg = s.slice(s.indexOf(`    ${k}: useCallback`), s.indexOf("\n", s.indexOf(`    ${k}: useCallback`)));
+      expect(seg, k).not.toContain("allowRef");
+    }
+  });
+
+  it("real temporary Git repository: four sub-phase files accepted; fifth or Planiprêt path refused", () => {
+    const check = (extra: string[]) => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "p21b1-"));
+      const g = (...a: string[]) => execFileSync("git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...a], { cwd: tmp, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      try {
+        g("init", "-q");
+        fs.writeFileSync(path.join(tmp, "README.md"), "b\n"); g("update-index", "--add", "README.md");
+        const base = g("commit-tree", g("write-tree"), "-m", "base");
+        for (const f of [...SUB_FILES, ...extra]) { fs.mkdirSync(path.join(tmp, path.dirname(f)), { recursive: true }); fs.writeFileSync(path.join(tmp, f), "x\n"); g("update-index", "--add", f); }
+        const end = g("commit-tree", g("write-tree"), "-p", base, "-m", "p21b1");
+        const list = g("diff", "--name-only", "--no-renames", base, end).split("\n").filter(Boolean).sort();
+        return JSON.stringify(list) === JSON.stringify(SUB_FILES) && !list.some(isProtected);
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    };
+    expect(check([])).toBe(true);
+    expect(check([`${APP}/App.tsx`])).toBe(false);
+    expect(check(["src/pages/planipret/x.ts"])).toBe(false);
+  }, 30000);
 
   it("declares exactly nine Phase 21B files, none protected, and the delivery range stays within them", () => {
     expect(FILES.length).toBe(9);
@@ -160,6 +209,7 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
   it("guards pass after and the real repository is unchanged by the tests", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(guard(`--scope=${SCOPE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
+    expect(guard(`--scope=${SUB}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(git("status", "--porcelain")).toBe(statusBefore);
   });
 });

@@ -456,9 +456,10 @@ export default function MCalls() {
   useEffect(() => { setVisibleCount(25); }, [tab, search]);
 
   useEffect(() => {
-    registerRefresh(() => { load(true); loadRecordings(false, true); });
-    return () => registerRefresh(null);
-  }, [load, loadRecordings, registerRefresh]);
+    // Voicemails tab registers its own owner; recordings only refresh on their tab.
+    if (tab === "voicemails") return;
+    return registerRefresh(tab === "recordings" ? () => loadRecordings(false, true) : () => load(true));
+  }, [tab, load, loadRecordings, registerRefresh]);
 
 
   // Auto-refresh on phone_calls changes is intentionally disabled so the
@@ -2137,8 +2138,7 @@ function VoicemailsTab({
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    registerRefresh(() => load());
-    return () => registerRefresh(null);
+    return registerRefresh(() => load());
   }, [load, registerRefresh]);
 
   useEffect(() => {

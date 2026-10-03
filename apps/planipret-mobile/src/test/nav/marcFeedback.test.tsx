@@ -161,7 +161,7 @@ describe("C — recurring tasks show their frequency", () => {
 });
 
 describe("D — Marketing wording and destination", () => {
-  it("no 'Commercialisation' string in Planiprêt mobile sources", () => {
+  it("no forbidden French synonym in Planiprêt mobile sources", () => {
     const { execSync } = require("node:child_process");
     const word = "Commerciali" + "sation";
     const dirs = [resolve(__dirname, "../.."), resolve(__dirname, "../../../../../src/pages/planipret"), resolve(__dirname, "../../../../../src/components/planipret")];

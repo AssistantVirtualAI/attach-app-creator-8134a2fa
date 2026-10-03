@@ -1223,7 +1223,7 @@ const handler = async (req: Request): Promise<Response> => {
       const extUuid = typeof params?.extension_uuid === "string" ? params.extension_uuid : "";
       if (Object.keys(mirror).length === 0 || !extUuid || !organization_id) return json(pbxResult, 200);
       try {
-        // Zero matching rows must never be reported as "updated".
+        // Zero matching rows must never be reported as updated.
         const { data: mirrorRow, error: mirrorErr } = await admin.from("pbx_extensions").update(mirror).eq("organization_id", organization_id).eq("pbx_uuid", extUuid).select("id").maybeSingle();
         return json({ ...pbxResult, policyMirror: !mirrorErr && mirrorRow ? "updated" : "pending_sync" }, 200);
       } catch (_e) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import TitleBar from './components/TitleBar';
 import SetupWizard from './components/SetupWizard';
 import UpdateBanner from './components/UpdateBanner';
@@ -18,6 +18,7 @@ import { SoftphoneProvider } from './contexts/SoftphoneContext';
 import { useTenant } from './hooks/useTenant';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useExtensionDataSync } from './hooks/useExtensionDataSync';
+import { useLemtelDesktopClientConfig } from './hooks/useLemtelDesktopClientConfig';
 
 const LEMTEL_ORG_ID = '71755d33-ed64-4ad5-a828-61c9d2029eb7';
 
@@ -81,8 +82,9 @@ type Creds = {
 
 type ActiveCreds = Exclude<Creds, null>;
 
-function SipKeepAlive({ creds, children }: { creds: ActiveCreds; children?: React.ReactNode }) {
+function SipKeepAlive({ creds, allowNewActions, children }: { creds: ActiveCreds; allowNewActions: boolean; children?: React.ReactNode }) {
   const sp = useSoftphone({
+    allowNewActions,
     extension: creds.extension,
     displayName: creds.displayName,
     sipDomain: creds.sipDomain,
@@ -96,6 +98,31 @@ function SipKeepAlive({ creds, children }: { creds: ActiveCreds; children?: Reac
   // Expose the single SIP instance to all children via context
   return <SoftphoneProvider value={sp}>{children ?? null}</SoftphoneProvider>;
 }
+
+// Phase 21B: the existing CDR sync is triggered only while the portal manifest is allowed.
+// Mounted only in the allowed subtree; unmounting stops its existing cadence immediately.
+function AllowedCdrSync() {
+  useEffect(() => {
+    triggerCdrSync();
+    const syncTimer = setInterval(triggerCdrSync, 5 * 60 * 1000);
+    return () => clearInterval(syncTimer);
+  }, []);
+  return null;
+}
+
+/** Phase 21B: strictly local cleanup for the Desktop policy flow (no server sign-out, no reload). */
+async function clearLocalDesktopPolicyState() {
+  try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
+  try { await window.electronAPI?.saveCredentials?.(null); } catch { /* noop */ }
+  try {
+    window.localStorage.removeItem('lemtel-desktop-auth');
+    window.sessionStorage.removeItem('lemtel-desktop-auth');
+    window.localStorage.removeItem('lemtel.sip_password');
+  } catch { /* noop */ }
+  setAuthToken(null);
+}
+
+const isBusyCallState = (s?: string) => s === 'ringing-in' || s === 'ringing-out' || s === 'active' || s === 'held';
 
 function DesktopBackgroundSync({ fallbackExtension }: { fallbackExtension?: string | null }) {
   const { orgId, extension } = useTenant();
@@ -122,6 +149,51 @@ function DesktopApp() {
   const [creds, setCreds] = useState<Creds>(null);
   const [loading, setLoading] = useState(true);
   const [mobileSettings, setMobileSettings] = useState(false);
+  const finalizingRef = useRef(false);
+  const [policyBlocked, setPolicyBlocked] = useState(false);
+  const [callState, setCallState] = useState<string | undefined>(() => sipProvider.getSnapshot?.().callState);
+
+  // Phase 21B: portal lifecycle runs before SipKeepAlive is ever mounted. Without a session, Desktop is unavailable.
+  const lifecycle = useLemtelDesktopClientConfig(creds?.accessToken || null);
+  const lifecycleStatus = lifecycle.status;
+  const { refresh: refreshLifecycle, finalizeBlock } = lifecycle;
+
+  useEffect(() => sipProvider.subscribe?.((snap) => setCallState(snap.callState)), []);
+
+  // Foreground refresh only when idle; the hook itself enforces the 900 s minimum.
+  useEffect(() => {
+    const onForeground = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (isBusyCallState(sipProvider.getSnapshot?.().callState)) return;
+      void refreshLifecycle();
+    };
+    window.addEventListener('focus', onForeground);
+    document.addEventListener('visibilitychange', onForeground);
+    return () => {
+      window.removeEventListener('focus', onForeground);
+      document.removeEventListener('visibilitychange', onForeground);
+    };
+  }, [refreshLifecycle]);
+
+  // Deferred revocation: an existing call stays up; once idle, stop SIP once and clear local state.
+  useEffect(() => {
+    if (lifecycleStatus !== 'pending_block' || isBusyCallState(callState)) return;
+    if (finalizingRef.current) return;
+    finalizingRef.current = true;
+    setPolicyBlocked(true);
+    void (async () => {
+      try { await sipProvider.stop?.(); } catch { /* noop */ }
+      finalizeBlock();
+      await clearLocalDesktopPolicyState();
+    })();
+  }, [lifecycleStatus, callState, finalizeBlock]);
+
+  const returnToSignIn = async () => {
+    if (!finalizingRef.current) await clearLocalDesktopPolicyState();
+    setPolicyBlocked(false);
+    setCreds(null);
+    finalizingRef.current = false;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -182,7 +254,6 @@ function DesktopApp() {
           accessToken: session.access_token,
           refreshToken: session.refresh_token,
         });
-        triggerCdrSync();
 
       } else {
         // A browser-local Supabase session without Electron credentials is stale for the packaged app.
@@ -193,12 +264,14 @@ function DesktopApp() {
     };
 
     init();
-    const syncTimer = setInterval(triggerCdrSync, 5 * 60 * 1000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         try { audit('softphone.signed_out'); } catch { /* noop */ }
-        try { await sipProvider.stop?.(); } catch { /* noop */ }
+        // Phase 21B: the policy flow already stopped SIP once; never stop it twice.
+        if (!finalizingRef.current) {
+          try { await sipProvider.stop?.(); } catch { /* noop */ }
+        }
         await window.electronAPI?.saveCredentials?.(null).catch(() => {});
         setAuthToken(null);
         setCreds(null);
@@ -207,7 +280,6 @@ function DesktopApp() {
       if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
         setAuthToken(session.access_token);
         if (event === 'SIGNED_IN') {
-          triggerCdrSync();
           audit('softphone.signed_in', session.user?.id, { email: session.user?.email });
         }
         setCreds((prev) => prev ? {
@@ -233,7 +305,6 @@ function DesktopApp() {
 
     return () => {
       cancelled = true;
-      clearInterval(syncTimer);
       subscription.unsubscribe();
       try { unsubscribeSip?.(); } catch { /* noop */ }
     };
@@ -269,22 +340,46 @@ function DesktopApp() {
     );
   }
 
+  const accessScreen = (title: string, withButton: boolean) => (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
+      <TitleBar />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: t.textMuted, fontSize: 14 }}>
+        <div>{title}</div>
+        {withButton && (
+          <button type="button" onClick={() => { void returnToSignIn(); }} style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer' }}>
+            Revenir à la connexion
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  if (policyBlocked || (creds && (lifecycleStatus === 'unavailable' || lifecycleStatus === 'blocked'))) {
+    return accessScreen('Accès Desktop indisponible', true);
+  }
+
   if (!creds) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
         <BrightnessOverlay />
         <TitleBar />
         <div style={{ flex: 1, overflow: 'auto', position: 'relative', zIndex: 1 }}>
-          <SetupWizard onComplete={(c: any) => { setCreds(c); triggerCdrSync(); }} />
+          <SetupWizard onComplete={(c: any) => { setCreds(c); }} />
         </div>
       </div>
     );
   }
 
+  if (lifecycleStatus === 'checking') {
+    return accessScreen('Vérification de l’accès Lemtel Desktop…', false);
+  }
+
+  const lifecycleAllowed = lifecycleStatus === 'allowed';
   return (
-    <SipKeepAlive creds={creds}>
+    <SipKeepAlive creds={creds} allowNewActions={lifecycleAllowed}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
-        <DesktopBackgroundSync fallbackExtension={creds.extension} />
+        {lifecycleAllowed && <AllowedCdrSync />}
+        {lifecycleAllowed && <DesktopBackgroundSync fallbackExtension={creds.extension} />}
         <BrightnessOverlay />
         {!IS_EMBED && <TitleBar />}
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative', zIndex: 1 }}>

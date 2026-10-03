@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { sipProvider, SoftphoneSnapshot, SoftphoneConfig } from '@/lib/sip/jssipProvider';
 import { ringtone } from '@/lib/sip/ringtonePlayer';
 import { supabase, SB_URL, SB_KEY } from '@/lib/supabaseClient';
@@ -10,6 +10,8 @@ interface UseSoftphoneArgs {
   wssUrl?: string;
   accessToken?: string;
   refreshToken?: string;
+  /** Phase 21B: when false, new telephony actions (call, retry, restart, auto-heal, credential re-init) are refused. Existing call controls stay available. */
+  allowNewActions?: boolean;
 }
 
 interface FetchedCreds {
@@ -97,10 +99,14 @@ export function useSoftphone(args: UseSoftphoneArgs) {
   const [retryTick, setRetryTick] = useState(0);
   const [recording, setRecording] = useState(false);
   const [healedKey, setHealedKey] = useState<string>('');
+  const allowNewActions = args.allowNewActions !== false;
+  const allowRef = useRef(allowNewActions);
+  allowRef.current = allowNewActions;
 
   // Auto-heal: if PBX rejects registration (401/403/auth), force local password
   // into PBX once per (cause) so the saved password becomes the source of truth.
   useEffect(() => {
+    if (!allowNewActions) return;
     if (snap.status !== 'error') return;
     const cause = snap.errorCause || '';
     if (!/401|403|forbidden|unauth|reject|auth/i.test(cause)) return;
@@ -126,7 +132,7 @@ export function useSoftphone(args: UseSoftphoneArgs) {
         setRetryTick((n) => n + 1);
       } catch { /* noop */ }
     })();
-  }, [snap.status, snap.errorCause, args.extension, args.accessToken, healedKey]);
+  }, [snap.status, snap.errorCause, args.extension, args.accessToken, healedKey, allowNewActions]);
 
   useEffect(() => {
     const unsub = sipProvider.subscribe(setSnap);
@@ -142,6 +148,8 @@ export function useSoftphone(args: UseSoftphoneArgs) {
       setLoading(false);
       return;
     }
+    // Phase 21B: no credential re-init / re-registration while new actions are refused.
+    if (!allowRef.current) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -253,6 +261,7 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     dismissSipNotice: useCallback(() => setSipNotice(null), []),
     sipUnavailableReason: sipProvider.unavailableReason(),
     call: useCallback(async (n: string) => {
+      if (!allowRef.current) return 'Desktop access unavailable';
       const err = await sipProvider.call(n);
       if (err) setSipNotice(err);
       return err;
@@ -307,6 +316,7 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     }, [recording, snap.callUuid]),
     /** Fast, safe recovery: single-flight re-registration without a full teardown. */
     retryNow: useCallback(() => {
+      if (!allowRef.current) return;
       setSipNotice(null);
       setCredError(null);
       const ok = sipProvider.retryNow();
@@ -314,6 +324,7 @@ export function useSoftphone(args: UseSoftphoneArgs) {
       if (!ok) setRetryTick((n) => n + 1);
     }, []),
     restart: useCallback(async () => {
+      if (!allowRef.current) return;
       setCredError(null);
       setSipNotice(null);
       await sipProvider.restart();

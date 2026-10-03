@@ -28,8 +28,12 @@ This phase changes no Planiprêt source and does not validate Planiprêt busines
 - `6ff7adb57e88d0afe24bf65f70ad0314f005ca3a`
 - `d8eba749f5855a71831cb216a452a0777339bb6e`
 
-## Permanent rule
-No Planiprêt file may change after the compatibility cutoff `2d933df2f`. Any such committed change fails with `PLANIPRET_PATH_CHANGED`; any working-tree change fails with `PLANIPRET_WORKTREE_CHANGED`. Any deviation from the exact seven paths inside the interval fails with `PLANIPRET_COMPATIBILITY_SCOPE_EXACT`.
+## Current guard rules
+- The historical interval `87b6b8029..2d933df2f` is immutable; any deviation from the exact seven paths fails with `PLANIPRET_COMPATIBILITY_SCOPE_EXACT`.
+- The working-tree guard fails on any staged, unstaged or untracked Planiprêt path with `PLANIPRET_WORKTREE_CHANGED`.
+- A per-phase Lemtel guard `--scope=<commit>` fails on any Planiprêt path in `scope..HEAD` with `PLANIPRET_SCOPE_CHANGED`.
+- Planiprêt changes committed outside and before that scope are neither a Lemtel approval nor a Lemtel validation.
+- There is no permanent exception.
 
 ## What this is not
 This is not a source merge, copy, rollback, or approval for any future Planiprêt work.
@@ -38,4 +42,4 @@ This is not a source merge, copy, rollback, or approval for any future Planiprê
 Revert this phase only if the existing Planiprêt source is separately reviewed and the compatibility baseline must be replaced by a newly approved boundary.
 
 ## Phase 15D update
-The seven-path interval `87b6b8029..2d933df2f` stays frozen and exact. The former "permanent rule" (fail on every Planiprêt commit after `2d933df2f`) is replaced by two checks: the working-tree guard (`PLANIPRET_WORKTREE_CHANGED`, always on) and the per-phase `--scope=<commit>` guard (`PLANIPRET_SCOPE_CHANGED` for any Planiprêt path inside a Lemtel phase's own `scope..HEAD`). Planiprêt changes committed after `2d933df2f` by Planiprêt work are not approved, compatible or examined by this baseline.
+The seven-path interval `87b6b8029..2d933df2f` stays frozen and exact. Protection after it is provided by the working-tree guard (`PLANIPRET_WORKTREE_CHANGED`, always on) and the per-phase `--scope=<commit>` guard (`PLANIPRET_SCOPE_CHANGED` for any Planiprêt path inside a Lemtel phase's own `scope..HEAD`). Planiprêt changes committed after `2d933df2f` by Planiprêt work are not approved, compatible or examined by this baseline.

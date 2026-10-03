@@ -29,14 +29,18 @@ The `Planipret` Git branch name does not authorize any change to the Planiprêt 
 
 ## Required check before every Lemtel phase
 
-Run `node scripts/verify-lemtel-planipret-isolation.mjs --base=a1bd41eba` and the Phase 15A test. A failure blocks the phase.
+Before and after the work, run all of: `node scripts/verify-lemtel-planipret-isolation.mjs` (no-argument mode), `node scripts/verify-lemtel-planipret-isolation.mjs --scope=<phase start commit>`, and the Phase 15 test (`src/test/lemtelPlanipretIsolationPhase15.test.ts`). Any failure blocks the phase.
 
 ## Phase 15A.1 — frozen scope and permanent guard
 
 - Phase 15A's original implementation is attested only over `a1bd41eba..87b6b8029` (`PHASE15A_END`), which must contain exactly the four Phase 15A files.
-- The verifier additionally scans all later committed history (`87b6b8029..HEAD`, failure `PLANIPRET_PATH_CHANGED`) and the current staged, unstaged and untracked working tree (failure `PLANIPRET_WORKTREE_CHANGED`) for Planiprêt-protected paths.
+- The historical 15A and 15C intervals remain frozen and exact.
+- No-argument mode checks only those historical intervals, the policy, the verifier's own safety, and uncommitted Planiprêt paths in the working tree (staged, unstaged or untracked: `PLANIPRET_WORKTREE_CHANGED`).
+- Every future Lemtel phase must run no-argument mode **and** `--scope=<phase start commit>`, before and after its work.
+- `PLANIPRET_SCOPE_CHANGED` blocks any committed Planiprêt path inside that phase's own `scope..HEAD` range.
+- Planiprêt commits that predate a Lemtel scope are not approved, examined or validated by Lemtel; they are only outside that range.
+- No permanent Planiprêt exception is created.
 - Later Lemtel phases can add non-Planiprêt files without invalidating historical Phase 15A.
-- Every future phase still must execute its own strict phase-scope verifier **and** this permanent Planiprêt guard.
 
 ## Escalation rule
 
@@ -47,7 +51,7 @@ A genuine shared-code change requires a separately written, explicitly approved 
 - The original Phase 15A range `a1bd41eba..87b6b8029` remains immutable.
 - Seven Planiprêt files were already changed in the separately audited interval `87b6b8029..2d933df2f`.
 - Their exact paths are frozen as a one-time compatibility record (see `phase-15c-historical-compatibility-baseline.md`).
-- The permanent "never modify Planiprêt" guard starts strictly after `2d933df2f`.
+- After `2d933df2f`, protection relies on the working-tree guard and each Lemtel phase's `--scope=<commit>` guard (see Phase 15D).
 - No Planiprêt source was changed by Phase 15C.
 
 ## Phase 15D — shared repository, per-phase scope guard

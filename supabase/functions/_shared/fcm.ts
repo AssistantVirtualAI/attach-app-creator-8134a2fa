@@ -145,7 +145,7 @@ export async function sendFcmDataMessage(
         body: JSON.stringify({
           message: {
             token,
-            data,
+            data: sanitizeFcmData(data),
             android: {
               priority: "HIGH",
               ttl: `${Math.max(0, opts.ttlSeconds ?? 30)}s`,
@@ -186,7 +186,7 @@ export async function sendFcmNotification(
           message: {
             token,
             notification: { title: opts.title, body: opts.body ?? "" },
-            data: opts.data ?? {},
+            data: sanitizeFcmData(opts.data ?? {}),
             android: {
               priority: "HIGH",
               notification: {

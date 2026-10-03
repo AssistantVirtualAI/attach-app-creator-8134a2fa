@@ -84,7 +84,7 @@ export function verify(args, root = process.cwd(), opts = {}) {
   let scope = null;
   if (args.length > 1) return { code: 2, stdout: USAGE + "\n" };
   if (args.length === 1 && args[0] !== `--base=${BASE}`) {
-    const m = /^--scope=([0-9a-f]{7,40})$/.exec(args[0]);
+    const m = args[0].match(/^--scope=([0-9a-f]{7,40})$/);
     if (!m) return { code: 2, stdout: USAGE + "\n" };
     scope = m[1];
   }

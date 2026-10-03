@@ -1043,7 +1043,7 @@ function TranscriptSection({ call, onUpdated }: { call: RecordingCall; onUpdated
               {copied ? "Copié" : "Copier"}
             </button>
           </div>
-          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-1">
             {segments.filter((s) => !q || s.text.toLowerCase().includes(q.toLowerCase())).map((s, i) => {
               const isAgent = (s.speaker || "").toLowerCase().includes("agent") || (s.speaker || "").toLowerCase().includes("courtier") || s.speaker === "A";
               return (

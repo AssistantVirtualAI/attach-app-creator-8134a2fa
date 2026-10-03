@@ -11,6 +11,7 @@ import {
   LogOut, Trash2, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages, ExternalLink, Database,
 } from "lucide-react";
 import { openBrokerPortal } from "@/lib/planipret/openBrokerPortal";
+import { useDndToggle } from "@/lib/planipret/useDndToggle";
 import { getAppVersionInfo } from "@/lib/planipret/appVersion";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
@@ -42,6 +43,12 @@ export default function MMore() {
   const [params] = useSearchParams();
   const [editOpen, setEditOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // DND: only the confirmed profile value is the source of truth; no optimistic success.
+  const { busy: dndBusy, pending: dndPending, toggle: toggleDnd } = useDndToggle(profile, reloadProfile, {
+    onSuccess: (v) => toast.success(v ? t("more.dndEnabled") : t("home.dndDisabled")),
+    onError: () => toast.error(t("common.failed")),
+  });
+  const dndShown = dndPending ?? !!profile?.dnd_enabled;
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [dndOpen, setDndOpen] = useState(false);
   const [taskDiagOpen, setTaskDiagOpen] = useState(false);
@@ -348,11 +355,7 @@ export default function MMore() {
           icon={<BellOff className="w-4 h-4" style={profile?.dnd_enabled ? { color: "var(--pp-color-danger)" } : undefined} />}
           label={t("more.dnd")}
           sub={profile?.dnd_enabled ? t("more.dndActiveSub") : t("more.inactive")}
-          right={<Toggle on={!!profile?.dnd_enabled} onChange={async (v) => {
-            await supabase.from("planipret_profiles").update({ dnd_enabled: v }).eq("user_id", profile.user_id);
-            await reloadProfile();
-            toast.success(v ? t("more.dndEnabled") : t("home.dndDisabled"));
-          }} />}
+          right={<Toggle testId="dnd-toggle" on={dndShown} busy={dndBusy} onChange={toggleDnd} />}
         />
         <Row icon={<SettingsIcon className="w-4 h-4" />} label={t("more.configureDnd")} onClick={() => setDndOpen(true)} chevron />
       </Section>
@@ -691,10 +694,16 @@ function Row({
   );
 }
 
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ on, onChange, busy = false, testId }: { on: boolean; onChange: (v: boolean) => void; busy?: boolean; testId?: string }) {
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onChange(!on); }}
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-busy={busy || undefined}
+      disabled={busy}
+      data-testid={testId}
+      onClick={(e) => { e.stopPropagation(); if (!busy) onChange(!on); }}
       className="rounded-full p-0.5 transition"
       style={{
         width: 40, height: 24,

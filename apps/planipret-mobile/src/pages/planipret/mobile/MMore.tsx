@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { openBrokerPortal } from "@/lib/planipret/openBrokerPortal";
 import { useDndToggle } from "@/lib/planipret/useDndToggle";
+
+export const MARKETING_PORTAL_PATH = "/planipret/broker/marketing";
 import { getAppVersionInfo } from "@/lib/planipret/appVersion";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
@@ -29,7 +31,7 @@ import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { startMs365Authorize } from "@/lib/planipret/ms365Start";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
-import { Radio, Wallet, Users as UsersIcon, ListChecks } from "lucide-react";
+import { Radio, Wallet, Users as UsersIcon, ListChecks, Megaphone } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
 const initials = (name?: string) =>
@@ -306,6 +308,20 @@ export default function MMore() {
             }
           }}
           right={openingPortal ? <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>…</span> : undefined}
+          chevron />
+        {/* Marketing lives only in the broker portal: open it there via the approved handoff. */}
+        <Row icon={<Megaphone className="w-4 h-4" />} label="Marketing"
+          sub={lang === "en" ? "Opens in your broker portal" : "S'ouvre dans votre portail courtier"}
+          onClick={async () => {
+            if (openingPortal) return;
+            setOpeningPortal(true);
+            try {
+              const res = await openBrokerPortal(MARKETING_PORTAL_PATH);
+              if (res.ok === false) toast.error(res.error);
+            } finally {
+              setOpeningPortal(false);
+            }
+          }}
           chevron />
         <Row icon={<User className="w-4 h-4" />} label={t("more.myProfile")} onClick={() => setEditOpen(true)} chevron />
         <Row icon={<Lock className="w-4 h-4" />} label={t("more.changePassword")} onClick={() => navigate("/mplanipret/change-password")} chevron />

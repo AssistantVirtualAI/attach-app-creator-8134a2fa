@@ -47,17 +47,18 @@ vi.mock('@capacitor/network', () => ({
 }));
 
 import SettingsScreen from '../screens/SettingsScreen';
+import { mobileApi } from '../lib/mobileApi';
 import { ThemeProvider } from '../lib/ThemeContext';
 import { MobileI18nProvider as LangProvider } from '../lib/i18n';
 
 const creds: any = { extension: '300', displayName: 'Test', email: 't@x.com', sipDomain: 'lemtel.tel', role: 'agent' };
 const sp: any = { snap: { status: 'registered' }, sipConfig: { wssUrl: 'wss://x' }, sipLog: [], reconnect: vi.fn(), clearSipState: vi.fn() };
 
-function renderScreen() {
+function renderScreen(portalTelephonyPolicy?: any) {
   return render(
     <ThemeProvider>
       <LangProvider>
-        <SettingsScreen creds={creds} sp={sp} onSignOut={() => {}} />
+        <SettingsScreen creds={creds} sp={sp} onSignOut={() => {}} portalTelephonyPolicy={portalTelephonyPolicy} />
       </LangProvider>
     </ThemeProvider>
   );
@@ -114,5 +115,37 @@ describe('SettingsScreen — rows & sheets', () => {
       capListeners.forEach((cb) => cb({ connected: true, connectionType: 'cellular' }));
     });
     await waitFor(() => expect(screen.getAllByText(/LTE|Cellular/i).length).toBeGreaterThan(0));
+  });
+});
+
+describe('SettingsScreen — Phase 22B portal policy (read-only)', () => {
+  const policy = { dndState: 'enabled', forwardingState: 'disabled', recordingPolicy: 'portal_managed', voicemailPolicy: 'enabled' };
+
+  it('without policy prop the section is not rendered', async () => {
+    renderScreen();
+    await screen.findByText(/^(Ringtone|Sonnerie)$/i);
+    expect(screen.queryByText(/^(Politique du portail|Portal policy)$/)).toBeNull();
+    expect(document.querySelector('[data-testid="portal-policy"]')).toBeNull();
+  });
+
+  it('with policy shows the four states and the portal authority note', async () => {
+    renderScreen(policy);
+    const card = await screen.findByTestId('portal-policy');
+    const txt = card.textContent || '';
+    expect(txt).toMatch(/Portal policy|Politique du portail/);
+    expect(txt).toMatch(/Do not disturb: enabled|Ne pas déranger : activé/);
+    expect(txt).toMatch(/Call forwarding: disabled|Transfert d’appels : désactivé/);
+    expect(txt).toMatch(/Recording: portal managed|Enregistrement : géré par le portail/);
+    expect(txt).toMatch(/Voicemail: enabled|Boîte vocale : activée/);
+    expect(txt).toMatch(/applied by the portal|appliqués par le portail/);
+  });
+
+  it('card has no interactive control and triggers no mutation', async () => {
+    renderScreen(policy);
+    const card = await screen.findByTestId('portal-policy');
+    expect(card.querySelectorAll('button, input, select, textarea, [role="switch"], [role="checkbox"], [role="button"]').length).toBe(0);
+    card.querySelectorAll('*').forEach((el) => fireEvent.click(el));
+    expect(mobileApi.setDnd).not.toHaveBeenCalled();
+    expect(mobileApi.setForwarding).not.toHaveBeenCalled();
   });
 });

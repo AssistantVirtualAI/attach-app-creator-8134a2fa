@@ -9,7 +9,7 @@ import { LemtelMark, AvaBadge } from '../components/Brand';
 import VoicemailScreen from './VoicemailScreen';
 import MessagesScreen from './MessagesScreen';
 import ContactsScreen from './ContactsScreen';
-import SettingsScreen from './SettingsScreen';
+import SettingsScreen, { type PortalTelephonyPolicy } from './SettingsScreen';
 import DeleteAccountScreen from './DeleteAccountScreen';
 import PrivacyScreen from './PrivacyScreen';
 import DataSafetyScreen from './DataSafetyScreen';
@@ -27,8 +27,8 @@ import { useTr, useT } from '../lib/i18n';
 type Sub = null | 'voicemail' | 'messages' | 'contacts' | 'settings' | 'delete' | 'privacy' | 'datasafety' | 'permissions' | 'support' | 'aiaudit' | 'queues' | 'features' | 'sipdebug';
 
 export default function MoreScreen({
-  creds, sp, onSignOut, haptic, 
-}: { creds: Creds; sp: any; onSignOut: () => void; haptic: (s?: ImpactStyle) => Promise<void>;  }) {
+  creds, sp, onSignOut, haptic, portalTelephonyPolicy = null,
+}: { creds: Creds; sp: any; onSignOut: () => void; haptic: (s?: ImpactStyle) => Promise<void>; portalTelephonyPolicy?: PortalTelephonyPolicy | null }) {
   const { tr } = useTr();
   const { tx } = useT();
   const [sub, setSub] = useState<Sub>(null);
@@ -37,7 +37,7 @@ export default function MoreScreen({
   if (sub === 'voicemail')   return <SubPage onBack={() => setSub(null)} title={tr.more.voicemail}><VoicemailScreen haptic={haptic} /></SubPage>;
   if (sub === 'messages')    return <SubPage onBack={() => setSub(null)} title={tr.more.messages}><MessagesScreen haptic={haptic} /></SubPage>;
   if (sub === 'contacts')    return <SubPage onBack={() => setSub(null)} title={tr.more.contacts}><ContactsScreen sp={sp} /></SubPage>;
-  if (sub === 'settings')    return <SubPage onBack={() => setSub(null)} title={tr.more.settings}><SettingsScreen creds={creds} sp={sp} onSignOut={onSignOut}  /></SubPage>;
+  if (sub === 'settings')    return <SubPage onBack={() => setSub(null)} title={tr.more.settings}><SettingsScreen creds={creds} sp={sp} onSignOut={onSignOut} portalTelephonyPolicy={portalTelephonyPolicy} /></SubPage>;
   if (sub === 'delete')      return <SubPage onBack={() => setSub(null)} title={tr.more.deleteAccount}><DeleteAccountScreen onDone={onSignOut} /></SubPage>;
   if (sub === 'privacy')     return <SubPage onBack={() => setSub(null)} title={tr.more.privacy}><PrivacyScreen /></SubPage>;
   if (sub === 'datasafety')  return <SubPage onBack={() => setSub(null)} title={tr.more.dataSafety}><DataSafetyScreen /></SubPage>;

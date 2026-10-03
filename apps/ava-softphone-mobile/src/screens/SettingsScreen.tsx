@@ -15,9 +15,53 @@ import { showMobileToast as toast } from '../lib/mobileToast';
 
 const PORTAL_URL = 'https://avastatistic.ca';
 
+// Lemtel Phase 22B — read-only view of the four validated portal policy labels.
+export type PortalTelephonyPolicy = {
+  dndState: 'enabled' | 'disabled';
+  forwardingState: 'enabled' | 'disabled';
+  recordingPolicy: string;
+  voicemailPolicy: string;
+};
+
+const POLICY_LABELS = {
+  fr: {
+    dnd: { enabled: 'Ne pas déranger : activé', disabled: 'Ne pas déranger : désactivé' },
+    fwd: { enabled: 'Transfert d’appels : activé', disabled: 'Transfert d’appels : désactivé' },
+    rec: { not_allowed: 'Enregistrement : non autorisé', user_allowed: 'Enregistrement : autorisé à l’utilisateur', portal_managed: 'Enregistrement : géré par le portail' },
+    vm: { enabled: 'Boîte vocale : activée', disabled: 'Boîte vocale : désactivée' },
+    title: 'Politique du portail',
+    note: 'Les réglages téléphoniques sont appliqués par le portail. Modifiez-les dans le portail Lemtel.',
+  },
+  en: {
+    dnd: { enabled: 'Do not disturb: enabled', disabled: 'Do not disturb: disabled' },
+    fwd: { enabled: 'Call forwarding: enabled', disabled: 'Call forwarding: disabled' },
+    rec: { not_allowed: 'Recording: not allowed', user_allowed: 'Recording: user allowed', portal_managed: 'Recording: portal managed' },
+    vm: { enabled: 'Voicemail: enabled', disabled: 'Voicemail: disabled' },
+    title: 'Portal policy',
+    note: 'Telephony settings are applied by the portal. Change them in the Lemtel portal.',
+  },
+} as const;
+
+function PortalPolicyCard({ policy, lang }: { policy: PortalTelephonyPolicy; lang: string }) {
+  const L = lang === 'fr' ? POLICY_LABELS.fr : POLICY_LABELS.en;
+  const pick = (m: Record<string, string>, k: string) => (Object.prototype.hasOwnProperty.call(m, k) ? m[k] : null);
+  const lines = [pick(L.dnd, policy.dndState), pick(L.fwd, policy.forwardingState), pick(L.rec, policy.recordingPolicy), pick(L.vm, policy.voicemailPolicy)].filter((x): x is string => !!x);
+  return (
+    <section data-testid="portal-policy" aria-label={L.title}>
+      <SectionTitle eyebrow="PORTAL" title={L.title} />
+      <Card padded={true}>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {lines.map((l) => <li key={l} style={{ padding: '4px 0', fontSize: font.sm, color: colors.textIce }}>{l}</li>)}
+        </ul>
+      </Card>
+      <p style={{ fontSize: font.xs, color: colors.mutedSilver, margin: '6px 4px 14px' }}>{L.note}</p>
+    </section>
+  );
+}
+
 export default function SettingsScreen({
-  creds, sp, onSignOut, onNavigate, preferClickToCall = false, togglePreferC2C = () => {},
-}: { creds: Creds; sp: any; onSignOut: () => void; onNavigate?: (t: Tab) => void; preferClickToCall?: boolean; togglePreferC2C?: () => void }) {
+  creds, sp, onSignOut, onNavigate, preferClickToCall = false, togglePreferC2C = () => {}, portalTelephonyPolicy = null,
+}: { creds: Creds; sp: any; onSignOut: () => void; onNavigate?: (t: Tab) => void; preferClickToCall?: boolean; togglePreferC2C?: () => void; portalTelephonyPolicy?: PortalTelephonyPolicy | null }) {
   const { t, lang, setLang } = useT();
   const { mode, toggle: toggleTheme } = useTheme();
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -208,6 +252,8 @@ export default function SettingsScreen({
           onPress={() => setLang(lang === 'fr' ? 'en' : 'fr')}
         />
       </Card>
+
+      {portalTelephonyPolicy && <PortalPolicyCard policy={portalTelephonyPolicy} lang={lang} />}
 
       {/* Calling */}
       <SectionTitle eyebrow={t('settings.calling')} title={t('settings.availability')} />

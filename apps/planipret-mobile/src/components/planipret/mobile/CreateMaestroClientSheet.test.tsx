@@ -24,7 +24,8 @@ describe("CreateMaestroClientSheet", () => {
       />,
     );
 
-    await screen.findByDisplayValue("5145551234");
+    // The sheet formats the incoming number for Maestro (formatMaestroPhone).
+    await screen.findByDisplayValue("(514) 555-1234");
     const title = screen.getByText("Créer le client dans Maestro");
     const overlay = title.closest("[data-client-create-overlay]");
     const panel = title.closest("div[class*='max-h-[85dvh]']");

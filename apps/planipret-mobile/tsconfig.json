@@ -18,7 +18,7 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
 
-    "paths": { "@/*": ["./src/*"] },
+    "paths": { "@/*": ["./src/*"], "@planipret-edge/*": ["../../supabase/functions/_shared/*"] },
     "types": ["vite/client"]
 
   },

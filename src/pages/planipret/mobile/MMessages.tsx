@@ -2469,7 +2469,7 @@ function Teams365Panel({ profile }: { profile: any }) {
   ];
 
   return (
-    <div className="px-4 py-3 space-y-3">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 py-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-3" style={{ WebkitOverflowScrolling: "touch" }}>
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft Teams</h2>
         <button onClick={load} className="text-xs px-2 py-1 rounded-full flex items-center gap-1"

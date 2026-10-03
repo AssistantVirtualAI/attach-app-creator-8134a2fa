@@ -261,7 +261,7 @@ export default function MAvaDirectory() {
       </div>
 
       {/* Results */}
-      <div className="flex-1 overflow-y-auto px-3 pb-6">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pb-6">
         {err && <p className="text-xs py-2" style={{ color: "#E84C4C" }}>{err}</p>}
         {!loading && !err && results.length === 0 && (
           <p className="text-xs text-center py-6" style={{ color: "var(--pp-text-muted)" }}>
@@ -316,7 +316,7 @@ export default function MAvaDirectory() {
               <Trash2 className="w-4 h-4" /> Purger
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-2">
             {auditLoading && <Loader2 className="w-5 h-5 animate-spin mx-auto my-6" style={{ color: "var(--pp-text-muted)" }} />}
             {!auditLoading && audit.length === 0 && (
               <p className="text-xs text-center py-6" style={{ color: "var(--pp-text-muted)" }}>Aucune entrée.</p>

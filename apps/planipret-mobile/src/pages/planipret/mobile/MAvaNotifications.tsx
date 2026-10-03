@@ -178,7 +178,7 @@ export default function MAvaNotifications() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {loading && visible.length === 0 ? (
           <div className="text-center text-xs py-10" style={{ color: "var(--pp-text-muted)" }}>{t("avaNotifications.loading")}</div>
         ) : visible.length === 0 ? (

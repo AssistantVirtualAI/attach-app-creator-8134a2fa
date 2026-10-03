@@ -61,6 +61,7 @@ export async function startMicrosoftSignIn(
   await nativeSet(INTENT_KEY, "login");
   await nativeSet(NEXT_KEY, nextPath);
   markMs365Pending();
+  // Justified bypass: Microsoft *sign-in* (not connect) returns via its own intent/next store, not the connect return whitelist.
   await openMs365Authorize({
     clientId: cfg.client_id,
     tenant: cfg.tenant_id || "common",

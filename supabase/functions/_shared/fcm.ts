@@ -98,6 +98,33 @@ export type FcmSendResult = {
 };
 
 /**
+ * FCM refuses the WHOLE message with HTTP 400 "Invalid data payload key: from"
+ * when `message.data` carries one of its reserved keys, so an incoming-call
+ * wake-up would never reach the phone. Reserved keys are kept under an `x_`
+ * alias instead of being dropped: the app reads `data.from ?? data.callerName`
+ * (see apps/planipret-mobile/src/lib/native/permissions/notifications.ts), so
+ * the caller still shows and no value is lost.
+ */
+const FCM_RESERVED_DATA_KEYS = new Set([
+  "from", "to", "message", "notification", "registration_ids", "result",
+  "time_to_live", "title", "click_action", "collapse_key", "priority",
+  "dry_run", "condition", "content_available",
+]);
+
+export function sanitizeFcmData(data: Record<string, string>): Record<string, string> {
+  const safe: Record<string, string> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const lower = key.toLowerCase();
+    if (FCM_RESERVED_DATA_KEYS.has(lower) || lower.startsWith("google") || lower.startsWith("gcm")) {
+      safe[`x_${lower}`] = value;
+      continue;
+    }
+    safe[key] = value;
+  }
+  return safe;
+}
+
+/**
  * Send a high-priority DATA-ONLY message. Data-only lets the app build its own
  * full-screen incoming-call notification (PpSipKeepAliveService) instead of
  * letting the system show a plain banner.
@@ -118,7 +145,7 @@ export async function sendFcmDataMessage(
         body: JSON.stringify({
           message: {
             token,
-            data,
+            data: sanitizeFcmData(data),
             android: {
               priority: "HIGH",
               ttl: `${Math.max(0, opts.ttlSeconds ?? 30)}s`,
@@ -159,7 +186,7 @@ export async function sendFcmNotification(
           message: {
             token,
             notification: { title: opts.title, body: opts.body ?? "" },
-            data: opts.data ?? {},
+            data: sanitizeFcmData(opts.data ?? {}),
             android: {
               priority: "HIGH",
               notification: {

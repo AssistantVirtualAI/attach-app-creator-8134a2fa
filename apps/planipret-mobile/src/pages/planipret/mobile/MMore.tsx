@@ -25,7 +25,7 @@ import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings
 import MRingtoneSettings from "@/components/planipret/mobile/MRingtoneSettings";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
-import { openMs365Authorize } from "@/lib/ms365OAuth";
+import { startMs365Authorize } from "@/lib/planipret/ms365Start";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
 import { Radio, Wallet, Users as UsersIcon, ListChecks } from "lucide-react";
@@ -160,7 +160,7 @@ export default function MMore() {
     const tenant = cfg.tenant_id || "common";
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       const state = user?.id ?? "";
-      await openMs365Authorize({ clientId, tenant, state });
+      await startMs365Authorize({ clientId, tenant, state });
     });
   };
 

@@ -97,6 +97,9 @@ export default function Ms365Callback() {
   // Protection: if a Supabase session already exists (magic-link verified, or the
   // code was consumed by a previous delivery of the same deep link), never show an
   // error — land the user on the home page.
+  // Every early/cancel/anti-replay/failure exit to Home drops the remembered destination.
+  const exitHome = () => { clearMs365ReturnTo(); navigate("/mplanipret/home", { replace: true }); };
+
   const homeIfSignedIn = async (): Promise<boolean> => {
     try {
       const { data } = await supabase.auth.getSession();
@@ -104,7 +107,7 @@ export default function Ms365Callback() {
         clearRememberedMs365RedirectUri();
         await clearMicrosoftSignInIntentAsync();
         setStatus("ok");
-        navigate("/mplanipret/home", { replace: true });
+        exitHome();
         return true;
       }
     } catch {}
@@ -129,7 +132,7 @@ export default function Ms365Callback() {
     const freshCode = currentCode;
     if (freshCode && exchangedCodes.has(freshCode)) {
       exchangeStarted.current = true;
-      navigate("/mplanipret/home", { replace: true });
+      exitHome();
       return;
     }
     if (exchangeInFlight) return;
@@ -146,9 +149,9 @@ export default function Ms365Callback() {
         const code = recovered.code;
         const err = recovered.error;
         if (err) { await failWithGuard(err); return; }
-        if (!code) { navigate("/mplanipret/home", { replace: true }); return; }
+        if (!code) { exitHome(); return; }
         if (code !== currentCode && exchangedCodes.has(code)) {
-          navigate("/mplanipret/home", { replace: true });
+          exitHome();
           return;
         }
         exchangedCodes.add(code);
@@ -158,7 +161,7 @@ export default function Ms365Callback() {
         const state = recovered.state;
         const code_verifier = await getRememberedMs365CodeVerifierAsync(state);
         if (!code_verifier) {
-          navigate("/mplanipret/home", { replace: true });
+          exitHome();
           return;
         }
         const isMicrosoftLogin = (await getMicrosoftSignInIntentAsync()) === "login" || Boolean(state?.startsWith("login:"));

@@ -20,13 +20,13 @@ async function verifyTelnyxSignature(rawBody: string, signature: string | null, 
   try {
     const key = await crypto.subtle.importKey(
       "raw",
-      b64decode(pubKey),
+      b64decode(pubKey) as unknown as BufferSource,
       { name: "Ed25519" } as any,
       false,
       ["verify"],
     );
     const message = new TextEncoder().encode(`${timestamp}|${rawBody}`);
-    return await crypto.subtle.verify("Ed25519" as any, key, b64decode(signature), message);
+    return await crypto.subtle.verify("Ed25519" as any, key, b64decode(signature) as unknown as BufferSource, message);
   } catch (e) {
     console.warn("Telnyx signature verify failed", e);
     return false;

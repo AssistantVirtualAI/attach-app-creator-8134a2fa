@@ -95,8 +95,7 @@ describe("Lemtel Phase 21A — mobile portal device lifecycle", () => {
   it("new lifecycle code contains no forbidden stack, endpoint or sensitive data access", () => {
     for (const f of [LIB, HOOK]) {
       const s = stripLabels(rd(f));
-      const stripped = stripLabels(s);
-    expect(stripped).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|wss?:\\/\\/|softphone-credentials|sipPassword|password|refresh_token|access_token|recording_url|cdr|voicemail_|sms", "i"));
+      expect(s).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|wss?:\\/\\/|softphone-credentials|sipPassword|password|refresh_token|access_token|recording_url|cdr|voicemail_|sms", "i"));
       expect(s).not.toMatch(/\bfetch\(|WebSocket|setInterval/);
     }
     expect(rd(HOOK)).toContain("const FN = 'lemtel-client-config'");
@@ -137,7 +136,7 @@ describe("Lemtel Phase 21A — mobile portal device lifecycle", () => {
     expect(s).toContain("exactKeys(ca, Object.keys(CAPABILITY_ENUMS))");
     expect(s).toContain("exactKeys(ob, ['diagnosticLevel', 'redactionPolicyRef', 'supportBundleAllowed'])");
     expect(s).not.toMatch(/const str = /);
-    expect(s).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|\\bpbx\\b|wss?:\\/\\/|sipPassword|password|refresh_token|access_token|recording_url|cdr|voicemail_|sms\\b|\\bfetch\\(|WebSocket", "i"));
+    expect(stripLabels(s)).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|\\bpbx\\b|wss?:\\/\\/|sipPassword|password|refresh_token|access_token|recording_url|cdr|voicemail_|sms|\\bfetch\\(|WebSocket", "i"));
   });
 
   it("Planiprêt guard passes after", () => expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n"));

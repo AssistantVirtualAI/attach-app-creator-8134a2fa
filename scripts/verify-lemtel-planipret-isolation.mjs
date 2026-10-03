@@ -18,7 +18,7 @@ export const APPROVED_COMPATIBILITY_PLANIPRET_PATHS = [
   "src/pages/planipret/mobile/MCalls.tsx",
   "src/pages/planipret/mobile/MContacts.tsx",
 ];
-export const USAGE = "LEMTEL_ISOLATION_USAGE: [--base=a1bd41eba]";
+export const USAGE = "LEMTEL_ISOLATION_USAGE: [--base=a1bd41eba] [--scope=<commit>]";
 export const POLICY = "schemas/lemtel-isolation/planipret-protected-paths-v1.json";
 export const SELF = "scripts/verify-lemtel-planipret-isolation.mjs";
 export const TEST = "src/test/lemtelPlanipretIsolationPhase15.test.ts";
@@ -80,7 +80,14 @@ export function checkSelf(text) {
 }
 
 export function verify(args, root = process.cwd(), opts = {}) {
-  if (args.length > 1 || (args.length === 1 && args[0] !== `--base=${BASE}`)) return { code: 2, stdout: USAGE + "\n" };
+  // Phase 15D: zero args, `--base=a1bd41eba` (historical), or `--scope=<commit>`; never combined.
+  let scope = null;
+  if (args.length > 1) return { code: 2, stdout: USAGE + "\n" };
+  if (args.length === 1 && args[0] !== `--base=${BASE}`) {
+    const m = args[0].match(/^--scope=([0-9a-f]{7,40})$/);
+    if (!m) return { code: 2, stdout: USAGE + "\n" };
+    scope = m[1];
+  }
   const base = opts.base ?? BASE, end = opts.end ?? PHASE15A_END, compat = opts.compat ?? PLANIPRET_COMPATIBILITY_END, head = opts.head ?? "HEAD";
   const f = [];
   let policy = null;
@@ -110,13 +117,19 @@ export function verify(args, root = process.cwd(), opts = {}) {
     }
   }
   if (rangeOk) {
-    // C. Permanent global guard: commits strictly after the compatibility cutoff and current working tree.
-    const later = committedPaths(root, compat, head);
+    // C. Working-tree guard (always): no staged, unstaged or untracked Planiprêt path.
     const wt = worktreePaths(root);
-    if (later === null || wt === null) f.push("GIT_READ_FAILED");
+    if (wt === null) f.push("GIT_READ_FAILED");
+    else if (wt.some((p) => !ALLOWED.includes(p) && isProtected(p))) f.push("PLANIPRET_WORKTREE_CHANGED");
+  }
+  if (scope !== null) {
+    // D. Phase 15D: a Lemtel phase may never change Planiprêt inside its own scope..HEAD range.
+    if (!isCommit(root, scope)) f.push("SCOPE_MISSING");
+    else if (git(root, ["merge-base", "--is-ancestor", scope, head]) === null) f.push("SCOPE_NOT_ANCESTOR");
     else {
-      if (later.some((p) => !ALLOWED.includes(p) && isProtected(p)) && !f.includes("PLANIPRET_PATH_CHANGED")) f.push("PLANIPRET_PATH_CHANGED");
-      if (wt.some((p) => !ALLOWED.includes(p) && isProtected(p))) f.push("PLANIPRET_WORKTREE_CHANGED");
+      const sp = committedPaths(root, scope, head);
+      if (sp === null) f.push("GIT_READ_FAILED");
+      else if (sp.some((p) => !ALLOWED.includes(p) && isProtected(p))) f.push("PLANIPRET_SCOPE_CHANGED");
     }
   }
   let self = null;

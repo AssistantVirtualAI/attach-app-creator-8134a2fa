@@ -427,17 +427,17 @@ export default function MCalls() {
     return () => { cancelled = true; };
   }, [calls, params, userId]);
 
-  // Preload recordings on mount so the Recordings tab is already populated
-  // when the user taps it — no visible loader unless the cache is truly empty.
+  // Recordings inventory + heavy sync load only once the broker opens the
+  // Recordings tab (explicit intent); cached results still paint instantly.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || tab !== "recordings") return;
     void loadRecordings(true);
-  }, [userId, loadRecordings]);
+  }, [userId, tab, loadRecordings]);
 
   // Recording/transcript updates arrive through Realtime. Avoid periodic API
   // polling, which previously added traffic while SIP was trying to register.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || tab !== "recordings") return;
     const ids = [...new Set([userId, profileAuthId].filter(Boolean))];
     const channels = ids.map((id) => supabase
       .channel(`mcalls-recordings:${id}`)
@@ -446,9 +446,7 @@ export default function MCalls() {
         schema: "public",
         table: "planipret_phone_calls",
         filter: `user_id=eq.${id}`,
-      }, () => {
-        if (tab === "recordings") void loadRecordingsFromCache(true, true);
-      })
+      }, () => { void loadRecordingsFromCache(true, true); })
       .subscribe());
     return () => { channels.forEach((channel) => { void supabase.removeChannel(channel); }); };
   }, [tab, userId, profileAuthId, loadRecordingsFromCache]);

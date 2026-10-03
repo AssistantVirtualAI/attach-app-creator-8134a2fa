@@ -211,4 +211,52 @@ describe("MCommissions (mobile)", () => {
     expect(await screen.findByText(/requiert un accès Maestro administrateur/i)).toBeInTheDocument();
     expect(screen.queryByText("server implementation detail")).not.toBeInTheDocument();
   });
+
+  it("filtres : frappe dans le brouillon = zéro appel avant Appliquer, puis un seul cycle", async () => {
+    render(<MCommissions />);
+    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
+    const before = invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "summary").length;
+    fireEvent.click(screen.getByLabelText("Filtres"));
+    const sheet = screen.getByRole("dialog");
+    expect(sheet.className).toMatch(/overflow-y-auto/);
+    expect(sheet.className).toMatch(/min-h-0/);
+    expect(sheet.getAttribute("style") ?? "").toMatch(/safe-area-inset-bottom/);
+    fireEvent.change(screen.getByPlaceholderText("ex. 2026"), { target: { value: "20" } });
+    fireEvent.change(screen.getByPlaceholderText("ex. 2026"), { target: { value: "2026" } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "summary").length).toBe(before);
+    fireEvent.click(screen.getByText("Appliquer"));
+    await waitFor(() => {
+      const s = invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "summary");
+      expect(s.length).toBe(before + 1);
+      expect(s[s.length - 1][1].body.filters.number_prefix).toBe("2026");
+    });
+  });
+
+  it("réponse ancienne ignorée après changement de période", async () => {
+    let releaseOld!: () => void;
+    let first = true;
+    invokeMock.mockImplementation((fn: string, opts: any) => {
+      if (first && opts?.body?.action === "summary") {
+        first = false;
+        return new Promise((r) => { releaseOld = () => r({ data: { summary: { ...SUMMARY, deposit_count: 999 } }, error: null }); });
+      }
+      return respond(fn, opts);
+    });
+    render(<MCommissions />);
+    fireEvent.click(screen.getByText("Année en cours"));
+    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
+    releaseOld();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText("999")).toBeNull();
+  });
+
+  it("double tap « Charger plus » = une seule requête page 2", async () => {
+    render(<MCommissions />);
+    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
+    const more = await screen.findByText(/charger plus/i);
+    fireEvent.click(more); fireEvent.click(more);
+    await waitFor(() => expect(invokeMock.mock.calls.some((c) => c[1]?.body?.filters?.page === 2)).toBe(true));
+    expect(invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "deposits" && c[1]?.body?.filters?.page === 2)).toHaveLength(1);
+  });
 });

@@ -1,7 +1,7 @@
 // Telnyx inbound SMS webhook → persists to pbx_sms_* and broadcasts realtime.
 // Verifies the Telnyx-Signature header (Ed25519) when TELNYX_PUBLIC_KEY is set.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { decode as b64decode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { decodeBase64 as b64decode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

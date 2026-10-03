@@ -23,6 +23,9 @@ export type LifecycleDecision =
   | 'expired_manifest'
   | 'transient_failure';
 
+export type RecordingPolicy = 'not_allowed' | 'user_allowed' | 'portal_managed';
+export type BinaryPortalPolicy = 'enabled' | 'disabled';
+
 export type LemtelManifest = {
   schemaVersion: typeof SCHEMA_VERSION;
   identity: { organizationRef: string; domainRef: string; extensionRef: string; userRef: string; privacyScope: typeof OWN };
@@ -30,8 +33,8 @@ export type LemtelManifest = {
   revision: { manifestRevision: string; issuedAt: string; expiresAt: string; refreshMode: string; revocationBehavior: typeof REVOKE_BEHAVIOR };
   device: { deviceRef: string; deviceState: 'approved' | 'pending' | 'revoked'; deviceRevision: string; deviceAction: 'none' | 'refresh_required' | 'revoke_required' };
   telephonyPolicy: {
-    credentialRevisionRef: string; dndState: 'enabled' | 'disabled'; forwardingState: 'enabled' | 'disabled';
-    recordingPolicy: string; voicemailPolicy: string;
+    credentialRevisionRef: string; dndState: BinaryPortalPolicy; forwardingState: BinaryPortalPolicy;
+    recordingPolicy: RecordingPolicy; voicemailPolicy: BinaryPortalPolicy;
     callsPrivacyScope: typeof OWN; recordingsPrivacyScope: typeof OWN; voicemailPrivacyScope: typeof OWN; transcriptsPrivacyScope: typeof OWN;
   };
   routing: { routingMode: 'direct_current'; routingAssignmentRef: string; fallbackMode: 'direct_current'; edgeFeatureGate: false };

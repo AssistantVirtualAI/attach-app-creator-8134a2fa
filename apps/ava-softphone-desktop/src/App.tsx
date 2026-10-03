@@ -156,6 +156,7 @@ function DesktopApp() {
   // Phase 21B: portal lifecycle runs before SipKeepAlive is ever mounted. Without a session, Desktop is unavailable.
   const lifecycle = useLemtelDesktopClientConfig(creds?.accessToken || null);
   const lifecycleStatus = lifecycle.status;
+  const portalTelephonyPolicy = lifecycle.manifest?.telephonyPolicy ?? null;
   const { refresh: refreshLifecycle, finalizeBlock } = lifecycle;
 
   useEffect(() => sipProvider.subscribe?.((snap) => setCallState(snap.callState)), []);
@@ -384,7 +385,7 @@ function DesktopApp() {
         {!IS_EMBED && <TitleBar />}
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
           {mobileSettings ? (
-            <SettingsPage creds={creds} onSignOut={signOutDesktop} onBack={() => setMobileSettings(false)} />
+            <SettingsPage creds={creds} onSignOut={signOutDesktop} onBack={() => setMobileSettings(false)} portalTelephonyPolicy={portalTelephonyPolicy} />
           ) : (
             <SoftphonePane creds={creds} onOpenSettings={openSettingsMobile} />
           )}

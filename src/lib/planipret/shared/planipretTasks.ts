@@ -27,6 +27,7 @@ export interface NormalizedTask {
   target_name: string | null;
   is_recurring: boolean;
   recurring_pattern: string | null;
+  recurring_value?: number | null;
   created_by_ava: boolean;
   /** Maestro user ids this task is assigned to (from `users`, `users_id`, …). */
   assignee_ids: string[];
@@ -420,6 +421,7 @@ export function normalizeTask(input: any): NormalizedTask {
     target_name: raw?.client_name ?? raw?.contact_name ?? raw?.user_name ?? raw?.target_name ?? null,
     is_recurring: truthy(raw?.is_recurring),
     recurring_pattern: raw?.recurring_pattern ? String(raw.recurring_pattern) : null,
+    recurring_value: raw?.recurring_value != null && Number.isFinite(Number(raw.recurring_value)) ? Number(raw.recurring_value) : null,
     created_by_ava: truthy(raw?.created_by_ava) || String(raw?.source ?? "").toLowerCase().includes("ava"),
     assignee_ids: assignment.ids,
     assignment_source: assignment.source,

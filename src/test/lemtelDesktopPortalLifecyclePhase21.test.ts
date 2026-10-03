@@ -92,7 +92,7 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
     expect(s).toContain("{lifecycleAllowed && <DesktopBackgroundSync");
     const desktopApp = s.slice(s.indexOf("function DesktopApp()"));
     expect(desktopApp).not.toMatch(/triggerCdrSync|setInterval/);
-    expect([...s.matchAll(/triggerCdrSync\(\)/g)].length).toBe(1);
+    expect([...s.matchAll(/triggerCdrSync\(\);/g)].length).toBe(1);
     expect(s).toContain("Accès Desktop indisponible");
     expect(s).toContain("Revenir à la connexion");
   });

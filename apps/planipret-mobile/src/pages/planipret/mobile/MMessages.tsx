@@ -161,7 +161,7 @@ export default function MMessages() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {visited.has("sms") && <div className="h-full" hidden={sub !== "sms"}><SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} initialTo={qTo} /></div>}
+        {visited.has("sms") && <div className="h-full" hidden={sub !== "sms"}><SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} active={sub === "sms"} initialTo={qTo} /></div>}
         {visited.has("team") && <div className="h-full" hidden={sub !== "team"}><TeamChat profile={profile} /></div>}
         {visited.has("teams365") && <div className="h-full" hidden={sub !== "teams365"}><Teams365Panel profile={profile} /></div>}
         {visited.has("emails") && <div className="h-full" hidden={sub !== "emails"}><EmailsList profile={profile} initialTo={qTo} initialName={qName} /></div>}
@@ -325,7 +325,7 @@ const recipientFromRow = (c: any, source: SmsRecipient["source"], index: number)
 const recipientHay = (r: SmsRecipient) => `${r.name} ${r.phone} ${r.email ?? ""} ${r.extension ?? ""} ${r.department ?? ""}`.toLowerCase();
 const looksLikePhone = (value: string) => /^[+]?[-() .\d]{3,}$/.test(value.trim());
 
-function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
+function SmsList({ profile, openDialer, registerRefresh, active = true, initialTo }: any) {
   const { t } = useMplanipretLang();
   const [searchParams, setSearchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";
@@ -414,7 +414,9 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [profile?.user_id]);
-  useEffect(() => { registerRefresh(load); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
+  // Only the visible sub-tab owns pull-to-refresh; hidden panels unregister.
+  const smsLoadRef = useRef(load); smsLoadRef.current = load;
+  useEffect(() => { if (!active) return; return registerRefresh(() => smsLoadRef.current()); /* eslint-disable-next-line */ }, [active, profile?.user_id, registerRefresh]);
   useEffect(() => {
     const to = searchParams.get("to")?.trim();
     const body = searchParams.get("body")?.trim() ?? "";

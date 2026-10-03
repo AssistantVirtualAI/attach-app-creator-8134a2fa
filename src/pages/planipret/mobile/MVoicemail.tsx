@@ -112,7 +112,8 @@ export default function MVoicemail() {
   };
 
   useEffect(() => { load(); }, [profile?.user_id, tab]);
-  useEffect(() => { registerRefresh(load); return () => registerRefresh(null); }, [profile?.user_id]);
+  const vmLoadRef = useRef(load); vmLoadRef.current = load;
+  useEffect(() => registerRefresh(() => vmLoadRef.current()), [profile?.user_id, tab, registerRefresh]);
 
   useEffect(() => {
     if (!profile?.id && !profile?.user_id) return;

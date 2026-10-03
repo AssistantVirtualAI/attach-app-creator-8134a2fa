@@ -375,8 +375,7 @@ export default function MHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
   useEffect(() => {
-    registerRefresh(async () => { await Promise.all([loadStats(true), loadBrief(true)]); });
-    return () => registerRefresh(null);
+    return registerRefresh(async () => { await Promise.all([loadStats(true), loadBrief(true)]); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.user_id, period]);
 

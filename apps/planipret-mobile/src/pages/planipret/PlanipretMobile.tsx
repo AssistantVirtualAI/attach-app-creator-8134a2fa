@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
 import AiConsentHost from "@/components/planipret/mobile/AiConsentHost";
+import { createRefreshRegistry } from "@/lib/planipret/refreshRegistry";
 import { useNavigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -96,7 +97,7 @@ const PlanipretBadge = () => (
   </div>
 );
 
-export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promise<void>; openDialer: (number?: string, autoDial?: boolean) => void; openAva: () => void; registerRefresh: (fn: (() => Promise<void> | void) | null) => void; softphone: ReturnType<typeof useMplanipretSoftphone> };
+export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promise<void>; openDialer: (number?: string, autoDial?: boolean) => void; openAva: () => void; registerRefresh: (fn: (() => Promise<void> | void) | null) => () => void; softphone: ReturnType<typeof useMplanipretSoftphone> };
 
 const TABS = [
   { to: "/mplanipret/home", labelKey: "tabs.home", Icon: Home, flag: null },
@@ -548,11 +549,9 @@ export default function PlanipretMobile() {
   // Stack of refresh handlers: the most recently mounted page/sub-tab owns the
   // pull gesture; its cleanup pops only its own entry. Stable identity so page
   // effects do not re-register on every shell render. Cleared on route change.
-  const refreshStack = useRef<Array<() => Promise<void> | void>>([]);
-  const registerRefresh = useCallback((fn: (() => Promise<void> | void) | null) => {
-    if (fn) refreshStack.current.push(fn); else refreshStack.current.pop();
-  }, []);
-  const currentRefresh = () => refreshStack.current[refreshStack.current.length - 1] ?? null;
+  const refreshRegistry = useRef(createRefreshRegistry()).current;
+  const registerRefresh = useCallback((fn: (() => Promise<void> | void) | null) => refreshRegistry.register(fn), [refreshRegistry]);
+  const currentRefresh = () => refreshRegistry.current();
   // Stale-load guard: leaving the page while a refresh runs releases the
   // spinner immediately; the old page's result can no longer block the new one.
   const pullGen = useRef(0);
@@ -560,8 +559,9 @@ export default function PlanipretMobile() {
   const handlePull = async () => {
     const fn = currentRefresh(); if (!fn) return;
     const gen = pullGen.current;
+    const regGen = refreshRegistry.generation;
     await new Promise<void>((resolve) => {
-      const iv = setInterval(() => { if (pullGen.current !== gen) { clearInterval(iv); resolve(); } }, 100);
+      const iv = setInterval(() => { if (pullGen.current !== gen || refreshRegistry.generation !== regGen) { clearInterval(iv); resolve(); } }, 100);
       Promise.resolve().then(fn).catch(() => {}).finally(() => { clearInterval(iv); resolve(); });
     });
   };

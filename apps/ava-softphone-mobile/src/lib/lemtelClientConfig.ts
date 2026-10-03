@@ -89,33 +89,67 @@ export async function getInstallationRef(): Promise<string> {
 
 // ---------- strict validation ----------
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const str = (v: unknown) => typeof v === 'string' && v.length > 0 && v.length <= 200;
 const exactKeys = (o: Record<string, unknown>, keys: string[]) => {
   const k = Object.keys(o).sort();
   return k.length === keys.length && [...keys].sort().every((x, i) => x === k[i]);
 };
 
-/** Structural check only. Returns the typed manifest or null. */
+// Phase 21A.1 hardening: every Phase 16 key, pattern, UTC date and enum is enforced.
+const OPAQUE_REF_RE = /^[a-z0-9][a-z0-9_-]{2,63}$/;
+const UTC_Z_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?Z$/;
+const ref = (v: unknown) => typeof v === 'string' && OPAQUE_REF_RE.test(v);
+const oneOf = (v: unknown, allowed: readonly string[]) => typeof v === 'string' && allowed.includes(v);
+const bool = (v: unknown) => typeof v === 'boolean';
+/** Strict ISO UTC (Z only, 0-3 decimals), real calendar date. */
+export function isStrictUtc(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  const m = UTC_Z_RE.exec(v);
+  if (!m) return false;
+  const [y, mo, d, h, mi, se] = m.slice(1, 7).map(Number);
+  if (mo < 1 || mo > 12 || d < 1 || h > 23 || mi > 59 || se > 59) return false;
+  const dim = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  if (d > dim) return false;
+  return Number.isFinite(Date.parse(v));
+}
+const ACCOUNT_STATES = ['active', 'suspended', 'disabled'] as const;
+const SIGN_IN_MODES = ['portal_password', 'microsoft_sso', 'portal_password_or_microsoft_sso'] as const;
+const REFRESH_MODES = ['foreground_and_revision_check', 'manual_only', 'disabled'] as const;
+const DEVICE_STATES = ['approved', 'pending', 'revoked'] as const;
+const DEVICE_ACTIONS = ['none', 'refresh_required', 'revoke_required'] as const;
+const ON_OFF = ['enabled', 'disabled'] as const;
+const RECORDING_POLICIES = ['not_allowed', 'user_allowed', 'portal_managed'] as const;
+const DIAGNOSTIC_LEVELS = ['off', 'error_only', 'standard'] as const;
+const CAPABILITY_ENUMS: Record<string, readonly string[]> = {
+  maestroSyncState: ['disabled', 'not_ready', 'ready'],
+  avaCallActionState: ['disabled', 'not_ready', 'requires_user_confirmation'],
+  avaSmsActionState: ['disabled', 'not_ready', 'requires_user_confirmation'],
+  microsoftSsoState: ['disabled', 'not_ready', 'ready'],
+};
+
+/** Strict Phase 16 contract check. Returns the typed manifest or null. */
 export function parseManifest(raw: unknown): LemtelManifest | null {
   if (!isObj(raw)) return null;
   if (!exactKeys(raw, ['schemaVersion', 'identity', 'access', 'revision', 'device', 'telephonyPolicy', 'routing', 'capabilities', 'observability'])) return null;
   const { identity: id, access: ac, revision: rv, device: dv, telephonyPolicy: tp, routing: ro, capabilities: ca, observability: ob } = raw;
   if (raw.schemaVersion !== SCHEMA_VERSION) return null;
   if (!isObj(id) || !exactKeys(id, ['organizationRef', 'domainRef', 'extensionRef', 'userRef', 'privacyScope'])) return null;
-  if (![id.organizationRef, id.domainRef, id.extensionRef, id.userRef].every(str)) return null;
+  if (![id.organizationRef, id.domainRef, id.extensionRef, id.userRef].every(ref) || id.privacyScope !== OWN) return null;
   if (!isObj(ac) || !exactKeys(ac, ['mobileEnabled', 'desktopEnabled', 'accountState', 'signInMode'])) return null;
-  if (typeof ac.mobileEnabled !== 'boolean' || typeof ac.desktopEnabled !== 'boolean' || !['active', 'suspended', 'disabled'].includes(ac.accountState as string) || !str(ac.signInMode)) return null;
+  if (!bool(ac.mobileEnabled) || !bool(ac.desktopEnabled) || !oneOf(ac.accountState, ACCOUNT_STATES) || !oneOf(ac.signInMode, SIGN_IN_MODES)) return null;
   if (!isObj(rv) || !exactKeys(rv, ['manifestRevision', 'issuedAt', 'expiresAt', 'refreshMode', 'revocationBehavior'])) return null;
-  if (![rv.manifestRevision, rv.issuedAt, rv.expiresAt, rv.refreshMode].every(str)) return null;
+  if (!ref(rv.manifestRevision) || !isStrictUtc(rv.issuedAt) || !isStrictUtc(rv.expiresAt) || !oneOf(rv.refreshMode, REFRESH_MODES) || rv.revocationBehavior !== REVOKE_BEHAVIOR) return null;
   if (!isObj(dv) || !exactKeys(dv, ['deviceRef', 'deviceState', 'deviceRevision', 'deviceAction'])) return null;
-  if (typeof dv.deviceRef !== 'string' || !DEVICE_REF_RE.test(dv.deviceRef) || !str(dv.deviceRevision)) return null;
-  if (!['approved', 'pending', 'revoked'].includes(dv.deviceState as string) || !['none', 'refresh_required', 'revoke_required'].includes(dv.deviceAction as string)) return null;
+  if (typeof dv.deviceRef !== 'string' || !DEVICE_REF_RE.test(dv.deviceRef) || !ref(dv.deviceRevision)) return null;
+  if (!oneOf(dv.deviceState, DEVICE_STATES) || !oneOf(dv.deviceAction, DEVICE_ACTIONS)) return null;
   if (!isObj(tp) || !exactKeys(tp, ['credentialRevisionRef', 'dndState', 'forwardingState', 'recordingPolicy', 'voicemailPolicy', 'callsPrivacyScope', 'recordingsPrivacyScope', 'voicemailPrivacyScope', 'transcriptsPrivacyScope'])) return null;
-  if (![tp.credentialRevisionRef, tp.recordingPolicy, tp.voicemailPolicy].every(str)) return null;
-  if (!['enabled', 'disabled'].includes(tp.dndState as string) || !['enabled', 'disabled'].includes(tp.forwardingState as string)) return null;
-  if (!isObj(ro) || !exactKeys(ro, ['routingMode', 'routingAssignmentRef', 'fallbackMode', 'edgeFeatureGate']) || !str(ro.routingAssignmentRef)) return null;
-  if (!isObj(ca) || !Object.values(ca).every(str)) return null;
-  if (!isObj(ob) || !exactKeys(ob, ['diagnosticLevel', 'redactionPolicyRef', 'supportBundleAllowed']) || typeof ob.supportBundleAllowed !== 'boolean') return null;
+  if (!ref(tp.credentialRevisionRef) || !oneOf(tp.dndState, ON_OFF) || !oneOf(tp.forwardingState, ON_OFF) || !oneOf(tp.recordingPolicy, RECORDING_POLICIES) || !oneOf(tp.voicemailPolicy, ON_OFF)) return null;
+  if (tp.callsPrivacyScope !== OWN || tp.recordingsPrivacyScope !== OWN || tp.voicemailPrivacyScope !== OWN || tp.transcriptsPrivacyScope !== OWN) return null;
+  if (!isObj(ro) || !exactKeys(ro, ['routingMode', 'routingAssignmentRef', 'fallbackMode', 'edgeFeatureGate'])) return null;
+  if (ro.routingMode !== 'direct_current' || ro.fallbackMode !== 'direct_current' || ro.edgeFeatureGate !== false || !ref(ro.routingAssignmentRef)) return null;
+  if (!isObj(ca) || !exactKeys(ca, Object.keys(CAPABILITY_ENUMS))) return null;
+  if (!Object.entries(CAPABILITY_ENUMS).every(([k, allowed]) => oneOf(ca[k], allowed))) return null;
+  if (!isObj(ob) || !exactKeys(ob, ['diagnosticLevel', 'redactionPolicyRef', 'supportBundleAllowed'])) return null;
+  if (!oneOf(ob.diagnosticLevel, DIAGNOSTIC_LEVELS) || !ref(ob.redactionPolicyRef) || !bool(ob.supportBundleAllowed)) return null;
   return raw as unknown as LemtelManifest;
 }
 

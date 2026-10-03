@@ -947,10 +947,10 @@ function TopHeader({
 // installation reference and never starts a connection automatically.
 function MobileAccessBlocked({ onBack }: { onBack: () => void }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', gap: 16, background: colors.bg, color: colors.text }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', gap: 16, background: colors.navyDeep, color: colors.textIce }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Accès Mobile indisponible</h1>
       <p style={{ margin: 0, opacity: 0.8, maxWidth: 320 }}>L’accès de cet appareil n’est plus autorisé. Reconnectez-vous ou contactez votre administrateur.</p>
-      <button type="button" onClick={onBack} style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: gradients.primary, color: '#fff', fontWeight: 600 }}>Revenir à la connexion</button>
+      <button type="button" onClick={onBack} style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: gradients.call, color: colors.textIce, fontWeight: 600 }}>Revenir à la connexion</button>
     </div>
   );
 }

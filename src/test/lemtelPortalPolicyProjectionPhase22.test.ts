@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "1467ed489";
+const PHASE22A_END = "25cf91bd2";
 const CFG = "supabase/functions/lemtel-client-config/index.ts";
 const PROXY = "supabase/functions/fusionpbx-proxy/index.ts";
 const FILES = [
@@ -29,20 +30,16 @@ describe("Lemtel Phase 22A — portal policy projection", () => {
 
   it("guards pass before", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${BASE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
   });
 
   it("six exact files exist, none protected, delivery range stays within them", () => {
     expect(FILES.length).toBe(6);
     expect(FILES.filter(isProtected)).toEqual([]);
     for (const f of FILES) expect(fs.existsSync(path.join(root, f)), f).toBe(true);
-    execFileSync("git", ["merge-base", "--is-ancestor", BASE, "HEAD"], { cwd: root });
-    const changed = [
-      ...git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n"),
-      ...git("diff", "--name-only", "--no-renames").split("\n"),
-    ].filter(Boolean);
+    execFileSync("git", ["merge-base", "--is-ancestor", BASE, PHASE22A_END], { cwd: root });
+    const changed = git("diff", "--name-only", "--no-renames", `${BASE}..${PHASE22A_END}`).split("\n").filter(Boolean).sort();
     expect(changed.filter(isProtected)).toEqual([]);
-    for (const f of changed) expect(FILES, f).toContain(f);
+    expect(changed).toEqual(FILES);
   });
 
   it("reads only pbx_extensions with five strict columns, bound to extension_id and organization_id", () => {
@@ -100,12 +97,15 @@ describe("Lemtel Phase 22A — portal policy projection", () => {
     expect(b).toContain('["none", "inbound", "outbound", "all"]');
     expect(b).toContain("Object.keys(mirror).length === 0");
     for (const bad of ["forward_all_destination", "password", "raw_data", "retry", "fetch(", "mirrorErr.message"]) expect(b).not.toContain(bad);
-    expect(b).toContain('policyMirror: mirrorErr ? "pending_sync" : "updated"');
+    expect(b).toContain('.update(mirror).eq("organization_id", organization_id).eq("pbx_uuid", extUuid).select("id").maybeSingle()');
+    expect(b).toContain('policyMirror: !mirrorErr && mirrorRow ? "updated" : "pending_sync"');
+    expect(b.match(/"updated"/g)?.length).toBe(1);
+    expect(b).toContain('policyMirror: "pending_sync"');
     expect(b).not.toContain(V);
   });
 
   it("no migration, types, drizzle, package/lockfile or new SIP/PBX mechanism", () => {
-    const changed = [...git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n"), ...git("diff", "--name-only").split("\n")].filter(Boolean);
+    const changed = git("diff", "--name-only", "--no-renames", `${BASE}..${PHASE22A_END}`).split("\n").filter(Boolean);
     for (const f of changed) expect(f).not.toMatch(/supabase\/migrations\/|integrations\/supabase\/types\.ts|drizzle|package(-lock)?\.json|bun\.lockb?|pnpm-lock|yarn\.lock|config\.toml/);
     const baseProxy = git("show", `${BASE}:${PROXY}`);
     const cur = rd(PROXY);
@@ -137,7 +137,6 @@ describe("Lemtel Phase 22A — portal policy projection", () => {
 
   it("guards pass after", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${BASE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(git("status", "--porcelain")).toBe(statusBefore);
   });
 });

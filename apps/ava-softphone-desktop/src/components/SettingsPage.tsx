@@ -6,6 +6,23 @@ import { useContrast, Contrast } from '../hooks/useContrast';
 import { sipProvider } from '../lib/sip/jssipProvider';
 import { theme } from '../lib/theme';
 import pkg from '../../package.json';
+import type { BinaryPortalPolicy, RecordingPolicy } from '../lib/lemtelDesktopClientConfig';
+
+/** Lemtel Phase 22C — the four validated portal policy labels, read-only. */
+export type PortalTelephonyPolicy = {
+  dndState: BinaryPortalPolicy;
+  forwardingState: BinaryPortalPolicy;
+  recordingPolicy: RecordingPolicy;
+  voicemailPolicy: BinaryPortalPolicy;
+};
+
+const PORTAL_POLICY_LABELS = {
+  dnd: { enabled: 'Do not disturb: enabled', disabled: 'Do not disturb: disabled' },
+  fwd: { enabled: 'Call forwarding: enabled', disabled: 'Call forwarding: disabled' },
+  rec: { not_allowed: 'Recording: not allowed', user_allowed: 'Recording: user allowed', portal_managed: 'Recording: portal managed' },
+  vm: { enabled: 'Voicemail: enabled', disabled: 'Voicemail: disabled' },
+} as const;
+const PORTAL_POLICY_NOTE = 'Telephony settings are applied by the portal. Change them in the Lemtel portal.';
 
 const c = theme.colors;
 
@@ -135,12 +152,30 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
+function PortalPolicyCard({ policy }: { policy: PortalTelephonyPolicy }) {
+  const L = PORTAL_POLICY_LABELS;
+  const pick = (m: Record<string, string>, k: string) => (Object.prototype.hasOwnProperty.call(m, k) ? m[k] : null);
+  const lines = [pick(L.dnd, policy.dndState), pick(L.fwd, policy.forwardingState), pick(L.rec, policy.recordingPolicy), pick(L.vm, policy.voicemailPolicy)].filter((x): x is string => !!x);
+  return (
+    <section data-testid="desktop-portal-policy" aria-label="Portal policy">
+      <SectionTitle eyebrow="PORTAL" title="Portal policy" />
+      <Card>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {lines.map((l) => <li key={l} style={{ padding: '3px 0', fontSize: 12, color: c.text }}>{l}</li>)}
+        </ul>
+      </Card>
+      <p style={{ fontSize: 11, color: c.textDim, margin: '6px 4px 0' }}>{PORTAL_POLICY_NOTE}</p>
+    </section>
+  );
+}
+
 /* ─── Main SettingsPage ─────────────────────────────────────────────────── */
 
 export default function SettingsPage({
   creds,
   onSignOut,
   onBack,
+  portalTelephonyPolicy = null,
 }: {
   creds: {
     email: string;
@@ -151,6 +186,7 @@ export default function SettingsPage({
   };
   onSignOut: () => void;
   onBack: () => void;
+  portalTelephonyPolicy?: PortalTelephonyPolicy | null;
 }) {
   const { mode, setMode } = useTheme();
   const { brightness, setBrightness } = useBrightness();
@@ -378,6 +414,8 @@ export default function SettingsPage({
             </div>
           </div>
         </Card>
+
+        {portalTelephonyPolicy && <PortalPolicyCard policy={portalTelephonyPolicy} />}
 
         {/* ── Calls ────────────────────────────────────────────────────── */}
         <SectionTitle eyebrow="CALLS" title="Call Settings" />

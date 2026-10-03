@@ -128,4 +128,45 @@ describe('useLemtelDesktopClientConfig', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(edgeCall).toHaveBeenCalledTimes(2);
   });
+
+  it('Phase 22C: allowed exposes validated manifest with four policies; register body unchanged', async () => {
+    edgeCall.mockResolvedValueOnce(manifest({ 'telephonyPolicy.dndState': 'enabled' }));
+    const { result } = renderHook(() => useLemtelDesktopClientConfig('tok'));
+    expect(result.current.manifest).toBeNull();
+    await waitFor(() => expect(result.current.status).toBe('allowed'));
+    const tp = result.current.manifest!.telephonyPolicy;
+    expect([tp.dndState, tp.forwardingState, tp.recordingPolicy, tp.voicemailPolicy]).toEqual(['enabled', 'disabled', 'portal_managed', 'enabled']);
+    expect(edgeCall).toHaveBeenCalledTimes(1);
+    expect(edgeCall.mock.calls[0][2]).toEqual({ action: 'register', platform: 'desktop', installationRef: await getInstallationRef() });
+  });
+
+  it('Phase 22C: transient failure + valid cache exposes cached manifest', async () => {
+    await saveCachedManifest(manifest({ 'telephonyPolicy.forwardingState': 'enabled' }));
+    edgeCall.mockRejectedValueOnce(new Error('Failed to fetch'));
+    const { result } = renderHook(() => useLemtelDesktopClientConfig('tok'));
+    await waitFor(() => expect(result.current.status).toBe('allowed'));
+    expect(result.current.manifest!.telephonyPolicy.forwardingState).toBe('enabled');
+  });
+
+  it('Phase 22C: blocked / invalid / no session expose no manifest', async () => {
+    edgeCall.mockRejectedValueOnce(new Error('device_revoked'));
+    const a = renderHook(() => useLemtelDesktopClientConfig('tok'));
+    await waitFor(() => expect(a.result.current.status).toBe('pending_block'));
+    expect(a.result.current.manifest).toBeNull();
+    edgeCall.mockResolvedValueOnce(manifest({ 'telephonyPolicy.recordingPolicy': 'always' }));
+    const b = renderHook(() => useLemtelDesktopClientConfig('tok2'));
+    await waitFor(() => expect(b.result.current.status).toBe('unavailable'));
+    expect(b.result.current.manifest).toBeNull();
+    const c = renderHook(() => useLemtelDesktopClientConfig(null));
+    expect(c.result.current.manifest).toBeNull();
+  });
+
+  it('Phase 22C: finalizeBlock resets manifest to null', async () => {
+    edgeCall.mockResolvedValueOnce(manifest());
+    const { result } = renderHook(() => useLemtelDesktopClientConfig('tok'));
+    await waitFor(() => expect(result.current.manifest).not.toBeNull());
+    act(() => result.current.finalizeBlock());
+    expect(result.current.manifest).toBeNull();
+    expect(result.current.status).toBe('blocked');
+  });
 });

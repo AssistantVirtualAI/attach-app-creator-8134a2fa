@@ -293,4 +293,15 @@ describe('Phase 21B.1 — useSoftphone async races during revocation', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     } finally { vi.unstubAllGlobals(); }
   });
+
+  it('Phase 22C: the four portal policy values are validated; unknown recording/voicemail refused', () => {
+    for (const r of ['not_allowed', 'user_allowed', 'portal_managed']) expect(evaluateManifest(validManifest({ 'telephonyPolicy.recordingPolicy': r }), NOW)).toBe('allowed');
+    for (const v of ['enabled', 'disabled']) {
+      expect(evaluateManifest(validManifest({ 'telephonyPolicy.dndState': v, 'telephonyPolicy.forwardingState': v, 'telephonyPolicy.voicemailPolicy': v }), NOW)).toBe('allowed');
+    }
+    expect(evaluateManifest(validManifest({ 'telephonyPolicy.recordingPolicy': 'always' }), NOW)).toBe('invalid_manifest');
+    expect(evaluateManifest(validManifest({ 'telephonyPolicy.voicemailPolicy': 'maybe' }), NOW)).toBe('invalid_manifest');
+    const typed: import('./lemtelDesktopClientConfig').LemtelManifest['telephonyPolicy']['recordingPolicy'] = 'portal_managed';
+    expect(typed).toBe('portal_managed');
+  });
 });

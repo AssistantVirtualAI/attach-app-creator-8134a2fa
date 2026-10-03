@@ -14,6 +14,7 @@ export type LemtelDesktopClientConfig = {
   status: LemtelDesktopClientConfigStatus;
   sipAllowed: boolean;
   deviceRef: string | null;
+  manifest: LemtelManifest | null;
   refresh: (opts?: { force?: boolean }) => Promise<void>;
   finalizeBlock: () => void;
   clearCachedManifest: () => Promise<void>;
@@ -40,6 +41,7 @@ export function useLemtelDesktopClientConfig(sessionToken: string | null | undef
   const hasSession = !!sessionToken;
   const [status, setStatus] = useState<LemtelDesktopClientConfigStatus>(hasSession ? 'checking' : 'unavailable');
   const [deviceRef, setDeviceRef] = useState<string | null>(null);
+  const [manifest, setManifest] = useState<LemtelManifest | null>(null);
   const tokenRef = useRef(sessionToken);
   const deviceRefRef = useRef<string | null>(null);
   const lastSuccessRef = useRef<number | null>(null);
@@ -57,27 +59,32 @@ export function useLemtelDesktopClientConfig(sessionToken: string | null | undef
       deviceRefRef.current = m.device.deviceRef;
       lastSuccessRef.current = Date.now();
       setDeviceRef(m.device.deviceRef);
+      setManifest(m);
       setStatus('allowed');
       return;
     }
+    setManifest(null);
     if (decision === 'expired_manifest' || decision === 'invalid_manifest') { setStatus('unavailable'); return; }
     setStatus('pending_block');
   }, []);
 
   const handleFailure = useCallback(async (err: unknown) => {
     const kind = classifyError(err);
-    if (kind === 'unauthorized') { setStatus('unavailable'); return; }
+    if (kind === 'unauthorized') { setManifest(null); setStatus('unavailable'); return; }
     if (kind === 'transient_failure') {
       const cached = await loadCachedManifest();
       if (cacheUsableAfterTransient(cached)) {
         deviceRefRef.current = cached!.manifest.device.deviceRef;
         setDeviceRef(cached!.manifest.device.deviceRef);
+        setManifest(cached!.manifest);
         setStatus('allowed');
       } else {
+        setManifest(null);
         setStatus('unavailable');
       }
       return;
     }
+    setManifest(null);
     setStatus('pending_block');
   }, []);
 
@@ -104,6 +111,7 @@ export function useLemtelDesktopClientConfig(sessionToken: string | null | undef
   useEffect(() => {
     if (!hasSession) {
       registeredRef.current = false;
+      setManifest(null);
       setStatus((s) => (s === 'blocked' ? s : 'unavailable'));
       return;
     }
@@ -128,9 +136,10 @@ export function useLemtelDesktopClientConfig(sessionToken: string | null | undef
     deviceRefRef.current = null;
     lastSuccessRef.current = null;
     setDeviceRef(null);
+    setManifest(null);
     void clearManifestCache();
   }, []);
 
   const sipAllowed = status === 'allowed';
-  return { status, sipAllowed, deviceRef, refresh, finalizeBlock, clearCachedManifest };
+  return { status, sipAllowed, deviceRef, manifest, refresh, finalizeBlock, clearCachedManifest };
 }

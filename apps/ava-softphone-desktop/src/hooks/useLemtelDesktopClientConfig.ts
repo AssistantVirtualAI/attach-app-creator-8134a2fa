@@ -107,7 +107,9 @@ export function useLemtelDesktopClientConfig(sessionToken: string | null | undef
       setStatus((s) => (s === 'blocked' ? s : 'unavailable'));
       return;
     }
-    if (registeredRef.current || statusRef.current === 'blocked') return;
+    if (registeredRef.current) return;
+    // A new authenticated session (including after a finalized block) re-registers; the portal decides.
+    statusRef.current = 'checking';
     setStatus('checking');
     void run('register');
   }, [hasSession, run]);

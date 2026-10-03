@@ -119,5 +119,22 @@ describe("Lemtel Phase 21A — mobile portal device lifecycle", () => {
     expect(git("status", "--porcelain")).toBe(before);
   }, 30000);
 
+  it("21A.1: frozen range d0c306208..314fc946f is exactly the eight original files (never compared to HEAD)", () => {
+    execFileSync("git", ["merge-base", "--is-ancestor", "d0c306208", "314fc946f"], { cwd: root });
+    const list = git("diff", "--name-only", "--no-renames", "d0c306208", "314fc946f").split("\n").filter(Boolean).sort();
+    expect(list).toEqual(FILES);
+  });
+
+  it("21A.1: strict validator rules are present", () => {
+    const s = rd(LIB);
+    expect(s).toContain("const OPAQUE_REF_RE = /^[a-z0-9][a-z0-9_-]{2,63}$/;");
+    expect(s).toMatch(/UTC_Z_RE = .*\(\?:\\\.\\d\{1,3\}\)\?Z\$/);
+    for (const e of ["maestroSyncState", "avaCallActionState", "avaSmsActionState", "microsoftSsoState", "requires_user_confirmation", "portal_password_or_microsoft_sso", "foreground_and_revision_check", "portal_managed", "error_only"]) expect(s).toContain(e);
+    expect(s).toContain("exactKeys(ca, Object.keys(CAPABILITY_ENUMS))");
+    expect(s).toContain("exactKeys(ob, ['diagnosticLevel', 'redactionPolicyRef', 'supportBundleAllowed'])");
+    expect(s).not.toMatch(/const str = /);
+    expect(s).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|\\bpbx\\b|wss?:\\/\\/|sipPassword|password|refresh_token|access_token|recording_url|cdr|voicemail_|sms\\b|\\bfetch\\(|WebSocket", "i"));
+  });
+
   it("Planiprêt guard passes after", () => expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n"));
 });

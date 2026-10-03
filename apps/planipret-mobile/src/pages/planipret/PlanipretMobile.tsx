@@ -553,7 +553,18 @@ export default function PlanipretMobile() {
     if (fn) refreshStack.current.push(fn); else refreshStack.current.pop();
   }, []);
   const currentRefresh = () => refreshStack.current[refreshStack.current.length - 1] ?? null;
-  const handlePull = async () => { const fn = currentRefresh(); if (fn) await fn(); };
+  // Stale-load guard: leaving the page while a refresh runs releases the
+  // spinner immediately; the old page's result can no longer block the new one.
+  const pullGen = useRef(0);
+  useEffect(() => { pullGen.current += 1; }, [location.pathname]);
+  const handlePull = async () => {
+    const fn = currentRefresh(); if (!fn) return;
+    const gen = pullGen.current;
+    await new Promise<void>((resolve) => {
+      const iv = setInterval(() => { if (pullGen.current !== gen) { clearInterval(iv); resolve(); } }, 100);
+      Promise.resolve().then(fn).catch(() => {}).finally(() => { clearInterval(iv); resolve(); });
+    });
+  };
   const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull, 70, () => currentRefresh() != null);
 
   // Remember each page's scroll position so returning to a tab reopens it

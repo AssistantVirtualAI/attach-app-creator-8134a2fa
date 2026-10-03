@@ -447,7 +447,7 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-3">
+    <div className="p-3">
       <div className="flex justify-end mb-2 gap-2">
         <button
           onClick={() => void load(true)}
@@ -2242,7 +2242,7 @@ function TeamRoster({ profile, openDialer, onSwitchTab }: { profile: any; openDi
   };
 
   return (
-    <div className="h-full overflow-y-auto p-3">
+    <div className="p-3">
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -2471,7 +2471,7 @@ function Teams365Panel({ profile }: { profile: any }) {
   ];
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-3 space-y-3">
+    <div className="px-4 py-3 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft Teams</h2>
         <button onClick={load} className="text-xs px-2 py-1 rounded-full flex items-center gap-1"

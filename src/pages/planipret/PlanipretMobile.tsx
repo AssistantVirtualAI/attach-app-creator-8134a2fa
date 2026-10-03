@@ -547,7 +547,16 @@ export default function PlanipretMobile() {
   };
   const refreshFn = useRef<(() => Promise<void> | void) | null>(null);
   const registerRefresh = (fn: (() => Promise<void> | void) | null) => { refreshFn.current = fn; };
-  const handlePull = async () => { if (refreshFn.current) await refreshFn.current(); };
+  const pullGen = useRef(0);
+  useEffect(() => { pullGen.current += 1; }, [location.pathname]);
+  const handlePull = async () => {
+    const fn = refreshFn.current; if (!fn) return;
+    const gen = pullGen.current;
+    await new Promise<void>((resolve) => {
+      const iv = setInterval(() => { if (pullGen.current !== gen) { clearInterval(iv); resolve(); } }, 100);
+      Promise.resolve().then(fn).catch(() => {}).finally(() => { clearInterval(iv); resolve(); });
+    });
+  };
   const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull);
 
   // Remember each page's scroll position so returning to a tab reopens it

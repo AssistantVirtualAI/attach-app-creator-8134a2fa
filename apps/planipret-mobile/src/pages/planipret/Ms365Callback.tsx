@@ -112,6 +112,7 @@ export default function Ms365Callback() {
   };
 
   const failWithGuard = async (message: string) => {
+    clearMs365ReturnTo();
     if (await homeIfSignedIn()) return;
     setStatus("error");
     setError(message);

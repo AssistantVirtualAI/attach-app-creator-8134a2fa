@@ -578,7 +578,7 @@ function NewSmsSheet({ onClose, onStart }: { onClose: () => void; onStart: (numb
   const manual = query.trim();
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end md:items-center md:justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div role="dialog" aria-modal="true" data-pp-sheet aria-label="Nouveau SMS" data-testid="new-sms-sheet" className="fixed inset-0 z-40 flex items-end md:items-center md:justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
         className="w-full md:w-[390px] rounded-t-3xl md:rounded-2xl flex flex-col"
         style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", maxHeight: "86dvh" }}
@@ -619,7 +619,7 @@ function NewSmsSheet({ onClose, onStart }: { onClose: () => void; onStart: (numb
             </button>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1.5">
+        <div data-scroll-owner="new-sms" className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4 space-y-1.5" style={{ minHeight: 0, WebkitOverflowScrolling: "touch" }}>
           {loading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="h-14 rounded-2xl animate-pulse" style={{ background: "var(--pp-bg-surface)" }} />
@@ -1651,13 +1651,13 @@ function EmailDetailSheet({ email, cacheIdentity, onClose, onCompose, onChanged,
   });
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+    <div role="dialog" aria-modal="true" data-pp-sheet data-testid="email-detail-sheet" className="fixed inset-0 z-[9999] flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
       <div
         className="w-full rounded-t-3xl flex flex-col shadow-2xl"
         style={{
           background: "var(--pp-bg-base)",
           border: "1px solid var(--pp-bg-border-2)",
-          height: "calc(100vh - env(safe-area-inset-top) - 24px)",
+          height: "calc(100dvh - env(safe-area-inset-top) - 24px)",
           maxHeight: "calc(100dvh - 24px)",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -1687,7 +1687,8 @@ function EmailDetailSheet({ email, cacheIdentity, onClose, onCompose, onChanged,
         </div>
 
         <div
-          className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
+          data-scroll-owner="email-detail"
+          className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-3"
           style={{ WebkitOverflowScrolling: "touch", minHeight: 0, overflowX: "hidden", maxWidth: "100vw" }}
         >
           <div className="rounded-xl p-3.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
@@ -1903,13 +1904,13 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
   const title = mode === "reply" ? "Répondre" : mode === "reply_all" ? "Répondre à tous" : mode === "forward" ? "Transférer" : t("messages.newEmail");
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col" style={{ paddingTop: "env(safe-area-inset-top,0px)", paddingBottom: "env(safe-area-inset-bottom,0px)", background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+    <div role="dialog" aria-modal="true" data-pp-sheet data-testid="email-compose-sheet" className="fixed inset-0 z-[9999] flex flex-col" style={{ paddingTop: "env(safe-area-inset-top,0px)", paddingBottom: "env(safe-area-inset-bottom,0px)", background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
       <div
         className="w-full rounded-t-3xl flex flex-col shadow-2xl"
         style={{
           background: "var(--pp-bg-base)",
           border: "1px solid var(--pp-bg-border-2)",
-          height: "calc(100vh - env(safe-area-inset-top) - 24px)",
+          height: "calc(100dvh - env(safe-area-inset-top) - 24px)",
           maxHeight: "calc(100dvh - 24px)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
@@ -1930,7 +1931,7 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
             {t("common.send")}
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        <div data-scroll-owner="email-compose" className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2" style={{ minHeight: 0, WebkitOverflowScrolling: "touch" }}>
           {(mode === "new" || mode === "forward") && (
             <>
               <div className="flex items-start gap-2">

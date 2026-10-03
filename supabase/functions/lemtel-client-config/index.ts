@@ -75,13 +75,31 @@ export async function opaqueRef(prefix: string, ...parts: (string | number | nul
 export type Account = {
   id: string; organization_id: string; domain_uuid: string | null; extension_id: string | null; portal_user_id: string;
   app_access_enabled: boolean; mobile_access_enabled: boolean; desktop_access_enabled: boolean;
-  account_status: string | null; dnd_enabled: boolean; forward_enabled: boolean; updated_at: string | null;
+  account_status: string | null; updated_at: string | null;
 };
+// Phase 22A: internal, minimal extension policy mirror. Never returned raw; only safe labels are projected.
+export type ExtensionPolicy = {
+  do_not_disturb: boolean | null; forward_all_enabled: boolean | null; call_recording: string | null;
+  voicemail_enabled: boolean | null; updated_at: string | null;
+};
+// Strict, stable column order. No forwarding target, secret, raw payload or extension number.
+export const EXTENSION_POLICY_COLUMNS = "do_not_disturb,forward_all_enabled,call_recording,voicemail_enabled,updated_at";
+const RECORDING_MANAGED = ["inbound", "outbound", "all"];
+// Pure projection of the policy mirror to the Phase 16 labels; restrictive fallback when absent.
+export function projectPolicy(p: ExtensionPolicy | null | undefined) {
+  if (!p) return { dndState: "disabled", forwardingState: "disabled", recordingPolicy: "not_allowed", voicemailPolicy: "disabled" } as const;
+  return {
+    dndState: p.do_not_disturb === true ? "enabled" : "disabled",
+    forwardingState: p.forward_all_enabled === true ? "enabled" : "disabled",
+    recordingPolicy: typeof p.call_recording === "string" && RECORDING_MANAGED.includes(p.call_recording) ? "portal_managed" : "not_allowed",
+    voicemailPolicy: p.voicemail_enabled === true ? "enabled" : "disabled",
+  } as const;
+}
 // Internal ownership IDs (id, organization_id, user_id, softphone_user_id) are never placed in a response, manifest, error or log.
 export type Device = { device_ref: string; state: "approved" | "pending" | "revoked"; revision: number; platform: Platform; id?: string; organization_id?: string; user_id?: string; softphone_user_id?: string };
 
 // Only these columns are ever selected from the existing softphone account table.
-export const ACCOUNT_COLUMNS = "id,organization_id,domain_uuid,extension_id,portal_user_id,app_access_enabled,mobile_access_enabled,desktop_access_enabled,account_status,dnd_enabled,forward_enabled,updated_at";
+export const ACCOUNT_COLUMNS = "id,organization_id,domain_uuid,extension_id,portal_user_id,app_access_enabled,mobile_access_enabled,desktop_access_enabled,account_status,updated_at";
 export const DEVICE_COLUMNS = "id,device_ref,state,revision,platform,organization_id,user_id,softphone_user_id";
 
 export function accessFailure(a: Account | null, platform?: Platform): Failure | null {
@@ -103,8 +121,9 @@ export function resolveRegistration(existing: Device | null): "insert" | "reuse"
   return existing.state === "revoked" ? "revoked" : "reuse";
 }
 
-export async function buildManifest(a: Account, d: Device, now: Date = new Date()) {
+export async function buildManifest(a: Account, d: Device, now: Date = new Date(), policy: ExtensionPolicy | null = null) {
   if (d.state === "revoked") return null;
+  const pol = projectPolicy(policy);
   const status = (a.account_status ?? "").toLowerCase();
   const accountState = !a.app_access_enabled ? "disabled" : status === "suspended" ? "suspended" : status === "disabled" ? "disabled" : "active";
   return {
@@ -118,7 +137,7 @@ export async function buildManifest(a: Account, d: Device, now: Date = new Date(
     },
     access: { mobileEnabled: a.mobile_access_enabled, desktopEnabled: a.desktop_access_enabled, accountState, signInMode: "portal_password" },
     revision: {
-      manifestRevision: await opaqueRef("rev", a.id, a.updated_at, d.device_ref, d.revision, d.state),
+      manifestRevision: await opaqueRef("rev", a.id, a.updated_at, d.device_ref, d.revision, d.state, policy ? "pol" : "nopol", policy?.updated_at, pol.dndState, pol.forwardingState, pol.recordingPolicy, pol.voicemailPolicy),
       issuedAt: new Date(Math.floor(now.getTime() / 1000) * 1000).toISOString().replace(".000Z", "Z"),
       expiresAt: new Date(Math.floor(now.getTime() / 1000) * 1000 + MANIFEST_TTL_SECONDS * 1000).toISOString().replace(".000Z", "Z"),
       refreshMode: "foreground_and_revision_check",
@@ -127,10 +146,10 @@ export async function buildManifest(a: Account, d: Device, now: Date = new Date(
     device: { deviceRef: d.device_ref, deviceState: d.state, deviceRevision: await opaqueRef("devrev", d.device_ref, d.revision), deviceAction: d.state === "approved" ? "none" : "refresh_required" },
     telephonyPolicy: {
       credentialRevisionRef: await opaqueRef("credrev", a.id, a.updated_at),
-      dndState: a.dnd_enabled ? "enabled" : "disabled",
-      forwardingState: a.forward_enabled ? "enabled" : "disabled",
-      recordingPolicy: "portal_managed",
-      voicemailPolicy: "enabled",
+      dndState: pol.dndState,
+      forwardingState: pol.forwardingState,
+      recordingPolicy: pol.recordingPolicy,
+      voicemailPolicy: pol.voicemailPolicy,
       callsPrivacyScope: OWN, recordingsPrivacyScope: OWN, voicemailPrivacyScope: OWN, transcriptsPrivacyScope: OWN,
     },
     routing: { routingMode: "direct_current", routingAssignmentRef: "route_direct_current_v1", fallbackMode: "direct_current", edgeFeatureGate: false },
@@ -217,6 +236,14 @@ export async function handler(req: Request): Promise<Response> {
     const denied = accessFailure(account, v.platform);
     if (denied) return respond({ error: denied.error }, denied.status);
     const a = account as Account;
+    // Phase 22A: at most one policy row, bound to the account's extension AND organization. Silent restrictive fallback.
+    let policy: ExtensionPolicy | null = null;
+    if (a.extension_id) {
+      try {
+        const { data: pr, error: pe } = await admin.from("pbx_extensions").select(EXTENSION_POLICY_COLUMNS).eq("id", a.extension_id).eq("organization_id", a.organization_id).limit(1).maybeSingle();
+        if (!pe && pr) policy = pr as ExtensionPolicy;
+      } catch (_e) { policy = null; }
+    }
 
     if (v.action === "register") {
       const hash = await sha256Hex(v.installationRef);
@@ -234,7 +261,7 @@ export async function handler(req: Request): Promise<Response> {
           .eq("device_ref", (device as Device).device_ref).eq("user_id", userId).eq("organization_id", a.organization_id).eq("softphone_user_id", a.id).neq("state", "revoked").select("id").maybeSingle();
         if (!mutationApplied(seen, seenErr)) return respond({ error: "device_not_found" }, 409);
       }
-      return respond(await buildManifest(a, device as Device));
+      return respond(await buildManifest(a, device as Device, new Date(), policy));
     }
 
     const { data: own } = await admin.from("lemtel_client_config_devices").select(DEVICE_COLUMNS).eq("device_ref", v.deviceRef).eq("user_id", userId).eq("platform", v.platform).eq("organization_id", a.organization_id).eq("softphone_user_id", a.id).maybeSingle();
@@ -246,7 +273,7 @@ export async function handler(req: Request): Promise<Response> {
       const { data: seen, error: seenErr } = await admin.from("lemtel_client_config_devices").update({ last_seen_at: new Date().toISOString() })
         .eq("id", d.id).eq("user_id", userId).eq("platform", v.platform).eq("organization_id", a.organization_id).eq("softphone_user_id", a.id).neq("state", "revoked").select("id").maybeSingle();
       if (!mutationApplied(seen, seenErr)) return respond({ error: "device_not_found" }, 409);
-      const m = await buildManifest(a, d);
+      const m = await buildManifest(a, d, new Date(), policy);
       return m ? respond(m) : respond({ error: "device_revoked" }, 403);
     }
 

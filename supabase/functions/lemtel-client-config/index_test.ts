@@ -8,8 +8,10 @@ const m = await import("./index.ts");
 const ACCOUNT = {
   id: "11111111-1111-4111-8111-111111111111", organization_id: "22222222-2222-4222-8222-222222222222", domain_uuid: "33333333-3333-4333-8333-333333333333",
   extension_id: "44444444-4444-4444-8444-444444444444", portal_user_id: "55555555-5555-4555-8555-555555555555", app_access_enabled: true,
-  mobile_access_enabled: true, desktop_access_enabled: false, account_status: "active", dnd_enabled: false, forward_enabled: true, updated_at: "2026-09-01T10:00:00Z",
+  mobile_access_enabled: true, desktop_access_enabled: false, account_status: "active", updated_at: "2026-09-01T10:00:00Z",
 };
+const POLICY_ON = { do_not_disturb: true, forward_all_enabled: true, call_recording: "all", voicemail_enabled: true, updated_at: "2026-09-15T12:34:56Z" };
+const POLICY_OFF = { do_not_disturb: false, forward_all_enabled: false, call_recording: "none", voicemail_enabled: false, updated_at: "2026-09-15T12:34:56Z" };
 const DEVICE = { device_ref: "dev_" + "a".repeat(32), state: "approved" as const, revision: 1, platform: "mobile" as const };
 const INST = "Install_Ref_ABCDEFGH_1234";
 const REF = /^[a-z0-9][a-z0-9_-]{2,63}$/;
@@ -54,7 +56,7 @@ Deno.test("manifest is Phase 16 compatible and contains no prohibited names or r
   assertEquals(man.capabilities, { maestroSyncState: "disabled", avaCallActionState: "disabled", avaSmsActionState: "disabled", microsoftSsoState: "not_ready" });
   assertEquals(man.revision.issuedAt, "2026-10-02T08:00:00Z");
   assertEquals(man.revision.expiresAt, "2026-10-02T08:15:00Z");
-  assertEquals(man.telephonyPolicy.forwardingState, "enabled");
+  assertEquals(man.telephonyPolicy.forwardingState, "disabled");
   for (const r of [man.identity.organizationRef, man.identity.domainRef, man.identity.extensionRef, man.identity.userRef, man.revision.manifestRevision, man.device.deviceRevision, man.telephonyPolicy.credentialRevisionRef]) assert(REF.test(r), r);
   const keys = JSON.stringify(man).match(/"[A-Za-z_]+":/g)!.map((k) => k.toLowerCase());
   for (const bad of ["password", "secret", "token", "host", "url", "extension\"", "forward_to", "forwardto", "phone", "endpoint", "recording_url", "transcript\""]) assert(!keys.some((k) => k.includes(bad)), bad);
@@ -170,4 +172,56 @@ Deno.test("Phase 20A: list_devices is authorized server-side and filtered by org
   assert(block.includes('respond({ error: "forbidden" }, 403)'));
   assert(block.includes('.select(LIST_COLUMNS).eq("organization_id", v.organizationId)'));
   assert(src.indexOf('auth.getUser()') < src.indexOf('if (v.action === "list_devices")'));
+});
+
+Deno.test("Phase 22A: full enabled policy projects to enabled labels", async () => {
+  const t = (await m.buildManifest(ACCOUNT, DEVICE, new Date(), POLICY_ON))!.telephonyPolicy;
+  assertEquals([t.dndState, t.forwardingState, t.recordingPolicy, t.voicemailPolicy], ["enabled", "enabled", "portal_managed", "enabled"]);
+  for (const r of ["inbound", "outbound"]) assertEquals(m.projectPolicy({ ...POLICY_ON, call_recording: r }).recordingPolicy, "portal_managed");
+});
+
+Deno.test("Phase 22A: full disabled policy projects to disabled labels", async () => {
+  const t = (await m.buildManifest(ACCOUNT, DEVICE, new Date(), POLICY_OFF))!.telephonyPolicy;
+  assertEquals([t.dndState, t.forwardingState, t.recordingPolicy, t.voicemailPolicy], ["disabled", "disabled", "not_allowed", "disabled"]);
+});
+
+Deno.test("Phase 22A: unknown recording value is not_allowed", () => {
+  for (const r of ["ALL", "bogus", "", null]) assertEquals(m.projectPolicy({ ...POLICY_ON, call_recording: r as string | null }).recordingPolicy, "not_allowed");
+});
+
+Deno.test("Phase 22A: absent policy returns the exact restrictive fallback", async () => {
+  const exp = { dndState: "disabled", forwardingState: "disabled", recordingPolicy: "not_allowed", voicemailPolicy: "disabled" };
+  assertEquals(m.projectPolicy(null), exp);
+  const t = (await m.buildManifest(ACCOUNT, DEVICE))!.telephonyPolicy;
+  assertEquals({ dndState: t.dndState, forwardingState: t.forwardingState, recordingPolicy: t.recordingPolicy, voicemailPolicy: t.voicemailPolicy }, exp);
+});
+
+Deno.test("Phase 22A: policy updated_at changes manifestRevision without exposing it", async () => {
+  const now = new Date("2026-10-02T08:00:00Z");
+  const a = await m.buildManifest(ACCOUNT, DEVICE, now, POLICY_ON);
+  const b = await m.buildManifest(ACCOUNT, DEVICE, now, { ...POLICY_ON, updated_at: "2026-09-16T00:00:00Z" });
+  assert(a!.revision.manifestRevision !== b!.revision.manifestRevision);
+  assert(a!.revision.manifestRevision !== (await m.buildManifest(ACCOUNT, DEVICE, now))!.revision.manifestRevision);
+  for (const x of [a, b]) { const s = JSON.stringify(x); assert(!s.includes("2026-09-15") && !s.includes("2026-09-16") && !s.includes("12:34:56")); }
+});
+
+Deno.test("Phase 22A: EXTENSION_POLICY_COLUMNS is strict", () => {
+  assertEquals(m.EXTENSION_POLICY_COLUMNS.split(","), ["do_not_disturb", "forward_all_enabled", "call_recording", "voicemail_enabled", "updated_at"]);
+  for (const bad of ["forward_all_destination", "password", "voicemail_password", "raw_data", "extension", "id"]) assert(!m.EXTENSION_POLICY_COLUMNS.split(",").includes(bad), bad);
+});
+
+Deno.test("Phase 22A: internal policy fields and values never appear in manifest or errors", async () => {
+  const s = JSON.stringify(await m.buildManifest(ACCOUNT, DEVICE, new Date(), POLICY_ON));
+  for (const k of ["do_not_disturb", "forward_all_enabled", "call_recording", "voicemail_enabled", "updated_at", "\"all\""]) assert(!s.includes(k), k);
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const block = src.slice(src.indexOf("let policy: ExtensionPolicy | null = null;"), src.indexOf('if (v.action === "register")'));
+  assert(!block.includes("respond(") && !block.includes("console."));
+});
+
+Deno.test("Phase 22A: account no longer selects legacy dnd/forward flags", async () => {
+  const cols = m.ACCOUNT_COLUMNS.split(",");
+  assert(!cols.includes("dnd_enabled") && !cols.includes("forward_enabled"));
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assert(!src.includes("dnd_enabled") && !src.includes("forward_enabled"));
+  assert(src.includes('.from("pbx_extensions").select(EXTENSION_POLICY_COLUMNS).eq("id", a.extension_id).eq("organization_id", a.organization_id)'));
 });

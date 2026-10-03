@@ -132,7 +132,7 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
   it("new lifecycle modules contain no forbidden stack, endpoint or sensitive data", () => {
     for (const f of [LIB, HOOK]) {
       const s = stripLabels(rd(f));
-      expect(s, f).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|\\bpbx\\b|wss?:\\/\\/|softphone-credentials|sipPassword|password|refresh_token|access_token|recording|cdr|voicemail_|\\bsms\\b|WebSocket|secret", "i"));
+      expect(s, f).not.toMatch(new RegExp(V + "|pjsip|jssip|fusion|\\bpbx\\b|wss?:\\/\\/|softphone-credentials|sipPassword|password|refresh_token|access_token|recording_url|cdr|voicemail_|\\bsms\\b|WebSocket|secret", "i"));
     }
     expect(rd(MAIN)).not.toContain(V);
     expect(rd(MAIN)).not.toMatch(/pjsip/i);

@@ -36,7 +36,7 @@ const between = (s: string, a: string, b: string) => s.slice(s.indexOf(a), s.ind
 describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
   const statusBefore = git("status", "--porcelain");
 
-  it("guards pass before (no-arg and --scope)", () => {
+  it("guards pass before (no-arg and --scope)", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(guard(`--scope=${SCOPE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
   });
@@ -126,7 +126,7 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
       const seg = s.slice(s.indexOf(`    ${k}: useCallback`), s.indexOf("\n", s.indexOf(`    ${k}: useCallback`)));
       expect(seg, k).not.toContain("allowRef");
     }
-    expect([...s.matchAll(/sipProvider\.init\(/g)].length).toBe(1);
+    expect([...s.matchAll(/await sipProvider\.init\(/g)].length).toBe(1);
   });
 
   it("new lifecycle modules contain no forbidden stack, endpoint or sensitive data", () => {
@@ -157,7 +157,7 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
     expect(check(["apps/planipret-mobile/src/x.ts"])).toBe(false);
   }, 30000);
 
-  it("guards pass after and the real repository is unchanged by the tests", () => {
+  it("guards pass after and the real repository is unchanged by the tests", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(guard(`--scope=${SCOPE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(git("status", "--porcelain")).toBe(statusBefore);

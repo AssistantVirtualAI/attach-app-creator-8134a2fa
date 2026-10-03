@@ -153,7 +153,7 @@ function DesktopApp() {
   const [policyBlocked, setPolicyBlocked] = useState(false);
   const [callState, setCallState] = useState<string | undefined>(() => sipProvider.getSnapshot?.().callState);
 
-  // Phase 21B: portal lifecycle runs before SipKeepAlive is ever mounted. No legacy mode.
+  // Phase 21B: portal lifecycle runs before SipKeepAlive is ever mounted. Without a session, Desktop is unavailable.
   const lifecycle = useLemtelDesktopClientConfig(creds?.accessToken || null);
   const lifecycleStatus = lifecycle.status;
   const { refresh: refreshLifecycle, finalizeBlock } = lifecycle;

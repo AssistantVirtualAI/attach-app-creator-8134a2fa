@@ -58,6 +58,8 @@ configureMobileApi({
 });
 import { configureAudit, audit } from './lib/audit';
 import { edgeCall, supabase } from './lib/mobileSupabase';
+import { useLemtelMobileClientConfig } from './hooks/useLemtelMobileClientConfig';
+import { CapacitorPjsip, stopAndroidSipService } from './lib/sip/nativeSipProvider';
 import PerfOverlay from './components/PerfOverlay';
 import IceDiagnosticsOverlay from './components/IceDiagnosticsOverlay';
 import { ensureActivePcConfig } from './lib/sip/rtcConfig';
@@ -72,6 +74,8 @@ const isPreviewMode = (() => {
 
 export default function MobileApp() {
   const { creds, setCreds, clearCreds, loading } = useStoredCreds();
+  // Phase 21A: local, non-sensitive notice shown after a finalized device/access block.
+  const [accessBlocked, setAccessBlocked] = useState(false);
 
   // Restore Supabase session on app launch so API calls are authenticated
   useEffect(() => {
@@ -162,6 +166,7 @@ export default function MobileApp() {
   useEffect(() => { void navLog('MobileApp render', { loading, booting, hasCreds: !!creds, tab }); }, [loading, booting, creds, tab]);
 
   if (loading || booting) return <SplashAva />;
+  if (accessBlocked && !creds) return <MobileI18nProvider><ThemeProvider><MobileAccessBlocked onBack={() => setAccessBlocked(false)} /></ThemeProvider></MobileI18nProvider>;
   if (!creds) return <MobileI18nProvider><ThemeProvider><AuthScreen onAuthenticated={(c) => {
     void navLog('AuthScreen.onAuthenticated', { userId: c?.userId, hasExtension: !!c?.extension, hasSipPassword: !!c?.sipPassword, org: c?.organizationId });
     void setPermissionLogContext({ userId: c?.userId, extension: c?.extension, organizationId: c?.organizationId });
@@ -172,12 +177,12 @@ export default function MobileApp() {
       .catch((e) => void navLog('requestPermissionsAfterLogin THREW', { error: String(e) }));
   }} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
 
-  return <MobileI18nProvider><ThemeProvider><AuthenticatedShell creds={creds} setCreds={setCreds} tab={tab} setTab={setTab} callsSub={callsSub} callsFilter={callsFilter} onSignOut={clearCreds} preferClickToCall={preferC2C} onTogglePreferC2C={() => {}} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
+  return <MobileI18nProvider><ThemeProvider><AuthenticatedShell creds={creds} setCreds={setCreds} tab={tab} setTab={setTab} callsSub={callsSub} callsFilter={callsFilter} onSignOut={clearCreds} onAccessBlocked={() => { setAccessBlocked(true); clearCreds(); }} preferClickToCall={preferC2C} onTogglePreferC2C={() => {}} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
 }
 
 function AuthenticatedShell({
-  creds, setCreds, tab, setTab, callsSub, callsFilter, onSignOut, preferClickToCall, onTogglePreferC2C,
-}: { creds: Creds; setCreds: (c: Creds) => void; tab: Tab; setTab: (t: Tab) => void; callsSub?: 'recents' | 'recordings' | 'voicemail' | 'dial'; callsFilter?: 'all' | 'missed'; onSignOut: () => void; preferClickToCall: boolean; onTogglePreferC2C: () => void }) {
+  creds, setCreds, tab, setTab, callsSub, callsFilter, onSignOut, onAccessBlocked, preferClickToCall, onTogglePreferC2C,
+}: { creds: Creds; setCreds: (c: Creds) => void; tab: Tab; setTab: (t: Tab) => void; callsSub?: 'recents' | 'recordings' | 'voicemail' | 'dial'; callsFilter?: 'all' | 'missed'; onSignOut: () => void; onAccessBlocked: () => void; preferClickToCall: boolean; onTogglePreferC2C: () => void }) {
 
 
   // permissions handled natively after login
@@ -185,6 +190,11 @@ function AuthenticatedShell({
   useEffect(() => { void navLog('AuthenticatedShell mount', { userId: creds.userId, extension: creds.extension, hasSip: !!creds.sipPassword, tab }); return () => { void navLog('AuthenticatedShell unmount'); }; }, []);
   useEffect(() => { void navLog('tab change', { tab }); }, [tab]);
   useDeviceNotifications(creds);
+  // Phase 21A: portal device lifecycle runs before any telephony credential hydration.
+  // Portal sessions must register and obtain an allowed manifest; manual legacy
+  // configuration without a portal session stays allowed ("legacy").
+  const clientConfig = useLemtelMobileClientConfig(creds?.accessToken || null);
+  const sipAllowed = clientConfig.sipAllowed;
   const [freshCredentialToken, setFreshCredentialToken] = useState('boot');
   const [authExpired, setAuthExpired] = useState(false);
   const passwordHealRef = useRef('');
@@ -193,7 +203,7 @@ function AuthenticatedShell({
 
   // Hydrate SIP credentials BEFORE starting JsSIP
   useEffect(() => {
-    if (!creds?.accessToken) return;
+    if (!creds?.accessToken || !sipAllowed) return;
     if (hydratedTokenRef.current === creds.accessToken) {
       setSipReady(true);
       return;
@@ -203,7 +213,7 @@ function AuthenticatedShell({
       hydratedTokenRef.current = creds.accessToken || '';
       setSipReady(true);
     }).catch(() => setSipReady(true));
-  }, [creds?.accessToken]);
+  }, [creds?.accessToken, sipAllowed]);
 
   // Restore Supabase session from stored creds so the mobile SDK can
   // auto-refresh tokens (and so realtime/edge calls always have a fresh JWT).
@@ -272,7 +282,7 @@ function AuthenticatedShell({
     try { return WORKING_WSS[0] ? new URL(WORKING_WSS[0]).hostname : ''; } catch { return ''; }
   })();
 
-  const sipConfig = credentialsReady && creds.extension && sipPassword
+  const sipConfig = sipAllowed && credentialsReady && creds.extension && sipPassword
     ? {
         extension: creds.extension,
         displayName: creds.displayName || creds.email || 'User',
@@ -299,7 +309,7 @@ function AuthenticatedShell({
   const softphone = useSoftphone(sipConfig);
 
   useEffect(() => {
-    if (!creds.accessToken || !creds.extension || !softphone.sipError) return;
+    if (!sipAllowed || !creds.accessToken || !creds.extension || !softphone.sipError) return;
     if (!/authentication failed|403|401|407|forbidden|unauthor/i.test(softphone.sipError)) return;
     const key = `${creds.userId || creds.email}:${creds.extension}:${softphone.sipError}`;
     if (passwordHealRef.current === key) return;
@@ -313,7 +323,7 @@ function AuthenticatedShell({
       .then(() => hydrateSoftphoneCredentials('mobile'))
       .then((next) => { if (next) setCreds(next); })
       .catch((e) => console.warn('[SIP] password auto-sync failed', e?.message || e));
-  }, [creds.accessToken, creds.email, creds.extension, creds.userId, setCreds, softphone.sipError]);
+  }, [sipAllowed, creds.accessToken, creds.email, creds.extension, creds.userId, setCreds, softphone.sipError]);
 
   const sp = useMemo(() => {
     const richCallState = softphone.isOnHold ? 'held' : softphone.callState === 'ringing' ? 'ringing-out' : softphone.callState;
@@ -403,6 +413,8 @@ function AuthenticatedShell({
   // as soon as the SIP stack is registered.
   const spRef = useRef(sp);
   useEffect(() => { spRef.current = sp; }, [sp]);
+  const clientConfigRef = useRef(clientConfig);
+  clientConfigRef.current = clientConfig;
   useEffect(() => {
     function tryDial(number: string) {
       if (spRef.current.snap.status === 'registered') {
@@ -459,7 +471,7 @@ function AuthenticatedShell({
     // Desktop/portal always fetch fresh SIP credentials from the backend.
     // Do the same on mobile once per session so stale cached SIP passwords from
     // prior logins cannot keep causing PBX auth failures.
-    if (creds.accessToken && hydratedTokenRef.current !== creds.accessToken) {
+    if (sipAllowed && creds.accessToken && hydratedTokenRef.current !== creds.accessToken) {
       hydratedTokenRef.current = creds.accessToken;
       hydrateSoftphoneCredentials('mobile').then((next) => {
         if (next) setCreds(next);
@@ -467,7 +479,7 @@ function AuthenticatedShell({
         setFreshCredentialToken(`${Date.now()}`);
       }).catch(() => { setFreshCredentialToken(`${Date.now()}`); });
     }
-  }, [creds]);
+  }, [creds, sipAllowed]);
 
 
 
@@ -517,9 +529,17 @@ function AuthenticatedShell({
     // JsSIP UA on every app foreground event, causing a perpetual connecting→registered
     // loop. Only trigger a manual reconnect if SIP is in a terminal error state.
     let unsub: () => void = () => {};
+    // Phase 21A: on foreground, with no active/ringing call, ask the lifecycle hook
+    // for a refresh (it enforces the 900 s minimum). A manifest read alone never
+    // triggers reconnect(); reconnect stays reserved for the terminal error state
+    // and only while the manifest allows telephony.
     onAppStateChange((active) => {
-      if (active && sp.snap?.status === 'error') {
-        sp.reconnect?.();
+      if (!active) return;
+      const cs = spRef.current?.snap?.callState;
+      const busy = cs === 'active' || cs === 'held' || cs === 'ringing-in' || cs === 'ringing-out';
+      if (!busy) void clientConfigRef.current.refresh();
+      if (clientConfigRef.current.sipAllowed && spRef.current?.snap?.status === 'error') {
+        spRef.current.reconnect?.();
       }
     }).then((u) => { unsub = u; });
 
@@ -527,6 +547,29 @@ function AuthenticatedShell({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creds.extension]);
 
+
+  const inCallNow =
+    sp.snap.callState === 'active' ||
+    sp.snap.callState === 'held' ||
+    sp.snap.callState === 'ringing-in' ||
+    sp.snap.callState === 'ringing-out';
+
+  // Phase 21A: a blocking policy is finalized only when no call is active or ringing.
+  // No automatic hangup, no redial, no timer, no reload.
+  const finalizingRef = useRef(false);
+  useEffect(() => {
+    if (clientConfig.status !== 'pending_block' || inCallNow || finalizingRef.current) return;
+    finalizingRef.current = true;
+    (async () => {
+      if (Capacitor.getPlatform() === 'ios') { try { await CapacitorPjsip.disconnect(); } catch { /* ignore */ } }
+      if (Capacitor.getPlatform() === 'android') { try { await stopAndroidSipService(); } catch { /* ignore */ } }
+      clientConfig.finalizeBlock();
+      await clientConfig.clearCachedManifest();
+      try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* ignore */ }
+      onAccessBlocked();
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientConfig.status, inCallNow]);
 
   const inCall =
     sp.snap.callState === 'active' ||
@@ -899,5 +942,15 @@ function TopHeader({
   );
 }
 
-
-
+// Phase 21A: local notice after a finalized access block. Shows no device reference,
+// extension, token or server detail. "Back to sign-in" never regenerates the
+// installation reference and never starts a connection automatically.
+function MobileAccessBlocked({ onBack }: { onBack: () => void }) {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', gap: 16, background: colors.midnight, color: colors.textIce }}>
+      <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Accès Mobile indisponible</h1>
+      <p style={{ margin: 0, opacity: 0.8, maxWidth: 320 }}>L’accès de cet appareil n’est plus autorisé. Reconnectez-vous ou contactez votre administrateur.</p>
+      <button type="button" onClick={onBack} style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: gradients.call, color: colors.textIce, fontWeight: 600 }}>Revenir à la connexion</button>
+    </div>
+  );
+}

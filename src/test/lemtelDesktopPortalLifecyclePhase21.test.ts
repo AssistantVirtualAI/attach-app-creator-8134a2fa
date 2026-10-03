@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 const root = path.resolve(__dirname, "../..");
 const SCOPE = "128b45ebb";
 const SUB = "313f86c1f";
+const SUB_END = "97a3f42db"; // Phase 21B: SCOPE..SUB ; Phase 21B.1: SUB..SUB_END (closed, frozen)
 const APP = "apps/ava-softphone-desktop/src";
 const LIB = `${APP}/lib/lemtelDesktopClientConfig.ts`;
 const HOOK = `${APP}/hooks/useLemtelDesktopClientConfig.ts`;
@@ -40,17 +41,15 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
 
   it("guards pass before (no-arg and --scope)", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${SCOPE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${SUB}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
   });
 
   it("Phase 21B.1 sub-phase range contains only the four allowed paths", () => {
     expect(SUB_FILES.length).toBe(4);
     for (const f of SUB_FILES) expect(FILES).toContain(f);
-    execFileSync("git", ["merge-base", "--is-ancestor", SUB, "HEAD"], { cwd: root });
-    const committed = git("diff", "--name-only", "--no-renames", `${SUB}..HEAD`).split("\n").filter(Boolean);
+    execFileSync("git", ["merge-base", "--is-ancestor", SUB, SUB_END], { cwd: root });
+    const committed = git("diff", "--name-only", "--no-renames", `${SUB}..${SUB_END}`).split("\n").filter(Boolean).sort();
     expect(committed.filter(isProtected)).toEqual([]);
-    for (const f of committed) expect(SUB_FILES, f).toContain(f);
+    expect(committed).toEqual(SUB_FILES);
   });
 
   it("Phase 21B.1: async credential / auto-heal flows re-check access; transfers guarded; existing-call controls not", () => {
@@ -94,10 +93,10 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
     expect(FILES.length).toBe(9);
     expect(FILES.filter(isProtected)).toEqual([]);
     for (const f of FILES) expect(fs.existsSync(path.join(root, f)), f).toBe(true);
-    execFileSync("git", ["merge-base", "--is-ancestor", SCOPE, "HEAD"], { cwd: root });
-    const committed = git("diff", "--name-only", "--no-renames", `${SCOPE}..HEAD`).split("\n").filter(Boolean);
+    execFileSync("git", ["merge-base", "--is-ancestor", SCOPE, SUB], { cwd: root });
+    const committed = git("diff", "--name-only", "--no-renames", `${SCOPE}..${SUB}`).split("\n").filter(Boolean).sort();
     expect(committed.filter(isProtected)).toEqual([]);
-    for (const f of committed) expect(FILES, f).toContain(f);
+    expect(committed).toEqual(FILES);
   });
 
   it("strict manifest: direct routing, edge false, four capabilities, 900 s, desktop permission", () => {
@@ -208,8 +207,6 @@ describe("Lemtel Phase 21B — Desktop portal device lifecycle", () => {
 
   it("guards pass after and the real repository is unchanged by the tests", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${SCOPE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${SUB}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(git("status", "--porcelain")).toBe(statusBefore);
   });
 });

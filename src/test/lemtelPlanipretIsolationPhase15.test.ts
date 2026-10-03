@@ -96,9 +96,9 @@ describe("Lemtel Phase 15A.1 — frozen scope + permanent Planiprêt guard", () 
     expect(r.stdout).toMatch(/SCOPE_NOT_ANCESTOR/);
   });
 
-  it("Phase 15D: the real repository passes with --scope=98eee7107", async () => {
+  it("Phase 22A.1: the real repository requires only the no-argument guard", async () => {
     const m = await load();
-    expect(m.verify(["--scope=98eee7107"], root)).toEqual(PASS);
+    expect(m.verify([], root)).toEqual(PASS);
   });
 
   it("staged, unstaged or untracked Planiprêt worktree paths fail", async () => {

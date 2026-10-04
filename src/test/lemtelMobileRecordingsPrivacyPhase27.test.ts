@@ -2,10 +2,14 @@ import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 
 // Phase 27A — Mobile recordings are own_extension_only. Read-only Git; never writes the real repository.
 const root = path.resolve(__dirname, "../..");
 const BASE = "179f313c6";
+// Immutable Phase 27A end: historical scope is read only on BASE..PHASE27A_END.
+const PHASE27A_END = "3128b873f";
+const RANGE = `${BASE}..${PHASE27A_END}`;
 const M = "apps/ava-softphone-mobile/src";
 const API = `${M}/lib/mobileApi.ts`;
 const CALLS = `${M}/screens/CallsScreen.tsx`;
@@ -23,26 +27,55 @@ const rd = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 const git = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "utf8" });
 const guard = () => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { cwd: root, encoding: "utf8" });
 const isProtected = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
-const changed = () => {
-  const committed = git("diff", "--name-only", "--no-renames", BASE).split("\n");
-  const untracked = git("ls-files", "--others", "--exclude-standard").split("\n");
-  return [...new Set([...committed, ...untracked].filter(Boolean))].sort();
-};
-const added = (f: string) => git("diff", "--no-renames", "-U0", BASE, "--", f).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
+const gitIn = (cwd: string, a: string[], env?: NodeJS.ProcessEnv, input?: string) =>
+  execFileSync("git", a, { cwd, encoding: "utf8", env: env ? { ...process.env, ...env } : process.env, input });
+const phaseFiles = (cwd = root) => gitIn(cwd, ["diff", "--name-only", "--no-renames", RANGE]).trim().split("\n").filter(Boolean).sort();
+const phaseAdded = (f: string, cwd = root) => gitIn(cwd, ["diff", "--no-renames", "-U0", RANGE, "--", f]).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
 
 describe("Lemtel Phase 27A — Mobile recordings privacy", () => {
   const statusBefore = git("status", "--porcelain");
 
-  it("BASE is a commit ancestor; permanent guard passes before", { timeout: 60000 }, () => {
+  it("frozen bounds are commits, BASE strict ancestor; permanent guard passes before", { timeout: 60000 }, () => {
     expect(git("cat-file", "-t", BASE).trim()).toBe("commit");
-    execFileSync("git", ["merge-base", "--is-ancestor", BASE, "HEAD"], { cwd: root });
+    expect(git("cat-file", "-t", PHASE27A_END).trim()).toBe("commit");
+    execFileSync("git", ["merge-base", "--is-ancestor", BASE, PHASE27A_END], { cwd: root });
+    expect(git("rev-parse", BASE).trim()).not.toBe(git("rev-parse", PHASE27A_END).trim());
+    expect(RANGE.includes("HEAD")).toBe(false);
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
   });
 
-  it("exactly the nine allowed paths changed, none protected", () => {
-    const c = changed();
+  it("exactly the nine historical paths in the frozen range, none protected", () => {
+    const c = phaseFiles();
     expect(c.filter(isProtected)).toEqual([]);
     expect(c).toEqual(FILES);
+  });
+
+  it("direct callers use the one-argument signature (7 and 30 days)", () => {
+    expect(rd(`${M}/components/NotificationsSheet.tsx`)).toContain("mobileApi.recordings({ rangeDays: 7 })");
+    expect(rd(`${M}/components/StatsDashboard.tsx`)).toContain("mobileApi.recordings({ rangeDays: 30 })");
+  });
+
+  it("a real later commit in a temporary clone does not change the frozen result", { timeout: 120000 }, () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lemtel-phase27a1-"));
+    try {
+      execFileSync("git", ["clone", "-q", "--no-checkout", root, tmp], { encoding: "utf8" });
+      const env = { GIT_INDEX_FILE: path.join(tmp, ".git", "phase27a1-index"), GIT_AUTHOR_NAME: "Phase 27A.1 validation", GIT_AUTHOR_EMAIL: "phase27a1@example.invalid", GIT_COMMITTER_NAME: "Phase 27A.1 validation", GIT_COMMITTER_EMAIL: "phase27a1@example.invalid" };
+      const end = gitIn(tmp, ["rev-parse", PHASE27A_END]).trim();
+      gitIn(tmp, ["update-ref", "HEAD", end]);
+      const before = { files: phaseFiles(tmp), lines: [API, CALLS, REC].map((f) => phaseAdded(f, tmp)) };
+      gitIn(tmp, ["read-tree", end], env);
+      const blob = gitIn(tmp, ["hash-object", "-w", "--stdin"], env, "future non-protected fixture\n").trim();
+      gitIn(tmp, ["update-index", "--add", "--cacheinfo", `100644,${blob},phase27a1_future_fixture.txt`], env);
+      const tree = gitIn(tmp, ["write-tree"], env).trim();
+      const commit = gitIn(tmp, ["commit-tree", tree, "-p", end, "-m", "Temporary future fixture"], env).trim();
+      gitIn(tmp, ["update-ref", "HEAD", commit]);
+      expect(gitIn(tmp, ["diff", "--name-only", `${end}..HEAD`]).trim()).toBe("phase27a1_future_fixture.txt");
+      expect(phaseFiles(tmp)).toEqual(before.files);
+      expect(phaseFiles(tmp)).toEqual(phaseFiles());
+      expect([API, CALLS, REC].map((f) => phaseAdded(f, tmp))).toEqual(before.lines);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it("mobileApi.recordings takes no extension and never builds extension=", () => {
@@ -76,7 +109,7 @@ describe("Lemtel Phase 27A — Mobile recordings privacy", () => {
   it("added product lines contain no Verto, PJSIP, SIP URL, credential, PBX write or server action", () => {
     for (const f of [API, CALLS, REC]) {
       // Pre-existing credential-free field name kept on rewritten lines.
-      const a = added(f).replace(/fusionpbxDomainUuid/g, "");
+      const a = phaseAdded(f).replace(/fusionpbxDomainUuid/g, "");
       for (const tok of ["ver" + "to", "Ver" + "to", "pjsip", "PJSIP", "sip:", "wss://", "https://", "sec" + "ret", "token", "fusionpbx", "FusionPBX", "fetch(", "POST", "migration", "functions/v1", ".insert(", ".update(", ".upsert(", ".delete("]) {
         expect(a.includes(tok), `${f} ${tok}`).toBe(false);
       }

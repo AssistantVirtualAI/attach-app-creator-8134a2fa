@@ -54,6 +54,9 @@ export async function openBrokerPortal(path?: string): Promise<OpenPortalResult>
       // or a former portal opening). Close it first; Browser.open otherwise
       // rejects a valid HTTPS URL with “Unable to display URL” on iOS.
       await withTimeout(Browser.close(), 800, "timeout").catch(() => undefined);
+      // iOS silently ignores a presentation started while the previous Safari
+      // sheet is still dismissing (open() resolves but nothing appears).
+      await new Promise((r) => setTimeout(r, 700));
       try {
         await withTimeout(Browser.open({ url, presentationStyle: "fullscreen" }), 8000, "timeout");
       } catch {

@@ -15,5 +15,5 @@ COPY --chown=node:node package.json ./
 COPY --chown=node:node migrations ./migrations
 USER node
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -qO- http://127.0.0.1:8080/health/live >/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD node dist/src/healthcheck.js
 CMD ["node", "dist/src/server.js"]

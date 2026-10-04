@@ -12,6 +12,9 @@ on:
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
       - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
+      - 'docs/lemtel-mobile/phase-31f-control-plane-liveness.md'
+      - 'services/lemtel-control-plane/**'
+      - 'infra/lemtel-control-plane/**'
       - 'apps/ava-softphone-mobile/src/**'
       - 'apps/ava-softphone-desktop/src/**'
       - 'supabase/functions/**'
@@ -27,6 +30,9 @@ on:
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
       - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
+      - 'docs/lemtel-mobile/phase-31f-control-plane-liveness.md'
+      - 'services/lemtel-control-plane/**'
+      - 'infra/lemtel-control-plane/**'
       - 'apps/ava-softphone-mobile/src/**'
       - 'apps/ava-softphone-desktop/src/**'
       - 'supabase/functions/**'
@@ -69,3 +75,47 @@ jobs:
       - name: Transitive and client dependencies remain manual-review findings
         run: |
           node scripts/lemtel-dependency-closure.mjs | node -e 'let s=""; process.stdin.on("data", d => s+=d); process.stdin.on("end", () => { const x=JSON.parse(s); if (!x.source_analysis_only || !x.findings_are_not_allowlist || x.database_export_authorized || x.migration_replay_authorized || x.functions_deploy_authorized || x.status !== "incomplete_manual_review_required") process.exit(1) })'
+
+  control-plane-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/lemtel-control-plane/package-lock.json
+      - name: Typecheck, test and compile isolated Control Plane
+        working-directory: services/lemtel-control-plane
+        run: npm ci --no-audit --no-fund && npm run check && npm test && npm run build
+      - name: Build image locally without pushing or deploying it
+        run: docker build --tag lemtel-control-plane:ci services/lemtel-control-plane
+      - name: Smoke-test the non-root image on an isolated network and non-default port
+        shell: bash
+        run: |
+          db_password="$(openssl rand -hex 24)"
+          redis_password="$(openssl rand -hex 24)"
+          service_token="$(openssl rand -hex 32)"
+          docker run --detach --name lemtel-control-plane-ci --network none --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges --health-interval 2s \
+            -e CONTROL_PLANE_PORT=18080 \
+            -e CONTROL_PLANE_DATABASE_URL="postgres://cp_app:${db_password}@db.invalid:5432/control_plane" \
+            -e CONTROL_PLANE_REDIS_URL="redis://:${redis_password}@redis.invalid:6379" \
+            -e CONTROL_PLANE_SERVICE_TOKEN="$service_token" \
+            -e CONTROL_PLANE_LOG_LEVEL=info \
+            lemtel-control-plane:ci
+          for attempt in $(seq 1 15); do
+            state="$(docker inspect --format '{{.State.Health.Status}}' lemtel-control-plane-ci)"
+            if test "$state" = healthy; then break; fi
+            if test "$state" = unhealthy; then exit 1; fi
+            sleep 2
+          done
+          test "$state" = healthy
+          docker exec lemtel-control-plane-ci node dist/src/healthcheck.js
+          if docker exec -e CONTROL_PLANE_PORT=18081 lemtel-control-plane-ci node dist/src/healthcheck.js; then
+            echo 'Healthcheck incorrectly accepted an unbound port' >&2
+            exit 1
+          fi
+      - name: Remove CI container even after a failure
+        if: always()
+        run: docker rm --force lemtel-control-plane-ci 2>/dev/null || true

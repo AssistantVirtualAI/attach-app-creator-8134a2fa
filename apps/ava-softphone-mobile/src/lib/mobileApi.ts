@@ -541,12 +541,6 @@ export const mobileApi = {
     { text: action === 'shorten' ? text.split(/[.!?]/)[0] + '.' : action === 'translate' ? `[FR] ${text}` : action === 'professional' ? `Bonjour,\n\n${text}\n\nCordialement.` : `${text} — refined by AVA.` },
   ),
 
-  setForwarding: (target: string | null) => call<{ ok: true }>(
-    '/mobile-settings-forwarding', { method: 'POST', body: JSON.stringify({ target }) }, { ok: true },
-  ),
-  setDnd: (enabled: boolean) => call<{ ok: true }>(
-    '/mobile-settings-dnd', { method: 'POST', body: JSON.stringify({ enabled }) }, { ok: true },
-  ),
 
   // Domain-wide stats for the mobile dashboard (read-only). Range: today|7d|30d.
   domainStats: (range: StatsRange = 'today') => call<DomainStats>(

@@ -1,6 +1,7 @@
 /**
  * Verifies every sheet-opening Settings row is tappable and opens the
- * correct in-app sheet (Ringtone, Audio output, Forwarding, Clear cache).
+ * correct in-app sheet (Ringtone, Audio output, Clear cache).
+ * Phase 23A: no local DND/forwarding control exists; the portal is the authority.
  * Also verifies Wi-Fi/LTE chip renders from the live network listener.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -20,8 +21,6 @@ vi.mock('../lib/mobileApi', () => ({
       role: 'agent',
       dataScope: 'own',
     }),
-    setDnd: vi.fn().mockResolvedValue(undefined),
-    setForwarding: vi.fn().mockResolvedValue(undefined),
   },
 }));
 vi.mock('../lib/permissions', () => ({
@@ -84,14 +83,13 @@ describe('SettingsScreen — rows & sheets', () => {
     });
   });
 
-  it('opens the Forwarding sheet and shows a phone input', async () => {
+  it('Phase 23A: without portal policy no local DND/forwarding control or input is rendered', async () => {
     renderScreen();
-    const row = await screen.findByText(/Call forwarding|Transfert d'appel/i);
-    fireEvent.click(row);
-    await waitFor(() => {
-      const input = document.querySelector('input[type="tel"]') as HTMLInputElement;
-      expect(input).toBeTruthy();
-    });
+    await screen.findByText(/^(Ringtone|Sonnerie)$/i);
+    expect(screen.queryByText(/^(Do not disturb|Ne pas déranger)$/i)).toBeNull();
+    expect(screen.queryByText(/^(Call forwarding|Transfert d[’']appels?)$/i)).toBeNull();
+    expect(document.querySelector('input[type="tel"]')).toBeNull();
+    expect(screen.queryByText(/Forwarding number|Numéro de transfert/i)).toBeNull();
   });
 
   it('opens the Clear cache confirmation sheet', async () => {
@@ -144,8 +142,27 @@ describe('SettingsScreen — Phase 22B portal policy (read-only)', () => {
     renderScreen(policy);
     const card = await screen.findByTestId('portal-policy');
     expect(card.querySelectorAll('button, input, select, textarea, [role="switch"], [role="checkbox"], [role="button"]').length).toBe(0);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch' as any);
+    const meCalls = (mobileApi.me as any).mock.calls.length;
     card.querySelectorAll('*').forEach((el) => fireEvent.click(el));
-    expect(mobileApi.setDnd).not.toHaveBeenCalled();
-    expect(mobileApi.setForwarding).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect((mobileApi as any).setDnd).toBeUndefined();
+    expect((mobileApi as any).setForwarding).toBeUndefined();
+    expect((mobileApi.me as any).mock.calls.length).toBe(meCalls);
+    expect(document.querySelector('input[type="tel"]')).toBeNull();
+    fetchSpy.mockRestore();
+  });
+
+  it('Phase 23A: with policy, DND/forwarding appear only as non-interactive labels inside the card', async () => {
+    renderScreen(policy);
+    const card = await screen.findByTestId('portal-policy');
+    const dnd = screen.getAllByText(/Do not disturb|Ne pas déranger/);
+    const fwd = screen.getAllByText(/Call forwarding|Transfert d[’']appels/);
+    for (const el of [...dnd, ...fwd]) {
+      expect(card.contains(el)).toBe(true);
+      expect(el.tagName).toBe('LI');
+      expect(el.closest('button, [role="switch"], [role="button"]')).toBeNull();
+    }
+    expect(document.querySelector('input[type="tel"]')).toBeNull();
   });
 });

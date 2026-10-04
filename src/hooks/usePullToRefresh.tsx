@@ -16,8 +16,9 @@ export function usePullToRefresh(
   threshold = 70,
   canRefresh: () => boolean = () => true,
 ) {
+  const innerRef = useRef<HTMLDivElement>(null!);
   const [el, setEl] = useState<HTMLDivElement | null>(null);
-  const ref = useCallback((node: HTMLDivElement | null) => { setEl(node); }, []);
+  const ref = useCallback((node: HTMLDivElement | null) => { innerRef.current = node as HTMLDivElement; setEl(node); }, []);
   const [pullDist, setPullDist] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef<number | null>(null);

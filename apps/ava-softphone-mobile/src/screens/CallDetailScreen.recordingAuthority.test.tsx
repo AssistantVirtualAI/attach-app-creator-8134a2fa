@@ -7,6 +7,7 @@ import React from 'react';
 const h = vi.hoisted(() => ({
   callDetail: vi.fn(),
   loadAudio: vi.fn(),
+  mobile: { userId: 'user-test', accessToken: 'tok-test', organizationId: 'org-test', fusionpbxDomainUuid: 'dom-fallback-test', extension: '201' },
 }));
 
 vi.mock('../lib/mobileApi', () => ({
@@ -14,7 +15,7 @@ vi.mock('../lib/mobileApi', () => ({
 }));
 vi.mock('../lib/mobileSupabase', () => ({ loadPbxRecordingAudioMobile: h.loadAudio }));
 vi.mock('../hooks/useMobileCredentials', () => ({
-  useMobileCredentials: () => ({ accessToken: 'tok-test', organizationId: 'org-test', fusionpbxDomainUuid: 'dom-fallback-test', extension: '201' }),
+  useMobileCredentials: () => h.mobile,
 }));
 vi.mock('../lib/mobileToast', () => ({ showMobileToast: vi.fn() }));
 vi.mock('../lib/i18n', () => ({ useT: () => ({ lang: 'en' }) }));
@@ -36,20 +37,21 @@ describe('Phase 29B — CallDetailScreen recording authority', () => {
   beforeEach(() => {
     h.callDetail.mockReset();
     h.loadAudio.mockReset();
+    h.mobile = { userId: 'user-test', accessToken: 'tok-test', organizationId: 'org-test', fusionpbxDomainUuid: 'dom-fallback-test', extension: '201' };
     fetchSpy.mockReset();
     vi.stubGlobal('fetch', fetchSpy);
     vi.stubGlobal('Audio', vi.fn(() => ({ pause: vi.fn(), play: vi.fn().mockResolvedValue(undefined) })));
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-  it('calls the shared helper once with CDR metadata only', async () => {
+  it('calls the shared helper with a CDR identifier only', async () => {
     h.callDetail.mockResolvedValue(cdr());
     h.loadAudio.mockResolvedValue('https://signed.test/a');
     render(<CallDetailScreen id="c1" onBack={() => {}} />);
     await flush();
     expect(h.loadAudio).toHaveBeenCalledTimes(1);
     const [meta, token, org, fallback] = h.loadAudio.mock.calls[0];
-    expect(meta).toMatchObject({ xml_cdr_uuid: 'pbx-1', record_path: '/rec/a', record_name: 'a.mp3', domain_uuid: 'dom-cdr', organization_id: 'org-cdr' });
+    expect(meta).toEqual({ xml_cdr_uuid: 'pbx-1', id: 'c1' });
     expect(meta).not.toHaveProperty('action');
     expect(meta).not.toHaveProperty('headers');
     expect([token, org, fallback]).toEqual(['tok-test', 'org-test', 'dom-fallback-test']);
@@ -93,7 +95,23 @@ describe('Phase 29B — CallDetailScreen recording authority', () => {
     await flush();
     const last = h.loadAudio.mock.calls[h.loadAudio.mock.calls.length - 1][0];
     expect(last.xml_cdr_uuid).toBe('pbx-2');
-    expect(last.record_name).toBe('b.mp3');
-    expect(h.loadAudio.mock.calls.filter((c) => c[0].xml_cdr_uuid === 'pbx-2' && c[0].record_name === 'a.mp3')).toHaveLength(0);
+    expect(last).toEqual({ xml_cdr_uuid: 'pbx-2', id: 'c2' });
+    expect(h.loadAudio.mock.calls.every((c) => !('record_name' in c[0]))).toBe(true);
+  });
+
+  it('does not reuse a signed URL returned after switching accounts with the same CDR id', async () => {
+    let resolveOld!: (url: string) => void;
+    h.callDetail.mockResolvedValue(cdr());
+    h.loadAudio.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }))
+      .mockResolvedValue('https://signed.test/user-b');
+    const { rerender } = render(<CallDetailScreen id="c1" onBack={() => {}} />);
+    await flush();
+    h.mobile = { ...h.mobile, userId: 'user-b', accessToken: 'tok-b' };
+    rerender(<CallDetailScreen id="c1" onBack={() => {}} />);
+    await flush();
+    await act(async () => { resolveOld('https://signed.test/user-a'); await Promise.resolve(); });
+    expect(h.loadAudio).toHaveBeenCalledTimes(2);
+    expect(h.loadAudio.mock.calls[1][1]).toBe('tok-b');
+    expect(document.body.textContent).not.toContain('user-a');
   });
 });

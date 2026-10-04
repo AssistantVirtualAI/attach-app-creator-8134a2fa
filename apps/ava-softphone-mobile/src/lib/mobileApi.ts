@@ -456,13 +456,8 @@ export const mobileApi = {
         method: 'POST',
         body: JSON.stringify({
           action: 'get-recording-signed-url',
-          organization_id: params.organization_id,
           params: {
             xml_cdr_uuid: params.xml_cdr_uuid,
-            record_path: params.record_path,
-            record_name: params.record_name,
-            domain_uuid: params.domain_uuid,
-            domain_name: params.domain_name,
             expires_in: 300,
           },
         }),
@@ -470,44 +465,27 @@ export const mobileApi = {
       { ok: true, url: '', expiresInSec: 0, contentType: 'audio/wav' },
     ),
 
-  analyzeCall: (callId: string, meta?: { transcript?: string | null; transcript_text?: string | null; organization_id?: string | null; force?: boolean }) => call<{ jobId?: string; transcript?: string; transcript_text?: string; summary?: string; sentiment?: string; topics?: string[]; action_items?: string[]; analysis?: any; insights?: any }>(
+  analyzeCall: (callId: string, opts?: { force?: boolean }) => call<{ jobId?: string; transcript?: string; transcript_text?: string; summary?: string; sentiment?: string; topics?: string[]; action_items?: string[]; analysis?: any; insights?: any }>(
     '/ai-analyze-call', {
       method: 'POST',
       body: JSON.stringify({
         call_id: callId,
         call_record_id: callId,
-        transcript: meta?.transcript || meta?.transcript_text || undefined,
-        organization_id: meta?.organization_id || undefined,
-        force: meta?.force || undefined,
+        force: opts?.force || undefined,
       }),
     },
     { jobId: 'job-' + Date.now() },
   ),
-  transcribeCall: async (callId: string, meta?: { recording_path?: string | null; recording_name?: string | null; domain_uuid?: string | null; xml_cdr_uuid?: string | null; organization_id?: string | null; vm_id?: string | null; force?: boolean; disableClaude?: boolean }) => {
+  transcribeCall: async (callId: string, opts?: { force?: boolean; disableClaude?: boolean }) => {
     const cid = String(callId);
-    const xmlCdrUuid = meta?.xml_cdr_uuid || (meta?.recording_name ? String(meta.recording_name).replace(/\.(mp3|wav|ogg|m4a|webm)$/i, '') : '') || callId;
-    const vm = meta?.vm_id ? ` vm_id=${meta.vm_id}` : '';
-    const tag = `[mobileApi.transcribeCall] cid=${cid}${vm}`;
+    const tag = `[mobileApi.transcribeCall] cid=${cid}`;
     const startedAt = Date.now();
     const payload = {
       call_record_id: callId,
-      xml_cdr_uuid: xmlCdrUuid,
-      recording_path: meta?.recording_path || undefined,
-      recording_name: meta?.recording_name || undefined,
-      record_path: meta?.recording_path || undefined,
-      record_name: meta?.recording_name || undefined,
-      domain_uuid: meta?.domain_uuid || undefined,
-      organization_id: meta?.organization_id || '71755d33-ed64-4ad5-a828-61c9d2029eb7',
-      vm_id: meta?.vm_id || undefined,
-      force: meta?.force || undefined,
-      disable_claude: meta?.disableClaude || undefined,
+      force: opts?.force || undefined,
+      disable_claude: opts?.disableClaude || undefined,
     };
-    console.log(`${tag} action=invoke`, {
-      has_recording_path: !!payload.recording_path,
-      has_recording_name: !!payload.recording_name,
-      organization_id: payload.organization_id,
-      force: !!payload.force,
-    });
+    console.log(`${tag} action=invoke`, { force: !!payload.force });
     try {
       const res = await call<{ transcript_text?: string; stub?: boolean; reason?: string; error?: string; details?: string; fetchErrors?: string[]; provider?: string; attempts?: any[]; cid?: string }>(
         '/ai-transcribe-call', { method: 'POST', body: JSON.stringify(payload) },

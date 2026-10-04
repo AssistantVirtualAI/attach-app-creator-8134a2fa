@@ -9,12 +9,14 @@ const h = vi.hoisted(() => {
   ch.subscribe.mockImplementation(() => ch);
   return {
     ch,
-    channel: vi.fn(() => ch),
+    channel: vi.fn((_name: string) => ch),
     removeChannel: vi.fn(),
     recordings: vi.fn(),
     me: vi.fn(),
     restGet: vi.fn(),
     download: vi.fn(),
+    cached: vi.fn(async () => null),
+    toast: vi.fn(),
   };
 });
 
@@ -24,8 +26,8 @@ vi.mock('../lib/mobileSupabase', () => ({
   restGet: h.restGet,
   loadPbxRecordingAudioMobile: vi.fn(),
 }));
-vi.mock('../lib/recordingCache', () => ({ downloadRecording: h.download, getCachedRecordingUrl: vi.fn(async () => null) }));
-vi.mock('../lib/mobileToast', () => ({ showMobileToast: vi.fn() }));
+vi.mock('../lib/recordingCache', () => ({ downloadRecording: h.download, getCachedRecordingUrl: h.cached }));
+vi.mock('../lib/mobileToast', () => ({ showMobileToast: h.toast }));
 vi.mock('../hooks/useCallAi', () => ({
   useCallAi: () => ({ data: { summary: 'Personal summary' }, loading: false, running: false, stage: 'idle', error: null, run: vi.fn() }),
 }));
@@ -33,13 +35,15 @@ vi.mock('../lib/i18n', () => ({ useT: () => ({ lang: 'en' }) }));
 
 import RecordingsScreen from './RecordingsScreen';
 
-const own = { id: 'r1', from: '5145550000', to: '201', extension: '201', customer: 'Own Caller', startedAt: new Date().toISOString(), durationSec: 60, hasTranscript: true };
+const own = { id: 'r1', from: '5145550000', to: '201', extension: '201', organization_id: 'org-test', customer: 'Own Caller', startedAt: new Date().toISOString(), durationSec: 60, hasTranscript: true };
 
 const flush = async () => { await act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); }); };
-const Screen = (p: any) => <RecordingsScreen creds={null} rangeDays={7} onRangeDaysChange={() => {}} {...p} />;
+const creds: any = { userId: 'user-test', organizationId: 'org-test', extension: '201', accessToken: 'token-test' };
+const Screen = (p: any) => <RecordingsScreen creds={creds} rangeDays={7} onRangeDaysChange={() => {}} {...p} />;
 
 beforeEach(() => {
-  for (const f of [h.channel, h.removeChannel, h.recordings, h.me, h.restGet, h.download, h.ch.on, h.ch.subscribe]) f.mockClear();
+  for (const f of [h.channel, h.removeChannel, h.recordings, h.me, h.restGet, h.download, h.cached, h.toast, h.ch.on, h.ch.subscribe]) f.mockClear();
+  h.cached.mockResolvedValue(null);
   h.recordings.mockResolvedValue([own]);
   h.ch.on.mockImplementation(() => h.ch);
   h.ch.subscribe.mockImplementation(() => h.ch);
@@ -76,6 +80,18 @@ describe('Phase 27A — RecordingsScreen own_extension_only', () => {
     expect(h.channel).not.toHaveBeenCalled();
     expect(screen.queryByTestId('recordings-own-extension')).toBeNull();
     expect(container.textContent).not.toMatch(/domain|domaine/i);
+  });
+
+  it('refuses rows returned for a different extension or organization', async () => {
+    h.recordings.mockResolvedValueOnce([own,
+      { ...own, id: 'r2', extension: '305', customer: 'Other extension' },
+      { ...own, id: 'r3', organization_id: 'org-other', customer: 'Other organization' },
+    ]);
+    render(<Screen myExtension="201" />);
+    await flush();
+    expect(screen.getByText('Own Caller')).toBeTruthy();
+    expect(screen.queryByText('Other extension')).toBeNull();
+    expect(screen.queryByText('Other organization')).toBeNull();
   });
 
   it('realtime channel is named with the extension and filtered exactly by it', async () => {
@@ -121,5 +137,35 @@ describe('Phase 27A — RecordingsScreen own_extension_only', () => {
     fireEvent.click(screen.getByText('Own Caller'));
     await flush();
     expect(screen.getByText('Personal summary')).toBeTruthy();
+  });
+
+  it('ignores a focus refresh from the previous extension', async () => {
+    let resolveOld!: (rows: any[]) => void;
+    const { rerender } = render(<Screen myExtension="201" />);
+    await flush();
+    h.recordings.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    h.recordings.mockResolvedValue([{ ...own, id: 'r-new', extension: '202', customer: 'Current caller' }]);
+    rerender(<Screen myExtension="202" creds={{ ...creds, extension: '202' }} />);
+    expect(screen.queryByText('Own Caller')).toBeNull();
+    await flush();
+    await act(async () => { resolveOld([own]); await Promise.resolve(); });
+    expect(screen.queryByText('Own Caller')).toBeNull();
+    expect(screen.getByText('Current caller')).toBeTruthy();
+  });
+
+  it('ignores a late playback download from the prior account', async () => {
+    let resolveOld!: (url: string) => void;
+    h.download.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+    const { rerender, container } = render(<Screen myExtension="201" />);
+    await flush();
+    fireEvent.click(screen.getByText('▶'));
+    await flush();
+    rerender(<Screen myExtension="201" creds={{ ...creds, userId: 'user-b', accessToken: 'token-b' }} />);
+    await flush();
+    await act(async () => { resolveOld('blob:previous-account'); await Promise.resolve(); });
+    expect((container.querySelector('audio') as HTMLAudioElement).getAttribute('src')).toBeNull();
+    expect(h.toast).not.toHaveBeenCalled();
+    expect(h.download.mock.calls[0][5]).toMatchObject({ scope: { userId: 'user-test', organizationId: 'org-test', extension: '201' } });
   });
 });

@@ -25,9 +25,6 @@ function mapCall(r: any) {
     customer: r.caller_name || undefined,
     startedAt: r.start_at, durationSec: r.duration_seconds || 0,
     hasRecording: !!(r.has_recording || r.recording_path || r.recording_name || r.recording_url), hasTranscript: !!r.transcribed,
-    recording_path: r.recording_path || undefined,
-    recording_name: r.recording_name || undefined,
-    recording_url: r.recording_url || undefined,
   };
 }
 
@@ -62,11 +59,10 @@ Deno.serve(async (req) => {
     // Mobile app is ALWAYS scoped to the current broker's extension — no
     // admin bypass here, so brokers never see other brokers' calls.
     const ext = sp.extension;
-    const extFilter = `extension.eq.${ext},caller_number.eq.${ext},source_number.eq.${ext},destination_number.eq.${ext},destination.eq.${ext}`;
 
     if (id) {
       let detailQ = admin.from("pbx_call_records").select("*")
-        .eq("id", id).eq("organization_id", sp.organization_id).or(extFilter);
+        .eq("id", id).eq("organization_id", sp.organization_id).eq("extension", ext);
       // Allow rows where domain_uuid is NULL (older CDRs) OR matches the user's domain.
       if (sp.domain_uuid) detailQ = detailQ.or(`domain_uuid.eq.${sp.domain_uuid},domain_uuid.is.null`);
       const { data: r } = await detailQ.maybeSingle();
@@ -143,8 +139,8 @@ Deno.serve(async (req) => {
     let listQ = admin.from("pbx_call_records")
       .select("id, pbx_uuid, organization_id, domain_uuid, direction, call_status, caller_name, caller_number, source_number, destination_number, extension, start_at, duration_seconds, missed_call, has_recording, transcribed")
       .eq("organization_id", sp.organization_id)
+      .eq("extension", ext)
       .gte("start_at", since);
-    listQ = listQ.or(extFilter);
     if (sp.domain_uuid) listQ = listQ.or(`domain_uuid.eq.${sp.domain_uuid},domain_uuid.is.null`);
     const { data: rows, error } = await listQ
       .order("start_at", { ascending: false })

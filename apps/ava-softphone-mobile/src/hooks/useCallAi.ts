@@ -1,23 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { mobileApi, CallDetail } from '../lib/mobileApi';
-import { supabase } from '../integrations/supabase/client';
+import { supabase } from '../lib/mobileSupabase';
 
 export type AiStage = 'idle' | 'transcribing' | 'analyzing' | 'done' | 'error';
-
-export interface CallAiMeta {
-  recording_path?: string | null;
-  recording_name?: string | null;
-  domain_uuid?: string | null;
-  xml_cdr_uuid?: string | null;
-  organization_id?: string | null;
-}
 
 /**
  * Shared hook to load a call's transcript + AI insights and (re)run
  * `ai-transcribe-call` → `ai-analyze-call`. Used by the recording row in
  * RecordingsScreen and by CallDetailScreen.
  */
-export function useCallAi(callId: string | null, meta: CallAiMeta | undefined, opts: { autoLoad?: boolean } = {}) {
+export function useCallAi(callId: string | null, opts: { autoLoad?: boolean } = {}) {
   const { autoLoad = true } = opts;
   const [data, setData] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,6 +18,12 @@ export function useCallAi(callId: string | null, meta: CallAiMeta | undefined, o
   const [error, setError] = useState<string | null>(null);
   const ranRef = useRef<string | null>(null);
   const runSeqRef = useRef(0);
+
+  useEffect(() => {
+    setData(null); setLoading(false); setRunning(false); setStage('idle'); setError(null);
+    ranRef.current = null;
+    return () => { runSeqRef.current++; };
+  }, [callId]);
 
   const mergeDetail = useCallback((fresh: CallDetail | null, preferFresh = false) => {
     if (!fresh) return;
@@ -54,14 +52,15 @@ export function useCallAi(callId: string | null, meta: CallAiMeta | undefined, o
     setLoading(true);
     try {
       const d = await mobileApi.callDetail(callId);
+      if (seq !== runSeqRef.current) return null;
       // A stale fetch must never wipe transcript/AI data produced by a newer run.
-      mergeDetail(d, seq === runSeqRef.current);
+      mergeDetail(d, true);
       return d;
     } catch (e: any) {
-      setError(e?.message || 'Failed to load call');
+      if (seq === runSeqRef.current) setError(e?.message || 'Failed to load call');
       return null;
     } finally {
-      setLoading(false);
+      if (seq === runSeqRef.current) setLoading(false);
     }
   }, [callId, mergeDetail]);
 
@@ -92,14 +91,10 @@ export function useCallAi(callId: string | null, meta: CallAiMeta | undefined, o
     try {
       const claudeFallback = (() => { try { return localStorage.getItem('ava.claudeFallback') !== 'off'; } catch { return true; } })();
       const t = await mobileApi.transcribeCall(callId, {
-        recording_path: meta?.recording_path,
-        recording_name: meta?.recording_name,
-        domain_uuid: meta?.domain_uuid,
-        xml_cdr_uuid: meta?.xml_cdr_uuid || callId,
-        organization_id: meta?.organization_id,
         force: opts?.force,
         disableClaude: !claudeFallback,
       });
+      if (runSeqRef.current !== seq) return;
       if (t?.provider) { try { localStorage.setItem('ava.lastTranscriber', t.provider); } catch {} }
       if (t?.stub || t?.error) {
         const reason = t.reason || t.error || '';
@@ -119,11 +114,8 @@ export function useCallAi(callId: string | null, meta: CallAiMeta | undefined, o
 
       setStage('analyzing');
       const transcriptText = (t as any)?.transcript_text || (t as any)?.transcript || '';
-      const a: any = await mobileApi.analyzeCall(callId, {
-        transcript: transcriptText,
-        organization_id: meta?.organization_id,
-        force: opts?.force,
-      });
+      const a: any = await mobileApi.analyzeCall(callId, { force: opts?.force });
+      if (runSeqRef.current !== seq) return;
       if (a?.ok === false || a?.error) {
         throw new Error(a?.error || a?.reason || 'analysis failed');
       }
@@ -179,12 +171,13 @@ export function useCallAi(callId: string | null, meta: CallAiMeta | undefined, o
       ranRef.current = callId;
       setStage('done');
     } catch (e: any) {
+      if (runSeqRef.current !== seq) return;
       setError(e?.message || 'Transcription failed');
       setStage('error');
     } finally {
-      setRunning(false);
+      if (runSeqRef.current === seq) setRunning(false);
     }
-  }, [callId, running, meta, load]);
+  }, [callId, running, load]);
 
 
   return { data, loading, running, stage, error, load, run, setData };

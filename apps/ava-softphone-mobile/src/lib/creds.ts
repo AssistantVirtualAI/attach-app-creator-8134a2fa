@@ -1,5 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Preferences } from '@capacitor/preferences';
+import { supabase, clearRecordingAudioCache } from './mobileSupabase';
+import { clearRecordingCache } from './recordingCache';
+import { setAuthToken } from './mobileApi';
 
 export type Creds = {
   portalUrl?: string;
@@ -26,37 +29,86 @@ export type Creds = {
 
 
 const KEY = 'lemtel.creds.v1';
+let credentialEpoch = 0;
+let storageQueue: Promise<void> = Promise.resolve();
+let authQueue: Promise<void> = Promise.resolve();
+
+function ordered<T>(queue: 'storage' | 'auth', action: () => Promise<T>): Promise<T> {
+  const previous = queue === 'storage' ? storageQueue : authQueue;
+  const task = previous.then(action, action);
+  const settled = task.then(() => {}, () => {});
+  if (queue === 'storage') storageQueue = settled;
+  else authQueue = settled;
+  return task;
+}
+
+export function isCurrentCredentialEpoch(epoch: number): boolean { return epoch === credentialEpoch; }
+export function getCredentialEpoch(): number { return credentialEpoch; }
+
+/** One owner of Supabase session restoration; logout is queued after any in-flight restore. */
+export function restoreSupabaseSession(c: Creds): Promise<{ access_token: string; refresh_token: string; user: { id: string } } | null> {
+  const epoch = credentialEpoch;
+  return ordered('auth', async () => {
+    if (epoch !== credentialEpoch || !c.userId || !c.accessToken || !c.refreshToken) return null;
+    const { data: existing } = await supabase.auth.getSession();
+    if (epoch !== credentialEpoch) return null;
+    if (existing.session?.user?.id === c.userId) return existing.session;
+    if (existing.session?.user?.id) return null;
+    const { data, error } = await supabase.auth.setSession({ access_token: c.accessToken, refresh_token: c.refreshToken });
+    if (epoch !== credentialEpoch || error || data.session?.user?.id !== c.userId) return null;
+    return data.session;
+  });
+}
+
+function signOutSupabaseSession(): Promise<void> {
+  return ordered('auth', async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* no active SDK session */ }
+    }
+  });
+}
 
 // Lightweight Preferences shim — uses Capacitor when native, localStorage on web preview.
 export const Store = {
   async get(): Promise<Creds | null> {
-    try {
-      if ((Preferences as any)?.get) {
-        const { value } = await Preferences.get({ key: KEY });
-        if (value) return JSON.parse(value);
-      }
-    } catch {}
-    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null;
-    return v ? JSON.parse(v) : null;
+    return ordered('storage', async () => {
+      try {
+        if ((Preferences as any)?.get) {
+          const { value } = await Preferences.get({ key: KEY });
+          if (value) return JSON.parse(value);
+        }
+      } catch {}
+      const v = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null;
+      try { return v ? JSON.parse(v) : null; } catch { return null; }
+    });
   },
-  async set(c: Creds) {
-    const v = JSON.stringify(c);
-    try {
-      if ((Preferences as any)?.set) {
-        await Preferences.set({ key: KEY, value: v });
-        return;
-      }
-    } catch {}
-    if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, v);
+  async set(c: Creds, expectedEpoch = credentialEpoch): Promise<void> {
+    return ordered('storage', async () => {
+      if (expectedEpoch !== credentialEpoch) return;
+      const v = JSON.stringify(c);
+      try {
+        if ((Preferences as any)?.set) {
+          await Preferences.set({ key: KEY, value: v });
+          if (typeof localStorage !== 'undefined') localStorage.removeItem(KEY);
+          return;
+        }
+      } catch {}
+      if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, v);
+    });
   },
-  async clear() {
-    try {
-      if ((Preferences as any)?.remove) {
-        await Preferences.remove({ key: KEY });
-        return;
-      }
-    } catch {}
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(KEY);
+  async clear(): Promise<void> {
+    credentialEpoch++;
+    return ordered('storage', async () => {
+      try {
+        if ((Preferences as any)?.remove) {
+          await Preferences.remove({ key: KEY });
+        }
+      } catch {}
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(KEY);
+    });
   },
 };
 
@@ -67,25 +119,47 @@ export const clearCredentials = () => Store.clear();
 export function useStoredCreds() {
   const [creds, setCredsState] = useState<Creds | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
+  const clearingRef = useRef(false);
+  const credsRef = useRef<Creds | null>(null);
 
   useEffect(() => {
-    Store.get().then((c) => { setCredsState(c); setLoading(false); });
+    const epoch = credentialEpoch;
+    Store.get().then((c) => {
+      if (epoch !== credentialEpoch) return;
+      credsRef.current = c;
+      setCredsState(c);
+    }).finally(() => setLoading(false));
   }, []);
 
   const setCreds = useCallback((c: Creds | ((prev: Creds | null) => Creds)) => {
-    setCredsState((prev) => {
-      const next = typeof c === 'function' ? (c as any)(prev) : c;
-      Store.set(next).catch(() => {});
-      return next;
-    });
+    if (clearingRef.current) return;
+    const previous = credsRef.current;
+    if (typeof c === 'function' && !previous) return;
+    const next = typeof c === 'function' ? c(previous) : c;
+    // Only an explicit sign-out can precede a different account's login.
+    if (previous?.userId && next.userId && previous.userId !== next.userId) return;
+    credsRef.current = next;
+    setCredsState(next);
+    void Store.set(next).catch(() => {});
   }, []);
 
   const clearCreds = useCallback(() => {
+    if (clearingRef.current) return;
+    clearingRef.current = true;
+    // Lock media immediately, before asynchronous native disk cleanup or
+    // remote refresh-token revocation completes.
+    clearRecordingAudioCache();
+    setAuthToken(null);
+    setSigningOut(true);
+    credsRef.current = null;
     setCredsState(null);
-    Store.clear().catch(() => {});
+    const storage = Store.clear();
+    void Promise.allSettled([storage, signOutSupabaseSession(), clearRecordingCache()])
+      .finally(() => { clearingRef.current = false; setSigningOut(false); });
   }, []);
 
-  return { creds, setCreds, clearCreds, loading };
+  return { creds, setCreds, clearCreds, loading: loading || signingOut };
 }
 
 /**
@@ -113,12 +187,14 @@ export async function fetchOrganizationIdForUser(accessToken: string, userId: st
 /** Resolve + persist organizationId for the currently stored creds. Returns the resolved id. */
 export async function ensureStoredOrganizationId(): Promise<string | null> {
   const c = await Store.get();
+  const epoch = credentialEpoch;
   if (!c) return null;
   if (c.organizationId) return c.organizationId;
   if (!c.accessToken || !c.userId) return null;
   const orgId = await fetchOrganizationIdForUser(c.accessToken, c.userId);
-  if (orgId) await Store.set({ ...c, organizationId: orgId });
-  return orgId;
+  if (epoch !== credentialEpoch) return null;
+  if (orgId) await Store.set({ ...c, organizationId: orgId }, epoch);
+  return epoch === credentialEpoch ? orgId : null;
 }
 
 /**
@@ -129,6 +205,7 @@ export async function ensureStoredOrganizationId(): Promise<string | null> {
  */
 export async function hydrateSoftphoneCredentials(platform: 'mobile' | 'desktop' = 'mobile'): Promise<Creds | null> {
   const c = await Store.get();
+  const epoch = credentialEpoch;
   if (!c?.accessToken) return null;
   try {
     const res = await fetch(`${SUPABASE_URL_DEF}/functions/v1/softphone-credentials?platform=${platform}`, {
@@ -136,6 +213,7 @@ export async function hydrateSoftphoneCredentials(platform: 'mobile' | 'desktop'
     });
     if (!res.ok) return null;
     const d = await res.json().catch(() => null) as any;
+    if (epoch !== credentialEpoch) return null;
     if (!d || d.error || !d.extension) return null;
     const next: Creds = {
       ...c,
@@ -155,9 +233,7 @@ export async function hydrateSoftphoneCredentials(platform: 'mobile' | 'desktop'
       dataScope: d.data_scope || c.dataScope,
       portalUrl: d.portal_url || c.portalUrl,
     };
-    await Store.set(next);
-    return next;
+    await Store.set(next, epoch);
+    return epoch === credentialEpoch ? next : null;
   } catch { return null; }
 }
-
-

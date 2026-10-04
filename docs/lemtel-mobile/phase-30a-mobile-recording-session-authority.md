@@ -1,0 +1,28 @@
+# Lemtel — phase 30A : autorité des enregistrements et sessions mobiles
+
+**État :** implémentation en branche de revue, non déployée, sans modification FusionPBX réelle, sans migration et sans changement Planiprêt.
+
+## Contrat obtenu
+
+- **Serveur en premier.** Pour un JWT utilisateur, `ai-transcribe-call` résout le CDR par UUID PBX, UUID de ligne ou identifiant d'enregistrement relié au CDR. Il exige un poste renseigné et la liaison exacte `portal_user_id + organization_id + extension` dans `pbx_softphone_users`. L'absence de CDR ou de liaison échoue avant toute lecture, cache de transcription, dépense IA ou écriture. Les métadonnées audio et l'organisation proviennent du CDR, jamais du client. Le proxy reçoit le JWT d'origine et uniquement l'identifiant CDR; le repli `fetch(recording_url)` reste réservé aux appels **service-role** internes. La branche PBX de `ai-analyze-call` réutilise cette même autorisation **avant** les caches et ne lit plus le transcript/organisation fourni par un JWT utilisateur; sa branche Planiprêt et les appels internes service-role conservent leurs contrats. Les appels de `process-call-recording` conservent leur contrat antérieur.
+- **Client mobile ensuite.** Les demandes de lecture signée et de transcription n'envoient plus de chemin, nom, URL ou organisation audio. Le lecteur des messages vocaux emprunte aussi le helper authentifié; le chemin diagnostique `voicemailAudio` n'envoie plus que le CDR. Les API serveur `mobile-calls` (liste et détail avec transcript) et `mobile-voicemails` se limitent à l'extension exacte du CDR; elles ne renvoient plus de pointeur PBX dans leurs réponses. Aucune URL signée n'est conservée dans un cache global; une réponse audio tardive après changement de session est ignorée.
+- **Hors-ligne et session.** Les fichiers neufs résident sous `recordings/v2/<utilisateur>-<organisation>-<poste>/<CDR>.<format>` et les caches mémoire sont scindés par cette même portée. Les anciens fichiers v1 non attribués ne sont **jamais relus**; aucune migration. La déconnexion coupe les lecteurs, invalide les requêtes en cours, purge mémoire, fichiers et métadonnées en meilleur effort, efface les identifiants et ferme la session Supabase. Les mutations Preferences et les restaurations Supabase sont mises en file avec une génération de session : une hydratation lancée sous A ne peut pas réécrire A après sa purge. Le softphone d'un compte restauré reste masqué avant vérification du JWT, et la reconnexion attend aussi la fin de la purge native.
+- **Transitions UI.** Les listes et détails masquent immédiatement les lignes du compte précédent, filtrent poste et organisation, annulent les requêtes/focus/Realtime obsolètes et refusent que des téléchargements ou traitements IA tardifs réouvrent l'ancien média. L'écran des appels remonte son sous-arbre au changement d'utilisateur, organisation ou poste.
+
+## Validation effectuée sans infrastructure réelle
+
+- `npx tsc --noEmit -p tsconfig.json` dans `apps/ava-softphone-mobile` : **réussi**.
+- Neuf suites ciblées Vitest : **47 tests réussis**, y compris changement de compte/poste, cache web/natif, restauration tardive, déconnexion, analyse IA, messages vocaux et contrat transcription.
+- `npm run build` : **réussi** (bundle Capacitor web uniquement, aucune compilation native ou soumission).
+- `deno check --no-lock supabase/functions/ai-transcribe-call/index.ts` : **réussi**.
+- Contrats Deno du proxy, de la transcription, du garde d'analyse IA et des listes/détails mobiles : **19 tests réussis**; `deno check` de `ai-analyze-call` et `actionlint` du pipeline Lemtel : **réussis**.
+- Suite mobile complète : **14 échecs préexistants inchangés** par rapport à l'état avant 30A (7 fichiers : pavé de numérotation, SIP, thème, snapshots). La CI 30A contrôle les chemins modifiés et TypeScript; elle ne remplace pas la remise à niveau de la suite complète.
+
+## Portes avant iOS et Android
+
+1. Faire relire puis intégrer la chaîne de PR Desktop 29C → 29D → mobile 30A. Ne **pas** publier un client 30A avant la fonction serveur sécurisée; déployer `ai-transcribe-call` en staging isolé avant tout essai mobile, puis seulement en environnement autorisé.
+2. Dans la phase 30B, remettre les 14 tests historiques au vert, valider les accès multi-utilisateurs/multi-postes et le cache sur appareils iOS et Android réels (A télécharge, se déconnecte pendant le téléchargement, B ouvre le même identifiant CDR). Vérifier aussi les chemins voicemail existants après le refus des CDR sans extension.
+3. Vérifier l'intégration contrôlée avec les informations opérationnelles de Kenny et Phil : configuration SIP/WSS/TLS, droits et flux FusionPBX, identité poste ↔ utilisateur, réseau/TURN, scénarios d'appel et d'enregistrement. **Aucun secret ou paramètre de production n'est codé en dur** dans cette phase.
+4. Ensuite seulement : versions et signatures natives, tests internes TestFlight puis piste interne Google Play, validation de l'auto-update Desktop et distribution graduelle. Aucune soumission ou mise en production n'a été réalisée ici.
+
+**Limites de sécurité explicites :** une URL Storage signée déjà copiée avant la déconnexion peut rester utilisable jusqu'à son expiration serveur (jusqu'à 300 secondes); une révocation immédiate nécessite une évolution serveur ultérieure. Un cache volontairement hors-ligne ne peut pas vérifier une révocation de droits au moment où le réseau est absent; la purge et la séparation de comptes limitent ici les réutilisations sur appareil partagé. La restriction d'extension de la transcription s'applique également aux administrateurs connectés par JWT : une future transcription inter-postes exigerait un chemin administrateur distinct et explicitement autorisé côté serveur.

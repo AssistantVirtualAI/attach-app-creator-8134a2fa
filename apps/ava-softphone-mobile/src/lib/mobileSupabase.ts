@@ -126,77 +126,53 @@ const clean = (value: unknown) => {
   return text && text !== 'null' && text !== 'undefined' ? text : '';
 };
 
-// Module-level cache so blob: URLs survive tab switches within the session.
-const audioBlobCache = new Map<string, string>();
-
-export function getCachedRecordingAudio(key: string): string | undefined {
-  return audioBlobCache.get(key);
-}
-
-export function getCachedRecordingAudioEntries(): Array<[string, string]> {
-  return Array.from(audioBlobCache.entries());
-}
+// A server-signed bearer URL must not outlive the current mobile session.
+// Never cache it by CDR alone: the same device can switch user or extension.
+let audioEpoch = 0;
+export function clearRecordingAudioCache() { audioEpoch++; }
 
 /**
  * Get a fresh JWT token from the Supabase session.
  * Refreshes proactively if the token is expired or close to expiry (< 60s).
- * Falls back to the provided token if session refresh fails.
+ * Never falls back to caller-supplied/stored credentials after sign-out.
  */
-async function getFreshToken(fallbackToken?: string | null): Promise<string | null> {
-  try {
-    const sb = getMobileSupabaseClient();
-    let { data: { session } } = await sb.auth.getSession();
-    const nowSec = Math.floor(Date.now() / 1000);
-    // Refresh if expired or close to expiry
-    if (!session || (session.expires_at && session.expires_at - nowSec < 60)) {
-      const { data: refreshed } = await sb.auth.refreshSession();
-      if (refreshed?.session) session = refreshed.session;
-    }
-    return session?.access_token || fallbackToken || null;
-  } catch {
-    return fallbackToken || null;
+async function getFreshSession() {
+  const sb = getMobileSupabaseClient();
+  let { data: { session } } = await sb.auth.getSession();
+  if (!session?.user?.id) throw new Error('Session expirée. Reconnectez-vous pour écouter les enregistrements.');
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (session.expires_at && session.expires_at - nowSec < 60) {
+    const { data: refreshed, error } = await sb.auth.refreshSession();
+    if (error || !refreshed?.session?.user?.id) throw new Error('Session expirée. Reconnectez-vous pour écouter les enregistrements.');
+    session = refreshed.session;
   }
+  return session;
 }
 
 export async function loadPbxRecordingAudioMobile(
   recording: RecordingMeta,
-  token?: string | null,
-  organizationId?: string | null,
-  fallbackDomainUuid?: string | null,
-  opts?: { skipCache?: boolean },
+  _token?: string | null,
+  _organizationId?: string | null,
+  _fallbackDomainUuid?: string | null,
+  _opts?: { skipCache?: boolean },
 ) {
   const xml_cdr_uuid = clean(recording.xml_cdr_uuid || recording.pbx_uuid || recording.id);
-  const record_path = clean(recording.record_path || recording.recording_path);
-  const record_name = clean(recording.record_name || recording.recording_name);
-  if (!xml_cdr_uuid && (!record_path || !record_name)) throw new Error('Missing recording metadata');
-
-  const cacheKey = xml_cdr_uuid || `${record_path}/${record_name}`;
-  if (!opts?.skipCache) {
-    const cached = audioBlobCache.get(cacheKey);
-    // Only return cached HTTP(S) signed URLs — never cached blob: URLs,
-    // because a fetch() of a blob: URL whose source is gone will fail silently.
-    if (cached && /^https?:\/\//i.test(cached)) return cached;
-    if (cached) audioBlobCache.delete(cacheKey);
-  } else {
-    audioBlobCache.delete(cacheKey);
-  }
-
-  // Get a fresh token — refresh proactively if close to expiry (mirrors desktop behavior)
-  let freshToken = await getFreshToken(token);
-
-  const payload = {
-    organization_id: clean(recording.organization_id) || organizationId || undefined,
-    params: {
-      xml_cdr_uuid,
-      record_path,
-      record_name,
-      domain_uuid: clean(recording.domain_uuid) || clean(fallbackDomainUuid),
-      domain_name: clean(recording.domain_name),
-      recorded_at: clean(recording.recorded_at || recording.start_at),
-      local_recording_url: clean(recording.recording_url),
-      expires_in: 300,
-    },
+  if (!xml_cdr_uuid) throw new Error('Missing CDR identifier');
+  const requestEpoch = audioEpoch;
+  const initialSession = await getFreshSession();
+  let freshToken = initialSession.access_token;
+  const userId = initialSession.user.id;
+  const assertCurrentSession = async () => {
+    if (requestEpoch !== audioEpoch) throw new Error('Session changed during recording playback');
+    const { data: { session } } = await getMobileSupabaseClient().auth.getSession();
+    if (requestEpoch !== audioEpoch || session?.user?.id !== userId) {
+      throw new Error('Session changed during recording playback');
+    }
   };
+
+  // Phase 29B/30A: the server resolves the path, org, domain, name and URL
+  // from the authorized CDR. The device sends no recording metadata at all.
+  const payload = { params: { xml_cdr_uuid, expires_in: 300 } };
 
   // Per-attempt correlation id
   const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
@@ -219,10 +195,11 @@ export async function loadPbxRecordingAudioMobile(
   if (signed.ok) {
     const json = await signed.json().catch(() => null);
     if (json?.ok && json?.url) {
-      audioBlobCache.set(cacheKey, json.url as string);
+      await assertCurrentSession();
       return json.url as string;
     }
   }
+  if (signed.status === 403) throw new Error('Accès refusé à cet enregistrement.');
 
   // Fall back to direct streaming
   let res = await doFetch(freshToken, 'get-recording');
@@ -232,7 +209,7 @@ export async function loadPbxRecordingAudioMobile(
     try {
       const sb = getMobileSupabaseClient();
       const { data: refreshed } = await sb.auth.refreshSession();
-      if (refreshed?.session?.access_token) {
+      if (refreshed?.session?.access_token && refreshed.session.user.id === userId && requestEpoch === audioEpoch) {
         freshToken = refreshed.session.access_token;
         res = await doFetch(freshToken, 'get-recording');
       }
@@ -279,8 +256,7 @@ export async function loadPbxRecordingAudioMobile(
 
   const blob = await res.blob();
   if (!blob.size) throw new Error('Empty recording');
+  await assertCurrentSession();
   const url = URL.createObjectURL(blob);
-  // Do NOT cache blob: URLs — they are short-lived and break fetch() in
-  // downloadRecording. Only HTTP(S) signed URLs are cached (above).
   return url;
 }

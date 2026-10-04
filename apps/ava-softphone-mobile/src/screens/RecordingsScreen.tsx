@@ -4,8 +4,7 @@ import { colors, font, radius, gradients } from '../lib/theme';
 import { mobileApi, RecordingEntry } from '../lib/mobileApi';
 import { Card, Chip, EmptyState, Skeleton, AIPanel } from '../components/ui/Primitives';
 import type { Creds } from '../lib/creds';
-import { loadPbxRecordingAudioMobile } from '../lib/mobileSupabase';
-import { downloadRecording, getCachedRecordingUrl } from '../lib/recordingCache';
+import { downloadRecording, getCachedRecordingUrl, type RecordingScope } from '../lib/recordingCache';
 import { showMobileToast } from '../lib/mobileToast';
 import { useCallAi } from '../hooks/useCallAi';
 import { useT } from '../lib/i18n';
@@ -22,6 +21,7 @@ export default function RecordingsScreen({
   onRangeDaysChange: (days: 7 | 30) => void;
 }) {
   const [items, setItems] = useState<RecordingEntry[] | null>(null);
+  const [loadedForScope, setLoadedForScope] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -37,50 +37,85 @@ export default function RecordingsScreen({
   // onError handler can re-download it without needing closure state.
   const currentPlaybackRef = useRef<RecordingEntry | null>(null);
   const recoveringRef = useRef(false);
+  const scope: RecordingScope | null = creds?.userId && creds?.organizationId && creds?.accessToken && myExtension
+    ? { userId: creds.userId, organizationId: creds.organizationId, extension: myExtension }
+    : null;
+  const scopeId = scope ? `${scope.userId}|${scope.organizationId}|${scope.extension}|${creds?.accessToken}` : '';
+  const activeScopeRef = useRef(scopeId);
+  activeScopeRef.current = scopeId;
+  const visibleItems = loadedForScope === scopeId ? items : null;
+  const visibleError = loadedForScope === scopeId ? error : null;
+
+  useEffect(() => {
+    if (audioRef.current?.getAttribute('src')) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+    }
+    currentPlaybackRef.current = null;
+    recoveringRef.current = false;
+    setError(null);
+    setPlayingId(null); setLoadingId(null); setDownloadingId(null);
+    setExpandedId(null); setCachedIds(new Set()); setPlaybackErrors({});
+    setItems(scopeId ? null : []);
+    setLoadedForScope(scopeId);
+  }, [scopeId]);
 
   // Load recordings (real-time: refresh on focus + every 30s + after a call ends).
   const reload = React.useCallback(() => {
     let cancelled = false;
     // Phase 27A — own_extension_only: the server imposes the connected extension.
-    if (!myExtension) return () => { cancelled = true; };
+    if (!scope || !scopeId) return () => { cancelled = true; };
     mobileApi.recordings({ rangeDays })
-      .then((rows) => { if (!cancelled) setItems(rows); })
-      .catch((e: any) => { if (!cancelled) { setError(e?.message || 'Failed to load recordings'); setItems((prev) => prev ?? []); } });
+      .then((rows) => {
+        if (cancelled || activeScopeRef.current !== scopeId) return;
+        setItems(rows.filter((r) => r.extension === scope.extension && r.organization_id === scope.organizationId));
+        setLoadedForScope(scopeId);
+      })
+      .catch((e: any) => {
+        if (!cancelled && activeScopeRef.current === scopeId) { setError(e?.message || 'Failed to load recordings'); setItems((prev) => prev ?? []); }
+      });
     return () => { cancelled = true; };
-  }, [myExtension, rangeDays]);
+  }, [scopeId, rangeDays]);
 
   useEffect(() => {
     setError(null);
-    if (!myExtension) { setItems([]); return; }
+    if (!scopeId) { setItems([]); setLoadedForScope(''); return; }
     setItems(null);
-    const cancel = reload();
+    const cancels: Array<() => void> = [reload()];
     // 30s polling removed — realtime subscriptions + focus + callEnded events handle refresh.
-    const onFocus = () => reload();
-    const onCallEnded = () => { setTimeout(reload, 1500); setTimeout(reload, 8000); };
+    const onFocus = () => { cancels.push(reload()); };
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const onCallEnded = () => { timers.push(setTimeout(onFocus, 1500), setTimeout(onFocus, 8000)); };
     window.addEventListener('focus', onFocus);
     window.addEventListener('ava:callEnded', onCallEnded as any);
 
     // Live realtime: channel scoped exactly to the connected extension.
     let ch: any = null;
+    let cancelled = false;
     (async () => {
       try {
         const { supabase } = await import('../lib/mobileSupabase');
+        if (cancelled) return;
         if (creds?.accessToken) { try { supabase.realtime.setAuth(creds.accessToken); } catch {} }
         const filter = `extension=eq.${myExtension}`;
         ch = supabase.channel(`recordings-ext-${myExtension}`)
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pbx_call_recordings', filter } as any, () => reload())
           .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pbx_call_recordings', filter } as any, () => reload())
           .subscribe();
+        if (cancelled) { await supabase.removeChannel(ch); ch = null; }
       } catch {}
     })();
 
     return () => {
-      cancel();
+      cancelled = true;
+      cancels.forEach((cancel) => cancel());
+      timers.forEach(clearTimeout);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('ava:callEnded', onCallEnded as any);
       (async () => { try { const { supabase } = await import('../lib/mobileSupabase'); ch && supabase.removeChannel(ch); } catch {} })();
     };
-  }, [reload, myExtension, creds?.accessToken]);
+  }, [reload, scopeId]);
 
   // cachedIdsRef mirrors cachedIds state but is updated without triggering
   // re-renders, so background probes and prefetches can update it safely.
@@ -95,19 +130,19 @@ export default function RecordingsScreen({
   // Stable key derived from the sorted list of recording IDs.
   // Changes only when the actual set of recordings changes, not on every poll.
   const itemsIdsKey = useMemo(
-    () => (items ? items.slice(0, 50).map((r) => r.id).join(',') : ''),
-    [items],
+    () => (visibleItems ? visibleItems.slice(0, 50).map((r) => r.id).join(',') : ''),
+    [visibleItems],
   );
 
   // Probe + prefetch — runs only when the set of recording IDs changes.
   useEffect(() => {
-    if (!items || items.length === 0 || !itemsIdsKey) return;
+    if (!visibleItems || visibleItems.length === 0 || !itemsIdsKey || !scope) return;
     const accessToken = creds?.accessToken || null;
     const domainUuid = creds?.domainUuid || creds?.fusionpbxDomainUuid || null;
     const orgId = creds?.organizationId || null;
 
     // Full guard key: IDs + token. If neither changed, skip entirely.
-    const key = `${itemsIdsKey}-${accessToken ?? ''}`;
+    const key = `${scopeId}-${itemsIdsKey}`;
     if (prefetchKeyRef.current === key) return;
     prefetchKeyRef.current = key;
 
@@ -123,9 +158,9 @@ export default function RecordingsScreen({
     (async () => {
       // Step 1: probe disk for all items in the current set.
       const probeResults = await Promise.all(
-        items.slice(0, 50).map(async (r) => ({ id: r.id, u: await getCachedRecordingUrl(r.id) }))
+        visibleItems.slice(0, 50).map(async (r) => ({ id: r.id, u: await getCachedRecordingUrl(r.id, scope) }))
       );
-      if (cancelled) return;
+      if (cancelled || activeScopeRef.current !== scopeId) return;
 
       // Update cachedIds state ONCE from probe results (single re-render).
       const next = new Set<string>();
@@ -143,16 +178,13 @@ export default function RecordingsScreen({
     return () => { cancelled = true; };
   // itemsIdsKey is a stable memo derived from items — safe to use as dep.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemsIdsKey, creds?.accessToken]);
+  }, [itemsIdsKey, scopeId]);
 
 
 
   const recMeta = (rec: RecordingEntry) => ({
-    recording_path: rec.record_path, recording_name: rec.record_name,
-    xml_cdr_uuid: rec.xml_cdr_uuid || rec.pbx_uuid || (rec.record_name ? rec.record_name.replace(/\.(mp3|wav|ogg|m4a|webm)$/i, '') : rec.id), domain_uuid: rec.domain_uuid,
-    domain_name: rec.domain_name,
-    organization_id: rec.organization_id || creds?.organizationId || undefined,
-    start_at: rec.startedAt,
+    xml_cdr_uuid: rec.xml_cdr_uuid || rec.pbx_uuid || rec.id,
+    recording_name: rec.record_name,
   });
 
   const captureError = (rec: RecordingEntry, e: any, fallback: string) => {
@@ -171,6 +203,8 @@ export default function RecordingsScreen({
   };
 
   const play = async (rec: RecordingEntry) => {
+    if (!scope || !scopeId || rec.extension !== scope.extension || rec.organization_id !== scope.organizationId) return;
+    const requestScope = scopeId;
     if (playingId === rec.id) {
       audioRef.current?.pause();
       setPlayingId(null);
@@ -180,14 +214,17 @@ export default function RecordingsScreen({
     setPlaybackErrors((prev) => { const n = { ...prev }; delete n[rec.id]; return n; });
     try {
       // Phase 5: serve from local cache first; if missing, download (and cache) on the fly.
-      let url = await getCachedRecordingUrl(rec.id);
+      let url = await getCachedRecordingUrl(rec.id, scope);
+      if (activeScopeRef.current !== requestScope) return;
       if (!url) {
         url = await downloadRecording(
           rec.id, recMeta(rec),
           creds?.accessToken || null,
           creds?.organizationId || null,
           creds?.domainUuid || creds?.fusionpbxDomainUuid || null,
+          { scope },
         );
+        if (activeScopeRef.current !== requestScope) return;
         setCachedIds((prev) => new Set(prev).add(rec.id));
       }
       currentPlaybackRef.current = rec;
@@ -202,13 +239,15 @@ export default function RecordingsScreen({
       }
       setPlayingId(rec.id);
     } catch (e: any) {
-      captureError(rec, e, fr ? 'Impossible de charger l\'enregistrement' : 'Unable to load recording');
+      if (activeScopeRef.current === requestScope) captureError(rec, e, fr ? 'Impossible de charger l\'enregistrement' : 'Unable to load recording');
     } finally {
-      setLoadingId(null);
+      if (activeScopeRef.current === requestScope) setLoadingId(null);
     }
   };
 
   const download = async (rec: RecordingEntry) => {
+    if (!scope || !scopeId || rec.extension !== scope.extension || rec.organization_id !== scope.organizationId) return;
+    const requestScope = scopeId;
     setDownloadingId(rec.id);
     setPlaybackErrors((prev) => { const n = { ...prev }; delete n[rec.id]; return n; });
     try {
@@ -217,14 +256,15 @@ export default function RecordingsScreen({
         creds?.accessToken || null,
         creds?.organizationId || null,
         creds?.domainUuid || creds?.fusionpbxDomainUuid || null,
-        { force: true },
+        { force: true, scope },
       );
+      if (activeScopeRef.current !== requestScope) return;
       setCachedIds((prev) => new Set(prev).add(rec.id));
       showMobileToast(fr ? 'Enregistrement téléchargé pour écoute hors-ligne' : 'Recording downloaded for offline playback', 'success');
     } catch (e: any) {
-      captureError(rec, e, fr ? 'Téléchargement échoué' : 'Download failed');
+      if (activeScopeRef.current === requestScope) captureError(rec, e, fr ? 'Téléchargement échoué' : 'Download failed');
     } finally {
-      setDownloadingId(null);
+      if (activeScopeRef.current === requestScope) setDownloadingId(null);
     }
   };
 
@@ -262,7 +302,8 @@ export default function RecordingsScreen({
             message: mediaErr?.message ?? null,
             src: audioRef.current?.currentSrc || null,
           });
-          if (!rec || recoveringRef.current) return;
+          if (!rec || !scope || !scopeId || rec.extension !== scope.extension || rec.organization_id !== scope.organizationId || recoveringRef.current) return;
+          const requestScope = scopeId;
           recoveringRef.current = true;  // permanent lock — never reset in finally
           setLoadingId(rec.id);
           try {
@@ -271,8 +312,9 @@ export default function RecordingsScreen({
               creds?.accessToken || null,
               creds?.organizationId || null,
               creds?.domainUuid || creds?.fusionpbxDomainUuid || null,
-              { force: true },
+              { force: true, scope },
             );
+            if (activeScopeRef.current !== requestScope) return;
             setPlaybackErrors((prev) => { const n = { ...prev }; delete n[rec.id]; return n; });
             setCachedIds((prev) => new Set(prev).add(rec.id));
             if (audioRef.current) {
@@ -284,10 +326,11 @@ export default function RecordingsScreen({
               });
             }
           } catch (e: any) {
+            if (activeScopeRef.current !== requestScope) return;
             recoveringRef.current = false;  // only reset on hard failure so user can retry
             captureError(rec, e, fr ? 'Impossible de recharger l\'enregistrement' : 'Unable to reload recording');
           } finally {
-            setLoadingId(null);
+            if (activeScopeRef.current === requestScope) setLoadingId(null);
             // DO NOT reset recoveringRef.current here — see comment above.
           }
         }}
@@ -295,18 +338,18 @@ export default function RecordingsScreen({
         controls
       />
 
-      {error && (
+      {visibleError && (
         <Card accent="gold" style={{ marginBottom: 10 }}>
           <div style={{ fontSize: font.sm, color: colors.danger, fontWeight: 700 }}>{fr ? 'Échec du chargement des enregistrements' : 'Failed to load recordings'}</div>
-          <div style={{ fontSize: 11, color: colors.mutedSilver, marginTop: 4 }}>{error}</div>
+          <div style={{ fontSize: 11, color: colors.mutedSilver, marginTop: 4 }}>{visibleError}</div>
         </Card>
       )}
 
-      {!items && <ListSkeleton rows={5} />}
-      {items && items.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension, r.summary].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).length === 0 && (
+      {!visibleItems && <ListSkeleton rows={5} />}
+      {visibleItems && visibleItems.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension, r.summary].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).length === 0 && (
         <EmptyState icon="🎙" title={fr ? 'Aucun enregistrement' : 'No recordings yet'} hint={fr ? 'Les enregistrements de votre extension apparaîtront ici.' : 'Recordings for your extension will appear here.'} />
       )}
-      {items && items.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension, r.summary].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).map((r) => (
+      {visibleItems && visibleItems.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension, r.summary].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).map((r) => (
         <div key={r.id} style={{ marginBottom: 8 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 12,
@@ -399,14 +442,7 @@ export default function RecordingsScreen({
 function RecordingAiPanel({ rec }: { rec: RecordingEntry }) {
   const { lang } = useT();
   const fr = lang === 'fr';
-  const meta = useMemo(() => ({
-    recording_path: rec.record_path,
-    recording_name: rec.record_name,
-    domain_uuid: rec.domain_uuid,
-    xml_cdr_uuid: rec.xml_cdr_uuid || rec.pbx_uuid || (rec.record_name ? rec.record_name.replace(/\.(mp3|wav|ogg|m4a|webm)$/i, '') : rec.id),
-    organization_id: rec.organization_id,
-  }), [rec]);
-  const { data, loading, running, stage, error, run } = useCallAi(rec.id, meta);
+  const { data, loading, running, stage, error, run } = useCallAi(rec.id);
 
   const hasTranscript = (data?.transcript?.length || 0) > 0;
   const hasAi = !!data?.summary || (data?.coachingNotes?.length || 0) > 0;

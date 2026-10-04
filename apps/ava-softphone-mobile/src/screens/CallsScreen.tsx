@@ -43,6 +43,7 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
   // Resolve admin + own extension to scope/filter the History list.
   useEffect(() => {
     let cancelled = false;
+    setMyExt(null);
     mobileApi.me().then((m) => {
       if (cancelled) return;
       const admin = !!m?.permissions?.admin;
@@ -162,7 +163,7 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
       {sub === 'recordings' && (
         <div style={{ marginTop: 6 }}>
           <Suspense fallback={<ListSkeleton rows={4} />}>
-            <RecordingsScreen creds={creds || null} myExtension={myExt} rangeDays={rangeDays} onRangeDaysChange={setRangeDays} />
+            <RecordingsScreen key={`${creds?.userId || ''}:${creds?.organizationId || ''}:${myExt || ''}`} creds={creds || null} myExtension={myExt} rangeDays={rangeDays} onRangeDaysChange={setRangeDays} />
           </Suspense>
         </div>
       )}

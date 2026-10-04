@@ -1,0 +1,25 @@
+# Lemtel — phase 31C : frontière de dépendances avant auto-hébergement
+
+**État au 4 octobre 2026 : développement et analyse hors ligne uniquement.** La cible reste la pile Lemtel isolée sur Hostinger, avec DigitalOcean en secours. Le propriétaire a déjà pointé `lemtel.avastatistic.ca` sur le VPS Hostinger choisi dans IONOS; cela ne fournit pas encore l’API, son certificat TLS ni une reprise automatique. Le gestionnaire Docker Hostinger ne liste aucun projet. DigitalOcean affiche 2 vCPU / 4 Go / 80 Go, avec backups hebdomadaires activés mais aucune sauvegarde automatique encore disponible.
+
+## Livrable 31C
+
+`node scripts/lemtel-dependency-closure.mjs` parcourt **sans réseau ni écriture** les sources Desktop et mobile pour relever les appels Edge **littéraux**, puis inspecte les fonctions candidates 31B et les entrypoints appelés par les clients. Il suit les imports locaux statiques pour repérer des marqueurs Planiprêt directs ou transitifs, des références à des tables/RPC/Storage et des imports introuvables. Ses résultats restent `manual_review`, `incomplete_manual_review_required`, avec export de base, replay de migrations et déploiement **interdits**. Aucun secret, corps de fonction, SQL ni donnée client n’est émis dans le rapport JSON.
+
+Sur la branche 31C au lancement de cet audit : **24 noms de fonctions appelées littéralement par les deux clients**, **54 fermetures d’import candidates**, **3 appels clients explicitement préfixés `pp-`**, **14 fermetures avec marqueur Planiprêt dans un import transitoire**, aucun import relatif manquant parmi ceux reconnus par l’analyseur. Les trois appels clients à trancher sont `pp-caller-lookup`, `pp-contacts-upsert` et `pp-wss-fallback-log`. Un marqueur présent peut être un commentaire ou un chemin inactif; son absence **ne démontre pas** l’isolation. Les appels calculés, les constantes indirectes, les imports dynamiques, les dépendances SQL (FK/RLS/triggers/RPC/grants), les buckets et leurs objets doivent encore être revus manuellement. Ces comptes sont des découvertes statiques, **pas** un plan de copie ni une allowlist de production.
+
+Les tests synthétiques prouvent que l’audit repère un marqueur dans un import partagé, signale un entrypoint absent, exclut les fichiers de test client et n’imprime pas les littéraux sensibles. La CI `.github/workflows/lemtel-hosting-offline-readiness.yml` rejoue ces contrôles lorsqu’une source cliente, fonction ou migration change; elle maintient aussi le refus du préflight sur les deux VPS.
+
+## Étapes à enchaîner dans l’ordre
+
+1. **Fermer la frontière fonctionnelle Lemtel** : vérifier un à un les trois appels `pp-`, les 14 signaux transitifs, les appels calculés et les fonctions manquantes éventuelles. Remplacer ou exclure leurs usages dans une future pile isolée, sans changer le comportement des utilisateurs actuellement sur l’ancien backend.
+2. **Construire une baseline indépendante** : établir par revue la liste des tables, types, FK, RLS, triggers, RPC, grants, identités Auth, buckets et fonctions nécessaires. Ne pas rejouer les 510 migrations mutualisées ni copier Auth/Storage/Planiprêt; choisir le modèle de nouveaux comptes et de réauthentification avant de manipuler des données.
+3. **Préparer le paquet de production Hostinger** : versionner séparément un déploiement Lemtel complet, les interfaces de secrets sans valeurs, le reverse proxy HTTPS et les contrôles applicatifs Auth/RLS/Storage/Realtime/Functions. Le Compose Control Plane actuel reste réservé au développement. Réaliser une restauration isolée et les tests fonctionnels **après** admission opérationnelle distincte.
+4. **Préparer le secours DigitalOcean** : même pile, réplication ou restauration chiffrée vérifiée, primaire unique et fencing anti-double-écriture, RPO/RTO mesurés, healthchecks, simulation de panne et retour arrière. L’enregistrement A IONOS actuel reste Hostinger seul; ne pas ajouter un second A avant la recette.
+5. **Distribuer les clients seulement après recette** : nouveau couple origine HTTPS/clé publique, redirections Auth, connexion après changement d’émetteur, tests Desktop/iOS/Android physiques (entrant, sortant, veille, audio, TURN) avec validation PBX de Kenny/Phil, puis versions signées.
+
+## Barrière de mise en ligne
+
+`schemas/lemtel-staging-admission/staging-admission-policy.json` reste `offline_only: true`, `current_decision: denied` et refuse runtime, réseau, secrets, données persistantes et déploiement. Snapshot préchangement, responsables monitoring/secrets, rétention des logs, approbation DNS/TLS et accord PBX manquent encore. Le préflight 31B renvoie **78** pour Hostinger et DigitalOcean. Cette phase ne modifie pas ces valeurs, n’installe rien sur les VPS, ne modifie pas IONOS et n’appelle pas FusionPBX.
+
+**Critère de succès de la phase suivante :** une baseline Lemtel et une matrice de dépendances approuvables, sans référence Planiprêt non justifiée, testées hors ligne avec données synthétiques et sans capacité de déploiement. Un lien DNS valide ne remplace pas ce critère.

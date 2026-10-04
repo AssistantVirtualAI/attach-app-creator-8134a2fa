@@ -7,6 +7,7 @@ import RecordingDebugScreen from './RecordingDebugScreen';
 import { showMobileToast } from '../lib/mobileToast';
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { useT } from '../lib/i18n';
+import { loadPbxRecordingAudioMobile } from '../lib/mobileSupabase';
 
 type AiStage = 'idle' | 'transcribing' | 'analyzing' | 'done' | 'error';
 
@@ -42,62 +43,58 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
   }, [data?.hasRecording]);
 
   // Cleanup audio on unmount or call change
+  const idRef = useRef(id);
+  idRef.current = id;
   useEffect(() => () => {
     audioRef.current?.pause();
     audioRef.current = null;
   }, [id]);
+  // Phase 29B — a new call id never reuses the previous CDR or audio.
+  const firstIdRef = useRef(true);
+  useEffect(() => {
+    if (firstIdRef.current) { firstIdRef.current = false; return; }
+    setData(null); setAudioUrl(null); setAudioError(null); setPlaying(false); setCur(0); setDur(0);
+  }, [id]);
 
+  // Phase 29B — single authenticated audio path: the shared helper. Metadata
+  // comes only from the loaded CDR (`data`) and the detail `id`; the server
+  // enforces the signed-in extension scope.
   const fetchUrl = useCallback(async (): Promise<string | null> => {
     setAudioError(null);
     setLoadingAudio(true);
+    const reqId = id;
     try {
-      // Use fetch() directly to handle binary audio/mpeg response
-      const SUPABASE_URL = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
-      const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
-      const token = mobile.accessToken;
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/fusionpbx-proxy`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'apikey': ANON_KEY,
-        },
-        body: JSON.stringify({
-          action: 'get-recording',
-          xml_cdr_uuid: data?.pbx_uuid || id,
-          recording_name: data?.record_name || data?.recording_name || `${data?.pbx_uuid || id}.mp3`,
-          recording_path: data?.record_path || data?.recording_path || '',
-          domain_uuid: data?.domain_uuid || mobile.fusionpbxDomainUuid || '2936594e-17b7-42a9-9165-95be48627923',
-        }),
-      });
-      const contentType = response.headers.get('content-type') || '';
-      if (!response.ok || !contentType.includes('audio')) {
-        const err: any = await response.json().catch(() => ({}));
-        let msg: string;
-        if (err?.error === 'RECORDING_NOT_FOUND') {
-          if (err?.session_logged_in === false) {
-            msg = 'PBX rejected the recording session — FusionPBX credentials look invalid or expired. Ask the admin to refresh FUSIONPBX_USERNAME / FUSIONPBX_PASSWORD.';
-          } else if (err?.file_missing) {
-            msg = 'Recording file no longer exists on the PBX disk (likely past the retention window).';
-          } else {
-            msg = 'Recording is not reachable on the PBX (file missing or path mismatch).';
-          }
-        } else if (err?.error === 'Forbidden') {
-          msg = 'You are not allowed to listen to this call (extension scope).';
-        } else {
-          msg = err?.message || err?.error || 'No recording available for this call.';
-        }
-        throw new Error(msg);
-      }
-      const blob = await response.blob();
-      return URL.createObjectURL(blob);
+      const d: any = data || {};
+      const meta: any = { xml_cdr_uuid: d.pbx_uuid || id, id };
+      if (d.pbx_uuid) meta.pbx_uuid = d.pbx_uuid;
+      const path = d.record_path || d.recording_path;
+      const name = d.record_name || d.recording_name;
+      if (path) meta.record_path = path;
+      if (name) meta.record_name = name;
+      if (d.domain_uuid) meta.domain_uuid = d.domain_uuid;
+      if (d.organization_id) meta.organization_id = d.organization_id;
+      const at = d.recorded_at || d.start_at || d.started_at;
+      if (at) meta.recorded_at = at;
+      const url = await loadPbxRecordingAudioMobile(
+        meta,
+        mobile.accessToken,
+        mobile.organizationId,
+        mobile.fusionpbxDomainUuid,
+      );
+      if (reqId !== idRef.current) return null;
+      return url || null;
     } catch (e: any) {
-      setAudioError(e?.message || 'Unable to load recording');
+      if (reqId !== idRef.current) return null;
+      const raw = String(e?.code || e?.message || '');
+      const denied = /forbidden|scope|403/i.test(raw) || e?.http_status === 403;
+      setAudioError(denied
+        ? 'You are not allowed to listen to this call (extension scope).'
+        : 'Unable to load recording');
       return null;
     } finally {
-      setLoadingAudio(false);
+      if (reqId === idRef.current) setLoadingAudio(false);
     }
-  }, [id, mobile.accessToken, mobile.fusionpbxDomainUuid, data]);
+  }, [id, mobile.accessToken, mobile.organizationId, mobile.fusionpbxDomainUuid, data]);
 
 
   const togglePlay = useCallback(async () => {

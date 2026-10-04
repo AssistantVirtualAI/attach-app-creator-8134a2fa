@@ -28,8 +28,10 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
   const [aiStage, setAiStage] = useState<AiStage>('idle');
   const errorRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const idRef = useRef(id);
+  idRef.current = id;
 
-  const load = useCallback(() => { mobileApi.callDetail(id).then(setData).catch(() => {}); }, [id]);
+  const load = useCallback(() => { const reqId = id; mobileApi.callDetail(id).then((d) => { if (reqId === idRef.current) setData(d); }).catch(() => {}); }, [id]);
   useEffect(() => { load(); }, [load]);
 
   // Auto-prefetch signed audio URL the moment we know a recording exists,
@@ -43,8 +45,6 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
   }, [data?.hasRecording]);
 
   // Cleanup audio on unmount or call change
-  const idRef = useRef(id);
-  idRef.current = id;
   useEffect(() => () => {
     audioRef.current?.pause();
     audioRef.current = null;

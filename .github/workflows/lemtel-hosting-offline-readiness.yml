@@ -5,11 +5,13 @@ on:
     paths:
       - '.github/workflows/lemtel-hosting-offline-readiness.yml'
       - 'scripts/lemtel-hosting-preflight*'
+      - 'scripts/lemtel-hosting-readiness*'
       - 'scripts/inventory-lemtel-hosting*'
       - 'scripts/lemtel-dependency-closure*'
       - 'schemas/lemtel-staging-admission/staging-admission-policy.json'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
+      - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
       - 'apps/ava-softphone-mobile/src/**'
       - 'apps/ava-softphone-desktop/src/**'
       - 'supabase/functions/**'
@@ -18,11 +20,13 @@ on:
     paths:
       - '.github/workflows/lemtel-hosting-offline-readiness.yml'
       - 'scripts/lemtel-hosting-preflight*'
+      - 'scripts/lemtel-hosting-readiness*'
       - 'scripts/inventory-lemtel-hosting*'
       - 'scripts/lemtel-dependency-closure*'
       - 'schemas/lemtel-staging-admission/staging-admission-policy.json'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
+      - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
       - 'apps/ava-softphone-mobile/src/**'
       - 'apps/ava-softphone-desktop/src/**'
       - 'supabase/functions/**'
@@ -40,8 +44,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test fail-closed hosting gate and read-only dependency inventory
-        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
+      - name: Test fail-closed hosting gate, inventory and readiness probe (offline mocks)
+        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/lemtel-hosting-readiness.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
       - name: Both destinations must remain blocked by the current policy
         shell: bash
         run: |

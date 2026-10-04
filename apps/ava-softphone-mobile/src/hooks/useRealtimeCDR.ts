@@ -55,7 +55,7 @@ export type SyncLogEntry = {
   source: 'realtime' | 'polling' | 'manual' | 'snapshot';
 };
 
-export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7, extensionFilter?: string | null) {
+export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7) {
   const [calls, setCalls] = useState<CallRecord[] | null>(null);
   const [transport, setTransport] = useState<CDRTransport>('idle');
   const [warning, setWarning] = useState<string | null>(null);
@@ -72,7 +72,7 @@ export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7, exten
     try {
       // Small page = fast paint on mobile. Realtime keeps the list fresh
       // beyond this initial snapshot, so 20 rows is plenty.
-      const d = await mobileApi.calls({ rangeDays, extension: extensionFilter, limit: 20 });
+      const d = await mobileApi.calls({ rangeDays, limit: 20 });
       setCalls(d);
       setLastSyncAt(Date.now());
       pushLog({ status: 'success', source: 'snapshot', reason: `Snapshot loaded (${Array.isArray(d) ? d.length : 0} CDRs)` });
@@ -81,7 +81,7 @@ export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7, exten
       setWarning(reason);
       pushLog({ status: 'failed', source: 'snapshot', reason });
     }
-  }, [pushLog, rangeDays, extensionFilter]);
+  }, [pushLog, rangeDays]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,19 +103,22 @@ export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7, exten
 
     const connect = async () => {
       if (cancelled) return;
-      const ext = creds?.extension;
-      const orgId = creds?.organizationId;
+      // Phase 26A — own_extension_only: no admin/org scope, no organizational fallback.
+      const ext = creds?.extension || '';
+      if (!ext) {
+        setTransport('idle');
+        setWarning('Call history will be available once an extension is assigned.');
+        return;
+      }
       // Get fresh token from Supabase session first, fall back to stored creds
       const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: null }));
       const token = sessionData?.session?.access_token || creds?.accessToken || null;
-      if (!token || (!ext && !orgId)) { startPolling('Missing credentials for realtime — polling.'); return; }
+      if (!token) { startPolling('Missing credentials for realtime — polling.'); return; }
 
       const sb = client(token);
-      // Prefer extension scope; fall back to organization scope when the user
-      // signed in via email and has no extension bound (e.g. org admins).
-      const adminScope = creds?.dataScope === 'domain_admin' || !!creds?.permissions?.admin;
-      const filter = adminScope && orgId ? `organization_id=eq.${orgId}` : ext ? `extension=eq.${ext}` : `organization_id=eq.${orgId}`;
-      const chanKey = adminScope && orgId ? `cdr-org-${orgId}` : ext ? `cdr-ext-${ext}` : `cdr-org-${orgId}`;
+      const filter = `extension=eq.${ext}`;
+      const chanKey = `cdr-ext-${ext}`;
+      const own = (r: any) => !!r && r.extension === ext;
       watchdog = setTimeout(() => {
         startPolling('Realtime unavailable — polling every 15s.');
       }, 8_000);
@@ -124,6 +127,7 @@ export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7, exten
         .channel(`${chanKey}-${attempt}`)
 
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pbx_call_records', filter }, (payload) => {
+          if (!own(payload.new)) return;
           const row = mapRow(payload.new);
           setCalls((prev) => {
             const list = prev || [];
@@ -134,6 +138,7 @@ export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7, exten
           pushLog({ status: 'success', source: 'realtime', reason: `INSERT ${row.id.slice(0, 8)}…` });
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pbx_call_records', filter }, (payload) => {
+          if (!own(payload.new)) return;
           const row = mapRow(payload.new);
           setCalls((prev) => (prev || []).map((c) => (c.id === row.id ? { ...c, ...row } : c)));
           setLastSyncAt(Date.now());
@@ -195,7 +200,7 @@ export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7, exten
       })();
     };
 
-    load();
+    if (creds?.extension) load();
     connect();
 
     const onVis = () => { if (document.visibilityState === 'visible') { load(); if (transport !== 'realtime') retryTickRef.current?.(); } };
@@ -212,7 +217,7 @@ export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7, exten
       window.removeEventListener('focus', load);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [creds?.extension, creds?.accessToken, creds?.organizationId, rangeDays, extensionFilter]);
+  }, [creds?.extension, creds?.accessToken, rangeDays]);
 
   return {
     calls,

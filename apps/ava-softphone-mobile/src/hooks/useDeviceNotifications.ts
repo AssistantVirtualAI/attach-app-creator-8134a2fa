@@ -30,10 +30,10 @@ export function useDeviceNotifications(creds: Creds | null) {
 
       const ext = creds.extension;
       const orgId = creds.organizationId;
-      const adminScope = creds.dataScope === 'domain_admin' || !!creds.permissions?.admin;
-      const cdrFilter = adminScope && orgId ? `organization_id=eq.${orgId}` : ext ? `extension=eq.${ext}` : `organization_id=eq.${orgId}`;
+      // Phase 26A — CDR notifications are own_extension_only; no admin/org fallback.
+      const cdrFilter = ext ? `extension=eq.${ext}` : null;
 
-      cdrCh = supabase.channel(`notif-cdr-${ext || orgId || 'all'}`)
+      if (cdrFilter) cdrCh = supabase.channel(`notif-cdr-${ext}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pbx_call_records', filter: cdrFilter }, (payload) => {
           const r: any = payload.new;
           const billsec = Number(r?.billsec ?? r?.duration_seconds ?? 0);

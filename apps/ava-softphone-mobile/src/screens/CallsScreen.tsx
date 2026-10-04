@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, Suspense, lazy } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { ImpactStyle } from '@capacitor/haptics';
 import { colors, font, radius, gradients } from '../lib/theme';
 import { mobileApi, CallRecord } from '../lib/mobileApi';
@@ -11,7 +11,6 @@ const RecordingsScreen = lazy(() => import('./RecordingsScreen'));
 import { useRealtimeCDR } from '../hooks/useRealtimeCDR';
 import type { Creds } from '../lib/creds';
 import { showMobileToast } from '../lib/mobileToast';
-import { restGet } from '../lib/mobileSupabase';
 import { useTr } from '../lib/i18n';
 import { dialNumber } from '../lib/dialNumber';
 
@@ -27,13 +26,10 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
   // Sync when parent updates from deep link (notification tap).
   useEffect(() => { if (initialSub) setSub(initialSub); }, [initialSub]);
   useEffect(() => { if (initialFilter) setFilter(initialFilter); }, [initialFilter]);
-  const [extFilter, setExtFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [rangeDays, setRangeDays] = useState<7 | 30>(7);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [myExt, setMyExt] = useState<string | null>(null);
-  const [domainExtensions, setDomainExtensions] = useState<string[]>([]);
-  const [fallbackDomainUuid, setFallbackDomainUuid] = useState<string | null>(null);
   const [number, setNumber] = useState('');
   const [dialError, setDialError] = useState<string | null>(null);
   const [dialDebug, setDialDebug] = useState<string | null>(null);
@@ -41,8 +37,8 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
 
   // Real-time CDR via Supabase Realtime (postgres_changes) with automatic
   // 15s polling fallback + visible warning if the realtime channel fails.
-  const queryExt = isAdmin && extFilter !== 'all' ? extFilter : null;
-  const { calls, transport, warning, dismissWarning } = useRealtimeCDR(creds || null, rangeDays, queryExt);
+  // Phase 26A — History is personal (own extension only), including for admins.
+  const { calls, transport, warning, dismissWarning } = useRealtimeCDR(creds || null, rangeDays);
 
   // Resolve admin + own extension to scope/filter the History list.
   useEffect(() => {
@@ -52,19 +48,9 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
       const admin = !!m?.permissions?.admin;
       setIsAdmin(admin);
       setMyExt(m?.extension?.number || null);
-      setFallbackDomainUuid(m?.domain?.fusionpbxDomainUuid || m?.organization?.fusionpbxDomainUuid || null);
-      if (!admin && m?.extension?.number) setExtFilter(m.extension.number);
     }).catch(() => { if (!cancelled) setIsAdmin(false); });
     return () => { cancelled = true; };
   }, [creds?.accessToken]);
-
-  useEffect(() => {
-    const domainUuid = creds?.domainUuid || creds?.fusionpbxDomainUuid || fallbackDomainUuid;
-    if (!creds?.accessToken || !domainUuid || !isAdmin) return;
-    restGet<{ extension: string }[]>(`/rest/v1/pbx_extensions_directory?select=extension&domain_uuid=eq.${encodeURIComponent(domainUuid)}&enabled=eq.true&order=extension.asc`, creds.accessToken)
-      .then((rows) => setDomainExtensions((rows || []).map((r) => String(r.extension)).filter(Boolean)))
-      .catch(() => setDomainExtensions([]));
-  }, [creds?.accessToken, creds?.domainUuid, creds?.fusionpbxDomainUuid, fallbackDomainUuid, isAdmin]);
 
   if (selected) return <CallDetailScreen id={selected} onBack={() => setSelected(null)} />;
 
@@ -74,8 +60,7 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
   const filtered = (calls || []).filter((c) => {
     const statusOk = filter === 'all' ? true : c.status === 'missed';
     if (!statusOk) return false;
-    if (isAdmin === false && myExt && !matchExt(c, myExt)) return false;
-    if (isAdmin && extFilter !== 'all' && !matchExt(c, extFilter)) return false;
+    if (myExt && !matchExt(c, myExt)) return false;
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       return [c.customer, c.from, c.to, c.extension, c.status, c.direction].filter(Boolean).join(' ').toLowerCase().includes(q);
@@ -83,13 +68,6 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
     return true;
   });
 
-  const extensionOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of domainExtensions) set.add(e);
-    for (const c of calls || []) if (c.extension) set.add(c.extension);
-    if (myExt) set.add(myExt);
-    return Array.from(set).sort();
-  }, [calls, domainExtensions, myExt]);
 
 
   const startCall = async (to: string) => {
@@ -203,17 +181,7 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
             ))}
           </div>
 
-          {isAdmin && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 2px 10px' }}>
-              <label style={{ fontSize: font.xs, color: colors.mutedSilver, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>{tr.calls.extension}</label>
-              <select value={extFilter} onChange={(e) => setExtFilter(e.target.value)} style={{ flex: 1, padding: '7px 10px', borderRadius: 10, border: `1px solid ${colors.border}`, background: 'rgba(255,255,255,0.06)', color: colors.textIce, fontSize: 12, fontWeight: 700 }}>
-                <option value="all">{tr.calls.allExtensions}</option>
-                {myExt && <option value={myExt}>{tr.calls.mine.replace('{ext}', myExt)}</option>}
-                {extensionOptions.filter((e) => e !== myExt).map((e) => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </div>
-          )}
-          {isAdmin === false && myExt && (
+          {myExt && (
             <div style={{ fontSize: font.xs, color: colors.mutedSilver, margin: '0 2px 10px' }}>{tr.calls.showingMine.replace('{ext}', myExt)}</div>
           )}
 

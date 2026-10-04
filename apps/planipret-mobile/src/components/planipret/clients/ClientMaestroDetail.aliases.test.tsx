@@ -14,6 +14,9 @@ const h = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     rpc: h.rpc,
+    channel: () => { const c: any = { on: () => c, subscribe: () => c, unsubscribe: () => {} }; return c; },
+    removeChannel: vi.fn(),
+    auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) },
     functions: { invoke: vi.fn(async () => ({ data: null, error: null })) },
     from: () => {
       const q: any = new Proxy({}, { get: (_t, p) => (p === "then" ? (r: any) => r({ data: [], error: null }) : () => q) });

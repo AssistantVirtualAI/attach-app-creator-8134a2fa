@@ -24,21 +24,24 @@ const git = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "u
 const guard = () => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { cwd: root, encoding: "utf8" });
 const isProtected = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
 
-// Frozen end = first commit after BASE that adds this test file; before that, include pending changes.
+// Frozen end = last commit after BASE touching a phase-only file (this test or the component test);
+// automatic commits may split the phase. Pending phase changes are included until committed.
+const PHASE_ONLY = [SELF, VMTEST];
+const pendingPaths = () => git("status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3)).filter(Boolean);
 const frozenEnd = (): string | null => {
-  const out = git("log", "--reverse", "--format=%H", "--diff-filter=A", `${BASE}..HEAD`, "--", SELF).trim();
-  return out ? out.split("\n")[0] : null;
+  const out = git("log", "-1", "--format=%H", `${BASE}..HEAD`, "--", ...PHASE_ONLY).trim();
+  return out || null;
 };
+const hasPending = () => pendingPaths().some((p) => FILES.includes(p));
 const changed = () => {
   const end = frozenEnd();
-  if (end) return git("diff", "--name-only", "--no-renames", `${BASE}..${end}`).split("\n").filter(Boolean).sort();
-  const committed = git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n");
-  const pending = git("status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3));
+  const committed = git("diff", "--name-only", "--no-renames", `${BASE}..${end ?? "HEAD"}`).split("\n");
+  const pending = hasPending() || !end ? pendingPaths() : [];
   return [...new Set([...committed, ...pending].filter(Boolean))].sort();
 };
 const added = (f: string) => {
   const end = frozenEnd();
-  const args = end ? ["diff", "--no-renames", "-U0", `${BASE}..${end}`, "--", f] : ["diff", "--no-renames", "-U0", BASE, "--", f];
+  const args = end && !hasPending() ? ["diff", "--no-renames", "-U0", `${BASE}..${end}`, "--", f] : ["diff", "--no-renames", "-U0", BASE, "--", f];
   return git(...args).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
 };
 

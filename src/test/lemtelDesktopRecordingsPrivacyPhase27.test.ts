@@ -66,7 +66,7 @@ describe("Lemtel Phase 27B — Desktop recordings privacy", () => {
     expect(s).toContain("if (pending) clearTimeout(pending);");
     expect(s).toContain("supabase.removeChannel(channel)");
     expect(s).toContain("audioCache.clear();");
-    expect(s).toContain("return () => { audioCache.clear(); };");
+    expect(s).toContain("return () => { genRef.current += 1; audioCache.clear(); };");
   });
 
   it("avaApi personal methods resolve the extension from getMeContext and refuse its absence", () => {

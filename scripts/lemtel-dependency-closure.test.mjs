@@ -23,6 +23,11 @@ test('actual Lemtel clients and import graph remain discovery, never a deploymen
   assert.ok(report.client_dependencies.some((item) => item.function === 'fusionpbx-proxy' && item.entrypoint_present));
   assert.ok(report.function_import_closures.some((item) => item.function === 'fusionpbx-proxy'));
   assert.ok(report.function_import_closures.every((item) => item.classification === 'manual_review' && item.dynamic_calls_and_sql_dependencies_review_required));
+  assert.deepEqual(report.client_callsite_findings.map((item) => item.client),
+    ['ava-softphone-mobile', 'ava-softphone-desktop']);
+  assert.ok(report.client_callsite_findings.every((item) => item.heuristic_manual_review_required &&
+    item.unattributed_invocation_count >= 0 && item.interpolated_api_path_count >= 0 &&
+    item.review_source_paths.every((path) => path.startsWith(`apps/${item.client}/src/`))));
   assert.deepEqual(audit(repo), report);
 });
 
@@ -70,6 +75,37 @@ test('a missing relative import is a blocking review signal, not an inferred cle
     const row = audit(root).function_import_closures.find((item) => item.function === 'lemtel-test');
     assert.equal(row.unresolved_relative_import_count, 1);
     assert.equal(row.dynamic_calls_and_sql_dependencies_review_required, true);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('computed client calls and interpolated endpoint paths remain review findings, not function names', () => {
+  const root = mkdtempSync(join(tmpdir(), 'lemtel-closure-'));
+  try {
+    make(root, 'supabase/migrations/01.sql', 'CREATE TABLE public.lemtel_calls (id uuid);\n');
+    make(root, 'supabase/functions/lemtel-valid/index.ts', 'export const run = () => true;\n');
+    make(root, 'apps/ava-softphone-mobile/src/main.ts', `const secret = 'DO_NOT_PRINT_THIS';
+client.functions.invoke('lemtel-valid');
+client.functions.invoke(computedName);
+client.functions.invoke('lemtel-phantom' + suffix);
+fetch(\`\${api}/functions/v1/\${secret}\`);
+fetch(\`\${api}/functions/v1/lemtel-phantom\${secret}\`);
+`);
+    make(root, 'apps/ava-softphone-desktop/src/main.ts', 'client.functions.invoke(dynamic + suffix);\n');
+    const report = audit(root);
+    assert.deepEqual(report.client_dependencies.map((item) => item.function), ['lemtel-valid']);
+    assert.deepEqual(report.client_callsite_findings, [
+      { client: 'ava-softphone-mobile', invocation_callsite_count: 3,
+        unattributed_invocation_count: 2, interpolated_api_path_count: 2,
+        review_source_paths: ['apps/ava-softphone-mobile/src/main.ts'],
+        heuristic_manual_review_required: true },
+      { client: 'ava-softphone-desktop', invocation_callsite_count: 1,
+        unattributed_invocation_count: 1, interpolated_api_path_count: 0,
+        review_source_paths: ['apps/ava-softphone-desktop/src/main.ts'],
+        heuristic_manual_review_required: true },
+    ]);
+    assert.ok(!JSON.stringify(report).includes('DO_NOT_PRINT_THIS'));
+    assert.ok(!JSON.stringify(report).includes('computedName'));
+    assert.ok(!JSON.stringify(report).includes(root));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

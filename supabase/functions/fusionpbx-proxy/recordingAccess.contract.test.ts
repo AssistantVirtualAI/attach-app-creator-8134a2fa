@@ -58,8 +58,10 @@ Deno.test("user–organization–extension match stays mandatory", () => {
 });
 
 Deno.test("client values take no part in decision nor in user read params", () => {
-  for (const bad of ["params", "body.", "domain_name", "record_path", "record_name", "local_recording_url"]) {
-    assertEquals(helper.includes(bad), false, bad);
+  // The server-side select string is excluded: it names DB columns, not client input.
+  const decision = helper.replace(/const recordSelect = "[^"]*";/, "");
+  for (const bad of ["params", "body.", "domain_name", "domain_uuid", "record_path", "record_name", "local_recording_url"]) {
+    assertEquals(decision.includes(bad), false, bad);
   }
   // Normalizer is pure and only reads `record`.
   for (const bad of ["await", "admin.", "fetch(", "params", "body", "clientParams", "signedParams"]) {

@@ -196,6 +196,9 @@ function AuthenticatedShell({
   const clientConfig = useLemtelMobileClientConfig(creds?.accessToken || null);
   const sipAllowed = clientConfig.sipAllowed;
   const portalTelephonyPolicy = clientConfig.manifest?.telephonyPolicy ?? null;
+  // Phase 25A — restrictive: anything but exactly 'enabled' is 'disabled'.
+  const voicemailPolicy: 'enabled' | 'disabled' =
+    portalTelephonyPolicy?.voicemailPolicy === 'enabled' ? 'enabled' : 'disabled';
   // Phase 24A — manual recording only for the exact validated 'user_allowed'; everything else is restrictive.
   const rawRecordingPolicy = portalTelephonyPolicy?.recordingPolicy;
   const recordingPolicy: 'not_allowed' | 'user_allowed' | 'portal_managed' =
@@ -626,7 +629,7 @@ function AuthenticatedShell({
           <Suspense fallback={<ScreenSkeleton />}>
             {tab === 'contacts'   && <ContactsScreen sp={sp} />}
             {tab === 'chats'      && <MessagesHubScreen accessToken={creds.accessToken || null} userId={creds.userId} sp={sp} haptic={haptic} channelUnread={notif.channelUnread} />}
-            {tab === 'calls'      && <CallsScreen sp={sp} haptic={haptic} creds={creds} initialSub={callsSub} initialFilter={callsFilter} />}
+            {tab === 'calls'      && <CallsScreen sp={sp} haptic={haptic} creds={creds} initialSub={callsSub} initialFilter={callsFilter} voicemailPolicy={voicemailPolicy} />}
             {tab === 'keypad'     && <DialerScreen sp={sp} haptic={haptic} />}
             {tab === 'speeddial'  && <SpeedDialScreen sp={sp} preferClickToCall={preferClickToCall} />}
             {/* legacy deep-link routes */}
@@ -634,8 +637,8 @@ function AuthenticatedShell({
             {tab === 'ava'        && <AVAChatScreen />}
             {tab === 'messages'   && <MessagesHubScreen accessToken={creds.accessToken || null} userId={creds.userId} sp={sp} haptic={haptic} channelUnread={notif.channelUnread} />}
             {tab === 'settings'   && <SettingsScreen creds={creds} sp={sp} onSignOut={onSignOut} onNavigate={setTab as any} preferClickToCall={preferClickToCall} togglePreferC2C={onTogglePreferC2C} portalTelephonyPolicy={portalTelephonyPolicy} />}
-            {tab === 'more'       && <MoreScreen creds={creds} sp={sp} onSignOut={onSignOut} haptic={haptic} portalTelephonyPolicy={portalTelephonyPolicy} />}
-            {tab === 'voicemail'  && <VoicemailScreen haptic={haptic} />}
+            {tab === 'more'       && <MoreScreen creds={creds} sp={sp} onSignOut={onSignOut} haptic={haptic} portalTelephonyPolicy={portalTelephonyPolicy} voicemailPolicy={voicemailPolicy} />}
+            {tab === 'voicemail'  && <VoicemailScreen haptic={haptic} voicemailPolicy={voicemailPolicy} />}
             {tab === 'sms'        && <MessagesScreen haptic={haptic} />}
             {tab === 'queues'     && <QueuesScreen />}
             {tab === 'audiodiag'  && <AudioDiagnosticsScreen />}

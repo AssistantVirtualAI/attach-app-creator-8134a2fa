@@ -18,19 +18,25 @@
 import { Capacitor } from '@capacitor/core';
 import { loadPbxRecordingAudioMobile } from './mobileSupabase';
 
-const META_KEY_PREFIX = 'ava.recordingCache.v1.';
+const META_KEY_PREFIX = 'ava.recordingCache.v2.';
+export type RecordingScope = { userId: string; organizationId: string; extension: string };
+let cacheEpoch = 0;
+
+function scopeKey(scope?: RecordingScope | null): string | null {
+  if (!scope?.userId?.trim() || !scope.organizationId?.trim() || !scope.extension?.trim()) return null;
+  return `${scope.userId.trim()}|${scope.organizationId.trim()}|${scope.extension.trim()}`;
+}
+
+function scopedFile(id: string, scope: RecordingScope) {
+  return `recordings/v2/${sanitizeId(scope.userId)}-${sanitizeId(scope.organizationId)}-${sanitizeId(scope.extension)}/${sanitizeId(id)}`;
+}
 
 // Files confirmed missing this session — skip stat, go straight to download.
 const knownMissingIds = new Set<string>();
 
 type RecMeta = {
-  recording_path?: string | null;
   recording_name?: string | null;
   xml_cdr_uuid?: string | null;
-  domain_uuid?: string | null;
-  domain_name?: string | null;
-  organization_id?: string | null;
-  start_at?: string | null;
 };
 
 function sanitizeId(id: string) {
@@ -57,24 +63,25 @@ function extFromContentType(blobType: string | undefined): string | null {
 }
 
 function pickExt(blobType: string | undefined, recordingName: string | undefined, cid: string): string {
+  const fromType = extFromContentType(blobType);
+  if (fromType) return fromType;
   const nameLower = (recordingName || '').toLowerCase();
   for (const ext of KNOWN_EXTS) {
     if (nameLower.endsWith('.' + ext)) return ext;
   }
-  const fromType = extFromContentType(blobType);
-  if (fromType) return fromType;
   console.warn('[recordingCache] cid=' + cid + ' action=pick-ext fallback=wav', { contentType: blobType || null, recordingName: recordingName || null });
   return 'wav';
 }
 
 
-async function findExistingFile(id: string): Promise<string | null> {
+async function findExistingFile(id: string, scope: RecordingScope): Promise<string | null> {
   if (!Capacitor.isNativePlatform()) return null;
   try {
     const { Filesystem, Directory } = await import(/* @vite-ignore */ '@capacitor/filesystem');
-    const base = sanitizeId(id);
-    // Probe known extensions plus the legacy ".audio" name for backward compat.
-    const candidates = [...KNOWN_EXTS.map((e) => `recordings/${base}.${e}`), `recordings/${base}.audio`];
+    const base = scopedFile(id, scope);
+    // Never probe v1 recordings/<id>.*: they have no owner and could belong
+    // to another user on this device. No file migration is performed.
+    const candidates = KNOWN_EXTS.map((e) => `${base}.${e}`);
     for (const path of candidates) {
       try {
         const st = await Filesystem.stat({ path, directory: Directory.Data });
@@ -94,45 +101,68 @@ async function findExistingFile(id: string): Promise<string | null> {
  * it must download the file. We also add the id to knownMissingIds so
  * subsequent calls skip the stat entirely.
  */
-async function getCachedNativePath(id: string): Promise<string | null> {
+async function getCachedNativePath(id: string, scope: RecordingScope): Promise<string | null> {
   if (!Capacitor.isNativePlatform()) return null;
+  const key = `${scopeKey(scope)}|${id}`;
 
   // Fast-path: already confirmed missing this session.
-  if (knownMissingIds.has(id)) return null;
+  if (knownMissingIds.has(key)) return null;
 
   try {
     const { Filesystem, Directory } = await import(/* @vite-ignore */ '@capacitor/filesystem');
-    const found = await findExistingFile(id);
+    const found = await findExistingFile(id, scope);
     if (!found) {
-      knownMissingIds.add(id);
+      knownMissingIds.add(key);
       return null;
     }
     const statResult = await Filesystem.stat({ path: found, directory: Directory.Data });
     if (!statResult || (statResult.size !== undefined && statResult.size === 0)) {
-      knownMissingIds.add(id);
+      knownMissingIds.add(key);
       return null;
     }
     const uri = await Filesystem.getUri({ path: found, directory: Directory.Data });
     return Capacitor.convertFileSrc(uri.uri);
   } catch {
-    knownMissingIds.add(id);
+    knownMissingIds.add(key);
     return null;
   }
 }
 
 const webBlobCache = new Map<string, string>();
 
-export async function getCachedRecordingUrl(id: string): Promise<string | null> {
-  if (Capacitor.isNativePlatform()) return getCachedNativePath(id);
-  return webBlobCache.get(id) || null;
+export async function getCachedRecordingUrl(id: string, scope?: RecordingScope | null): Promise<string | null> {
+  const key = scopeKey(scope);
+  if (!key || !scope) return null;
+  const epoch = cacheEpoch;
+  const value = Capacitor.isNativePlatform() ? await getCachedNativePath(id, scope) : webBlobCache.get(`${key}|${id}`) || null;
+  return epoch === cacheEpoch ? value : null;
 }
 
 /**
  * Call this after a successful download to clear the missing-file flag so
  * subsequent getCachedRecordingUrl calls return the freshly-written file.
  */
-export function markRecordingCached(id: string) {
-  knownMissingIds.delete(id);
+export function markRecordingCached(id: string, scope: RecordingScope) {
+  knownMissingIds.delete(`${scopeKey(scope)}|${id}`);
+}
+
+export async function clearRecordingCache(): Promise<void> {
+  cacheEpoch++;
+  knownMissingIds.clear();
+  for (const url of webBlobCache.values()) { try { URL.revokeObjectURL(url); } catch {} }
+  webBlobCache.clear();
+  try {
+    const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)).filter(Boolean) as string[];
+    for (const key of keys) {
+      if (key.startsWith(META_KEY_PREFIX) || key.startsWith('ava.recordingCache.v1.')) localStorage.removeItem(key);
+    }
+  } catch { /* storage unavailable */ }
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const { Filesystem, Directory } = await import(/* @vite-ignore */ '@capacitor/filesystem');
+      await Filesystem.rmdir({ path: 'recordings', directory: Directory.Data, recursive: true });
+    }
+  } catch { /* already absent or device offline; v1 files are never read */ }
 }
 
 /**
@@ -145,10 +175,17 @@ export async function downloadRecording(
   accessToken: string | null,
   organizationId: string | null,
   domainUuidFallback: string | null,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; scope?: RecordingScope | null } = {},
 ): Promise<string> {
+  const scope = opts.scope;
+  if (!scopeKey(scope) || !scope) throw new Error('Authenticated recording scope required');
+  const epoch = cacheEpoch;
+  const assertActive = () => {
+    if (epoch !== cacheEpoch) throw new Error('Recording session changed');
+  };
   if (!opts.force) {
-    const existing = await getCachedRecordingUrl(id);
+    const existing = await getCachedRecordingUrl(id, scope);
+    assertActive();
     if (existing) return existing;
   }
 
@@ -156,27 +193,23 @@ export async function downloadRecording(
     {
       id,
       xml_cdr_uuid: meta.xml_cdr_uuid || undefined,
-      recording_path: meta.recording_path || undefined,
-      recording_name: meta.recording_name || undefined,
-      domain_uuid: meta.domain_uuid || undefined,
-      domain_name: meta.domain_name || undefined,
-      organization_id: meta.organization_id || undefined,
-      start_at: meta.start_at || undefined,
     },
     accessToken,
     organizationId,
     domainUuidFallback,
     { skipCache: true },
   );
+  assertActive();
 
   const cid = sanitizeId(id);
   // Validate it's a real HTTP(S) URL — never a stale blob: URL that fetch() can't read.
   if (!/^https?:\/\//i.test(signedUrl)) {
-    console.error('[recordingCache] cid=' + cid + ' action=invalid-url', { signedUrl: signedUrl.slice(0, 40) });
+    console.error('[recordingCache] cid=' + cid + ' action=invalid-url');
     throw new Error('Invalid recording URL — not an HTTP URL');
   }
   console.log('[recordingCache] cid=' + cid + ' action=fetch-start', { force: !!opts.force });
   const resp = await fetch(signedUrl);
+  assertActive();
   if (!resp.ok) {
     console.error('[recordingCache] cid=' + cid + ' action=fetch-fail', { status: resp.status });
     throw new Error(`Download failed: HTTP ${resp.status}`);
@@ -184,6 +217,7 @@ export async function downloadRecording(
   const contentType = resp.headers.get('content-type') || '';
   const contentLength = Number(resp.headers.get('content-length') || '0') || 0;
   const blob = await resp.blob();
+  assertActive();
   const effectiveType = blob.type || contentType;
 
   // Stronger validation: refuse empty / suspiciously small / non-audio payloads.
@@ -206,31 +240,44 @@ export async function downloadRecording(
   if (Capacitor.isNativePlatform()) {
     const { Filesystem, Directory } = await import(/* @vite-ignore */ '@capacitor/filesystem');
     const buf = await blob.arrayBuffer();
+    assertActive();
     if (buf.byteLength === 0) throw new Error('Download failed: empty audio buffer (0 bytes)');
     const b64 = arrayBufferToBase64(buf);
-    try { await Filesystem.mkdir({ path: 'recordings', directory: Directory.Data, recursive: true }); } catch {}
+    const directory = scopedFile(id, scope).replace(/\/[^/]+$/, '');
+    try { await Filesystem.mkdir({ path: directory, directory: Directory.Data, recursive: true }); } catch {}
     let ext = pickExt(effectiveType, meta.recording_name || undefined, cid);
     if (!KNOWN_EXTS.includes(ext)) {
       const fallback = extFromContentType(effectiveType) || 'wav';
       console.warn('[recordingCache] cid=' + cid + ' action=ext-unknown fallback=' + fallback, { derived: ext, contentType: effectiveType });
       ext = fallback;
     }
-    console.log('[recordingCache] cid=' + cid + ' action=write', { ext, contentType: effectiveType || '(none)', size: buf.byteLength, recordingName: meta.recording_name || null });
-    const path = `recordings/${cid}.${ext}`;
+    console.log('[recordingCache] cid=' + cid + ' action=write', { ext, contentType: effectiveType || '(none)', size: buf.byteLength });
+    const path = `${scopedFile(id, scope)}.${ext}`;
+    assertActive();
     await Filesystem.writeFile({ path, directory: Directory.Data, data: b64 });
-    try { localStorage.setItem(META_KEY_PREFIX + id, JSON.stringify({ at: Date.now(), size: buf.byteLength, ext, contentType: effectiveType || null })); } catch {}
+    if (epoch !== cacheEpoch) {
+      try { await Filesystem.deleteFile({ path, directory: Directory.Data }); } catch {}
+      throw new Error('Recording session changed');
+    }
+    try { localStorage.setItem(META_KEY_PREFIX + scopeKey(scope) + '|' + id, JSON.stringify({ at: Date.now(), size: buf.byteLength, ext, contentType: effectiveType || null })); } catch {}
     // Clear the missing flag now that the file is written.
-    markRecordingCached(id);
+    markRecordingCached(id, scope);
     const uri = await Filesystem.getUri({ path, directory: Directory.Data });
+    assertActive();
     const src = Capacitor.convertFileSrc(uri.uri);
-    console.log('[recordingCache] cid=' + cid + ' action=ready', { ext, src });
+    console.log('[recordingCache] cid=' + cid + ' action=ready', { ext });
     return src;
 
   } else {
     const url = URL.createObjectURL(blob);
-    const prev = webBlobCache.get(id);
+    if (epoch !== cacheEpoch) {
+      URL.revokeObjectURL(url);
+      throw new Error('Recording session changed');
+    }
+    const key = `${scopeKey(scope)}|${id}`;
+    const prev = webBlobCache.get(key);
     if (prev) { try { URL.revokeObjectURL(prev); } catch {} }
-    webBlobCache.set(id, url);
+    webBlobCache.set(key, url);
     console.log('[recordingCache] cid=' + cid + ' action=ready-web', { contentType: effectiveType, size: blob.size });
     return url;
   }
@@ -250,8 +297,9 @@ export async function prefetchRecordings(
   accessToken: string | null,
   organizationId: string | null,
   domainUuidFallback: string | null,
-  opts: { concurrency?: number } = {},
+  opts: { concurrency?: number; scope?: RecordingScope | null } = {},
 ): Promise<void> {
+  if (!scopeKey(opts.scope)) return;
   const concurrency = Math.max(1, Math.min(4, opts.concurrency ?? 2));
   let i = 0;
   const workers: Promise<void>[] = [];
@@ -261,11 +309,11 @@ export async function prefetchRecordings(
         const idx = i++;
         const it = items[idx];
         try {
-          const cached = await getCachedRecordingUrl(it.id);
+          const cached = await getCachedRecordingUrl(it.id, opts.scope);
           if (cached) continue;
           // getCachedRecordingUrl returned null — either the file was never
           // downloaded or iOS evicted it. Download it now.
-          await downloadRecording(it.id, it.meta, accessToken, organizationId, domainUuidFallback);
+          await downloadRecording(it.id, it.meta, accessToken, organizationId, domainUuidFallback, { scope: opts.scope });
         } catch { /* ignore individual failures — try the next item */ }
       }
     })());

@@ -16,7 +16,8 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
   const { lang } = useT();
   const fr = lang === 'fr';
   const [debugOpen, setDebugOpen] = useState(false);
-  const [data, setData] = useState<CallDetail | null>(null);
+  const [storedData, setData] = useState<CallDetail | null>(null);
+  const [dataKey, setDataKey] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loadingAudio, setLoadingAudio] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -28,33 +29,35 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
   const [aiStage, setAiStage] = useState<AiStage>('idle');
   const errorRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const idRef = useRef(id);
-  idRef.current = id;
+  const requestKey = `${id}:${mobile.userId || ''}:${mobile.organizationId || ''}:${mobile.extension || ''}:${mobile.accessToken || ''}`;
+  const requestKeyRef = useRef(requestKey);
+  requestKeyRef.current = requestKey;
+  const data = dataKey === requestKey ? storedData : null;
 
-  const load = useCallback(() => { const reqId = id; mobileApi.callDetail(id).then((d) => { if (reqId === idRef.current) setData(d); }).catch(() => {}); }, [id]);
+  const load = useCallback(() => { const key = requestKey; mobileApi.callDetail(id).then((d) => { if (key === requestKeyRef.current) { setData(d); setDataKey(key); } }).catch(() => {}); }, [id, requestKey]);
   useEffect(() => { load(); }, [load]);
 
   // Auto-prefetch signed audio URL the moment we know a recording exists,
   // so the Play button is instant on tap. Silent failure (audioError state
   // surfaces it inline) — never throws into the screen.
   useEffect(() => {
-    if (data?.hasRecording && !audioUrl && !loadingAudio) {
+    if (dataKey === requestKey && data?.hasRecording && !audioUrl && !loadingAudio) {
       fetchUrl().then((u) => { if (u) setAudioUrl(u); });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.hasRecording]);
+  }, [data?.hasRecording, dataKey, requestKey]);
 
   // Cleanup audio on unmount or call change
   useEffect(() => () => {
     audioRef.current?.pause();
     audioRef.current = null;
-  }, [id]);
-  // Phase 29B — a new call id never reuses the previous CDR or audio.
+  }, [requestKey]);
+  // Phase 30A — neither a new CDR nor a new account/extension can reuse audio.
   const firstIdRef = useRef(true);
   useEffect(() => {
     if (firstIdRef.current) { firstIdRef.current = false; return; }
-    setData(null); setAudioUrl(null); setAudioError(null); setLoadingAudio(false); setPlaying(false); setCur(0); setDur(0);
-  }, [id]);
+    setData(null); setDataKey(null); setAudioUrl(null); setAudioError(null); setLoadingAudio(false); setPlaying(false); setCur(0); setDur(0);
+  }, [requestKey]);
 
   // Phase 29B — single authenticated audio path: the shared helper. Metadata
   // comes only from the loaded CDR (`data`) and the detail `id`; the server
@@ -62,29 +65,20 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
   const fetchUrl = useCallback(async (): Promise<string | null> => {
     setAudioError(null);
     setLoadingAudio(true);
-    const reqId = id;
+    const key = requestKey;
     try {
       const d: any = data || {};
       const meta: any = { xml_cdr_uuid: d.pbx_uuid || id, id };
-      if (d.pbx_uuid) meta.pbx_uuid = d.pbx_uuid;
-      const path = d.record_path || d.recording_path;
-      const name = d.record_name || d.recording_name;
-      if (path) meta.record_path = path;
-      if (name) meta.record_name = name;
-      if (d.domain_uuid) meta.domain_uuid = d.domain_uuid;
-      if (d.organization_id) meta.organization_id = d.organization_id;
-      const at = d.recorded_at || d.start_at || d.started_at;
-      if (at) meta.recorded_at = at;
       const url = await loadPbxRecordingAudioMobile(
         meta,
         mobile.accessToken,
         mobile.organizationId,
         mobile.fusionpbxDomainUuid,
       );
-      if (reqId !== idRef.current) return null;
+      if (key !== requestKeyRef.current) { if (url?.startsWith('blob:')) URL.revokeObjectURL(url); return null; }
       return url || null;
     } catch (e: any) {
-      if (reqId !== idRef.current) return null;
+      if (key !== requestKeyRef.current) return null;
       const raw = String(e?.code || e?.message || '');
       const denied = /forbidden|scope|403/i.test(raw) || e?.http_status === 403;
       setAudioError(denied
@@ -92,12 +86,13 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
         : 'Unable to load recording');
       return null;
     } finally {
-      if (reqId === idRef.current) setLoadingAudio(false);
+      if (key === requestKeyRef.current) setLoadingAudio(false);
     }
-  }, [id, mobile.accessToken, mobile.organizationId, mobile.fusionpbxDomainUuid, data]);
+  }, [id, requestKey, mobile.accessToken, mobile.organizationId, mobile.fusionpbxDomainUuid, data]);
 
 
   const togglePlay = useCallback(async () => {
+    if (requestKey !== requestKeyRef.current || dataKey !== requestKey) return;
     if (playing && audioRef.current) {
       audioRef.current.pause();
       setPlaying(false);
@@ -107,31 +102,33 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
     if (!url) {
       url = await fetchUrl();
       if (!url) return;
+      if (requestKey !== requestKeyRef.current) return;
       setAudioUrl(url);
     }
     audioRef.current?.pause();
     const audio = new Audio(url);
-    audio.ontimeupdate = () => setCur(audio.currentTime);
-    audio.onloadedmetadata = () => setDur(audio.duration || data?.durationSec || 0);
+    audio.ontimeupdate = () => { if (requestKey === requestKeyRef.current) setCur(audio.currentTime); };
+    audio.onloadedmetadata = () => { if (requestKey === requestKeyRef.current) setDur(audio.duration || data?.durationSec || 0); };
     audio.onended = () => {
+      if (requestKey !== requestKeyRef.current) return;
       setPlaying(false);
       setCur(0);
       if (data && !data.transcript?.length) transcribe();
     };
     audio.onerror = () => {
+      if (requestKey !== requestKeyRef.current) return;
       setAudioError('Playback failed');
       setPlaying(false);
     };
     audioRef.current = audio;
     try {
       await audio.play();
-      setPlaying(true);
+      if (requestKey === requestKeyRef.current) setPlaying(true);
     } catch {
-      setAudioError('Playback failed — tap retry');
-      setPlaying(false);
+      if (requestKey === requestKeyRef.current) { setAudioError('Playback failed — tap retry'); setPlaying(false); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, audioUrl, fetchUrl, data]);
+  }, [playing, audioUrl, fetchUrl, data, dataKey, requestKey]);
 
   const retry = useCallback(async () => {
     setAudioUrl(null);
@@ -141,18 +138,14 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
   }, [togglePlay]);
 
   const transcribe = useCallback(async () => {
-    if (transcribing) return;
+    if (transcribing || dataKey !== requestKey) return;
+    const key = requestKey;
     setTranscribing(true);
     setTranscribeError(null);
     setAiStage('transcribing');
     try {
-      const t = await mobileApi.transcribeCall(id, {
-        recording_path: (data as any)?.recording_path,
-        recording_name: (data as any)?.recording_name,
-        domain_uuid: (data as any)?.domain_uuid,
-        xml_cdr_uuid: (data as any)?.pbx_uuid || id,
-        organization_id: (data as any)?.organization_id,
-      });
+      const t = await mobileApi.transcribeCall(id);
+      if (key !== requestKeyRef.current) return;
       if (t?.stub || t?.error) {
         const reason = t.reason || t.error || '';
         const fetchTxt = (t.fetchErrors || []).join(' ');
@@ -173,20 +166,23 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
 
       setAiStage('analyzing');
       await mobileApi.analyzeCall(id);
+      if (key !== requestKeyRef.current) return;
       // Poll once for the freshly written transcript/insights
       await new Promise((r) => setTimeout(r, 1500));
+      if (key !== requestKeyRef.current) return;
       load();
       setAiStage('done');
       showMobileToast('AI analysis: déjà traité et mis en cache.', 'success');
     } catch (e: any) {
+      if (key !== requestKeyRef.current) return;
       const msg = e?.message || 'Transcription failed';
       setTranscribeError(msg);
       setAiStage('error');
       showMobileToast(`Transcription/scoring failed — tap to view error`, 'error', () => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     } finally {
-      setTranscribing(false);
+      if (key === requestKeyRef.current) setTranscribing(false);
     }
-  }, [id, transcribing, load]);
+  }, [id, transcribing, load, dataKey, requestKey]);
 
   const seek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current || !dur) return;

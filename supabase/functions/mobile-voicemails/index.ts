@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     let q = sb.from("pbx_call_records")
       .select(`
         id, caller_name, caller_number, start_at, duration_seconds, voicemail_message,
-        organization_id, pbx_uuid, domain_uuid, domain_name, recording_path, recording_name,
+        pbx_uuid,
         pbx_call_transcripts(transcript_text),
         pbx_ai_insights(summary, sentiment)
       `)
@@ -59,13 +59,8 @@ Deno.serve(async (req) => {
         priority: ai?.sentiment === "negative" ? "high" : "normal",
         sentiment: ai?.sentiment || "neutral",
         isNew: now - new Date(r.start_at).getTime() < 24 * 36e5,
-        // Metadata for the signed-URL audio proxy (fusionpbx-proxy get-recording-signed-url).
+        // The audio proxy resolves all file metadata from this server-owned CDR.
         xml_cdr_uuid: r.pbx_uuid || r.id,
-        record_path: r.recording_path || undefined,
-        record_name: r.recording_name || undefined,
-        domain_uuid: r.domain_uuid || undefined,
-        domain_name: r.domain_name || undefined,
-        organization_id: r.organization_id,
       };
     });
     return json(out);

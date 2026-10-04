@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Store, Creds, hydrateSoftphoneCredentials } from '../lib/creds';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../lib/mobileSupabase';
 
 /**
  * Shared mobile credentials hook. Returns the SIP domain context every screen
@@ -22,18 +22,25 @@ export function useMobileCredentials() {
       
       // Always get fresh token from Supabase session
       const { data: sessionData } = await supabase.auth.getSession();
-      const freshToken = sessionData?.session?.access_token || stored?.accessToken || null;
-      const freshRefresh = sessionData?.session?.refresh_token || stored?.refreshToken || null;
+      if (cancelled) return;
+      const session = sessionData?.session;
+      if (!session?.user?.id || !stored?.userId || session.user.id !== stored.userId) {
+        setCreds(null); setLoading(false); return;
+      }
+      const freshToken = session.access_token;
+      const freshRefresh = session.refresh_token;
       
       if (stored?.extension && (stored.domainUuid || stored.fusionpbxDomainUuid) && stored.organizationId) {
-        setCreds({ ...stored, accessToken: freshToken || stored.accessToken, refreshToken: freshRefresh || stored.refreshToken });
+        setCreds({ ...stored, accessToken: freshToken, refreshToken: freshRefresh });
         setLoading(false);
         return;
       }
       const hydrated = await hydrateSoftphoneCredentials('mobile').catch(() => null);
       if (cancelled) return;
+      const { data: current } = await supabase.auth.getSession();
+      if (cancelled || current.session?.user?.id !== session.user.id) return;
       const result = hydrated || stored || null;
-      setCreds(result ? { ...result, accessToken: freshToken || result.accessToken, refreshToken: freshRefresh || result.refreshToken } : null);
+      setCreds(result && result.userId === session.user.id ? { ...result, accessToken: freshToken, refreshToken: freshRefresh } : null);
       setLoading(false);
     })();
     return () => { cancelled = true; };

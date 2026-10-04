@@ -4,6 +4,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { mirrorCallAnalysisToMaestro } from "../_shared/maestro-telecom.ts";
 import { callAnthropic } from "../_shared/anthropic.ts";
 import { authorizeCallAccess, allowCallViewing } from "../_shared/planipret-call-access.ts";
+import { resolveAuthorizedTranscription } from "../ai-transcribe-call/recordingAuthority.ts";
 
 
 const SYSTEM_PROMPT = `Tu es un analyste IA spécialisé en appels téléphoniques et coaching d'agents.
@@ -60,22 +61,20 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (pbxCall) {
-      organization_id = organization_id || (pbxCall as any).organization_id;
       const isServiceCall = authHeader === `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
       if (!user && !isServiceCall) {
         return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      if (user) {
-        const [m1, m2, m3, m4] = await Promise.all([
-          admin.from("organization_members").select("organization_id").eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle(),
-          admin.from("org_members").select("org_id").eq("user_id", user.id).eq("org_id", organization_id).maybeSingle(),
-          admin.from("pbx_softphone_users").select("organization_id").eq("portal_user_id", user.id).eq("organization_id", organization_id).maybeSingle(),
-          admin.from("user_roles").select("organization_id").eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle(),
-        ]);
-        if (![m1, m2, m3, m4].some((r) => r.data)) {
+      if (!isServiceCall && user) {
+        const authorized = await resolveAuthorizedTranscription(admin, user.id, call_id);
+        if (!authorized || authorized.call.id !== (pbxCall as any).id) {
           return new Response(JSON.stringify({ success: false, error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
+        // Never analyze or persist an arbitrary transcript supplied by a user.
+        // It must come from this already-authorized CDR's server-side STT result.
+        transcript = null;
       }
+      organization_id = isServiceCall ? (organization_id || (pbxCall as any).organization_id) : (pbxCall as any).organization_id;
 
       if (!transcript) {
         const { data: tr } = await admin.from("pbx_call_transcripts")

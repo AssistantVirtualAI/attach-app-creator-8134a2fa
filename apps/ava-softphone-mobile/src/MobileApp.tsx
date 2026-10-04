@@ -35,7 +35,7 @@ import { useRealtimeCDR } from './hooks/useRealtimeCDR';
 import { useDeviceNotifications } from './hooks/useDeviceNotifications';
 import { initBackgroundSync } from './lib/backgroundSync';
 import { useNotificationCounts } from './hooks/useNotificationCounts';
-import { useStoredCreds, Creds, ensureStoredOrganizationId, hydrateSoftphoneCredentials } from './lib/creds';
+import { useStoredCreds, Creds, ensureStoredOrganizationId, hydrateSoftphoneCredentials, restoreSupabaseSession, getCredentialEpoch, isCurrentCredentialEpoch } from './lib/creds';
 import { gradients, colors } from './lib/theme';
 import { ThemeProvider } from './lib/ThemeContext';
 import { MobileI18nProvider } from './lib/i18n';
@@ -74,34 +74,33 @@ const isPreviewMode = (() => {
 
 export default function MobileApp() {
   const { creds, setCreds, clearCreds, loading } = useStoredCreds();
+  const [verifiedSessionKey, setVerifiedSessionKey] = useState<string | null>(null);
+  const expectedSessionKey = creds?.userId && creds.accessToken && creds.refreshToken
+    ? `${creds.userId}:${creds.accessToken}:${creds.refreshToken}` : null;
   // Phase 21A: local, non-sensitive notice shown after a finalized device/access block.
   const [accessBlocked, setAccessBlocked] = useState(false);
 
-  // Restore Supabase session on app launch so API calls are authenticated
+  // The only Supabase restore owner. Its queue is ordered before logout;
+  // old results cannot re-authenticate an account after a generation change.
   useEffect(() => {
     const token = creds?.accessToken;
     const refresh = creds?.refreshToken;
-    if (!token || !refresh) return;
-    supabase.auth.setSession({
-      access_token: token,
-      refresh_token: refresh,
-    }).then(({ data, error }) => {
-      if (error) {
-        console.warn('[Auth] Session restore failed:', error.message);
-        supabase.auth.refreshSession().then(({ data: r }) => {
-          if (r?.session) {
-            setCreds((prev: any) => ({ ...prev, accessToken: r.session!.access_token, refreshToken: r.session!.refresh_token }));
-            setAuthToken(r.session!.access_token);
-            configureMobileApi({ accessToken: r.session!.access_token });
-          }
-        });
-      } else if (data?.session) {
-        setAuthToken(data.session.access_token);
-        configureMobileApi({ accessToken: data.session.access_token });
-        console.log('[Auth] Session restored ✅');
+    if (!token || !refresh || !creds?.userId) return;
+    let cancelled = false;
+    const epoch = getCredentialEpoch();
+    const key = `${creds.userId}:${token}:${refresh}`;
+    void restoreSupabaseSession(creds).then((session) => {
+      if (cancelled || !isCurrentCredentialEpoch(epoch)) return;
+      if (!session) { clearCreds(); return; }
+      setAuthToken(session.access_token);
+      configureMobileApi({ accessToken: session.access_token });
+      setVerifiedSessionKey(key);
+      if (session.access_token !== token || session.refresh_token !== refresh) {
+        setCreds((prev) => ({ ...prev!, accessToken: session.access_token, refreshToken: session.refresh_token }));
       }
-    });
-  }, [creds?.accessToken, creds?.refreshToken]);
+    }).catch(() => { if (!cancelled && isCurrentCredentialEpoch(epoch)) clearCreds(); });
+    return () => { cancelled = true; };
+  }, [creds?.userId, creds?.accessToken, creds?.refreshToken]);
   const ALL_TABS: Tab[] = ['home','calls','ava','messages','more','voicemail','contacts','sms','queues','settings','chats','keypad','speeddial'];
   const initialTab = (() => {
     try {
@@ -165,7 +164,7 @@ export default function MobileApp() {
 
   useEffect(() => { void navLog('MobileApp render', { loading, booting, hasCreds: !!creds, tab }); }, [loading, booting, creds, tab]);
 
-  if (loading || booting) return <SplashAva />;
+  if (loading || booting || (expectedSessionKey && expectedSessionKey !== verifiedSessionKey)) return <SplashAva />;
   if (accessBlocked && !creds) return <MobileI18nProvider><ThemeProvider><MobileAccessBlocked onBack={() => setAccessBlocked(false)} /></ThemeProvider></MobileI18nProvider>;
   if (!creds) return <MobileI18nProvider><ThemeProvider><AuthScreen onAuthenticated={(c) => {
     void navLog('AuthScreen.onAuthenticated', { userId: c?.userId, hasExtension: !!c?.extension, hasSipPassword: !!c?.sipPassword, org: c?.organizationId });
@@ -177,7 +176,7 @@ export default function MobileApp() {
       .catch((e) => void navLog('requestPermissionsAfterLogin THREW', { error: String(e) }));
   }} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
 
-  return <MobileI18nProvider><ThemeProvider><AuthenticatedShell creds={creds} setCreds={setCreds} tab={tab} setTab={setTab} callsSub={callsSub} callsFilter={callsFilter} onSignOut={clearCreds} onAccessBlocked={() => { setAccessBlocked(true); clearCreds(); }} preferClickToCall={preferC2C} onTogglePreferC2C={() => {}} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
+  return <MobileI18nProvider><ThemeProvider><AuthenticatedShell key={`${creds.userId || ''}:${creds.organizationId || ''}:${creds.extension || ''}`} creds={creds} setCreds={setCreds} tab={tab} setTab={setTab} callsSub={callsSub} callsFilter={callsFilter} onSignOut={clearCreds} onAccessBlocked={() => { setAccessBlocked(true); clearCreds(); }} preferClickToCall={preferC2C} onTogglePreferC2C={() => {}} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
 }
 
 function AuthenticatedShell({
@@ -216,30 +215,24 @@ function AuthenticatedShell({
       setSipReady(true);
       return;
     }
+    let cancelled = false;
+    const epoch = getCredentialEpoch();
     hydrateSoftphoneCredentials('mobile').then((next) => {
-      if (next) setCreds(next);
+      if (cancelled || !isCurrentCredentialEpoch(epoch)) return;
+      if (next && next.userId === creds.userId) setCreds(next);
       hydratedTokenRef.current = creds.accessToken || '';
       setSipReady(true);
-    }).catch(() => setSipReady(true));
+    }).catch(() => { if (!cancelled && isCurrentCredentialEpoch(epoch)) setSipReady(true); });
+    return () => { cancelled = true; };
   }, [creds?.accessToken, sipAllowed]);
-
-  // Restore Supabase session from stored creds so the mobile SDK can
-  // auto-refresh tokens (and so realtime/edge calls always have a fresh JWT).
-  useEffect(() => {
-    if (!creds.accessToken || !creds.refreshToken) return;
-    supabase.auth.setSession({
-      access_token: creds.accessToken,
-      refresh_token: creds.refreshToken,
-    }).then(({ error }) => {
-      if (error) console.warn('[Auth] Session restore failed:', error.message);
-      else console.log('[Auth] Session restored');
-    }).catch((e) => console.warn('[Auth] setSession threw', e?.message || e));
-  }, [creds.accessToken, creds.refreshToken]);
 
   // Keep stored creds in sync with token refreshes; sign-out clears the app.
   useEffect(() => {
+    const epoch = getCredentialEpoch();
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isCurrentCredentialEpoch(epoch)) return;
       if (event === 'TOKEN_REFRESHED' && session) {
+        if (session.user.id !== creds.userId) { onSignOut(); return; }
         setCreds({ ...creds, accessToken: session.access_token, refreshToken: session.refresh_token });
         setAuthExpired(false);
       } else if (event === 'SIGNED_OUT') {

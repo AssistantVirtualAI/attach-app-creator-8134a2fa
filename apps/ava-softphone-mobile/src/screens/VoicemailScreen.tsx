@@ -6,7 +6,7 @@ import { mobileApi, VoicemailEntry } from '../lib/mobileApi';
 import { Card, Chip, EmptyState, GhostButton, AIPanel, Skeleton } from '../components/ui/Primitives';
 import { audit } from '../lib/audit';
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
-import { authedRealtime, edgeCall } from '../lib/mobileSupabase';
+import { authedRealtime, edgeCall, loadPbxRecordingAudioMobile } from '../lib/mobileSupabase';
 import { useTr } from '../lib/i18n';
 
 export type VoicemailPolicy = 'enabled' | 'disabled';
@@ -17,7 +17,8 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
   const greetingAllowed = voicemailPolicy === 'enabled';
 
   const mobile = useMobileCredentials();
-  const [items, setItems] = useState<VoicemailEntry[] | null>(null);
+  const [storedItems, setItems] = useState<VoicemailEntry[] | null>(null);
+  const [itemsScope, setItemsScope] = useState('');
   const [q, setQ] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -30,7 +31,11 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
   const [transcribing, setTranscribing] = useState<string | null>(null);
   const [transcribeError, setTranscribeError] = useState<Record<string, string>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const urlCache = useRef<Map<string, string>>(new Map());
+  const playEpochRef = useRef(0);
+  const playbackScope = `${mobile.userId || ''}:${mobile.organizationId || ''}:${mobile.extension || ''}:${mobile.accessToken || ''}`;
+  const playbackScopeRef = useRef(playbackScope);
+  playbackScopeRef.current = playbackScope;
+  const items = itemsScope === playbackScope ? storedItems : null;
   const [voices, setVoices] = useState<{ id: string; name: string }[]>([]);
   const [greetingText, setGreetingText] = useState('');
   const [voiceId, setVoiceId] = useState('EXAVITQu4vr4xnSDxMaL');
@@ -39,13 +44,23 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
   const [greetingPreviewUrl, setGreetingPreviewUrl] = useState<string | null>(null);
 
   const reload = async () => {
+    const key = playbackScope;
     setRefreshing(true);
-    try { setItems(await mobileApi.voicemails()); } catch {}
-    setRefreshing(false);
+    try {
+      const rows = await mobileApi.voicemails();
+      if (key === playbackScopeRef.current) { setItems(rows); setItemsScope(key); }
+    } catch {}
+    if (key === playbackScopeRef.current) setRefreshing(false);
   };
 
-  useEffect(() => { reload(); }, []);
-  useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
+  useEffect(() => {
+    playEpochRef.current++;
+    audioRef.current?.pause(); audioRef.current = null;
+    setPlaying(null); setLoadingId(null); setProgress(null);
+    setItems(null); setItemsScope(playbackScope); setTranscripts({}); setAnalyses({});
+    if (mobile.userId && mobile.accessToken) reload();
+    return () => { playEpochRef.current++; audioRef.current?.pause(); audioRef.current = null; };
+  }, [playbackScope]);
 
   // Revocation: wipe local greeting editor state; never touch messages/history.
   useEffect(() => {
@@ -150,50 +165,46 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
   };
 
   const fetchUrl = async (v: VoicemailEntry): Promise<string> => {
-    const res = await mobileApi
-      .voicemailAudio({
-        xml_cdr_uuid: v.xml_cdr_uuid,
-        record_path: v.record_path,
-        record_name: v.record_name,
-        domain_uuid: v.domain_uuid,
-        domain_name: v.domain_name,
-        organization_id: v.organization_id,
-      })
-      .catch(() => ({ url: '' } as any));
-    return res?.url || '';
+    if (!v.xml_cdr_uuid) return '';
+    return loadPbxRecordingAudioMobile({ xml_cdr_uuid: v.xml_cdr_uuid }, mobile.accessToken, mobile.organizationId, mobile.fusionpbxDomainUuid)
+      .catch(() => '');
   };
 
   const togglePlay = async (v: VoicemailEntry) => {
+    if (!mobile.userId || !mobile.accessToken) return;
+    const epoch = playEpochRef.current;
+    const scope = playbackScope;
     const id = v.id;
     setErrorId(null);
     if (playing === id) { audioRef.current?.pause(); setPlaying(null); return; }
     audioRef.current?.pause();
 
-    let url = urlCache.current.get(id) || '';
-    if (!url) {
-      setLoadingId(id);
-      url = await fetchUrl(v);
-      setLoadingId(null);
-      if (url) urlCache.current.set(id, url);
+    setLoadingId(id);
+    const url = await fetchUrl(v);
+    if (epoch !== playEpochRef.current || scope !== playbackScopeRef.current) {
+      if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+      return;
     }
+    setLoadingId(null);
     if (!url) { setErrorId(id); return; }
 
     const audio = new Audio(url);
-    audio.ontimeupdate = () => setProgress({ id, cur: audio.currentTime, dur: audio.duration || v.durationSec });
-    audio.onloadedmetadata = () => setProgress({ id, cur: 0, dur: audio.duration || v.durationSec });
-    audio.onended = () => { setPlaying(null); transcribe(v); };
-    audio.onerror = () => { setErrorId(id); setPlaying(null); };
+    const current = () => epoch === playEpochRef.current && scope === playbackScopeRef.current;
+    audio.ontimeupdate = () => { if (current()) setProgress({ id, cur: audio.currentTime, dur: audio.duration || v.durationSec }); };
+    audio.onloadedmetadata = () => { if (current()) setProgress({ id, cur: 0, dur: audio.duration || v.durationSec }); };
+    audio.onended = () => { if (current()) { setPlaying(null); transcribe(v); } };
+    audio.onerror = () => { if (current()) { setErrorId(id); setPlaying(null); } };
     audioRef.current = audio;
     setPlaying(id);
     audit('voicemail.played', id, { duration: v.durationSec });
-    audio.play().catch(() => { setErrorId(id); setPlaying(null); });
+    audio.play().catch(() => { if (current()) { setErrorId(id); setPlaying(null); } });
   };
 
   const retry = async (v: VoicemailEntry) => {
-    urlCache.current.delete(v.id);
+    const epoch = playEpochRef.current;
     setErrorId(null);
     await new Promise((r) => setTimeout(r, 3000));
-    togglePlay(v);
+    if (epoch === playEpochRef.current) togglePlay(v);
   };
 
   const onSeek = (e: React.MouseEvent<HTMLDivElement>, v: VoicemailEntry) => {

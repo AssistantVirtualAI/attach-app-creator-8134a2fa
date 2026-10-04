@@ -3,16 +3,18 @@
  * Fully simulated: local mocks only, no network, no real table, no PBX, no device.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, act, cleanup } from '@testing-library/react';
+import { render, act, cleanup, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 type Sub = { spec: any; cb: (p: any) => void };
 const channels: { name: string; subs: Sub[]; obj: any }[] = [];
 const removed: any[] = [];
-const creds = { current: { accessToken: 'test-token', extension: '201', domainUuid: 'dom-1' } as any };
+const creds = { current: { userId: 'user-test', organizationId: 'org-test', accessToken: 'test-token', extension: '201', domainUuid: 'dom-1' } as any };
+const loadAudio = vi.hoisted(() => vi.fn());
 
 vi.mock('../lib/mobileSupabase', () => ({
   edgeCall: vi.fn().mockResolvedValue({}),
+  loadPbxRecordingAudioMobile: loadAudio,
   authedRealtime: () => ({
     channel: (name: string) => {
       const entry = { name, subs: [] as Sub[], obj: null as any };
@@ -45,7 +47,8 @@ describe('Phase 29A — VoicemailScreen Realtime privacy', () => {
     removed.length = 0;
     voicemails.mockReset();
     voicemails.mockResolvedValue([]);
-    creds.current = { accessToken: 'test-token', extension: '201', domainUuid: 'dom-1' };
+    loadAudio.mockReset();
+    creds.current = { userId: 'user-test', organizationId: 'org-test', accessToken: 'test-token', extension: '201', domainUuid: 'dom-1' };
   });
 
   it('creates one channel named with 201, filtered extension=eq.201 on INSERT/UPDATE/DELETE', async () => {
@@ -116,5 +119,23 @@ describe('Phase 29A — VoicemailScreen Realtime privacy', () => {
     const created = channels[0].obj;
     unmount();
     expect(removed).toEqual([created]);
+  });
+
+  it('ignores a voicemail URL that arrives after the old session is unmounted', async () => {
+    let finish!: (url: string) => void;
+    const createAudio = vi.fn(() => ({ pause: vi.fn(), play: vi.fn().mockResolvedValue(undefined) }));
+    vi.stubGlobal('Audio', createAudio);
+    voicemails.mockResolvedValue([{ id: 'v1', xml_cdr_uuid: 'cdr-1', from: '201', customer: 'Own voice', durationSec: 30, receivedAt: new Date().toISOString(), priority: 'normal', isNew: false, summary: '' }]);
+    loadAudio.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { unmount } = render(<VoicemailScreen />);
+    await flush();
+    fireEvent.click(screen.getByText('Own voice'));
+    fireEvent.click(screen.getByText('▶'));
+    await flush();
+    expect(loadAudio).toHaveBeenCalledWith({ xml_cdr_uuid: 'cdr-1' }, 'test-token', 'org-test', undefined);
+    unmount();
+    await act(async () => { finish('https://signed.invalid/old-voice'); await Promise.resolve(); });
+    expect(createAudio).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

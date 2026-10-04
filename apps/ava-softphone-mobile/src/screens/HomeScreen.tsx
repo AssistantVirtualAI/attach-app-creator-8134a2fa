@@ -34,7 +34,7 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
               AI Phone
             </div>
           </div>
-          {data ? <StatusDot state={data?.status?.sipState ?? 'unknown'} /> : <Skeleton w={50} h={14} />}
+          {data ? <StatusDot state={data?.status?.sipState ?? 'offline'} /> : <Skeleton w={50} h={14} />}
         </div>
 
         <div style={{ marginTop: 16 }}>
@@ -55,8 +55,8 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         <QuickAction label="Appeler" icon="☎" tone="gold" onPress={() => { haptic(ImpactStyle.Medium); onNavigate('calls'); }} />
         <QuickAction label="Message" icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('messages'); }} />
-        <QuickAction label="Demander à AVA" icon="✦" tone="violet" onPress={() => { haptic(); onNavigate('ai'); }} />
-        <QuickAction label="Accueil" icon="◉" tone="violet" onPress={() => { haptic(); onNavigate('ai'); }} />
+        <QuickAction label="Demander à AVA" icon="✦" tone="violet" onPress={() => { haptic(); onNavigate('ava'); }} />
+        <QuickAction label="Accueil" icon="◉" tone="violet" onPress={() => { haptic(); onNavigate('home'); }} />
         <QuickAction label="Transfert" icon="↪" tone="gold" onPress={() => { haptic(); onNavigate('settings'); }} />
         <QuickAction label="Messagerie" icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('calls'); }} />
       </div>
@@ -109,7 +109,7 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
 
       {/* AI brief */}
       <SectionTitle eyebrow="Résumé AVA" title="Ce qui a changé depuis votre dernière connexion" />
-      <AIPanel title="Résumé quotidien AVA" right={<GhostButton tone="cyan" style={{ padding: '6px 10px' }} onClick={() => onNavigate('ai')}>Ouvrir l'IA</GhostButton>}>
+      <AIPanel title="Résumé quotidien AVA" right={<GhostButton tone="cyan" style={{ padding: '6px 10px' }} onClick={() => onNavigate('ava')}>Ouvrir l'IA</GhostButton>}>
         <p style={{ fontSize: font.base, lineHeight: 1.55, color: colors.textIce, margin: 0 }}>
           {data?.brief || "Génération du résumé du jour…"}
         </p>

@@ -1,6 +1,7 @@
 import { aiFetch } from "../_shared/claude-compat.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";
+import { resolveAuthorizedTranscription } from "./recordingAuthority.ts";
 
 
 const corsHeaders = {
@@ -86,7 +87,27 @@ Deno.serve(async (req) => {
       domain_uuid: domain_uuid || null,
       force: body?.force === true,
     });
-    // Strict: organization_id must come from the caller. No silent fallback to pbx_softphone_users.
+    // For a user JWT, membership in the organization is insufficient: the
+    // canonical CDR and its extension must belong to this specific portal user.
+    // Overwrite every audio pointer supplied by the client before the proxy or
+    // transcript persistence sees any of it. Service-role jobs retain their
+    // historical internal call shape below.
+    let call: any = null;
+    if (!isServiceCall && user) {
+      const resolved = await resolveAuthorizedTranscription(admin, user.id, call_record_id);
+      if (!resolved) {
+        await audit("forbidden", { error_code: "recording-scope", http_status: 403 });
+        return json({ error: "Forbidden" }, 403);
+      }
+      call = resolved.call;
+      call_record_id = call.id;
+      organization_id = call.organization_id;
+      xml_cdr_uuid = call.pbx_uuid || call.id;
+      recording_url = call.recording_url || resolved.recording?.recording_url || null;
+      recording_path = call.recording_path || resolved.recording?.recording_path || null;
+      recording_name = call.recording_name || resolved.recording?.recording_name || null;
+      domain_uuid = call.domain_uuid || null;
+    }
     if (!call_record_id || !organization_id) {
       console.warn(`${logTag} action=bad-request missing organization_id or call_record_id`);
       await audit("bad-request", { error_code: "missing-fields", http_status: 400 });
@@ -94,26 +115,14 @@ Deno.serve(async (req) => {
     }
     auditOrg = organization_id; auditCall = call_record_id;
 
-    // Membership check
-    if (!isServiceCall && user) {
-      const checks = await Promise.all([
-        admin.from("organization_members").select("organization_id").eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle(),
-        admin.from("org_members").select("org_id").eq("user_id", user.id).eq("org_id", organization_id).maybeSingle(),
-        admin.from("pbx_softphone_users").select("organization_id").eq("portal_user_id", user.id).eq("organization_id", organization_id).maybeSingle(),
-        admin.from("user_roles").select("organization_id").eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle(),
-      ]);
-      if (!checks.some((c) => c.data)) return json({ error: "Forbidden" }, 403);
-    }
-
-    // Resolve call: callId may be a recording id, not a call record id
-    let call: any = null;
-    {
+    // Internal service-role callers may use the legacy recording-id lookup.
+    if (isServiceCall) {
       const r = await admin.from("pbx_call_records")
         .select("id, pbx_uuid, raw_data, caller_number, caller_name, destination_number, destination, direction, start_at, duration_seconds, billsec, hangup_cause, recording_url, recording_path, recording_name, voicemail_message, domain_uuid, domain_name")
         .eq("id", call_record_id).eq("organization_id", organization_id).maybeSingle();
       call = r.data;
     }
-    if (!call) {
+    if (!call && isServiceCall) {
       const r = await admin.from("pbx_call_recordings")
         .select("call_record_id, recording_url, recording_path, recording_name, direction, recorded_at, duration_seconds")
         .eq("id", call_record_id).eq("organization_id", organization_id).maybeSingle();
@@ -128,8 +137,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Strict: if we can't find any call/recording AND caller didn't supply a recording pointer, return explicit 404.
-    const callerSuppliedPointer = !!(recording_url || recording_path || recording_name);
+    // Only trusted internal service-role jobs can use a legacy pointer when
+    // their CDR has not synchronized. A user-supplied pointer never opens it.
+    const callerSuppliedPointer = isServiceCall && !!(recording_url || recording_path || recording_name);
     if (!call && !callerSuppliedPointer) {
       console.warn(`${logTag} action=recording-not-found no call row and no caller-supplied recording pointer`);
       await audit("not-found", { error_code: "recording-not-found", http_status: 404 });
@@ -238,28 +248,31 @@ Deno.serve(async (req) => {
           const recName = effectiveRecName
           ? (/\.(mp3|wav|ogg|m4a|webm)$/i.test(effectiveRecName) ? effectiveRecName : `${effectiveRecName}.mp3`)
           : "";
-        const proxyPayload = {
-          organization_id,
-          params: {
-              // FusionPBX download endpoints require the PBX XML CDR UUID,
-              // not our database row id. The mobile UI passes both; keep the
-              // DB id for persistence, but use this value for audio fetches.
+        const proxyPayload = isServiceCall
+          ? {
+            organization_id,
+            params: {
               xml_cdr_uuid: effectiveXmlCdrUuid,
-            record_path: effectiveRecPath || "",
-            record_name: recName,
-            domain_uuid: domain_uuid || call?.domain_uuid || undefined,
-            domain_name: call?.domain_name || undefined,
-            recorded_at: call?.start_at || undefined,
-            local_recording_url: sourceUrl || undefined,
-            expires_in: 300,
-          },
-        };
+              record_path: effectiveRecPath || "",
+              record_name: recName,
+              domain_uuid: domain_uuid || call?.domain_uuid || undefined,
+              domain_name: call?.domain_name || undefined,
+              recorded_at: call?.start_at || undefined,
+              local_recording_url: sourceUrl || undefined,
+              expires_in: 300,
+            },
+          }
+          : { params: { xml_cdr_uuid: effectiveXmlCdrUuid, expires_in: 300 } };
+        // Authenticated callers are re-authorized by the Phase 29B proxy itself.
+        // A service-role key must never carry their client-supplied metadata.
+        const proxyBearer = isServiceCall ? SERVICE_KEY : authHeader;
+        const proxyApiKey = isServiceCall ? SERVICE_KEY : Deno.env.get("SUPABASE_ANON_KEY")!;
 
         // 1a. Try signed-url first (matches mobile path that's known to work).
         try {
           const signed = await fetch(`${SUPABASE_URL}/functions/v1/fusionpbx-proxy`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY },
+            headers: { "Content-Type": "application/json", "Authorization": proxyBearer, "apikey": proxyApiKey },
             body: JSON.stringify({ action: "get-recording-signed-url", ...proxyPayload }),
           });
           if (signed.ok) {
@@ -288,7 +301,7 @@ Deno.serve(async (req) => {
           try {
             const proxyRes = await fetch(`${SUPABASE_URL}/functions/v1/fusionpbx-proxy`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY },
+              headers: { "Content-Type": "application/json", "Authorization": proxyBearer, "apikey": proxyApiKey },
               body: JSON.stringify({ action: "get-recording", ...proxyPayload }),
             });
             const ct = proxyRes.headers.get("content-type") || "";
@@ -318,8 +331,9 @@ Deno.serve(async (req) => {
       }
 
 
-      // 2. Direct URL fallback
-      if (!audioBytes && sourceUrl && !isTwilio) {
+      // 2. Direct URL fallback is restricted to trusted internal service-role
+      // jobs; user requests must remain behind the authorized proxy path.
+      if (isServiceCall && !audioBytes && sourceUrl && !isTwilio) {
         try {
           const r = await fetch(sourceUrl);
           if (r.ok) {
@@ -420,7 +434,7 @@ Deno.serve(async (req) => {
       const ext = ({ mpeg: "mp3", mp3: "mp3", wav: "wav", webm: "webm", ogg: "ogg", mp4: "m4a" } as Record<string, string>)[audioFormat] || "wav";
       const fd = new FormData();
       fd.append("model", model);
-      fd.append("file", new Blob([audioBytes!], { type: audioMime }), `recording.${ext}`);
+      fd.append("file", new Blob([new Uint8Array(audioBytes!)], { type: audioMime }), `recording.${ext}`);
       fd.append("prompt", sttPrompt);
       const r = await aiFetch("https://ai.internal/v1/audio/transcriptions", {
         method: "POST",
@@ -472,7 +486,7 @@ Deno.serve(async (req) => {
       const ext = ({ mpeg: "mp3", mp3: "mp3", wav: "wav", webm: "webm", ogg: "ogg", mp4: "m4a" } as Record<string, string>)[audioFormat] || "wav";
       const fd = new FormData();
       fd.append("model", "whisper-1");
-      fd.append("file", new Blob([audioBytes!], { type: audioMime }), `recording.${ext}`);
+      fd.append("file", new Blob([new Uint8Array(audioBytes!)], { type: audioMime }), `recording.${ext}`);
       fd.append("language", transcriptLanguage);
       fd.append("response_format", "json");
       fd.append("temperature", "0");

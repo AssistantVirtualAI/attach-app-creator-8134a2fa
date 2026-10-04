@@ -9,6 +9,7 @@ import React from 'react';
 const edgeCall = vi.fn();
 vi.mock('../lib/mobileSupabase', () => ({
   edgeCall: (...a: any[]) => edgeCall(...a),
+  loadPbxRecordingAudioMobile: vi.fn(),
   authedRealtime: () => ({ channel: () => ({ on: function () { return this; }, subscribe: function () { return this; } }), removeChannel: () => {} }),
 }));
 vi.mock('../lib/mobileApi', () => ({

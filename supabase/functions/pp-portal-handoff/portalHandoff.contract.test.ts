@@ -70,3 +70,21 @@ Deno.test("URL complète: forme acceptée par les versions installées", () => {
   assertEquals(u.searchParams.get("em"), "courtier@example.com");
   assertEquals(u.searchParams.get("to"), "/planipret/broker");
 });
+
+Deno.test("erreurs: correlation_id + code normalisé, jamais le message brut", () => {
+  assertStringIncludes(SOURCE, 'failure("stamp", "handoff_stamp_failed", stampError)');
+  assertStringIncludes(SOURCE, 'failure("generate_link", "link_failed", linkErr)');
+  assertStringIncludes(SOURCE, 'failure("unexpected", "handoff_failed", e)');
+  assertStringIncludes(SOURCE, "json({ ok: false, error: code, correlation_id }, 500)");
+  assert(!/error:\s*linkErr\?\.message/.test(SOURCE), "message fournisseur renvoyé");
+  assert(!/String\(\(e as Error\)\?\.message/.test(SOURCE), "message d'exception renvoyé");
+});
+
+Deno.test("logs: aucun JWT, jeton, courriel, metadata ou URL", () => {
+  const logLines = SOURCE.split("\n").filter((l) => /console\.(log|warn|error)/.test(l));
+  for (const l of logLines) {
+    for (const bad of ["authHeader", "hashed_token", "user.email", "user_metadata", "handoffParams", "user.id", ".message"]) {
+      assert(!l.includes(bad), `log sensible: ${bad} dans « ${l.trim()} »`);
+    }
+  }
+});

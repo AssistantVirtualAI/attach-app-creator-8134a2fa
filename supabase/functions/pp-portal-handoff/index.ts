@@ -28,6 +28,19 @@ const json = (b: unknown, status = 200) => {
   return new Response(JSON.stringify(b), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 };
 
+// Server-side failure log: correlation id, step and normalized code only.
+// Never logs JWTs, magic tokens, emails, metadata or the final URL.
+const failure = (step: "stamp" | "generate_link" | "unexpected", code: string, err: unknown) => {
+  const correlation_id = crypto.randomUUID();
+  const e = err as { status?: number; code?: string; name?: string } | null;
+  console.error("[pp-portal-handoff] failure", JSON.stringify({
+    correlation_id, step,
+    provider_code: String(e?.code ?? e?.name ?? "unknown").slice(0, 64),
+    provider_status: typeof e?.status === "number" ? e.status : null,
+  }));
+  return json({ ok: false, error: code, correlation_id }, 500);
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -39,7 +52,7 @@ Deno.serve(async (req) => {
     const userClient = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
     const { data: u, error: uErr } = await userClient.auth.getUser();
     const user = u?.user;
-    if (!user) console.warn("[pp-portal-handoff] getUser failed", uErr?.message);
+    if (!user) console.warn("[pp-portal-handoff] getUser failed", uErr?.status ?? "no_user");
     if (!user?.email) return json({ ok: false, error: "not_authenticated" }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
@@ -49,7 +62,7 @@ Deno.serve(async (req) => {
       .select("id, user_id, role, email, full_name")
       .eq("user_id", user.id)
       .maybeSingle();
-    if (!profile) console.warn("[pp-portal-handoff] no profile for", user.id);
+    if (!profile) console.warn("[pp-portal-handoff] no planipret profile");
     if (!profile) return json({ ok: false, error: "no_planipret_profile" }, 403);
 
     let isAdmin = String((profile as any).role ?? "").toLowerCase().includes("admin");
@@ -74,14 +87,14 @@ Deno.serve(async (req) => {
           portal_handoff_at: new Date().toISOString(),
         },
       });
-    if (stampError) return json({ ok: false, error: "handoff_stamp_failed" }, 500);
+    if (stampError) return failure("stamp", "handoff_stamp_failed", stampError);
 
     const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
       type: "magiclink",
       email: user.email,
     });
     if (linkErr || !link?.properties?.hashed_token) {
-      return json({ ok: false, error: linkErr?.message ?? "link_failed" }, 500);
+      return failure("generate_link", "link_failed", linkErr);
     }
 
     const handoffParams = new URLSearchParams({
@@ -103,6 +116,6 @@ Deno.serve(async (req) => {
       expires_in: 300,
     });
   } catch (e) {
-    return json({ ok: false, error: String((e as Error)?.message ?? e) }, 500);
+    return failure("unexpected", "handoff_failed", e);
   }
 });

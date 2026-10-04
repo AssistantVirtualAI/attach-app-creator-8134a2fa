@@ -91,23 +91,33 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
     } finally { setGreetingBusy(false); }
   };
 
-  // Realtime: refresh list on any change to pbx_voicemails for this domain/extension.
+  // Phase 29A — Realtime refresh is scoped strictly to the signed-in extension.
+  // This only narrows the Realtime list trigger; signed audio URL authorization
+  // is unchanged here and is left to a later server-side phase.
+  const vmExt = String(mobile.extension || '').trim();
   useEffect(() => {
-    let channel: any = null;
+    const ext = vmExt;
+    if (!mobile.accessToken || !ext) return;
     let cancelled = false;
-    (async () => {
-      if (!mobile.accessToken) return;
-      const client = authedRealtime(mobile.accessToken);
-      const domainUuid = mobile.domainUuid;
-      const filter = domainUuid ? `domain_uuid=eq.${domainUuid}` : undefined;
-      channel = client
-        .channel('vm-mobile')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'pbx_voicemails', ...(filter ? { filter } : {}) } as any,
-          () => { if (!cancelled) reload(); })
-        .subscribe();
-    })();
-    return () => { cancelled = true; try { channel && authedRealtime(mobile.accessToken).removeChannel(channel); } catch {} };
-  }, [mobile.accessToken, mobile.domainUuid]);
+    const client = authedRealtime(mobile.accessToken);
+    const filter = `extension=eq.${ext}`;
+    const isOwn = (payload: any): boolean => {
+      const row = payload?.eventType === 'DELETE' ? payload?.old : payload?.new;
+      return String(row?.extension ?? '').trim() === ext;
+    };
+    const onChange = (payload: any) => {
+      if (cancelled) return;
+      if (!isOwn(payload)) return;
+      reload();
+    };
+    const channel = client
+      .channel(`vm-mobile-${ext}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pbx_voicemails', filter } as any, onChange)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pbx_voicemails', filter } as any, onChange)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'pbx_voicemails', filter } as any, onChange)
+      .subscribe();
+    return () => { cancelled = true; try { client.removeChannel(channel); } catch {} };
+  }, [mobile.accessToken, vmExt]);
 
 
   const fmt = (s: number) => {

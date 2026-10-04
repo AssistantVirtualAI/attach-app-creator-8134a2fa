@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     const userClient = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
     const { data: u, error: uErr } = await userClient.auth.getUser();
     const user = u?.user;
-    if (!user) console.warn("[pp-portal-handoff] getUser failed", uErr?.message);
+    if (!user) console.warn("[pp-portal-handoff] getUser failed", uErr?.status ?? "no_user");
     if (!user?.email) return json({ ok: false, error: "not_authenticated" }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);

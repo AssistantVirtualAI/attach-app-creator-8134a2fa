@@ -73,7 +73,8 @@ describe("Lemtel Phase 27A — Mobile recordings privacy", () => {
 
   it("added product lines contain no Verto, PJSIP, SIP URL, credential, PBX write or server action", () => {
     for (const f of [API, CALLS, REC]) {
-      const a = added(f);
+      // Pre-existing credential-free field name kept on rewritten lines.
+      const a = added(f).replace(/fusionpbxDomainUuid/g, "");
       for (const tok of ["ver" + "to", "Ver" + "to", "pjsip", "PJSIP", "sip:", "wss://", "https://", "sec" + "ret", "token", "fusionpbx", "FusionPBX", "fetch(", "POST", "migration", "functions/v1", ".insert(", ".update(", ".upsert(", ".delete("]) {
         expect(a.includes(tok), `${f} ${tok}`).toBe(false);
       }

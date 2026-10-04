@@ -1,6 +1,6 @@
 // Lemtel Phase 27A — Mobile recordings are own_extension_only. Local mocks only: no network, audio or AI calls.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, act, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, act, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 
 const h = vi.hoisted(() => {
@@ -77,7 +77,7 @@ describe('Phase 27A — RecordingsScreen own_extension_only', () => {
 
   it('realtime channel is named with the extension and filtered exactly by it', async () => {
     render(<Screen myExtension="201" />);
-    await flush();
+    await waitFor(() => expect(h.ch.subscribe).toHaveBeenCalled());
     expect(h.channel).toHaveBeenCalledTimes(1);
     expect(h.channel.mock.calls[0][0]).toBe('recordings-ext-201');
     const specs = h.ch.on.mock.calls.map((c: any[]) => c[1]);
@@ -90,7 +90,7 @@ describe('Phase 27A — RecordingsScreen own_extension_only', () => {
 
   it('reload depends only on the extension-filtered channel callback', async () => {
     render(<Screen myExtension="201" />);
-    await flush();
+    await waitFor(() => expect(h.ch.subscribe).toHaveBeenCalled());
     h.recordings.mockClear();
     const cb = h.ch.on.mock.calls[0][2];
     await act(async () => { cb({ new: { extension: '201' } }); });
@@ -102,10 +102,9 @@ describe('Phase 27A — RecordingsScreen own_extension_only', () => {
   it('unmount removes the channel and the listeners', async () => {
     const rem = vi.spyOn(window, 'removeEventListener');
     const { unmount } = render(<Screen myExtension="201" />);
-    await flush();
+    await waitFor(() => expect(h.ch.subscribe).toHaveBeenCalled());
     unmount();
-    await flush();
-    expect(h.removeChannel).toHaveBeenCalledWith(h.ch);
+    await waitFor(() => expect(h.removeChannel).toHaveBeenCalledWith(h.ch));
     const names = rem.mock.calls.map((c) => c[0]);
     expect(names).toContain('focus');
     expect(names).toContain('ava:callEnded');

@@ -65,8 +65,6 @@ export default function SettingsScreen({
   const { t, lang, setLang } = useT();
   const { mode, toggle: toggleTheme } = useTheme();
   const [me, setMe] = useState<MeResponse | null>(null);
-  const [dnd, setDnd] = useState(false);
-  const [forwarding, setForwarding] = useState<string | null>(null);
   const [perms, setPerms] = useState<AllPermissions | null>(null);
   const [haptics, setHaptics] = useState<boolean>(() => localStorage.getItem('ava.haptics') !== 'off');
   const [autoAnswer, setAutoAnswer] = useState<boolean>(() => localStorage.getItem('ava.autoAnswer') === 'on');
@@ -87,14 +85,11 @@ export default function SettingsScreen({
   const [netConnected, setNetConnected] = useState<boolean>(true);
 
   // In-app sheets (Capacitor WebView-safe replacements for prompt/confirm)
-  const [sheet, setSheet] = useState<null | 'ringtone' | 'audioOut' | 'fwd' | 'clearCache'>(null);
-  const [fwdInput, setFwdInput] = useState<string>('');
+  const [sheet, setSheet] = useState<null | 'ringtone' | 'audioOut' | 'clearCache'>(null);
 
   useEffect(() => {
     mobileApi.me().then((next) => {
       setMe(next);
-      setDnd(!!next.status?.doNotDisturb);
-      setForwarding(next.status?.forwarding || null);
     });
   }, []);
   useEffect(() => { checkAllPermissions().then(setPerms); }, []);
@@ -141,23 +136,6 @@ export default function SettingsScreen({
   }, []);
 
 
-  const toggleDnd = async () => { const next = !dnd; setDnd(next); try { await mobileApi.setDnd(next); toast(next ? (lang==='fr'?'Ne pas déranger activé':'Do not disturb on') : (lang==='fr'?'Ne pas déranger désactivé':'Do not disturb off'), 'success'); } catch {} };
-  const openFwdSheet = () => {
-    if (forwarding) {
-      setForwarding(null);
-      mobileApi.setForwarding(null).catch(() => {});
-      toast(lang==='fr'?'Transfert désactivé':'Forwarding disabled', 'success');
-      return;
-    }
-    setFwdInput('+1');
-    setSheet('fwd');
-  };
-  const commitFwd = async () => {
-    const v = fwdInput.trim();
-    if (!v) { setSheet(null); return; }
-    setForwarding(v); setSheet(null);
-    try { await mobileApi.setForwarding(v); toast(lang==='fr'?'Transfert activé':'Forwarding enabled', 'success'); } catch {}
-  };
   const applyPref = (key: string, next: boolean, apply: (v: boolean) => void, labelFr: string, labelEn: string) => {
     try {
       apply(next);
@@ -258,7 +236,6 @@ export default function SettingsScreen({
       {/* Calling */}
       <SectionTitle eyebrow={t('settings.calling')} title={t('settings.availability')} />
       <Card padded={false}>
-        <SettingsRow label={t('settings.dnd')} icon="🔕" onPress={toggleDnd} right={<Switch on={dnd} />} />
         <SettingsRow
           label={lang === 'fr' ? 'Utiliser Click-to-Call' : 'Use Click-to-Call'}
           icon="📞"
@@ -268,7 +245,6 @@ export default function SettingsScreen({
           right={<Switch on={preferClickToCall} />}
           onPress={togglePreferC2C}
         />
-        <SettingsRow label={t('settings.callForwarding')} icon="↪" onPress={openFwdSheet} value={forwarding || t('common.off')} right={<Switch on={!!forwarding} />} />
         <SettingsRow label={t('settings.voicemailGreeting')} icon="🎙" value={t('settings.defaultGreeting')} onPress={() => onNavigate?.('voicemail' as Tab)} />
         <SettingsRow label={t('settings.autoAnswer')} icon="⚡" right={<Switch on={autoAnswer} />} onPress={toggleAutoAnswer} />
         <SettingsRow label={t('settings.ringtone')} icon="🎵" value={ringtone} onPress={() => setSheet('ringtone')} />
@@ -496,24 +472,6 @@ export default function SettingsScreen({
           ] as [AudioRoute|'default', string][]).map(([k,l]) => (
             <SheetItem key={k} active={audioOut===k} onPress={() => pickAudioOutChoice(k)} label={l} />
           ))}
-        </Sheet>
-      )}
-      {sheet === 'fwd' && (
-        <Sheet title={lang==='fr'?'Numéro de transfert':'Forwarding number'} onClose={() => setSheet(null)}>
-          <input
-            type="tel" autoFocus value={fwdInput}
-            onChange={(e) => setFwdInput(e.target.value)}
-            placeholder="+15145550123"
-            style={{
-              width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 10,
-              background: 'rgba(255,255,255,0.06)', border: `1px solid ${colors.border}`,
-              color: colors.textIce, fontSize: 16, marginBottom: 12,
-            }}
-          />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setSheet(null)} style={sheetBtnStyle(false)}>{t('common.cancel')}</button>
-            <button onClick={commitFwd} style={sheetBtnStyle(true)}>{t('common.save')}</button>
-          </div>
         </Sheet>
       )}
       {sheet === 'clearCache' && (

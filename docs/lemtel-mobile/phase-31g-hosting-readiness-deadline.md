@@ -1,0 +1,11 @@
+# Lemtel — phase 31G : borne de temps et de taille de la sonde HTTPS
+
+**Statut : préparation hors ligne, aucun déploiement.** Hostinger demeure le primaire visé; DigitalOcean est le secours envisagé. Cette phase ne change ni DNS, ni serveur, ni données, ni Planiprêt, ni FusionPBX. La politique d’admission reste `denied` / `offline_only`.
+
+La sonde externe de la phase 31E conservait un timeout réseau, mais ce timeout peut être réarmé par une réponse envoyée très lentement : des octets reçus régulièrement ne prouvent pas que la réponse arrivera. `probeOrigin` a maintenant une **échéance totale par requête HTTPS**, qui coupe la connexion même pendant un flux goutte-à-goutte. La limite de réponse de 8 KiB est mesurée en **octets UTF-8**, plutôt qu’en caractères JavaScript. L’identité DNS, le SNI du domaine, la validation TLS et l’IPv4 épinglée restent inchangés. Le rapport ne révèle ni adresse fournie ni corps de réponse.
+
+Trois tests avec transport simulé, sans appel réseau, couvrent le serveur goutte-à-goutte, un corps multioctet trop grand et une réponse JSON normale. La sonde n’installe rien; une réponse saine ne constitue jamais une autorisation de déploiement ou une preuve de bascule automatique. L’échéance porte sur chaque **requête HTTPS**; les résolutions DNS, l’exécution globale et les sondes simulées injectées ne reçoivent pas cette échéance. Ces limites devront être traitées avant un usage comme moniteur opérationnel.
+
+Commande de validation : `node --test scripts/lemtel-hosting-preflight.test.mjs scripts/lemtel-hosting-readiness.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs` (**24/24** localement). Les contrôles CI de la PR précédente (#12) sont **6/6 réussis**; la CI de cette phase doit être vérifiée séparément.
+
+Au dernier essai externe, `lemtel.avastatistic.ca` résout vers le VPS Hostinger désigné, mais la négociation TLS expire; aucune API Lemtel complète n’est démontrée. Une clé SSH temporaire, ajoutée avec l’accord du propriétaire, a été refusée par `root` et `ubuntu`. Elle a été retirée de hPanel et supprimée du Sandbox. Le diagnostic système et la réparation du service HTTPS nécessitent une voie d’accès VPS valide et l’inventaire en lecture seule des écouteurs, services et conteneurs; la cause de l’échec reste inconnue.

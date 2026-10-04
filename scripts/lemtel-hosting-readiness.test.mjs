@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DOMAIN, HEALTH_PATH, inspect, pinnedIpv4Lookup, publicIpv4, run } from './lemtel-hosting-readiness.mjs';
+import { EventEmitter } from 'node:events';
+import { DOMAIN, HEALTH_PATH, inspect, pinnedIpv4Lookup, probeOrigin, publicIpv4, run } from './lemtel-hosting-readiness.mjs';
 
 // Only mocked probes use these well-known public resolver addresses.
 const PRIMARY = '1.1.1.1';
@@ -110,4 +111,53 @@ test('ne contacte pas un serveur sans IPv4 valide et ne divulgue aucune adresse 
   assert.ok(!result.stdout.includes(PRIMARY));
   assert.ok(!result.stdout.includes(BACKUP));
   assert.equal(calls, 1);
+});
+
+function simulatedTransport(serve) {
+  return (options, response) => {
+    assert.equal(options.hostname, DOMAIN);
+    assert.equal(options.servername, DOMAIN);
+    assert.equal(options.rejectUnauthorized, true);
+    assert.equal(options.path, HEALTH_PATH);
+    options.lookup(DOMAIN, { all: false }, (_error, address) => assert.equal(address, PRIMARY));
+    const req = new EventEmitter();
+    req.destroy = () => req.emit('close');
+    req.end = () => {
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.headers = { 'content-type': ready.contentType };
+      res.setEncoding = (encoding) => assert.equal(encoding, 'utf8');
+      response(res);
+      serve(res, req);
+    };
+    return req;
+  };
+}
+
+test('un serveur goutte-à-goutte ne peut prolonger la sonde au-delà du délai total', async (t) => {
+  let interval;
+  t.after(() => clearInterval(interval));
+  const transport = simulatedTransport((res, req) => {
+    req.on('close', () => clearInterval(interval));
+    interval = setInterval(() => res.emit('data', ' '), 5);
+  });
+  const result = await probeOrigin(DOMAIN, PRIMARY, 45, transport);
+  assert.deepEqual(result, { outcome: 'timeout' });
+});
+
+test('la limite du corps HTTPS s’applique aux octets UTF-8, sans publier le corps', async () => {
+  const transport = simulatedTransport((res) => {
+    res.emit('data', 'é'.repeat(4097)); // 8194 octets, mais seulement 4097 caractères.
+    res.emit('end');
+  });
+  const result = await probeOrigin(DOMAIN, PRIMARY, 100, transport);
+  assert.deepEqual(result, { outcome: 'response_too_large' });
+});
+
+test('une réponse complète et courte reste observable sans confondre liveness et admission', async () => {
+  const transport = simulatedTransport((res) => {
+    res.emit('data', ready.body);
+    res.emit('end');
+  });
+  assert.deepEqual(await probeOrigin(DOMAIN, PRIMARY, 100, transport), ready);
 });

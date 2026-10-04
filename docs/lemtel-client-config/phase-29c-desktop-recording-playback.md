@@ -1,0 +1,13 @@
+# Phase 29C — Lecture des enregistrements dans le softphone Desktop
+
+Le lecteur personnel Desktop passe exclusivement par les deux actions authentifiées de `fusionpbx-proxy` : `get-recording-signed-url`, puis, si nécessaire, `get-recording` pour le flux binaire. Le client n'envoie que `xml_cdr_uuid` (identifiant du CDR) et, pour l'URL signée, une durée de validité demandée. Aucun chemin, nom de fichier, domaine, date, URL d'enregistrement, organisation ni poste fourni par Desktop ne sert à la lecture. Le serveur résout le CDR, vérifie l'utilisateur, l'organisation et **l'extension exacte** dans `pbx_softphone_users`, puis reconstitue lui-même les métadonnées de lecture selon le contrat 29B/29B.1. Une erreur d'autorisation n'ouvre aucun chemin direct vers FusionPBX ou vers une URL client.
+
+Dans la vue personnelle, une ligne sans extension CDR identique au poste actif n'est pas affichée : le numéro de l'autre partie ne prouve pas la propriété. La transcription déclenchée depuis cette vue ne transmet plus de pointeurs d'enregistrement issus de la ligne affichée. Le cache audio est local au montage du lecteur ; il est effacé et les URL `blob:` sont révoquées lors d'un changement d'utilisateur, de poste, d'une déconnexion ou du démontage. Les réponses asynchrones d'une ancienne session sont ignorées, y compris pour le repli binaire ; le contexte utilisateur en vol ne peut pas remplir le cache après un changement de jeton. Les URL signées en cache ne sont pas réutilisées après leur expiration annoncée (avec marge de 15 secondes).
+
+## Vérifications locales
+
+- `cd apps/ava-softphone-desktop && npx vitest run src/components/RecordingsList.privacy.test.tsx src/lib/avaApi.recordingAuthority.test.ts` : transitions de session/poste, affichage, lecture, repli, payload et contexte auth.
+- `npx deno@2.5.4 test --no-check --allow-read --no-lock supabase/functions/fusionpbx-proxy/recordingAccess.contract.test.ts` : contrat partagé Desktop/serveur, sans accès réseau PBX, DB ou Storage par le code testé.
+- `cd apps/ava-softphone-desktop && npm run build` : construction Vite et Electron.
+
+Aucune migration, aucune modification du serveur FusionPBX réel, aucun changement Planiprêt. Les autres parcours du produit (notamment l'interface administrateur, les messages vocaux et le service de transcription général) ne constituent pas la vue personnelle d'enregistrements du softphone ; le client API partagé envoie néanmoins pour leurs deux actions audio uniquement l'identifiant du CDR, ce qui peut refuser un élément dépourvu de CDR autorisé plutôt que d'accepter des métadonnées client.

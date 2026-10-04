@@ -4,6 +4,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
 const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+const desktop = await Deno.readTextFile(new URL("../../../apps/ava-softphone-desktop/src/lib/avaApi.ts", import.meta.url));
 
 function slice(from: string, to: string): string {
   const a = src.indexOf(from);
@@ -26,6 +27,19 @@ Deno.test("both audio actions share the authorized resolution and server normali
   assert(getRec.includes("serverRecordingParams(recAccess.record)"));
   assert(signedHead.includes("serverRecordingParams(signedAccess.record)"));
   assertEquals(src.includes("canReadCallRecording"), false);
+});
+
+Deno.test("Phase 29C Desktop sends only a CDR identifier; the server supplies read metadata", () => {
+  assert(desktop.includes("params: { xml_cdr_uuid, expires_in: expiresInSec },"));
+  assert(desktop.includes("body: JSON.stringify({ action: 'get-recording', params: { xml_cdr_uuid } })"));
+  const signedClient = desktop.slice(desktop.indexOf("getRecordingSignedUrl: async"), desktop.indexOf("getRecordingAudioUrl: async"));
+  const binaryClient = desktop.slice(desktop.indexOf("getRecordingAudioUrl: async"), desktop.indexOf("  domains: async"));
+  for (const block of [signedClient, binaryClient]) {
+    assert(block.includes("if (!xml_cdr_uuid || !authToken) return null;"));
+    assertEquals(/recording\.(?:recording_url|recording_path|recording_name|record_path|record_name|organization_id|domain_uuid|domain_name)/.test(block), false);
+  }
+  assert(getRec.includes("recordingParams = serverRecordingParams(recAccess.record);"));
+  assert(signedHead.includes("const userReadParams = isServiceCall ? null : serverRecordingParams(signedAccess.record);"));
 });
 
 Deno.test("missing/unauthorized CDR refused before PBX, Storage or self-call", () => {

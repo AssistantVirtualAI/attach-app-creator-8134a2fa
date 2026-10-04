@@ -31,6 +31,7 @@ const APP_VERSION: string =
 interface Creds {
   extension: string;
   email: string;
+  userId?: string;
   displayName?: string;
   sipDomain?: string;
   wssUrl?: string;
@@ -692,8 +693,8 @@ export default function SoftphonePane({
               )}
               {callsSubTab === 'recordings' && (
                 <AppErrorBoundary compact onBack={() => setCallsSubTab('recents')}>
-                  {/* Phase 27B — personal surface: own extension only, no scope props. */}
-                  <RecordingsList extension={creds.extension} />
+                  {/* Phase 29C — remount on auth identity or extension change. */}
+                  <RecordingsList key={`${creds.userId || ''}:${creds.extension}`} extension={creds.extension} sessionUserId={creds.userId} />
                 </AppErrorBoundary>
               )}
               {callsSubTab === 'voicemail' && (

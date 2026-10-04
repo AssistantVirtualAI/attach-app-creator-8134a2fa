@@ -6,7 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import ReactMarkdown from "react-markdown";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import { useAvaContext } from "@/hooks/useAvaContext";
-import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 
 type Msg = { role: "user" | "assistant"; content: string };
 

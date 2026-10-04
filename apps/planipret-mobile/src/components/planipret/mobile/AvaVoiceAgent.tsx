@@ -13,7 +13,8 @@ import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
 import AiConsentGate, { hasAiConsent } from "@/components/planipret/mobile/AiConsentGate";
 import ReconnectStatus from "@/components/planipret/mobile/ReconnectStatus";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
-import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { getAvaToolLabel } from "@/lib/i18n/avaToolLabels";
 
 type AgentState = "idle" | "connecting" | "listening" | "speaking" | "processing" | "tool_running" | "error";

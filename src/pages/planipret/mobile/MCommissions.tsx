@@ -10,7 +10,8 @@ import {
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import MCommissionCharts from "@/components/planipret/mobile/MCommissionCharts";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
-import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { isStatsCacheFresh, readStatsCache, statsCacheKey, writeStatsCache } from "@/lib/planipret/commissionsCache";
 import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 

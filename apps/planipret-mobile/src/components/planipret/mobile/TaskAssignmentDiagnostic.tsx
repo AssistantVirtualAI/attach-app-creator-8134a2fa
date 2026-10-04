@@ -1,4 +1,4 @@
-import { tr } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, CheckCircle2, XCircle, Loader2, ExternalLink } from "lucide-react";

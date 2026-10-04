@@ -19,7 +19,8 @@ import { CallRecordingPlayer } from "@/components/planipret/mobile/call/CallReco
 import MaestroTab from "@/components/planipret/mobile/call/MaestroTab";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 
-import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
 import { presentCallParty } from "@/lib/planipret/callPresentation";

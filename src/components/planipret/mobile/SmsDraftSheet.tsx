@@ -1,4 +1,4 @@
-import { tr } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 // Brouillon de texto pour un client : le courtier voit le destinataire et le
 // texte complet, coche une confirmation explicite, puis seulement là le texto
 // part. Fermer ou revenir en arrière = annulation. Une clé d'idempotence

@@ -1,4 +1,4 @@
-import { tr } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 // Écran de fin d'appel : le courtier décide s'il sauvegarde l'appel dans
 // Maestro, et AVA propose (sans jamais envoyer automatiquement) un texto ou un
 // courriel de suivi qu'il doit relire et confirmer avant l'envoi.

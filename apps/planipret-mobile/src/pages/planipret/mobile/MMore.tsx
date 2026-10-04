@@ -27,7 +27,8 @@ import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard
 import MaestroRelinkButton from "@/components/planipret/mobile/MaestroRelinkButton";
 import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings";
 import MRingtoneSettings from "@/components/planipret/mobile/MRingtoneSettings";
-import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { startMs365Authorize } from "@/lib/planipret/ms365Start";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";

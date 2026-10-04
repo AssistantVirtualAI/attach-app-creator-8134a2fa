@@ -1,4 +1,4 @@
-import { tr } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";

@@ -1,4 +1,4 @@
-import { tr } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { useEffect, useState, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { AlertTriangle, RotateCw, X } from "lucide-react";

@@ -1,4 +1,4 @@
-import { tr } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, UserPlus, Loader2, ExternalLink } from "lucide-react";

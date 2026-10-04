@@ -26,7 +26,8 @@ import MobileHeaderControls from "@/components/planipret/mobile/MobileHeaderCont
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import PostCallConsentSheet from "@/components/planipret/mobile/PostCallConsentSheet";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
-import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { ROUTES } from "@/lib/routes";
 import { recordRedirect } from "@/lib/debug/navDebug";
 import { invokeEdge, onAuthRequired } from "@/lib/planipret/edgeAuth";

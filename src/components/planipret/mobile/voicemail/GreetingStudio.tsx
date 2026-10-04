@@ -5,7 +5,8 @@ import { createAudioGuard } from "@/lib/planipret/audio/audioGuard";
 import { blobToWavMono8k, wavPeak, bytesToBase64 } from "@/lib/planipret/audio/wavEncode";
 import { ensureMicPermission } from "@/lib/planipret/audio/micPermission";
 import { Play, Pause, Sparkles, Mic, RotateCw, Check, Settings2, ChevronDown, ChevronUp, Download } from "lucide-react";
-import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 
 type Voice = {
   voice_id: string;

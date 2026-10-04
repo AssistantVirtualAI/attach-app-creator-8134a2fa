@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, ArrowRightLeft } from "lucide-react";
 import { handoverController, type HandoverEvent } from "@/lib/planipret/net/handoverController";
-import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 
 const MAX = 5;
 

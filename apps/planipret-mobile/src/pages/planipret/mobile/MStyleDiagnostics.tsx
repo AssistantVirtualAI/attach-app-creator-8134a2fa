@@ -1,4 +1,4 @@
-import { tr } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 /**
  * Style / build diagnostics — confirms Tailwind is compiled and shows
  * native build info so the Xcode-rendered bundle can be matched to the

@@ -81,9 +81,16 @@ describe("Lemtel Phase 26A — Mobile call history privacy", () => {
 
   it("useDeviceNotifications has no organizational CDR channel or admin bypass", () => {
     const s = rd(NOTIF);
-    expect(s).not.toContain("adminScope");
-    expect(s).toContain("const cdrFilter = ext ? `extension=eq.${ext}` : null;");
-    expect(s).toContain("if (cdrFilter) cdrCh = supabase.channel(`notif-cdr-${ext}`)");
+    // Phase 26A.2 — aligned on the stricter Phase 28A hook invariants.
+    for (const bad of ["adminScope", "organization_id", "organizationId", "orgId", "dataScope", "permissions", "cdr-org-"]) expect(s.includes(bad), bad).toBe(false);
+    expect(s).toContain("const ext = String(creds.extension || '').trim();\n    if (!ext) return;");
+    expect(s).toContain("const cdrFilter = `extension=eq.${ext}`;\n      cdrCh = supabase.channel(`notif-cdr-${ext}`)");
+    const cdrBlock = s.slice(s.indexOf("cdrCh = supabase.channel(`notif-cdr-${ext}`)"), s.indexOf(".subscribe();", s.indexOf("cdrCh = supabase.channel(")));
+    expect(cdrBlock).toContain("if (String(r?.extension ?? '') !== ext) return;");
+    expect(cdrBlock).toContain("if (r?.voicemail_message) return;");
+    expect(cdrBlock.indexOf("if (String(r?.extension ?? '') !== ext) return;")).toBeLessThan(cdrBlock.indexOf("showLocalNotification("));
+    expect(cdrBlock.indexOf("if (r?.voicemail_message) return;")).toBeLessThan(cdrBlock.indexOf("showLocalNotification("));
+    expect(cdrBlock).not.toContain("kind: 'voicemail'");
   });
 
   it("added active lines contain no Verto, PBX call, secret, SIP URL or data write", () => {

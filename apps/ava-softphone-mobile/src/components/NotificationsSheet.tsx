@@ -22,7 +22,7 @@ export function useNotificationCounts(): Counts {
           mobileApi.calls({ rangeDays: 7 }).catch(() => [] as CallRecord[]),
           mobileApi.voicemails().catch(() => [] as VoicemailEntry[]),
           mobileApi.threads().catch(() => [] as SmsThread[]),
-          mobileApi.recordings(undefined, { rangeDays: 7 }).catch(() => [] as RecordingEntry[]),
+          mobileApi.recordings({ rangeDays: 7 }).catch(() => [] as RecordingEntry[]),
         ]);
         const cutoff = Date.now() - 24 * 36e5;
         const missed = (calls as CallRecord[]).filter((x) => x.status === 'missed' && new Date(x.startedAt).getTime() >= cutoff).length;

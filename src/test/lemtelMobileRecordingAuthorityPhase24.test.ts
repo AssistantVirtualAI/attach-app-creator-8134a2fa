@@ -7,6 +7,7 @@ import path from "node:path";
 // Read-only Git commands only; never writes the real repository.
 const root = path.resolve(__dirname, "../..");
 const BASE = "51831e134";
+const PHASE24A_END = "06c5a0197";
 const M = "apps/ava-softphone-mobile/src";
 const APP = `${M}/MobileApp.tsx`;
 const SHEET = `${M}/components/ActiveCallSheet.tsx`;
@@ -18,23 +19,27 @@ const rd = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 const git = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "utf8" });
 const guard = (...a: string[]) => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs", ...a], { cwd: root, encoding: "utf8" });
 const isProtected = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
-// Committed range plus pending changes, so the check holds before and after the automatic commit.
-const changed = () => {
-  const committed = git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n");
-  const pending = git("status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3));
-  return [...new Set([...committed, ...pending].filter(Boolean))].sort();
-};
-const added = (f: string) => git("diff", "--no-renames", "-U0", BASE, "--", f).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
+// Frozen historical range only (Phase 24A.1); later Lemtel phases cannot affect it.
+const changed = () => git("diff", "--name-only", "--no-renames", `${BASE}..${PHASE24A_END}`).split("\n").filter(Boolean).sort();
+const added = (f: string) => git("diff", "--no-renames", "-U0", `${BASE}..${PHASE24A_END}`, "--", f).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
 
 describe("Lemtel Phase 24A — Mobile manual recording authority", () => {
   const statusBefore = git("status", "--porcelain");
 
-  it("BASE is a commit and strict ancestor of HEAD; guards pass before", { timeout: 60000 }, () => {
+  it("frozen bounds are distinct ordered commits; permanent guard passes before", { timeout: 60000 }, () => {
     expect(git("cat-file", "-t", BASE).trim()).toBe("commit");
-    execFileSync("git", ["merge-base", "--is-ancestor", BASE, "HEAD"], { cwd: root });
-    expect(git("rev-parse", BASE).trim()).not.toBe(git("rev-parse", "HEAD").trim());
+    expect(git("cat-file", "-t", PHASE24A_END).trim()).toBe("commit");
+    expect(git("rev-parse", BASE).trim()).not.toBe(git("rev-parse", PHASE24A_END).trim());
+    execFileSync("git", ["merge-base", "--is-ancestor", BASE, PHASE24A_END], { cwd: root });
+    execFileSync("git", ["merge-base", "--is-ancestor", PHASE24A_END, "HEAD"], { cwd: root });
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${BASE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
+  });
+
+  it("later Desktop Phase 24B change is in BASE..HEAD but outside the frozen range", () => {
+    const later = "apps/ava-softphone-desktop/src/App.tsx";
+    expect(git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n")).toContain(later);
+    expect(changed()).not.toContain(later);
+    expect(changed()).toEqual(FILES);
   });
 
   it("exactly the five allowed paths changed, none protected", () => {
@@ -80,7 +85,6 @@ describe("Lemtel Phase 24A — Mobile manual recording authority", () => {
 
   it("guards pass after; real status unchanged", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${BASE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(git("status", "--porcelain")).toBe(statusBefore);
   });
 });

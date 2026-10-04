@@ -6,8 +6,12 @@ on:
       - '.github/workflows/lemtel-hosting-offline-readiness.yml'
       - 'scripts/lemtel-hosting-preflight*'
       - 'scripts/inventory-lemtel-hosting*'
+      - 'scripts/lemtel-dependency-closure*'
       - 'schemas/lemtel-staging-admission/staging-admission-policy.json'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
+      - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
+      - 'apps/ava-softphone-mobile/src/**'
+      - 'apps/ava-softphone-desktop/src/**'
       - 'supabase/functions/**'
       - 'supabase/migrations/**'
   push:
@@ -15,8 +19,12 @@ on:
       - '.github/workflows/lemtel-hosting-offline-readiness.yml'
       - 'scripts/lemtel-hosting-preflight*'
       - 'scripts/inventory-lemtel-hosting*'
+      - 'scripts/lemtel-dependency-closure*'
       - 'schemas/lemtel-staging-admission/staging-admission-policy.json'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
+      - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
+      - 'apps/ava-softphone-mobile/src/**'
+      - 'apps/ava-softphone-desktop/src/**'
       - 'supabase/functions/**'
       - 'supabase/migrations/**'
 
@@ -32,8 +40,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test fail-closed hosting gate and read-only candidate inventory
-        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/inventory-lemtel-hosting.test.mjs
+      - name: Test fail-closed hosting gate and read-only dependency inventory
+        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
       - name: Both destinations must remain blocked by the current policy
         shell: bash
         run: |
@@ -54,3 +62,6 @@ jobs:
       - name: Inventory is discovery only, not a migration or deployment
         run: |
           node scripts/inventory-lemtel-hosting.mjs | node -e 'let s=""; process.stdin.on("data", d => s+=d); process.stdin.on("end", () => { const x=JSON.parse(s); if (x.database_export_authorized || x.migration_replay_authorized || x.functions_deploy_authorized || x.status !== "discovery_only_manual_review_required") process.exit(1) })'
+      - name: Transitive and client dependencies remain manual-review findings
+        run: |
+          node scripts/lemtel-dependency-closure.mjs | node -e 'let s=""; process.stdin.on("data", d => s+=d); process.stdin.on("end", () => { const x=JSON.parse(s); if (!x.source_analysis_only || !x.findings_are_not_allowlist || x.database_export_authorized || x.migration_replay_authorized || x.functions_deploy_authorized || x.status !== "incomplete_manual_review_required") process.exit(1) })'

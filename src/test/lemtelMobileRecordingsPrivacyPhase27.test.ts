@@ -12,6 +12,8 @@ const CALLS = `${M}/screens/CallsScreen.tsx`;
 const REC = `${M}/screens/RecordingsScreen.tsx`;
 const FILES = [
   API, CALLS, REC,
+  // Callers adapted to the one-argument recordings() signature (typecheck fix).
+  `${M}/components/NotificationsSheet.tsx`, `${M}/components/StatsDashboard.tsx`,
   `${M}/screens/RecordingsScreen.privacy.test.tsx`,
   "src/test/lemtelMobileRecordingsPrivacyPhase27.test.ts",
   "docs/lemtel-mobile/phase-27a-mobile-recordings-privacy.md",
@@ -37,7 +39,7 @@ describe("Lemtel Phase 27A — Mobile recordings privacy", () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
   });
 
-  it("exactly the seven allowed paths changed, none protected", () => {
+  it("exactly the nine allowed paths changed, none protected", () => {
     const c = changed();
     expect(c.filter(isProtected)).toEqual([]);
     expect(c).toEqual(FILES);

@@ -1,7 +1,7 @@
 /**
  * AVA Desktop API Client.
  *
- * Backend: Supabase project gejxisrqtvxavbrfcoxz.supabase.co
+ * Backend: the configured Lemtel API origin (historical or self-hosted).
  *   Auth      — Supabase Auth (JWT in Authorization header).
  *   Tables    — pbx_call_records, pbx_extensions, pbx_ai_insights,
  *               pbx_sms_threads, pbx_softphone_users.

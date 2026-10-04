@@ -161,6 +161,26 @@ describe('useSoftphone', () => {
     expect(result.current.activeCallNumber).toBe('');
   });
 
+  it('answers an incoming call after the bounded TURN wait, before PBX cancellation', async () => {
+    const ua = installFakeJsSIP();
+    const { result } = renderHook(() => useSoftphone(cfg));
+    await waitFor(() => expect(ua.start).toHaveBeenCalled());
+    const session = makeFakeSession('incoming');
+    act(() => ua.emit('newRTCSession', { session }));
+    vi.useFakeTimers();
+    try {
+      vi.mocked(fetchIceServers).mockImplementationOnce(() => new Promise((resolve) => {
+        setTimeout(() => resolve([{ urls: 'stun:stun.example.test' }]), 1_200);
+      }));
+      act(() => { result.current.answer(); });
+      expect(session.answer).not.toHaveBeenCalled();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_200); });
+      expect(session.answer).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not place A’s delayed INVITE on B’s UA after an extension change', async () => {
     const uaA = installFakeJsSIP();
     const bHandlers: Record<string, Handler[]> = {};

@@ -1,3 +1,4 @@
+import { BACKEND_URL, BACKEND_ANON_KEY } from '../lib/backendOrigin';
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, LogOut, KeyRound, Camera, Check, Bell } from 'lucide-react';
@@ -5,9 +6,9 @@ import RingSettingsSheet from './RingSettingsSheet';
 import { colors, font, radius, gradients } from '../lib/theme';
 import type { Creds } from '../lib/creds';
 
-const SUPABASE_URL = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
+const SUPABASE_URL = BACKEND_URL;
 const SUPABASE_ANON =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
+  BACKEND_ANON_KEY;
 
 type Status = 'available' | 'busy' | 'on_call' | 'meeting' | 'lunch' | 'break' | 'dnd' | 'away' | 'out_of_office' | 'offline';
 

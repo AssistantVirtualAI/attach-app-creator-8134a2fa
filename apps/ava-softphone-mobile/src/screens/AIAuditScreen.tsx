@@ -1,4 +1,6 @@
+import { BACKEND_URL, BACKEND_ANON_KEY } from '../lib/backendOrigin';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { supabase } from '../lib/mobileSupabase';
 import { colors, font, radius } from '../lib/theme';
 import { Card, SectionTitle } from '../components/ui/Primitives';
 import { useT } from '../lib/i18n';
@@ -12,9 +14,8 @@ import { useT } from '../lib/i18n';
  * inserts a new attempt into the audit log.
  */
 
-const SUPABASE_URL = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
-const ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
+const SUPABASE_URL = BACKEND_URL;
+const ANON_KEY = BACKEND_ANON_KEY;
 
 type Row = {
   id: string;
@@ -49,21 +50,25 @@ const FILTER_FR: Record<typeof FILTERS[number], string> = {
 };
 
 
-function getToken(): string | null {
-  try { return localStorage.getItem('ava.auth.token') || localStorage.getItem('sb-access-token'); } catch { return null; }
-}
-
 async function authFetch(path: string, init: RequestInit = {}) {
-  const token = getToken();
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) {
+    window.dispatchEvent(new CustomEvent('mobile-auth-required'));
+    throw new Error('Session utilisateur requise');
+  }
   const res = await fetch(`${SUPABASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       apikey: ANON_KEY,
-      Authorization: `Bearer ${token || ANON_KEY}`,
+      Authorization: `Bearer ${token}`,
       ...(init.headers as any || {}),
     },
   });
+  if (res.status === 401 || res.status === 403) {
+    window.dispatchEvent(new CustomEvent('mobile-auth-required'));
+  }
   return res;
 }
 
@@ -89,6 +94,9 @@ export default function AIAuditScreen() {
       if (filter !== 'all') params.set('status', `eq.${filter}`);
       const res = await authFetch(`/rest/v1/ai_request_audit_log?${params.toString()}`);
       if (res.ok) setRows((await res.json()) as Row[]);
+      else setRows([]);
+    } catch {
+      setRows([]);
     } finally { setLoading(false); }
   }, [filter]);
 

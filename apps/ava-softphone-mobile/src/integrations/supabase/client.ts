@@ -1,12 +1,10 @@
+import { BACKEND_URL, BACKEND_ANON_KEY, BACKEND_STORAGE_SUFFIX } from '../../lib/backendOrigin';
 import { createClient } from '@supabase/supabase-js';
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 
-const SUPABASE_URL = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
-const SUPABASE_ANON_KEY =
-  (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
+const SUPABASE_URL = BACKEND_URL;
+const SUPABASE_ANON_KEY = BACKEND_ANON_KEY;
 
 // On native iOS/Android, localStorage is unreliable across app restarts.
 // Use Capacitor Preferences (backed by NSUserDefaults / SharedPreferences)
@@ -40,5 +38,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    ...(BACKEND_STORAGE_SUFFIX ? { storageKey: `lemtel-mobile-alt-auth${BACKEND_STORAGE_SUFFIX}` } : {}),
   },
 });

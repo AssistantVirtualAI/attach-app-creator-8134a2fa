@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { theme } from '../lib/theme';
 import { setAuthToken } from '../lib/avaApi';
 import { supabase } from '../lib/supabaseClient';
+import { BACKEND_URL } from '../lib/backendOrigin';
 import LemtelLogo from './LemtelLogo';
 import BrandTagline from './BrandTagline';
 
 type Creds = {
   portalUrl: string;
+  backendOrigin?: string;
   email: string;
   extension: string;
   displayName?: string;
@@ -39,6 +41,7 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
   ) => {
     const credentials: Creds = {
       portalUrl: (portalUrl || 'https://avastatistic.ca').replace(/\/+$/, ''),
+      backendOrigin: BACKEND_URL,
       email: fallbackEmail,
       extension: String(softphone?.extension ?? extension ?? 'N/A'),
       displayName: softphone?.display_name || fallbackEmail.split('@')[0],

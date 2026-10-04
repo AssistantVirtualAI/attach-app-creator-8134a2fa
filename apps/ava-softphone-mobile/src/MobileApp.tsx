@@ -1,3 +1,4 @@
+import { BACKEND_URL } from './lib/backendOrigin';
 import { Component, useEffect, useMemo, useRef, useState, Suspense, lazy, type ReactNode } from 'react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
@@ -50,12 +51,7 @@ import { configureMobileApi, setAuthToken } from './lib/mobileApi';
 
 
 // Initialize immediately so API calls never go out without credentials
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
-configureMobileApi({
-  portalUrl: 'https://gejxisrqtvxavbrfcoxz.supabase.co',
-  anonKey: SUPABASE_ANON_KEY,
-  accessToken: null,
-});
+configureMobileApi({ accessToken: null });
 import { configureAudit, audit } from './lib/audit';
 import { edgeCall, supabase } from './lib/mobileSupabase';
 import { useLemtelMobileClientConfig } from './hooks/useLemtelMobileClientConfig';
@@ -452,21 +448,10 @@ function AuthenticatedShell({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Configure the mobile API client with the Supabase Edge Functions host
-  // (NOT the marketing portal URL — edge functions live on supabase.co).
+  // Configure the mobile API client with the selected Lemtel backend,
+  // never with the marketing portal URL saved in user credentials.
   useEffect(() => {
-    const SUPABASE_URL =
-      (import.meta as any).env?.VITE_SUPABASE_URL ||
-      'https://gejxisrqtvxavbrfcoxz.supabase.co';
-    const SUPABASE_ANON =
-      (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-      (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
-    configureMobileApi({
-      portalUrl: SUPABASE_URL,
-      accessToken: creds.accessToken || null,
-      anonKey: SUPABASE_ANON,
-    });
+    configureMobileApi({ accessToken: creds.accessToken || null });
     configureAudit(async () => creds.accessToken || null);
     if (creds.accessToken) audit('softphone.signed_in', creds.userId, { extension: creds.extension });
     // Desktop/portal always fetch fresh SIP credentials from the backend.
@@ -496,7 +481,7 @@ function AuthenticatedShell({
         onToken: async (token, platform) => {
           await sendPushTokenToBackend({
             token, platform,
-            portalUrl: (creds as any).portalUrl || 'https://avastatistic.ca',
+            portalUrl: BACKEND_URL,
             accessToken: creds.accessToken || '',
             extension: creds.extension,
           });

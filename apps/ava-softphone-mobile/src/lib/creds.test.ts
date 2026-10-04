@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { BACKEND_URL } from './backendOrigin';
 
 const KEY = 'lemtel.creds.v1';
 const sample = { email: 'a@b.co', extension: '300', displayName: 'X' };
+const scopedSample = { ...sample, backendOrigin: BACKEND_URL };
 
 describe('creds.ts — web localStorage fallback (Preferences unavailable)', () => {
   beforeEach(() => {
@@ -21,8 +23,8 @@ describe('creds.ts — web localStorage fallback (Preferences unavailable)', () 
     const { saveCredentials, getCredentials, clearCredentials } = await import('./creds');
     expect(await getCredentials()).toBeNull();
     await saveCredentials(sample as any);
-    expect(localStorage.getItem(KEY)).toBe(JSON.stringify(sample));
-    expect(await getCredentials()).toEqual(sample);
+    expect(localStorage.getItem(KEY)).toBe(JSON.stringify(scopedSample));
+    expect(await getCredentials()).toEqual(scopedSample);
     await clearCredentials();
     expect(localStorage.getItem(KEY)).toBeNull();
     expect(await getCredentials()).toBeNull();
@@ -33,8 +35,8 @@ describe('creds.ts — web localStorage fallback (Preferences unavailable)', () 
     vi.doMock('@capacitor/preferences', () => ({ Preferences: {} }));
     const { saveCredentials, getCredentials } = await import('./creds');
     await saveCredentials(sample as any);
-    expect(localStorage.getItem(KEY)).toBe(JSON.stringify(sample));
-    expect(await getCredentials()).toEqual(sample);
+    expect(localStorage.getItem(KEY)).toBe(JSON.stringify(scopedSample));
+    expect(await getCredentials()).toEqual(scopedSample);
   });
 });
 
@@ -60,9 +62,9 @@ describe('creds.ts — native Preferences storage', () => {
   it('writes through to Preferences, not localStorage', async () => {
     const { saveCredentials, getCredentials, clearCredentials } = await import('./creds');
     await saveCredentials(sample as any);
-    expect(store[KEY]).toBe(JSON.stringify(sample));
+    expect(store[KEY]).toBe(JSON.stringify(scopedSample));
     expect(localStorage.getItem(KEY)).toBeNull();
-    expect(await getCredentials()).toEqual(sample);
+    expect(await getCredentials()).toEqual(scopedSample);
     await clearCredentials();
     expect(store[KEY]).toBeUndefined();
     expect(await getCredentials()).toBeNull();

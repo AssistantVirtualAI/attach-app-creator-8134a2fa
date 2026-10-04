@@ -1,21 +1,13 @@
 // ---------------------------------------------------------------------------
 // Shared WebRTC config + debug helpers for the SIP softphone.
 //
-// IMPORTANT: this file is mirrored at
-//   apps/ava-softphone-mobile/src/lib/sip/rtcConfig.ts
-// The sub-app's tsconfig only includes its own `src`, so we cannot import
-// across roots. Keep both files byte-identical — edit one, copy to the other.
+// Lemtel only: never ship TURN credentials in a Vite bundle. The related
+// Planiprêt module is a separate product and must not be edited here.
 // ---------------------------------------------------------------------------
 
 // ---------- Env-driven ICE provider configuration -------------------------
-// Defaults target Metered.ca (TURN/TURNS on 80/443, see docs/turn-ios-metered.md).
-// Override per environment (prod/staging) with Vite env vars:
-//   VITE_TURN_URLS              comma-separated turn:/turns: urls
-//   VITE_TURN_USERNAME          shared username for the urls above
-//   VITE_TURN_CREDENTIAL        shared credential
-//   VITE_STUN_URLS              comma-separated stun: urls (optional)
-//   VITE_TURN_FALLBACK_URLS     fallback turn urls if probe fails
-//   VITE_TURN_FALLBACK_USERNAME / VITE_TURN_FALLBACK_CREDENTIAL
+// Only public STUN coordinates can be configured at build time; TURN is
+// issued by the authenticated backend just before a call (iceServers.ts).
 function readEnv(name: string): string | undefined {
   try {
     // @ts-ignore — Vite env
@@ -23,44 +15,18 @@ function readEnv(name: string): string | undefined {
     return typeof v === 'string' && v.length ? v : undefined;
   } catch { return undefined; }
 }
-function buildIceServers(opts: {
-  stunEnv: string; turnEnv: string; userEnv: string; credEnv: string;
-  defaults: RTCIceServer[];
-}): RTCIceServer[] {
-  const turnUrls = readEnv(opts.turnEnv)?.split(',').map(s => s.trim()).filter(Boolean);
-  const stunUrlsEnv = readEnv(opts.stunEnv)?.split(',').map(s => s.trim()).filter(Boolean);
-  // If neither TURN nor STUN env vars are set, use the defaults (which include Metered TURN).
-  // If STUN env is set (even without TURN), use the env-provided STUN servers only —
-  // this allows disabling Metered TURN when it is unreachable from mobile networks.
-  if (!turnUrls?.length && !stunUrlsEnv?.length) return opts.defaults;
-  const stunUrls = stunUrlsEnv ?? ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'];
-  if (!turnUrls?.length) {
-    // STUN only — no TURN configured
-    return stunUrls.map((urls) => ({ urls }));
-  }
-  const username = readEnv(opts.userEnv) ?? '';
-  const credential = readEnv(opts.credEnv) ?? '';
-  return [
-    ...stunUrls.map((urls) => ({ urls })),
-    ...turnUrls.map((urls) => ({ urls, username, credential })),
-  ];
+function buildIceServers(stunEnv: string, defaults: RTCIceServer[]): RTCIceServer[] {
+  const urls = readEnv(stunEnv)?.split(',').map(s => s.trim()).filter(s => s.startsWith('stun:'));
+  return urls?.length ? urls.map((url) => ({ urls: url })) : defaults;
 }
 
-const METERED_DEFAULTS: RTCIceServer[] = [
+const STUN_DEFAULTS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'turn:global.relay.metered.ca:80', username: 'e499486ca9b7d5a03a01e915', credential: 'uMFpNAFBoFFUHOdF' },
-  { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'e499486ca9b7d5a03a01e915', credential: 'uMFpNAFBoFFUHOdF' },
-  { urls: 'turn:global.relay.metered.ca:443', username: 'e499486ca9b7d5a03a01e915', credential: 'uMFpNAFBoFFUHOdF' },
-  { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'e499486ca9b7d5a03a01e915', credential: 'uMFpNAFBoFFUHOdF' },
 ];
 
-/** Primary STUN/TURN — env-overridable, defaults to Metered.ca. */
-export const ICE_SERVERS: RTCIceServer[] = buildIceServers({
-  stunEnv: 'VITE_STUN_URLS', turnEnv: 'VITE_TURN_URLS',
-  userEnv: 'VITE_TURN_USERNAME', credEnv: 'VITE_TURN_CREDENTIAL',
-  defaults: METERED_DEFAULTS,
-});
+/** Public STUN for diagnostic/default PC config; never a private relay. */
+export const ICE_SERVERS: RTCIceServer[] = buildIceServers('VITE_STUN_URLS', STUN_DEFAULTS);
 
 export const PC_CONFIG: RTCConfiguration = {
   iceServers: ICE_SERVERS,
@@ -227,19 +193,8 @@ export function watchCallEstablishment(
   });
 }
 
-// ---------- Fallback ICE servers (env-overridable, OpenRelay defaults) -----
-const OPENRELAY_DEFAULTS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-];
-
-export const FALLBACK_ICE_SERVERS: RTCIceServer[] = buildIceServers({
-  stunEnv: 'VITE_STUN_FALLBACK_URLS', turnEnv: 'VITE_TURN_FALLBACK_URLS',
-  userEnv: 'VITE_TURN_FALLBACK_USERNAME', credEnv: 'VITE_TURN_FALLBACK_CREDENTIAL',
-  defaults: OPENRELAY_DEFAULTS,
-});
+// ---------- STUN-only fallback. TURN comes only from authenticated API. -----
+export const FALLBACK_ICE_SERVERS: RTCIceServer[] = buildIceServers('VITE_STUN_FALLBACK_URLS', STUN_DEFAULTS);
 
 // ---------- Diagnostic bus (UI + console) ----------------------------------
 export type IceDiagnosticEvent =
@@ -345,6 +300,14 @@ export async function probeTurnEndpoints(timeoutMs = 5000): Promise<{ provider: 
 export function ensureActivePcConfig(): Promise<RTCConfiguration> {
   if (_activePcConfig) return Promise.resolve(_activePcConfig);
   if (_probePromise) return _probePromise;
+  // The build has only public STUN. Actual TURN is fetched per call through
+  // fetchIceServers(); probing for relay candidates here can only delay UI.
+  if (!ICE_SERVERS.some((s) => [s.urls].flat().some((url) => url.startsWith('turn')))) {
+    _activeProvider = 'fallback';
+    _activePcConfig = { iceServers: FALLBACK_ICE_SERVERS, iceTransportPolicy: 'all', bundlePolicy: 'balanced' };
+    emitDiag({ kind: 'pc-config', provider: 'fallback' });
+    return Promise.resolve(_activePcConfig);
+  }
   _probePromise = (async () => {
     try {
       const res = await probeTurnEndpoints();
@@ -465,5 +428,3 @@ export function isIceDiagOverlayEnabled(): boolean {
   } catch {}
   return false;
 }
-
-

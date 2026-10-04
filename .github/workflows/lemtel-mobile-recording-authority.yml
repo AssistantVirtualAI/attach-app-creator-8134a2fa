@@ -1,4 +1,4 @@
-name: Lemtel mobile — recording authority
+name: Lemtel mobile — session, recording and TURN authority
 
 on:
   pull_request:
@@ -9,6 +9,7 @@ on:
       - 'supabase/functions/mobile-calls/**'
       - 'supabase/functions/mobile-voicemails/**'
       - 'supabase/functions/fusionpbx-proxy/**'
+      - 'supabase/functions/get-turn-credentials/**'
       - '.github/workflows/lemtel-mobile-recording-authority.yml'
   workflow_dispatch:
 
@@ -33,13 +34,13 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check renderer types
         run: npx tsc --noEmit -p tsconfig.json
-      - name: Test full Lemtel mobile suite (including recording authority)
+      - name: Test full Lemtel mobile suite (including cutover and TURN)
         run: npm test -- --reporter=dot
       - name: Build mobile web bundle (no native submission)
         run: npm run build
 
   contract:
-    name: Recording authority Deno contracts
+    name: Recording and TURN authority Deno contracts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +53,11 @@ jobs:
         run: deno check --no-lock --node-modules-dir=auto supabase/functions/ai-analyze-call/index.ts
       - name: Type-check mobile history and voicemail endpoints
         run: deno check --no-lock supabase/functions/mobile-calls/index.ts supabase/functions/mobile-voicemails/index.ts
+      - name: Type-check Lemtel TURN issuer
+        run: deno check --no-lock supabase/functions/get-turn-credentials/index.ts
       - name: Verify server contract without backend access
         run: >-
           deno test --no-check --allow-read --no-lock
           supabase/functions/ai-transcribe-call/recordingAuthority.contract.test.ts
           supabase/functions/fusionpbx-proxy/recordingAccess.contract.test.ts
+          supabase/functions/get-turn-credentials/turnIssuer.contract.test.ts

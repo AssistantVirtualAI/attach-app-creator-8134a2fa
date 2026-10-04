@@ -34,9 +34,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install compile SDK 36
-        run: sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Use hosted Android SDK 36
+        run: |
+          test -n "${ANDROID_HOME:-}"
+          if [ ! -f "$ANDROID_HOME/platforms/android-36/android.jar" ] || [ ! -d "$ANDROID_HOME/build-tools/36.0.0" ]; then
+            sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+          fi
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -d "$ANDROID_HOME/build-tools/36.0.0"
       - name: Install locked client dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Build web bundle
@@ -63,8 +68,8 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  ios-simulator:
-    name: iOS simulator build (no signing)
+  ios-device:
+    name: iOS device compile (no signing)
     runs-on: macos-14
     timeout-minutes: 45
     defaults:
@@ -83,12 +88,12 @@ jobs:
         run: npm run build
       - name: Sync native iOS project and CocoaPods (runner only)
         run: npx cap sync ios
-      - name: Compile simulator app without signing
+      - name: Compile iOS device app without signing
         run: >-
           xcodebuild -workspace ios/App/App.xcworkspace
-          -scheme App -configuration Debug -sdk iphonesimulator
-          -destination 'generic/platform=iOS Simulator'
+          -scheme App -configuration Debug -sdk iphoneos
+          -destination 'generic/platform=iOS'
           -derivedDataPath build/native-preflight
           CODE_SIGNING_ALLOWED=NO build
-      - name: Verify simulator app exists
-        run: test -d build/native-preflight/Build/Products/Debug-iphonesimulator/App.app
+      - name: Verify unsigned iOS device app exists
+        run: test -d build/native-preflight/Build/Products/Debug-iphoneos/App.app

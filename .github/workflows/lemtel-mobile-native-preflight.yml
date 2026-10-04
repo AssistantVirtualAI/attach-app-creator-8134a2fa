@@ -1,0 +1,99 @@
+name: Lemtel mobile — native build preflight
+
+on:
+  pull_request:
+    paths:
+      - 'apps/ava-softphone-mobile/**'
+      - 'docs/lemtel-mobile/phase-30c-native-build-preflight.md'
+      - '.github/workflows/lemtel-mobile-native-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-debug:
+    name: Android debug APK (no release signing)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: apps/ava-softphone-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Use hosted Android SDK 36
+        run: |
+          test -n "${ANDROID_HOME:-}"
+          if [ ! -f "$ANDROID_HOME/platforms/android-36/android.jar" ] || [ ! -d "$ANDROID_HOME/build-tools/36.0.0" ]; then
+            sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+          fi
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -d "$ANDROID_HOME/build-tools/36.0.0"
+      - name: Install locked client dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build web bundle
+        run: npm run build
+      - name: Sync native Android project (runner only)
+        run: npx cap sync android
+      - name: Compile debug APK without a release key
+        run: ./gradlew :app:assembleDebug --no-daemon
+        working-directory: apps/ava-softphone-mobile/android
+      - name: Verify debug APK exists
+        run: test -s android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify unsigned release is rejected before compilation
+        working-directory: apps/ava-softphone-mobile/android
+        run: |
+          if ./gradlew :app:bundleRelease --dry-run --no-daemon > /tmp/lemtel-release-guard.log 2>&1; then
+            echo 'Unsigned Android release was unexpectedly accepted'; exit 1
+          fi
+          grep -q 'Lemtel release signing is not configured' /tmp/lemtel-release-guard.log
+      - name: Save private short-lived debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-android-debug-${{ github.run_id }}
+          path: apps/ava-softphone-mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 3
+
+  ios-device:
+    name: iOS device compile (no signing)
+    runs-on: macos-14
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/ava-softphone-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
+      - name: Install locked client dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build web bundle
+        run: npm run build
+      - name: Sync native iOS project and CocoaPods (runner only)
+        run: npx cap sync ios
+      - name: Compile iOS device app without signing
+        run: >-
+          xcodebuild -workspace ios/App/App.xcworkspace
+          -scheme App -configuration Debug -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath build/native-preflight
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Verify unsigned iOS device app exists
+        run: test -d build/native-preflight/Build/Products/Debug-iphoneos/App.app

@@ -1,6 +1,15 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
+// CI debug builds need no release key. Never store signing material in source
+// or fall back to a developer's local keystore. A release requires all four.
+def releaseKeystorePath = System.getenv('LEMTEL_ANDROID_KEYSTORE_FILE')?.trim()
+def releaseStorePassword = System.getenv('LEMTEL_ANDROID_STORE_PASSWORD')
+def releaseKeyAlias = System.getenv('LEMTEL_ANDROID_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('LEMTEL_ANDROID_KEY_PASSWORD')
+def releaseSigningReady = [releaseKeystorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+    .every { it != null && !it.trim().isEmpty() } && file(releaseKeystorePath).isFile()
+
 android {
     namespace "com.lemtel.softphone"
     compileSdk rootProject.ext.compileSdkVersion
@@ -18,10 +27,12 @@ android {
 
     signingConfigs {
         release {
-            storeFile file(System.getProperty("user.home") + "/Desktop/lemtel-softphone.jks")
-            storePassword "LemtelSoft2026!"
-            keyAlias "lemtel-softphone"
-            keyPassword "LemtelSoft2026!"
+            if (releaseSigningReady) {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
         }
     }
 
@@ -29,7 +40,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            if (releaseSigningReady) signingConfig signingConfigs.release
         }
     }
 
@@ -64,6 +75,17 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// Catch aggregate tasks such as `build` that transitively package a release.
+// Fail before compiling rather than generating a misleading unsigned bundle.
+gradle.taskGraph.whenReady { graph ->
+    def releasePackaging = graph.allTasks.any { task ->
+        task.project.path == project.path && task.name in ['assembleRelease', 'bundleRelease', 'packageRelease']
+    }
+    if (releasePackaging && !releaseSigningReady) {
+        throw new GradleException('Lemtel release signing is not configured: provide LEMTEL_ANDROID_KEYSTORE_FILE, LEMTEL_ANDROID_STORE_PASSWORD, LEMTEL_ANDROID_KEY_ALIAS and LEMTEL_ANDROID_KEY_PASSWORD via a private channel.')
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')

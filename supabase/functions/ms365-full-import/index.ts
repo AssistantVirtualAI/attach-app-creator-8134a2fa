@@ -51,7 +51,7 @@ function computeContactDedupKey(c: any): string | null {
 async function syncContacts(admin: any, profile: any) {
   const user_id = profile.user_id;
   await setState(admin, user_id, "contacts", { status: "running", last_error: null });
-  const tenantId = String(profile.ms365_tenant_id ?? profile.ms365_tid ?? "");
+  const tenantId = "";
   const accountEmail = String(profile.ms365_email ?? "").toLowerCase();
   let url = "/me/contacts?$top=100&$select=id,displayName,givenName,surname,emailAddresses,businessPhones,mobilePhone,homePhones,companyName,jobTitle";
   let total = 0;
@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
     if (!userId) return json({ success: false, error: "unauthorized" }, 401);
 
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("id, user_id, full_name, ms365_email, ms365_tenant_id, ms365_access_token, ms365_refresh_token, ms365_scopes, ms365_token_expiry")
+      .select("id, user_id, full_name, ms365_email, ms365_access_token, ms365_refresh_token, ms365_scopes, ms365_token_expiry")
       .eq("user_id", userId).maybeSingle();
     if (!profile?.ms365_access_token) return json({ success: false, error: "ms365_not_connected" }, 400);
 

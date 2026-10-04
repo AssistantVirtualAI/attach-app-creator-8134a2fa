@@ -41,6 +41,9 @@ const Screen = (p: any) => <RecordingsScreen creds={null} rangeDays={7} onRangeD
 beforeEach(() => {
   for (const f of [h.channel, h.removeChannel, h.recordings, h.me, h.restGet, h.download, h.ch.on, h.ch.subscribe]) f.mockClear();
   h.recordings.mockResolvedValue([own]);
+  h.ch.on.mockImplementation(() => h.ch);
+  h.ch.subscribe.mockImplementation(() => h.ch);
+  h.channel.mockImplementation(() => h.ch);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 

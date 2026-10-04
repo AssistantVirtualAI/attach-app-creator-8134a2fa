@@ -2058,62 +2058,55 @@ const handler = async (req: Request): Promise<Response> => {
       return json({ success: errors.length === 0, stats: { ...stats, duration_ms }, errors });
     }
 
+    // Phase 29B — strict server authority for recording audio.
+    // Service-role internal calls are the ONLY bypass. A signed-in user may read
+    // audio only when the CDR (resolved server-side) belongs to the exact
+    // extension of one of their pbx_softphone_users rows in the same
+    // organization. Admin roles, org membership and any client-supplied
+    // organization/domain/path/extension never widen this access.
     async function canReadCallRecording(xmlCdrUuid: string | null | undefined) {
-      if (isServiceCall || !userId) return true;
-      if (!xmlCdrUuid) return false;
+      if (isServiceCall) return true;
+      if (!userId) return false;
+      const cdrId = typeof xmlCdrUuid === "string" ? xmlCdrUuid.trim() : "";
+      if (!cdrId) return false;
 
-      const recordSelect = "id, organization_id, extension_uuid, extension";
+      const recordSelect = "id, organization_id, extension";
       const { data: byPbxUuid, error: pbxErr } = await admin
         .from("pbx_call_records")
         .select(recordSelect)
-        .eq("pbx_uuid", xmlCdrUuid)
+        .eq("pbx_uuid", cdrId)
         .limit(1);
       if (pbxErr) {
-        console.warn("recording access lookup failed:", pbxErr.message);
+        console.warn("recording access lookup failed");
         return false;
       }
 
       let record = byPbxUuid?.[0] || null;
-      if (!record && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(xmlCdrUuid)) {
+      if (!record && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cdrId)) {
         const { data: byId, error: idErr } = await admin
           .from("pbx_call_records")
           .select(recordSelect)
-          .eq("id", xmlCdrUuid)
+          .eq("id", cdrId)
           .limit(1);
         if (idErr) {
-          console.warn("recording access id lookup failed:", idErr.message);
+          console.warn("recording access id lookup failed");
           return false;
         }
         record = byId?.[0] || null;
       }
-      if (!record) return false;
+      if (!record || !record.organization_id) return false;
+      const recordExtension = String(record.extension ?? "").trim();
+      if (!recordExtension) return false;
 
-      const { data: isLemtelAdmin } = await admin.rpc("is_lemtel_admin", { _user_id: userId });
-      if (isLemtelAdmin) return true;
-
-      const { data: orgMember } = await admin
-        .from("org_members")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("org_id", record.organization_id)
-        .in("role", ["owner", "admin"])
-        .maybeSingle();
-      if (orgMember) return true;
-
-      let softphoneQuery = admin
+      const { data: softphoneRows, error: softphoneErr } = await admin
         .from("pbx_softphone_users")
         .select("id")
         .eq("portal_user_id", userId)
         .eq("organization_id", record.organization_id)
+        .eq("extension", recordExtension)
         .limit(1);
-      if (record.extension) {
-        softphoneQuery = softphoneQuery.eq("extension", record.extension);
-      } else {
-        return false;
-      }
-      const { data: softphoneRows, error: softphoneErr } = await softphoneQuery;
       if (softphoneErr) {
-        console.warn("recording softphone access lookup failed:", softphoneErr.message);
+        console.warn("recording softphone access lookup failed");
         return false;
       }
       return !!softphoneRows?.length;
@@ -2132,11 +2125,12 @@ const handler = async (req: Request): Promise<Response> => {
       if (!recordingParams.xml_cdr_uuid) recordingParams.xml_cdr_uuid = body.xml_cdr_uuid || body.id;
       const { record_path, record_name, xml_cdr_uuid, domain_uuid, domain_name, local_recording_url, recorded_at } = recordingParams;
       const probeOnly = recordingParams.probe === true || recordingParams.probe === "true";
+      // Phase 29B — access check first: user calls without a resolvable own CDR stop here.
+      if (!(await canReadCallRecording(xml_cdr_uuid ? String(xml_cdr_uuid) : null))) {
+        return json({ error: "Forbidden", message: "Recording is outside the signed-in user extension scope" }, 403);
+      }
       if (!xml_cdr_uuid && !record_name && !(record_path && record_name)) {
         return json({ error: "xml_cdr_uuid, record_name, or (record_path, record_name) required" }, 400);
-      }
-      if (xml_cdr_uuid && !(await canReadCallRecording(String(xml_cdr_uuid)))) {
-        return json({ error: "Forbidden", message: "Recording is outside the signed-in user extension scope" }, 403);
       }
       const lower = String(record_name || "").toLowerCase();
       const ext = lower.endsWith(".mp3") ? "mp3"
@@ -2540,7 +2534,8 @@ const handler = async (req: Request): Promise<Response> => {
       try {
         const signedParams = { ...(params || {}) } as any;
         const signedXmlCdrUuid = signedParams.xml_cdr_uuid || body.xml_cdr_uuid || body.id || null;
-        if (signedXmlCdrUuid && !(await canReadCallRecording(String(signedXmlCdrUuid)))) {
+        // Phase 29B — validated before the service-role self-call; never a bypass.
+        if (!(await canReadCallRecording(signedXmlCdrUuid ? String(signedXmlCdrUuid) : null))) {
           return json({ error: "Forbidden", message: "Recording is outside the signed-in user extension scope" }, 403);
         }
         // Reuse the proven byte-fetch path by self-invoking get-recording.

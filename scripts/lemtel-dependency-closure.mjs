@@ -2,7 +2,7 @@
 // isolation: computed calls, comments, SQL dependencies and runtime behavior
 // still require manual review. This module has no network or write capability.
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, extname, join, resolve, sep } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inventory } from './inventory-lemtel-hosting.mjs';
 
@@ -11,9 +11,11 @@ const FOREIGN = /planipret|(?:^|\W)pp_[a-z0-9_]+/i;
 const IDENTIFIER = /^[a-z][a-z0-9-]{2,79}$/;
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs']);
 const CALLS = [
-  /\.functions\.invoke\s*\(\s*['"`]([a-z][a-z0-9-]{2,79})['"`]/g,
-  /\/functions\/v1\/([a-z][a-z0-9-]{2,79})(?=[^a-z0-9-]|$)/g,
+  /\.functions\.invoke\s*\(\s*['"`]([a-z][a-z0-9-]{2,79})['"`]\s*(?=[,)])/g,
+  /\/functions\/v1\/([a-z][a-z0-9-]{2,79})(?=[/?#'"`\s]|$)/g,
 ];
+const INVOCATIONS = /\.functions\.invoke\s*\(/g;
+const INTERPOLATED_PATHS = /\/functions\/v1\/[a-z0-9_-]*\$\{/g;
 // Bounded scan permits valid multiline import/export declarations while
 // excluding quoted literals and semicolon-separated statements.
 const IMPORTS = /\b(?:import|export)\s+(?:[^;'"`]{0,300}?\s+from\s+)?['"](\.{1,2}\/[^'"\n]+)['"]/g;
@@ -90,9 +92,23 @@ export function audit(root = ROOT) {
   const base = resolve(root, 'supabase/functions');
   const candidates = inventory(root).candidates.filter((entry) => entry.entrypoint_present);
   const references = new Map();
+  const clientCallsiteFindings = [];
   for (const app of ['ava-softphone-mobile', 'ava-softphone-desktop']) {
+    let invocationCount = 0;
+    let unattributedInvocationCount = 0;
+    let interpolatedPathCount = 0;
+    const reviewFiles = [];
     for (const file of sources(join(root, 'apps', app, 'src'))) {
       const text = readFileSync(file, 'utf8');
+      const literals = count(text, CALLS[0]);
+      const invocations = count(text, INVOCATIONS);
+      const interpolated = count(text, INTERPOLATED_PATHS);
+      invocationCount += invocations;
+      unattributedInvocationCount += invocations - literals;
+      interpolatedPathCount += interpolated;
+      if (invocations > literals || interpolated > 0) {
+        reviewFiles.push(relative(root, file).split(sep).join('/'));
+      }
       for (const regex of CALLS) {
         for (const match of text.matchAll(regex)) {
           const name = match[1];
@@ -104,6 +120,11 @@ export function audit(root = ROOT) {
         }
       }
     }
+    clientCallsiteFindings.push({ client: app, invocation_callsite_count: invocationCount,
+      unattributed_invocation_count: unattributedInvocationCount,
+      interpolated_api_path_count: interpolatedPathCount,
+      review_source_paths: reviewFiles.sort(),
+      heuristic_manual_review_required: true });
   }
   const clientDependencies = [...references].map(([name, apps]) => ({
     function: name,
@@ -122,6 +143,7 @@ export function audit(root = ROOT) {
     functions_deploy_authorized: false,
     findings_are_not_allowlist: true,
     client_dependencies: clientDependencies,
+    client_callsite_findings: clientCallsiteFindings,
     function_import_closures: [...names].sort().map((name) => inspectFunction(base, name)),
   };
 }

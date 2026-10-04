@@ -661,6 +661,26 @@ export const ava = {
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('lemtel:phone-sync-complete'));
     return (await readCallRecordRows(limit, opts)).map(mapCdrToCall);
   },
+  // Phase 26B — private softphone path (own_extension_only). The extension is
+  // resolved only from getMeContext(); callers cannot choose a scope. The
+  // general methods above are kept for the administrative console.
+  personalCalls: async (limit = 100, opts?: { rangeDays?: 7 | 30 | null }) => {
+    if (MOCK) return MOCK_CALLS;
+    const me = await getMeContext();
+    const ext = cleanText(me.extension);
+    if (!ext) return [] as CallRecord[];
+    await bestEffortCdrSync(Math.max(limit, 200));
+    return (await readCallRecordRows(limit, { extension: ext, rangeDays: opts?.rangeDays ?? null })).map(mapCdrToCall);
+  },
+  refreshPersonalCalls: async (limit = 150, opts?: { rangeDays?: 7 | 30 | null }) => {
+    if (MOCK) return MOCK_CALLS;
+    const me = await getMeContext();
+    const ext = cleanText(me.extension);
+    if (!ext) return [] as CallRecord[];
+    await bestEffortCdrSync(Math.max(limit, 250), 0, true);
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('lemtel:phone-sync-complete'));
+    return (await readCallRecordRows(limit, { extension: ext, rangeDays: opts?.rangeDays ?? null })).map(mapCdrToCall);
+  },
   scopedCallRecords: async (limit = 100, opts?: { scope?: 'mine' | 'org'; extension?: string | null; rangeDays?: 7 | 30 | null }) => {
     if (MOCK) return MOCK_CALLS as any[];
     await bestEffortCdrSync(Math.max(limit, 200));

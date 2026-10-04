@@ -20,6 +20,7 @@ import MaestroTab from "@/components/planipret/mobile/call/MaestroTab";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
 import { presentCallParty } from "@/lib/planipret/callPresentation";
@@ -899,7 +900,7 @@ function TranscriptStatusBanner({ s, has }: { s?: TxStatus; has: boolean }) {
         >
           {isPending ? "⏳ en attente" : `✅ ${label}`}
         </span>
-        <span style={{ color: "var(--pp-text-secondary)" }}>Source de transcription</span>
+        <span style={{ color: "var(--pp-text-secondary)" }}>{tr("Source de transcription", "Transcription source")}</span>
       </div>
       {history.length > 0 && (
         <ul className="text-[10px] space-y-0.5" style={{ color: "var(--pp-text-secondary)" }}>
@@ -987,7 +988,7 @@ function TranscriptView({
         </div>
         <button onClick={() => onFetch()} className="w-full py-2 rounded-lg text-xs font-semibold"
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}>
-          <RefreshCw className="w-3.5 h-3.5 inline mr-1" /> Réessayer
+          <RefreshCw className="w-3.5 h-3.5 inline mr-1" /> {tr("Réessayer", "Retry")}
         </button>
       </div>
       </div>
@@ -1052,19 +1053,19 @@ function TranscriptView({
           <button onClick={handleCopy}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1"
             style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-            aria-label="Copier">
-            <Copy className="w-3.5 h-3.5" /> Copier
+            aria-label={tr("Copier", "Copy")}>
+            <Copy className="w-3.5 h-3.5" /> {tr("Copier", "Copy")}
           </button>
           <button onClick={() => handleDownload("txt")}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1"
             style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-            aria-label="Télécharger .txt">
+            aria-label={tr("Télécharger .txt", "Download .txt")}>
             <Download className="w-3.5 h-3.5" /> .txt
           </button>
           <button onClick={() => handleDownload("md")}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1"
             style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-            aria-label="Télécharger .md">
+            aria-label={tr("Télécharger .md", "Download .md")}>
             <Download className="w-3.5 h-3.5" /> .md
           </button>
         </div>
@@ -1101,7 +1102,7 @@ function TranscriptView({
           className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2 sticky bottom-0"
           style={{ background: "linear-gradient(135deg, #2D1A5A, #9B7FE8)" }}
         >
-          {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyse en cours…</> : <><Sparkles className="w-4 h-4" /> Analyser avec Claude IA</>}
+          {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> {tr("Analyse en cours…", "Analyzing…")}</> : <><Sparkles className="w-4 h-4" /> {tr("Analyser avec Claude IA", "Analyze with Claude AI")}</>}
         </button>
       )}
     </div>
@@ -1141,7 +1142,7 @@ function ClaudeCoachingBlock({ analysis, coachingScore }: { analysis: any; coach
             <div className="text-[9px]" style={{ color: "var(--pp-text-muted)" }}>/10</div>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-wider font-bold" style={{ color: scoreColor }}>Score de coaching</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold" style={{ color: scoreColor }}>{tr("Score de coaching", "Coaching score")}</div>
             <div className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>{label}</div>
             <div className="mt-2 space-y-1">
               {barKeys.map(([k, lbl]) => {
@@ -1716,13 +1717,13 @@ function CallDetailSheet({
                   <button onClick={analyzeAI} disabled={aiLoading}
                     className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
                     style={{ background: "linear-gradient(135deg, #6C3CE1, var(--pp-agent))" }}>
-                    {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyse en cours…</> : <><Sparkles className="w-4 h-4" /> Analyser avec l'IA</>}
+                    {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> {tr("Analyse en cours…", "Analyzing…")}</> : <><Sparkles className="w-4 h-4" /> {tr("Analyser avec l'IA", "Analyze with AI")}</>}
                   </button>
                 ) : (
                   <button onClick={async () => { await fetchTranscript(); }} disabled={txLoading || txPreparing}
                     className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
                     style={{ background: "linear-gradient(135deg, var(--pp-brand-accent-2), var(--pp-brand-accent))" }}>
-                    {txPreparing ? <><Loader2 className="w-4 h-4 animate-spin" /> Préparation…</> : <>📝 Obtenir transcription + Analyse</>}
+                    {txPreparing ? <><Loader2 className="w-4 h-4 animate-spin" /> {tr("Préparation…", "Preparing…")}</> : <>📝 Obtenir transcription + Analyse</>}
                   </button>
                 )
               )}
@@ -1945,11 +1946,11 @@ function ActiveCallsTab({ userId, openDialer }: { userId: string; openDialer: (n
       {transferOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={() => setTransferOpen(null)}>
           <div className="bg-white rounded-2xl p-4 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
-            <div className="font-semibold text-sm mb-2">Transférer l'appel</div>
-            <input value={transferTo} onChange={(e) => setTransferTo(e.target.value)} placeholder="Transférer vers..." className="w-full px-3 py-2 rounded-lg bg-slate-100 text-sm outline-none mb-3" />
+            <div className="font-semibold text-sm mb-2">{tr("Transférer l'appel", "Transfer call")}</div>
+            <input value={transferTo} onChange={(e) => setTransferTo(e.target.value)} placeholder={tr("Transférer vers...", "Transfer to...")} className="w-full px-3 py-2 rounded-lg bg-slate-100 text-sm outline-none mb-3" />
             <div className="flex gap-2">
-              <button onClick={() => setTransferOpen(null)} className="flex-1 py-2 rounded-lg text-sm text-slate-600 bg-slate-100">Annuler</button>
-              <button onClick={() => { if (transferOpen && transferTo) { action("transfer", transferOpen, { destination: transferTo }); setTransferOpen(null); setTransferTo(""); } }} className="flex-1 py-2 rounded-lg text-sm text-white" style={{ background: PRIMARY }}>Transférer</button>
+              <button onClick={() => setTransferOpen(null)} className="flex-1 py-2 rounded-lg text-sm text-slate-600 bg-slate-100">{tr("Annuler", "Cancel")}</button>
+              <button onClick={() => { if (transferOpen && transferTo) { action("transfer", transferOpen, { destination: transferTo }); setTransferOpen(null); setTransferTo(""); } }} className="flex-1 py-2 rounded-lg text-sm text-white" style={{ background: PRIMARY }}>{tr("Transférer", "Transfer")}</button>
             </div>
           </div>
         </div>
@@ -1969,10 +1970,10 @@ function ActiveCallsTab({ userId, openDialer }: { userId: string; openDialer: (n
           <div className="fixed inset-0 z-50 flex flex-col items-center justify-center text-white p-6" style={{ background: PRIMARY }}>
             <div className="absolute inset-0 opacity-30 animate-pulse" style={{ background: PRIMARY }} />
             <div className="relative text-center mb-8 max-w-xs">
-              <div className="text-sm opacity-80 mb-2">Appel entrant…</div>
+              <div className="text-sm opacity-80 mb-2">{tr("Appel entrant…", "Incoming call…")}</div>
               <div className="text-3xl font-bold">{fullName ?? incoming.name ?? incoming.number}</div>
               {(fullName || incoming.name) && <div className="text-sm opacity-80 mt-1">{incoming.number}</div>}
-              {maestroLoading && <div className="text-[11px] opacity-70 mt-3">Recherche Maestro…</div>}
+              {maestroLoading && <div className="text-[11px] opacity-70 mt-3">{tr("Recherche Maestro…", "Searching Maestro…")}</div>}
               {!maestroLoading && found && (
                 <div className="mt-4 space-y-1.5">
                   {client?.company && <div className="text-xs opacity-90">🏢 {client.company}</div>}
@@ -2056,10 +2057,10 @@ function ActiveCallCard({ call, muted, onMute, onHold, onTransfer, onHangup }: {
         <div className="text-xs opacity-80 mt-1">{statusLabel}</div>
       </div>
       <div className="grid grid-cols-4 gap-2 mt-5">
-        <ActionBtn label="Muet" active={muted} Icon={muted ? MicOff : Mic} onClick={onMute} />
+        <ActionBtn label={tr("Muet", "Mute")} active={muted} Icon={muted ? MicOff : Mic} onClick={onMute} />
         <ActionBtn label={call.status === "hold" ? "Reprendre" : "Attente"} Icon={call.status === "hold" ? Play : Pause} onClick={onHold} />
-        <ActionBtn label="Transférer" Icon={ArrowRightLeft} onClick={onTransfer} />
-        <ActionBtn label="Raccrocher" Icon={PhoneOff} onClick={onHangup} big danger />
+        <ActionBtn label={tr("Transférer", "Transfer")} Icon={ArrowRightLeft} onClick={onTransfer} />
+        <ActionBtn label={tr("Raccrocher", "Hang up")} Icon={PhoneOff} onClick={onHangup} big danger />
       </div>
     </div>
   );
@@ -2313,9 +2314,9 @@ function VoicemailsTab({
                       )}
                     </div>
                     <div className="grid grid-cols-3 gap-1.5 mt-3">
-                      <VmAction icon={<Phone className="w-4 h-4" />} label="Rappeler" onClick={() => openDialer(vm.from_number ?? "")} accent />
-                      {folder === "inbox" && <VmAction icon={<Save className="w-4 h-4" />} label="Garder" onClick={() => saveVm(vm)} />}
-                      <VmAction icon={<Trash2 className="w-4 h-4" />} label="Suppr." onClick={() => removeVm(vm)} danger />
+                      <VmAction icon={<Phone className="w-4 h-4" />} label={tr("Rappeler", "Call back")} onClick={() => openDialer(vm.from_number ?? "")} accent />
+                      {folder === "inbox" && <VmAction icon={<Save className="w-4 h-4" />} label={tr("Garder", "Keep")} onClick={() => saveVm(vm)} />}
+                      <VmAction icon={<Trash2 className="w-4 h-4" />} label={tr("Suppr.", "Del.")} onClick={() => removeVm(vm)} danger />
                     </div>
                   </div>
                 )}
@@ -2403,7 +2404,7 @@ function VmAudio({ vm }: { vm: VM }) {
           {speed}x
         </button>
       </div>
-      {!src && <p className="text-[10px] mt-1" style={{ color: "var(--pp-text-faint)" }}>Chargement de l'audio…</p>}
+      {!src && <p className="text-[10px] mt-1" style={{ color: "var(--pp-text-faint)" }}>{tr("Chargement de l'audio…", "Loading audio…")}</p>}
     </div>
   );
 }

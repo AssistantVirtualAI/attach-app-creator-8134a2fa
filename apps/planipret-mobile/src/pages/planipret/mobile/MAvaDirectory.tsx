@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18n/tr";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -154,16 +155,16 @@ export default function MAvaDirectory() {
     <div className="flex flex-col h-full" style={{ background: "var(--pp-bg-base)" }}>
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
-        <button onClick={() => navigate(-1)} aria-label="Retour">
+        <button onClick={() => navigate(-1)} aria-label={tr("Retour", "Back")}>
           <ArrowLeft className="w-5 h-5" style={{ color: "var(--pp-text-primary)" }} />
         </button>
         <h1 className="text-base font-semibold flex-1" style={{ color: "var(--pp-text-primary)" }}>
           Recherche AVA
         </h1>
-        <button onClick={() => setShowFilters((v) => !v)} aria-label="Filtres">
+        <button onClick={() => setShowFilters((v) => !v)} aria-label={tr("Filtres", "Filters")}>
           <Filter className="w-5 h-5" style={{ color: showFilters ? "var(--pp-brand-accent)" : "var(--pp-text-muted)" }} />
         </button>
-        <button onClick={() => setShowAudit(true)} aria-label="Journal d'audit">
+        <button onClick={() => setShowAudit(true)} aria-label={tr("Journal d'audit", "Audit log")}>
           <History className="w-5 h-5" style={{ color: "var(--pp-text-muted)" }} />
         </button>
       </div>
@@ -178,12 +179,12 @@ export default function MAvaDirectory() {
             onChange={(e) => setQ(e.target.value)}
             onFocus={() => suggestions.length && setOpenSuggest(true)}
             onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
-            placeholder="Prénom, nom, entreprise ou numéro"
+            placeholder={tr("Prénom, nom, entreprise ou numéro", "First name, last name, company or number")}
             className="flex-1 bg-transparent outline-none text-sm"
             style={{ color: "var(--pp-text-primary)" }}
           />
           {q && (
-            <button onClick={() => { setQ(""); setResults([]); setSuggestions([]); }} aria-label="Effacer">
+            <button onClick={() => { setQ(""); setResults([]); setSuggestions([]); }} aria-label={tr("Effacer", "Clear")}>
               <X className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} />
             </button>
           )}
@@ -238,13 +239,13 @@ export default function MAvaDirectory() {
             <div className="flex items-center gap-1.5 flex-1 rounded-lg px-2 py-1.5"
               style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
               <Building2 className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
-              <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Entreprise"
+              <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder={tr("Entreprise", "Company")}
                 className="flex-1 bg-transparent outline-none text-xs" style={{ color: "var(--pp-text-primary)" }} />
             </div>
             <div className="flex items-center gap-1.5 flex-1 rounded-lg px-2 py-1.5"
               style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
               <Hash className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Numéro" inputMode="tel"
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={tr("Numéro", "Number")} inputMode="tel"
                 className="flex-1 bg-transparent outline-none text-xs" style={{ color: "var(--pp-text-primary)" }} />
             </div>
           </div>
@@ -287,7 +288,7 @@ export default function MAvaDirectory() {
               <button onClick={() => dialLocal(c)}
                 className="flex-1 py-1.5 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5"
                 style={{ background: "linear-gradient(135deg, #14622F, #29A35A)" }}>
-                <Phone className="w-3.5 h-3.5" /> Appeler
+                <Phone className="w-3.5 h-3.5" /> {tr("Appeler", "Call")}
               </button>
               <button onClick={() => dialVoice(c)} disabled={voiceBusy === (c.phone || c.extension)}
                 className="flex-1 py-1.5 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5"
@@ -306,7 +307,7 @@ export default function MAvaDirectory() {
       {showAudit && (
         <div className="absolute inset-0 z-40 flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
           <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
-            <button onClick={() => setShowAudit(false)} aria-label="Fermer">
+            <button onClick={() => setShowAudit(false)} aria-label={tr("Fermer", "Close")}>
               <ArrowLeft className="w-5 h-5" style={{ color: "var(--pp-text-primary)" }} />
             </button>
             <h2 className="text-base font-semibold flex-1" style={{ color: "var(--pp-text-primary)" }}>
@@ -319,7 +320,7 @@ export default function MAvaDirectory() {
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-2">
             {auditLoading && <Loader2 className="w-5 h-5 animate-spin mx-auto my-6" style={{ color: "var(--pp-text-muted)" }} />}
             {!auditLoading && audit.length === 0 && (
-              <p className="text-xs text-center py-6" style={{ color: "var(--pp-text-muted)" }}>Aucune entrée.</p>
+              <p className="text-xs text-center py-6" style={{ color: "var(--pp-text-muted)" }}>{tr("Aucune entrée.", "No entries.")}</p>
             )}
             {audit.map((a) => (
               <div key={a.id} className="rounded-lg p-2.5 mb-2"

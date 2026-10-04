@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Bell, Mail, PhoneCall, Sparkles, Calendar, Voicemail, RefreshCw, CheckCheck, Trash2, Check, Circle } from "lucide-react";
 import { toast } from "sonner";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -231,11 +232,11 @@ export default function MAvaNotifications() {
       <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Vider les notifications ?</AlertDialogTitle>
+            <AlertDialogTitle>{tr("Vider les notifications ?", "Clear notifications?")}</AlertDialogTitle>
             <AlertDialogDescription>{t("avaNotifications.confirmClearAll")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={clearing}>Annuler</AlertDialogCancel>
+            <AlertDialogCancel disabled={clearing}>{tr("Annuler", "Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={clearing}
               onClick={(event) => { event.preventDefault(); void clearAll().then(() => setClearOpen(false)); }}

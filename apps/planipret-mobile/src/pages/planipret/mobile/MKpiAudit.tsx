@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18n/tr";
 import { useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { ChevronLeft, RefreshCw, CheckCircle2, AlertCircle, MinusCircle, HelpCircle } from "lucide-react";
@@ -77,7 +78,7 @@ export default function MKpiAudit() {
         <button onClick={() => setTick((n) => n + 1)}
           className="w-9 h-9 rounded-lg flex items-center justify-center"
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}
-          aria-label="Rafraîchir">
+          aria-label={tr("Rafraîchir", "Refresh")}>
           <RefreshCw className="w-4 h-4" />
         </button>
       </header>

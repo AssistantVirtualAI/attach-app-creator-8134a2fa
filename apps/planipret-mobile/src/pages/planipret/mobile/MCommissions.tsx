@@ -11,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGri
 import MCommissionCharts from "@/components/planipret/mobile/MCommissionCharts";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { isStatsCacheFresh, readStatsCache, statsCacheKey, writeStatsCache } from "@/lib/planipret/commissionsCache";
 import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 
@@ -662,7 +663,7 @@ function Shell({ title, onBack, right, children }: { title: string; onBack: () =
   return (
     <div className="min-h-full px-4 pt-3 pb-24">
       <div className="flex items-center justify-between mb-4">
-        <button onClick={onBack} aria-label="Retour" className="p-2 -ml-2 rounded-lg" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
+        <button onClick={onBack} aria-label={tr("Retour", "Back")} className="p-2 -ml-2 rounded-lg" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-[16px] font-bold" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>{title}</h1>

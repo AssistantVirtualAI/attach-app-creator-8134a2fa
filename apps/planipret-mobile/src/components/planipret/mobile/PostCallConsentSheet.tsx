@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18n/tr";
 // Écran de fin d'appel : le courtier décide s'il sauvegarde l'appel dans
 // Maestro, et AVA propose (sans jamais envoyer automatiquement) un texto ou un
 // courriel de suivi qu'il doit relire et confirmer avant l'envoi.
@@ -242,7 +243,7 @@ export default function PostCallConsentSheet() {
   return createPortal(
     <div style={wrap}>
       <div style={card} role="dialog" aria-modal="true" aria-label="Décision après l'appel">
-        <div style={{ fontSize: 12, opacity: 0.7 }}>Fin d'appel</div>
+        <div style={{ fontSize: 12, opacity: 0.7 }}>{tr("Fin d'appel", "Call ended")}</div>
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>{clientName || "Client inconnu"}</div>
         <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 14 }}>
           {call.direction === "in" || call.direction === "inbound" ? "Appel entrant" : "Appel sortant"} · {clientNumber} · {call.duration_seconds ?? 0} s
@@ -278,11 +279,11 @@ export default function PostCallConsentSheet() {
 
         {step === "followup" && (
           <>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Envoyer un suivi au client ?</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{tr("Envoyer un suivi au client ?", "Send a follow-up to the client?")}</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button style={btn(kind === "sms" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("sms"); setConfirmed(false); }}>Texto</button>
-              <button style={btn(kind === "email" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("email"); setConfirmed(false); setRecipient(""); }}>Courriel</button>
-               <button style={btn("rgba(255,255,255,0.14)")} onClick={() => close(true)}>Aucun</button>
+              <button style={btn(kind === "sms" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("sms"); setConfirmed(false); }}>{tr("Texto", "Text")}</button>
+              <button style={btn(kind === "email" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("email"); setConfirmed(false); setRecipient(""); }}>{tr("Courriel", "Email")}</button>
+               <button style={btn("rgba(255,255,255,0.14)")} onClick={() => close(true)}>{tr("Aucun", "None")}</button>
             </div>
 
             {kind && (

@@ -28,6 +28,7 @@ import MaestroRelinkButton from "@/components/planipret/mobile/MaestroRelinkButt
 import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings";
 import MRingtoneSettings from "@/components/planipret/mobile/MRingtoneSettings";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { startMs365Authorize } from "@/lib/planipret/ms365Start";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
@@ -295,8 +296,8 @@ export default function MMore() {
       </Section>
 
       <Section title={t("more.sections.account")}>
-        <Row icon={<ExternalLink className="w-4 h-4" />} label="Ouvrir mon portail AVA Statistic"
-          sub="Connexion automatique avec votre compte"
+        <Row icon={<ExternalLink className="w-4 h-4" />} label={tr("Ouvrir mon portail AVA Statistic", "Open my AVA Statistic portal")}
+          sub={tr("Connexion automatique avec votre compte", "Automatic sign-in with your account")}
           onClick={async () => {
             if (openingPortal) return;
             setOpeningPortal(true);
@@ -499,7 +500,7 @@ export default function MMore() {
         <Row icon={<MessageCircle className="w-4 h-4" />} label={t("more.contactSupport")}
           onClick={() => { window.location.href = "mailto:support@avastatistic.ca?subject=Support%20Planipr%C3%AAt%20AI%20Portal"; }} chevron />
         <Row icon={<Bot className="w-4 h-4" />} label={aiOk ? "Consentement IA (AVA) : accordé" : "Consentement IA (AVA) : non accordé"}
-          sub="AVA envoie vos messages et transcriptions à OpenAI, Google (Gemini) et ElevenLabs. Touchez pour accorder ou retirer votre consentement."
+          sub={tr("AVA envoie vos messages et transcriptions à OpenAI, Google (Gemini) et ElevenLabs. Touchez pour accorder ou retirer votre consentement.", "AVA sends your messages and transcripts to OpenAI, Google (Gemini) and ElevenLabs. Tap to grant or withdraw consent.")}
           onClick={async () => {
             if (aiOk) {
               const revoked = await revokeAiConsent();
@@ -890,6 +891,24 @@ function HelpSheet({ onClose }: { onClose: () => void }) {
     { q: "Comment activer Ne pas déranger ?", a: "Dans Réglages > Ne pas déranger, activez-le maintenant ou programmez des heures automatiques." },
     { q: "Comment ouvrir le portail AVA Statistic ?", a: "Dans Réglages, touchez Ouvrir mon portail AVA Statistic. Vous pouvez aussi aller sur avastatistic.ca/planipret dans votre navigateur." },
     { q: "Comment changer la langue ?", a: "Dans Réglages, utilisez le sélecteur FR / EN. AVA répond dans la langue choisie sous Personnaliser AVA." },
+    { q: "Comment écouter ma boîte vocale ?", a: "Ouvrez Appels > Messagerie. Touchez un message pour l'écouter, le rappeler, le garder ou le supprimer. Les nouveaux messages déclenchent une notification." },
+    { q: "Comment changer mon message d'accueil ?", a: "Dans Appels > Messagerie > Message d'accueil, enregistrez votre voix, importez un fichier ou générez un message avec une voix AVA." },
+    { q: "Où sont mes enregistrements d'appels ?", a: "Dans Appels > Enregistrements. Vous ne voyez que les appels de votre propre poste. Touchez un appel pour l'écouter, lire la transcription et le résumé IA." },
+    { q: "Comment fonctionne l'analyse IA d'un appel ?", a: "Dans le détail d'un appel, touchez Analyser avec l'IA : vous obtenez un résumé, un score de coaching, les forces, les points à améliorer et un score de lead." },
+    { q: "Comment transférer ou mettre un appel en sourdine ?", a: "Pendant l'appel, utilisez les boutons Muet, Transférer et Raccrocher. Le haut-parleur et les écouteurs Bluetooth se choisissent avec le bouton Audio." },
+    { q: "Comment rechercher un client ?", a: "Ouvrez Contacts > Clients. Le compteur indique le nombre de clients chargés. Recherchez par nom ou cellulaire, filtrez par activité ou date d'ajout, et triez par nom ou date." },
+    { q: "Comment créer un client dans Maestro ?", a: "Dans Contacts > Clients, touchez + et remplissez la fiche (salutation, sexe, langue, adresse). Le client est créé directement dans Maestro." },
+    { q: "Comment voir l'historique d'un client ?", a: "Ouvrez la fiche du client : vous y voyez ses appels, textos, rendez-vous et tâches, et pouvez l'appeler, lui écrire ou créer une tâche." },
+    { q: "Comment prendre un rendez-vous ?", a: "Dans la fiche d'un client, touchez Nouveau RDV, choisissez le titre, l'heure de début et la durée. Le rendez-vous s'ajoute à votre calendrier." },
+    { q: "Comment lire et envoyer mes courriels ?", a: "Ouvrez Messages > Courriels après avoir connecté Microsoft 365 dans Réglages. Vous pouvez répondre, transférer, archiver et améliorer votre texte avec l'IA." },
+    { q: "Comment discuter avec mon équipe ?", a: "Messages > Équipe permet d'écrire à un collègue ou de créer un chat de groupe. L'annuaire montre tous les membres de votre organisation." },
+    { q: "Comment parler à AVA ?", a: "Touchez le bouton AVA au centre de la barre du bas. Écrivez ou parlez : AVA peut chercher un client, créer une tâche, préparer un texto ou résumer votre journée. Elle demande toujours votre confirmation avant d'agir." },
+    { q: "Pourquoi je ne reçois pas d'appels ?", a: "Vérifiez que Ne pas déranger est désactivé, que votre statut est Disponible et que les notifications sont autorisées dans les réglages du téléphone." },
+    { q: "Le son ne fonctionne pas pendant un appel", a: "Autorisez le micro pour l'app dans les réglages du téléphone, vérifiez la sortie audio (haut-parleur, Bluetooth) et redémarrez l'app si le problème continue." },
+    { q: "Comment actualiser une page ?", a: "Tirez la liste vers le bas pour la recharger, ou touchez l'icône d'actualisation en haut de la page." },
+    { q: "Comment changer le thème ?", a: "Touchez l'icône soleil/lune en haut de l'écran pour passer du mode clair au mode sombre." },
+    { q: "Mes données sont-elles protégées ?", a: "Vos appels, enregistrements et messages ne sont visibles que par vous. Sous Consentement IA, vous choisissez si AVA peut utiliser vos données." },
+    { q: "Comment me déconnecter ou supprimer mon compte ?", a: "En bas de Réglages : Se déconnecter, ou Supprimer mon compte (action définitive)." },
     { q: "Comment signaler un problème ?", a: "Utilisez Signaler un problème dans Réglages ou écrivez à AVA. Votre demande est transmise à l'équipe de soutien." },
   ] : [
     { q: "How do I find a client with AVA?", a: "Ask AVA for the client's name or number. AVA first shows the verified Maestro profile; calls, SMS or email are offered only when you ask." },
@@ -902,6 +921,24 @@ function HelpSheet({ onClose }: { onClose: () => void }) {
     { q: "How do I turn on Do Not Disturb?", a: "In Settings > Do Not Disturb, turn it on now or schedule automatic hours." },
     { q: "How do I open the AVA Statistic portal?", a: "In Settings, tap Open my AVA Statistic portal. You can also go to avastatistic.ca/planipret in your browser." },
     { q: "How do I change the language?", a: "In Settings, use the FR / EN switch. AVA replies in the language chosen under Customize AVA." },
+    { q: "How do I listen to my voicemail?", a: "Open Calls > Voicemail. Tap a message to play, call back, keep or delete it. New messages trigger a notification." },
+    { q: "How do I change my greeting?", a: "In Calls > Voicemail > Greeting, record your voice, upload a file or generate one with an AVA voice." },
+    { q: "Where are my call recordings?", a: "In Calls > Recordings. You only see calls from your own extension. Tap a call to play it and read the transcript and AI summary." },
+    { q: "How does AI call analysis work?", a: "In a call's details, tap Analyze with AI: you get a summary, a coaching score, strengths, areas to improve and a lead score." },
+    { q: "How do I transfer or mute a call?", a: "During a call, use Mute, Transfer and Hang up. Choose speaker or Bluetooth with the Audio button." },
+    { q: "How do I search for a client?", a: "Open Contacts > Clients. The counter shows how many clients are loaded. Search by name or mobile, filter by activity or date added, and sort by name or date." },
+    { q: "How do I create a client in Maestro?", a: "In Contacts > Clients, tap + and fill in the form (salutation, gender, language, address). The client is created directly in Maestro." },
+    { q: "How do I see a client's history?", a: "Open the client profile to see calls, texts, appointments and tasks, and call, write or create a task from there." },
+    { q: "How do I book an appointment?", a: "In a client profile, tap New appointment, choose the title, start time and duration. It's added to your calendar." },
+    { q: "How do I read and send email?", a: "Open Messages > Email after connecting Microsoft 365 in Settings. You can reply, forward, archive and improve your text with AI." },
+    { q: "How do I chat with my team?", a: "Messages > Team lets you write to a colleague or start a group chat. The directory lists everyone in your organization." },
+    { q: "How do I talk to AVA?", a: "Tap the AVA button in the middle of the bottom bar. Type or speak: AVA can find a client, create a task, draft a text or summarize your day. It always asks before acting." },
+    { q: "Why am I not receiving calls?", a: "Check that Do Not Disturb is off, your status is Available and notifications are allowed in your phone settings." },
+    { q: "No sound during a call", a: "Allow microphone access for the app in your phone settings, check the audio output (speaker, Bluetooth) and restart the app if it continues." },
+    { q: "How do I refresh a page?", a: "Pull the list down to reload it, or tap the refresh icon at the top of the page." },
+    { q: "How do I change the theme?", a: "Tap the sun/moon icon at the top of the screen to switch between light and dark mode." },
+    { q: "Is my data protected?", a: "Your calls, recordings and messages are visible only to you. Under AI consent, you choose whether AVA may use your data." },
+    { q: "How do I sign out or delete my account?", a: "At the bottom of Settings: Sign out, or Delete my account (permanent)." },
     { q: "How do I report a problem?", a: "Use Report a problem in Settings or write to AVA. Your request goes to the support team." },
   ];
   const faq = [

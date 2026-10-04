@@ -27,6 +27,7 @@ import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import PostCallConsentSheet from "@/components/planipret/mobile/PostCallConsentSheet";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { tr } from "@/lib/i18n/tr";
 import { ROUTES } from "@/lib/routes";
 import { recordRedirect } from "@/lib/debug/navDebug";
 import { invokeEdge, onAuthRequired } from "@/lib/planipret/edgeAuth";
@@ -408,7 +409,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
                   ) : contactsError && contacts.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>
                       <div className="mb-2">{contactsError}</div>
-                      <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
+                      <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>{tr("Réessayer", "Retry")}</button>
                     </div>
                   ) : filtered.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{tokens.length ? t("dialer.noResults") : t("contacts.noDirectory")}</div>
@@ -1216,7 +1217,7 @@ export default function PlanipretMobile() {
         <UniversalSearchBar />
         <div ref={scrollRef} className="pp-mobile-scroll flex-1 overflow-y-auto pb-[130px]">
           <PullIndicator pullDist={pullDist} refreshing={refreshing} threshold={threshold} color={ACCENT} />
-          <PlanipretErrorBoundary key={location.pathname}>
+          <PlanipretErrorBoundary key={`${location.pathname}:${lang}`}>
             <Suspense fallback={<MobileScreenSkeleton />}>
               <Outlet context={{ profile, reloadProfile: loadProfile, openDialer, openAva, registerRefresh, softphone } satisfies PlanipretMobileContext} />
             </Suspense>

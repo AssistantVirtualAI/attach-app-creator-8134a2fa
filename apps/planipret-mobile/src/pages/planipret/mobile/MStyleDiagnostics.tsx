@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18n/tr";
 /**
  * Style / build diagnostics — confirms Tailwind is compiled and shows
  * native build info so the Xcode-rendered bundle can be matched to the
@@ -196,7 +197,7 @@ export default function MStyleDiagnostics() {
               <BuildRow label="Build web time" value={build.webBuildTime} />
             </div>
           ) : (
-            <div className="text-xs" style={{ color: "#8FA8C0" }}>Chargement…</div>
+            <div className="text-xs" style={{ color: "#8FA8C0" }}>{tr("Chargement…", "Loading…")}</div>
           )}
           <div className="mt-3 p-2 rounded-lg text-[11px]" style={{ background: "#0D1F35", border: "1px solid #0E2A45", color: "#8FA8C0" }}>
             <Info className="w-3 h-3 inline mr-1" style={{ color: "#2E9BDC" }} />

@@ -196,6 +196,10 @@ function AuthenticatedShell({
   const clientConfig = useLemtelMobileClientConfig(creds?.accessToken || null);
   const sipAllowed = clientConfig.sipAllowed;
   const portalTelephonyPolicy = clientConfig.manifest?.telephonyPolicy ?? null;
+  // Phase 24A — manual recording only for the exact validated 'user_allowed'; everything else is restrictive.
+  const rawRecordingPolicy = portalTelephonyPolicy?.recordingPolicy;
+  const recordingPolicy: 'not_allowed' | 'user_allowed' | 'portal_managed' =
+    rawRecordingPolicy === 'user_allowed' || rawRecordingPolicy === 'portal_managed' ? rawRecordingPolicy : 'not_allowed';
   const [freshCredentialToken, setFreshCredentialToken] = useState('boot');
   const [authExpired, setAuthExpired] = useState(false);
   const passwordHealRef = useRef('');
@@ -656,7 +660,7 @@ function AuthenticatedShell({
         }}
       />
 
-      {inCall && <ActiveCallSheet sp={sp} haptic={haptic} />}
+      {inCall && <ActiveCallSheet sp={sp} haptic={haptic} recordingPolicy={recordingPolicy} />}
 
       <SipDebugPanel
         sipStatus={softphone.sipStatus}

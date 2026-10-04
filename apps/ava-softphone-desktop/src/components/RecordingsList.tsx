@@ -62,13 +62,26 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
   const [search, setSearch] = useState('');
   const [rangeDays, setRangeDays] = useState<7 | 30>(7);
 
+  // Phase 27B.1 — session generation: every extension change or unmount
+  // invalidates the session; async work from an old session becomes inert.
+  const extRef = useRef<string>('');
+  const genRef = useRef(0);
+  const ext = String(extension || '').trim();
+  extRef.current = ext;
+  type Session = { ext: string; gen: number };
+  const captureSession = useCallback((): Session => ({ ext: extRef.current, gen: genRef.current }), []);
+  const isCurrent = useCallback((sess: Session) => sess.gen === genRef.current && sess.ext === extRef.current && sess.ext !== '', []);
+
   const hydrateTranscripts = useCallback(async (rows: RecordingItem[]) => {
+    const sess = captureSession();
+    if (!isCurrent(sess)) return;
     const ids = rows.map(r => r.callId || r.id).filter(Boolean);
     if (!ids.length) return;
     const { data } = await supabase
       .from('pbx_call_transcripts')
       .select('call_record_id, transcript_text, provider')
       .in('call_record_id', ids);
+    if (!isCurrent(sess)) return;
     if (!data?.length) return;
     const byId = new Map(data.map((t: any) => [t.call_record_id, t]));
     setItems(prev => prev.map(r => {
@@ -90,48 +103,46 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
       }
       return next;
     });
-  }, []);
+  }, [captureSession, isCurrent]);
 
   // Phase 27B — session generation: any async answer from a previous
   // extension is ignored; data and audio URLs never cross extensions.
-  const extRef = useRef<string>('');
-  const ext = String(extension || '').trim();
-  extRef.current = ext;
-
   useEffect(() => {
+    genRef.current += 1;
     audioCache.clear();
     setItems([]); setAudio({}); setAudioErrors({}); setAudioLoading(null);
     setError(null); setItemErrors({}); setItemSuccess({}); setStatuses({}); setWorking(null);
     if (!ext) { setLoading(false); setRefreshing(false); }
-    return () => { audioCache.clear(); };
+    return () => { genRef.current += 1; audioCache.clear(); };
   }, [ext]);
 
   const load = useCallback(async (silent = false, force = false) => {
-    const forExt = ext;
-    if (!forExt) { setItems([]); setLoading(false); return; }
+    const sess = captureSession();
+    const forExt = sess.ext;
+    if (!forExt || !isCurrent(sess)) return;
     if (!silent) { setLoading(true); setError(null); }
     if (force) setRefreshing(true);
     try {
       const data = force
         ? await ava.refreshPersonalRecordings(200, { rangeDays })
         : await ava.personalRecordings(200, { rangeDays });
-      if (extRef.current !== forExt) return;
+      if (!isCurrent(sess)) return;
       const list = (Array.isArray(data) ? data : []).filter((r) => isOwnRecording(r, forExt));
       setItems(list);
       void hydrateTranscripts(list);
     } catch (e: any) {
-      if (extRef.current !== forExt) return;
+      if (!isCurrent(sess)) return;
       if (!silent || force) {
         setError(e?.message || 'Unable to load recordings.');
         setItems([]);
       }
     } finally {
-      if (extRef.current === forExt) {
+      if (isCurrent(sess)) {
         if (!silent) setLoading(false);
         if (force) setRefreshing(false);
       }
     }
-  }, [ext, rangeDays, hydrateTranscripts]);
+  }, [ext, rangeDays, hydrateTranscripts, captureSession, isCurrent]);
 
   const silentLoad = useCallback(() => { void load(true); }, [load]);
 
@@ -177,7 +188,11 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
 
   const setStatus = (id: string, s: JobStatus) => setStatuses(prev => ({ ...prev, [id]: s }));
 
+  const ownsRow = (r: RecordingItem) => Boolean(extRef.current) && isOwnRecording(r, extRef.current);
+
   const analyze = async (r: RecordingItem) => {
+    const sess = captureSession();
+    if (!isCurrent(sess) || !ownsRow(r)) return;
     setWorking(r.id); setError(null);
     setStatus(r.id, 'queued');
     setItemErrors((all) => { const n = { ...all }; delete n[r.id]; return n; });
@@ -198,6 +213,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
           record_name: r.recording_name,
         },
       });
+      if (!isCurrent(sess)) return;
       if (r1.error) throw r1.error;
       const d1 = (r1.data as any) || {};
       if (d1.stub === true) {
@@ -216,6 +232,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
           transcript_text,
         },
       });
+      if (!isCurrent(sess)) return;
       if (r2.error) throw r2.error;
       const ai = (r2.data as any)?.analysis || (r2.data as any) || null;
 
@@ -226,6 +243,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
         .select('transcript_text, provider')
         .eq('call_record_id', callRecId)
         .maybeSingle();
+      if (!isCurrent(sess)) return;
       const finalTranscript = (persisted?.transcript_text as string) || transcript_text;
       if (!finalTranscript || !finalTranscript.trim()) {
         throw new Error('Transcript was not persisted — please retry.');
@@ -243,16 +261,19 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
       setItemSuccess((all) => ({ ...all, [r.id]: 'Analyzed ✓' }));
       onAnalyze?.(r.id);
     } catch (e: any) {
+      if (!isCurrent(sess)) return;
       const msg = displayError(e);
       setError(msg);
       setItemErrors((all) => ({ ...all, [r.id]: msg }));
       setStatus(r.id, 'failed');
     } finally {
-      setWorking(null);
+      if (isCurrent(sess)) setWorking(null);
     }
   };
 
   const play = async (r: RecordingItem) => {
+    const sess = captureSession();
+    if (!isCurrent(sess) || !ownsRow(r)) return;
     setError(null);
     setAudioErrors((all) => { const next = { ...all }; delete next[r.id]; return next; });
     if (audio[r.id] || audioCache.has(r.id)) {
@@ -264,7 +285,9 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
     try {
       // Prefer short-lived signed URL (no client download); fallback to proxy blob.
       const signed = await ava.getRecordingSignedUrl(r as any);
+      if (!isCurrent(sess)) return;
       const url = signed?.url || (await ava.getRecordingAudioUrl(r as any));
+      if (!isCurrent(sess)) return;
       if (!url) {
         setAudioErrors((all) => ({
           ...all,
@@ -276,11 +299,13 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
       setAudio((a) => ({ ...a, [r.id]: url }));
       audit('recording.played', r.callId || r.id, { recording_name: r.recording_name });
     } finally {
-      setAudioLoading(null);
+      if (isCurrent(sess)) setAudioLoading(null);
     }
   };
 
   const recoverAudio = async (r: RecordingItem) => {
+    const sess = captureSession();
+    if (!isCurrent(sess) || !ownsRow(r)) return;
     audioCache.delete(r.id);
     setAudio((a) => {
       const next = { ...a };
@@ -291,6 +316,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
     setError(null);
     try {
       const url = await ava.getRecordingAudioUrl(r as any);
+      if (!isCurrent(sess)) return;
       if (url) {
         audioCache.set(r.id, url);
         setAudio((a) => ({ ...a, [r.id]: url }));
@@ -298,7 +324,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
       }
       setError('Recording file is listed in PBX, but the audio bytes are not reachable yet. Refresh the PBX sync and retry.');
     } finally {
-      setAudioLoading(null);
+      if (isCurrent(sess)) setAudioLoading(null);
     }
   };
 

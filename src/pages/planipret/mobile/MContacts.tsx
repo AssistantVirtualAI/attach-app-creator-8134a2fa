@@ -9,7 +9,7 @@ import AvaSummarizeSheet from "@/components/planipret/ava/AvaSummarizeSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
-import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
 import { ensureContacts, getContactsPermissionStatus, listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { openAppSettings, type PermStatus } from "@/lib/native/permissions/platform";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
@@ -523,7 +523,7 @@ export default function MContacts() {
             </div>
             <div className="flex gap-2 mt-2">
               {contactsPerm === "denied" ? (
-                <button onClick={openAppSettings} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Activer dans réglages</button>
+                <button onClick={openAppSettings} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>{tr("Activer dans réglages", "Enable in settings")}</button>
               ) : contactsPerm === "granted" ? (
                 <button onClick={() => void load("personal", { force: true })} disabled={contactsPermBusy || loading} className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)", opacity: contactsPermBusy || loading ? 0.7 : 1 }}>
                   {loading && <Loader2 className="w-3 h-3 animate-spin" />} Actualiser
@@ -563,7 +563,7 @@ export default function MContacts() {
             }}
             className="text-[11px] font-semibold px-2 py-1 rounded-full"
             style={{ background: "var(--pp-brand-accent-2)", color: "#fff", border: "1px solid var(--pp-brand-accent)" }}
-            aria-label="Rechercher partout">
+            aria-label={tr("Rechercher partout", "Search everywhere")}>
             Tout
           </button>
         )}
@@ -645,7 +645,7 @@ export default function MContacts() {
             <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
               className="text-xs px-2 py-1.5 rounded-full outline-none"
               style={{ background: filterDept ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: filterDept ? "#fff" : "var(--pp-text-secondary)", border: `1px solid ${filterDept ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)"}` }}>
-              <option value="">Département</option>
+              <option value="">{tr("Département", "Department")}</option>
               {deptOptions.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
@@ -653,7 +653,7 @@ export default function MContacts() {
             <select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}
               className="text-xs px-2 py-1.5 rounded-full outline-none"
               style={{ background: filterTeam ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: filterTeam ? "#fff" : "var(--pp-text-secondary)", border: `1px solid ${filterTeam ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)"}` }}>
-              <option value="">Équipe</option>
+              <option value="">{tr("Équipe", "Team")}</option>
               {teamOptions.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
@@ -661,17 +661,17 @@ export default function MContacts() {
             <button onClick={() => { setFilterDept(""); setFilterTeam(""); }}
               className="text-[11px] px-2 py-1 rounded-full font-semibold"
               style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
-              Effacer
+              {tr("Effacer", "Clear")}
             </button>
           )}
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}
             className="ml-auto text-xs px-2 py-1.5 rounded-full outline-none shrink-0"
             style={{ background: "var(--pp-bg-surface)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}
-            aria-label="Trier">
-            <option value="relevance">Trier : Pertinence</option>
-            <option value="name">Trier : Nom</option>
-            <option value="team">Trier : Équipe</option>
-            <option value="department">Trier : Département</option>
+            aria-label={tr("Trier", "Sort")}>
+            <option value="relevance">{tr("Trier : Pertinence", "Sort: Relevance")}</option>
+            <option value="name">{tr("Trier : Nom", "Sort: Name")}</option>
+            <option value="team">{tr("Trier : Équipe", "Sort: Team")}</option>
+            <option value="department">{tr("Trier : Département", "Sort: Department")}</option>
           </select>
         </div>
       )}
@@ -679,11 +679,11 @@ export default function MContacts() {
 
       {loadError && !loading && (
         <div className="rounded-2xl p-4 mb-3 text-sm" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
-          <div className="font-semibold mb-1">Impossible de charger les contacts</div>
+          <div className="font-semibold mb-1">{tr("Impossible de charger les contacts", "Unable to load contacts")}</div>
           <div className="text-xs opacity-80 break-all">{loadError}</div>
           <button onClick={() => load(tab, { force: true })} className="mt-2 text-xs px-3 py-1.5 rounded-full font-semibold"
             style={{ background: "rgba(239,68,68,0.15)", color: "#dc2626" }}>
-            Réessayer
+            {tr("Réessayer", "Retry")}
           </button>
         </div>
       )}
@@ -824,7 +824,7 @@ export default function MContacts() {
                     }}
                     className="flex items-center justify-center active:scale-95 transition"
                     style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", color: "#8b5cf6" }}
-                    aria-label="Courriel">
+                    aria-label={tr("Courriel", "Email")}>
                     <Mail className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -1168,7 +1168,7 @@ function ContactDetailSheet({
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
           <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!smsTarget} />
           <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={openEmail} disabled={!email} />
-          <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={openTaskComposer} disabled={creatingTask || (!maestroId && !bestPhone)} />
+          <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label={tr("Tâche", "Task")} onClick={openTaskComposer} disabled={creatingTask || (!maestroId && !bestPhone)} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={openAppt} disabled={!maestroId} />
         </div>
 
@@ -1510,7 +1510,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouveau SMS</div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>{tr("Nouveau SMS", "New SMS")}</div>
             <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>
               À {contactName}{smsFrom ? ` · De ${smsFrom}` : ""}
             </div>
@@ -1529,8 +1529,8 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#f59e0b" }} />
             <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">Aucun numéro SMS assigné</div>
-              <div style={{ color: "var(--pp-text-muted)" }}>Contactez l'administrateur pour activer l'envoi SMS.</div>
+              <div className="font-semibold">{tr("Aucun numéro SMS assigné", "No SMS number assigned")}</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>{tr("Contactez l'administrateur pour activer l'envoi SMS.", "Contact your administrator to enable SMS.")}</div>
             </div>
           </div>
         )}
@@ -1539,7 +1539,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">Vérification impossible</div>
+              <div className="font-semibold">{tr("Vérification impossible", "Unable to verify")}</div>
               <div style={{ color: "var(--pp-text-muted)" }}>{preflightErr}</div>
             </div>
           </div>
@@ -1549,7 +1549,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}>
             <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#22c55e" }} />
             <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">SMS envoyé</div>
+              <div className="font-semibold">{tr("SMS envoyé", "SMS sent")}</div>
               <div style={{ color: "var(--pp-text-muted)" }}>Livraison au {toE164(recipient)}</div>
             </div>
           </div>
@@ -1559,7 +1559,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#f59e0b" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">Téléphonie temporairement indisponible</div>
+              <div className="font-semibold">{tr("Téléphonie temporairement indisponible", "Phone service temporarily unavailable")}</div>
               <div style={{ color: "var(--pp-text-muted)" }}>
                 Le service SMS ne répond pas. Aucun message supplémentaire n’est envoyé automatiquement. Vous pouvez réessayer manuellement ; la même clé d’idempotence est conservée.
               </div>
@@ -1571,7 +1571,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">Échec envoi SMS</div>
+              <div className="font-semibold">{tr("Échec envoi SMS", "SMS failed")}</div>
               <div style={{ color: "var(--pp-text-muted)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 {errorMsg || "Erreur inconnue"}
               </div>
@@ -1579,7 +1579,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
           </div>
         )}
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Destinataire</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Destinataire", "Recipient")}</label>
         <input
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
@@ -1598,7 +1598,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={4}
-          placeholder="Écrire un message…"
+          placeholder={tr("Écrire un message…", "Write a message…")}
           disabled={sending || sent}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
@@ -1674,13 +1674,13 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouvel email</div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>{tr("Nouvel email", "New email")}</div>
             <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>À {contactName} · via Microsoft 365</div>
           </div>
           <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
         </div>
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Destinataire</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Destinataire", "Recipient")}</label>
         <input
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
@@ -1689,7 +1689,7 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
         />
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Sujet</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Sujet", "Subject")}</label>
         <input
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
@@ -1706,7 +1706,7 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={6}
-          placeholder="Écrire votre message…"
+          placeholder={tr("Écrire votre message…", "Write your message…")}
           disabled={sending || connecting}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
@@ -1807,11 +1807,11 @@ function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroCl
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouveau RDV</div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>{tr("Nouveau RDV", "New appointment")}</div>
             <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Avec {contactName} · via Maestro</div>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setHistoryOpen(true)} title="Historique des RDV"
+            <button onClick={() => setHistoryOpen(true)} title={tr("Historique des RDV", "Appointment history")}
               className="p-1.5 rounded-lg" style={{ color: "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border-2)" }}>
               <History className="w-4 h-4" />
             </button>
@@ -1824,7 +1824,7 @@ function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroCl
             style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}>
             <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#22c55e" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">RDV créé</div>
+              <div className="font-semibold">{tr("RDV créé", "Appointment created")}</div>
               <div style={{ color: "var(--pp-text-muted)" }}>{new Date(startAt).toLocaleString("fr-CA")} · {duration} min</div>
               <div className="flex gap-2 mt-2">
                 <button onClick={() => setHistoryOpen(true)}
@@ -1835,7 +1835,7 @@ function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroCl
                 <button onClick={onClose}
                   className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
                   style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
-                  Fermer
+                  {tr("Fermer", "Close")}
                 </button>
               </div>
             </div>
@@ -1846,23 +1846,23 @@ function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroCl
             style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">Échec création RDV</div>
+              <div className="font-semibold">{tr("Échec création RDV", "Failed to create appointment")}</div>
               <div style={{ color: "var(--pp-text-muted)" }}>{errorMsg}</div>
             </div>
           </div>
         )}
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Titre</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Titre", "Title")}</label>
         <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving || saved}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Début</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Début", "Start")}</label>
         <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} disabled={saving || saved}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Durée (min)</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Durée (min)", "Duration (min)")}</label>
         <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={saving || saved}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}>
@@ -1901,7 +1901,7 @@ function AppointmentHistorySheet({ onClose }: { onClose: () => void }) {
       >
         <div className="flex items-center justify-between mb-3 shrink-0">
           <div>
-            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Historique des RDV</div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>{tr("Historique des RDV", "Appointment history")}</div>
             <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{items.length} enregistrement{items.length > 1 ? "s" : ""}</div>
           </div>
           <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>

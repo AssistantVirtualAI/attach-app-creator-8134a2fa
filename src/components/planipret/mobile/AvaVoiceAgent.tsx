@@ -13,7 +13,7 @@ import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
 import AiConsentGate, { hasAiConsent } from "@/components/planipret/mobile/AiConsentGate";
 import ReconnectStatus from "@/components/planipret/mobile/ReconnectStatus";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
-import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
 import { getAvaToolLabel } from "@/lib/i18n/avaToolLabels";
 
 type AgentState = "idle" | "connecting" | "listening" | "speaking" | "processing" | "tool_running" | "error";
@@ -1005,7 +1005,7 @@ export function CalendarAwareConfirm({
               </button>
             </div>
             {isCalendar && pending.tool !== "cancel_calendar_event" && (
-              <button onClick={onCancel} className="w-full mt-2 h-9 rounded-lg text-[11px]" style={{ color: "#8FA8C0" }}>Annuler</button>
+              <button onClick={onCancel} className="w-full mt-2 h-9 rounded-lg text-[11px]" style={{ color: "#8FA8C0" }}>{tr("Annuler", "Cancel")}</button>
             )}
           </>
         )}

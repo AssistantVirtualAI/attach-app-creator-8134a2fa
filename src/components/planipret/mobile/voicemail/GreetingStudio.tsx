@@ -5,7 +5,7 @@ import { createAudioGuard } from "@/lib/planipret/audio/audioGuard";
 import { blobToWavMono8k, wavPeak, bytesToBase64 } from "@/lib/planipret/audio/wavEncode";
 import { ensureMicPermission } from "@/lib/planipret/audio/micPermission";
 import { Play, Pause, Sparkles, Mic, RotateCw, Check, Settings2, ChevronDown, ChevronUp, Download } from "lucide-react";
-import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
 
 type Voice = {
   voice_id: string;
@@ -519,7 +519,7 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
             return true;
           });
           if (filtered.length === 0) {
-            return <div className="text-[12px] p-3 rounded-xl text-center" style={{ background: TOKENS.card, color: TOKENS.muted, border: `1px solid ${TOKENS.border}` }}>Aucune voix ne correspond à ces filtres.</div>;
+            return <div className="text-[12px] p-3 rounded-xl text-center" style={{ background: TOKENS.card, color: TOKENS.muted, border: `1px solid ${TOKENS.border}` }}>{tr("Aucune voix ne correspond à ces filtres.", "No voice matches these filters.")}</div>;
           }
           return (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1" role="radiogroup" aria-label={t("greeting.selectVoice")}>

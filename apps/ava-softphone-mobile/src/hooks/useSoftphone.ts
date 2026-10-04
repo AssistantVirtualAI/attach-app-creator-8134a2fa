@@ -97,6 +97,7 @@ export function useSoftphoneJsSip(
   const [negotiatedCodec, setNegotiatedCodec] = useState<string | null>(null);
   const lastCallNumberRef = useRef<string>('');
   const callAttemptRef = useRef<number>(0);
+  const pendingDialSeqRef = useRef(0);
 
   const uaRef = useRef<any>(null);
   const sessionRef = useRef<any>(null);
@@ -171,6 +172,7 @@ export function useSoftphoneJsSip(
    * l'event `registered` du UA).
    */
   const ensureRegisteredThenRestore = useCallback((from: string) => {
+    if (authBlockedRef.current) return;
     const ua = uaRef.current;
     if (!ua) return;
     try {
@@ -273,6 +275,7 @@ export function useSoftphoneJsSip(
           ua.on('connecting', () => log('ws.connecting', config.wssUrl));
           ua.on('connected', () => log('ws.connected', config.wssUrl));
           ua.on('registered', () => {
+            if (cancelled || uaRef.current !== ua) return;
             clearRegistrationWatchdog();
             retryAttemptRef.current = 0;
             setRetryAttempt(0);
@@ -287,15 +290,18 @@ export function useSoftphoneJsSip(
           // Silent re-register on expiry / soft unregister — keeps the
           // active RTP session alive while we refresh the binding.
           const scheduleSilentReRegister = (delayMs: number, reason: string) => {
+            if (authBlockedRef.current) return;
             if (reRegisterTimerRef.current) clearTimeout(reRegisterTimerRef.current);
             const delay = Math.max(500, Math.min(delayMs, 30000));
             log('register.silent-reattempt', `${reason} in ${delay}ms`, 'warn');
             reRegisterTimerRef.current = setTimeout(() => {
+              if (cancelled || authBlockedRef.current) return;
               try { uaRef.current?.register?.(); }
               catch (e: any) { log('register.silent-reattempt.failed', e?.message || '', 'error'); }
             }, delay);
           };
           ua.on('unregistered', (e: any) => {
+            if (cancelled || uaRef.current !== ua) return;
             log('register.unregistered', e?.cause || '', 'warn');
             // Progressive backoff, scaled by retry attempt counter.
             const a = retryAttemptRef.current;
@@ -303,10 +309,12 @@ export function useSoftphoneJsSip(
             scheduleSilentReRegister(delay, 'unregistered');
           });
           ua.on('registrationExpiring', () => {
+            if (cancelled || uaRef.current !== ua) return;
             log('register.expiring', 'refreshing binding');
             scheduleSilentReRegister(500, 'expiring');
           });
           ua.on('registrationFailed', (e: any) => {
+            if (cancelled || uaRef.current !== ua) return;
             clearRegistrationWatchdog();
             const code = e?.response?.status_code;
             const msg = classifySipFailure({
@@ -317,14 +325,17 @@ export function useSoftphoneJsSip(
             setSipStatus('error');
             setSipError(msg, ctx);
             log('register.failed', `code=${code ?? '?'} cause=${e?.cause || ''} → ${msg}`, 'error');
-            if (code === 401 || code === 403 || code === 407) {
+            const authReason = `${e?.cause || ''} ${e?.response?.reason_phrase || ''}`;
+            if ([401, 403, 407].includes(code) || /\b(unauthorized|forbidden|authentication failed|wrong (?:sip )?password|proxy authentication required)\b/i.test(authReason)) {
               authBlockedRef.current = true;
-              log('retry.blocked', `auth failure (${code}) — auto-retry disabled until credentials change`, 'warn');
+              if (reRegisterTimerRef.current) { clearTimeout(reRegisterTimerRef.current); reRegisterTimerRef.current = null; }
+              log('retry.blocked', `auth failure (${code ?? 'no status code'}) — auto-retry disabled until credentials change`, 'warn');
               return;
             }
             scheduleRetry();
           });
           ua.on('disconnected', (e: any) => {
+            if (cancelled || uaRef.current !== ua) return;
             clearRegistrationWatchdog();
             setSipStatus('connecting');
             log('ws.disconnected', `code=${e?.code || ''} reason=${e?.reason || ''}`, 'warn');
@@ -335,6 +346,7 @@ export function useSoftphoneJsSip(
             }
           });
           ua.on('newRTCSession', (data: any) => {
+            if (cancelled || uaRef.current !== ua) return;
             const session = data.session;
             sessionRef.current = session;
             const remoteNumber = session.remote_identity?.uri?.user || 'Unknown';
@@ -368,6 +380,7 @@ export function useSoftphoneJsSip(
               session.once('icecandidate', outIceCandidateHandler);
             }
             session.on('peerconnection', (e: any) => {
+              if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
               const pc: RTCPeerConnection | undefined = e?.peerconnection;
               if (pc) {
                 // Wire remote audio track → <audio> element (otherwise the
@@ -382,6 +395,7 @@ export function useSoftphoneJsSip(
             });
             // ---- SDP introspection: log offer/answer codecs before INVITE is sent.
             session.on('sdp', (data: any) => {
+              if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
               try {
                 let sdp = data?.sdp || '';
                 if (data?.originator === 'local' && data?.type === 'offer' && callAttemptRef.current === 2) {
@@ -409,6 +423,7 @@ export function useSoftphoneJsSip(
             // Post-INVITE health-check: RFC 3261 Timer B = 32 s (5 s laissait
             // le PBX FusionPBX court quand il négocie DTLS-SRTP derrière NAT).
             watchCallEstablishment(session, session.connection, 32000).then((res) => {
+              if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
               if (res.ok) {
                 log('call.established', `ice=${res.iceState}`);
                 return;
@@ -441,16 +456,21 @@ export function useSoftphoneJsSip(
                 log('call.retry-timeout', `→ ${retryNumber} PCMU-only fallback`, 'warn');
                 try { sessionRef.current?.terminate(); } catch {}
                 ensureRegisteredThenRestore('invite-timeout');
-                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, INVITE_RETRY_BACKOFF_MS);
+                setTimeout(() => {
+                  if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
+                  try { placeCallInternal(retryNumber, true); } catch {}
+                }, INVITE_RETRY_BACKOFF_MS);
               }
             });
             session.on('confirmed', () => {
+              if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
               callStateRef.current = 'active'; setCallState('active');
               log('session.confirmed', remoteNumber);
               console.log('[SIP][info] session.confirmed — call connected');
               // Force Android into MODE_IN_COMMUNICATION via earpiece route so
               // remote audio is audible (WebView otherwise plays via media stream).
               import('../lib/sip/audioOutput').then(({ setRoute }) => {
+                if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
                 setRoute('earpiece').catch(() => {});
               });
               timerRef.current = setInterval(() => setCallTimer((t) => t + 1), 1000);
@@ -474,6 +494,7 @@ export function useSoftphoneJsSip(
                 if (statsTimerRef.current) clearInterval(statsTimerRef.current);
                 statsTimerRef.current = setInterval(async () => {
                   const q = await sampleCallQuality(pc, samplerStateRef.current);
+                  if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
                   setQuality(q);
                   // ---- Quality alerts (throttled, only when level worsens) ----
                   const now = Date.now();
@@ -537,6 +558,7 @@ export function useSoftphoneJsSip(
               samplerStateRef.current = {};
             };
             session.on('ended', () => {
+              if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
               callStateRef.current = 'ended'; setCallState('ended');
               log('session.ended', remoteNumber);
               // Always dismiss the native Android incoming-call notification and
@@ -548,6 +570,7 @@ export function useSoftphoneJsSip(
               if (timerRef.current) clearInterval(timerRef.current);
               stopStats();
               setTimeout(() => {
+                if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
                 setCallState('idle');
                 setCallTimer(0);
                 setIsMuted(false);
@@ -556,6 +579,7 @@ export function useSoftphoneJsSip(
               }, 2000);
             });
             session.on('failed', (e: any) => {
+              if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
               const code = e?.message?.status_code;
               const msg = classifySipFailure({
                 cause: e?.cause,
@@ -582,7 +606,10 @@ export function useSoftphoneJsSip(
                 const retryNumber = lastCallNumberRef.current;
                 log('call.retry-488', `→ ${retryNumber} with PCMU-only fallback`, 'warn');
                 setSipError('Codec refusé (488) — nouvelle tentative en PCMU…', ctx);
-                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, INVITE_RETRY_BACKOFF_MS);
+                setTimeout(() => {
+                  if (cancelled || uaRef.current !== ua || sessionRef.current !== session) return;
+                  try { placeCallInternal(retryNumber, true); } catch {}
+                }, INVITE_RETRY_BACKOFF_MS);
               } else {
                 setSipError(msg, ctx);
               }
@@ -668,6 +695,9 @@ export function useSoftphoneJsSip(
 
     return () => {
       cancelled = true;
+      pendingDialSeqRef.current++;
+      callAttemptRef.current = 0;
+      lastCallNumberRef.current = '';
       clearRetry();
       clearRegistrationWatchdog();
       if (reRegisterTimerRef.current) { clearTimeout(reRegisterTimerRef.current); reRegisterTimerRef.current = null; }
@@ -675,6 +705,10 @@ export function useSoftphoneJsSip(
       retryAttemptRef.current = 0;
       if (timerRef.current) clearInterval(timerRef.current);
       if (sessionRef.current && Capacitor.getPlatform() === 'android') void endAndroidCallAudio();
+      sessionRef.current = null;
+      callStateRef.current = 'idle'; setCallState('idle');
+      setCallTimer(0); setActiveCallNumber('');
+      setIsMuted(false); setIsOnHold(false);
       try { uaRef.current?.stop(); } catch {}
       uaRef.current = null;
       // JsSIP ownership ended (unmount, account change, credentials gone).
@@ -692,7 +726,7 @@ export function useSoftphoneJsSip(
     let detachNative: (() => void) | null = null;
 
     const trigger = (source: string) => {
-      if (cancelled) return;
+      if (cancelled || authBlockedRef.current) return;
       if (sipStatusRef.current === 'registered' || sipStatusRef.current === 'connecting') return;
       log('reconnect.auto', `source=${source} status=${sipStatusRef.current}`, 'warn');
       try { reconnectRef.current(); } catch (e: any) {
@@ -783,9 +817,20 @@ export function useSoftphoneJsSip(
     }
   };
 
+  /** An old ICE response must not clear a newer dial from another UA. */
+  const cancelPendingDial = (seq: number) => {
+    if (pendingDialSeqRef.current !== seq) return;
+    pendingDialSeqRef.current++;
+    callStateRef.current = 'idle'; setCallState('idle');
+    setActiveCallNumber('');
+    if (Capacitor.getPlatform() === 'android') void endAndroidCallAudio();
+  };
+
   /** Place a call. `forcePcmu=true` uses a secure WebRTC PCMU-only SDP modifier — used as a 488 fallback. */
   const placeCallInternal = async (number: string, forcePcmu = false): Promise<boolean> => {
-    if (!uaRef.current || !config) return false;
+    const ua = uaRef.current;
+    if (!ua || !config) return false;
+    const dialSeq = ++pendingDialSeqRef.current;
     setActiveCallNumber(number);
     callStateRef.current = 'ringing'; setCallState('ringing');
     setOfferedCodecs([]);
@@ -812,6 +857,9 @@ export function useSoftphoneJsSip(
 
     try {
       const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
+      // ICE/network work can finish after logout or a new extension has
+      // replaced the UA. Never let A's dial request use B's connection.
+      if (uaRef.current !== ua) { cancelPendingDial(dialSeq); return false; }
       log('ice.servers', `count=${iceServers.length}`);
       const callOpts: any = {
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
@@ -837,7 +885,8 @@ export function useSoftphoneJsSip(
       // Android: switch audio mode to MODE_IN_COMMUNICATION before INVITE so
       // the earpiece / speaker routing is armed when the remote track arrives.
       if (Capacitor.getPlatform() === 'android') await beginAndroidCallAudio();
-      uaRef.current.call(`sip:${number}@${config.domain}`, callOpts);
+      if (uaRef.current !== ua) { cancelPendingDial(dialSeq); return false; }
+      ua.call(`sip:${number}@${config.domain}`, callOpts);
       return true;
     } catch (err: any) {
       console.error('[AVA keypad] SIP call exception', err);
@@ -988,4 +1037,3 @@ export function useSoftphone(
   // eslint-disable-next-line react-hooks/rules-of-hooks
   return useSoftphoneJsSip(config, opts);
 }
-

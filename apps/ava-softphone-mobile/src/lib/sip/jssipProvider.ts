@@ -287,29 +287,17 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     register_expires: 300,
     connection_recovery_min_interval: 10,
     connection_recovery_max_interval: 60,
-    // Keep the WSS tunnel alive on Android carriers/proxies that close quiet
-    // WebSockets with an empty close code/reason after a few seconds.
-    ws_ping_pong: true,
-    ws_ping_pong_interval: 10,
     user_agent: "AVA Softphone 1.1",
   };
   if (isAndroid) {
-    // Android runs JsSIP over WSS inside the WebView. Do NOT set hack_via_tcp.
-    // hack_ip_in_contact: rewrites Contact IP for NAT traversal.
-    // hack_wss_in_transport: preserves WSS transport in Via so FusionPBX
-    //   routes responses back over the WSS tunnel (not TCP/5060).
-    // use_preloaded_route: FreeSwitch/FusionPBX WebSocket profile requires
-    //   the Route header pre-loaded for in-dialog requests (BYE, re-INVITE).
-    uaConfig.hack_via_tcp = false;
-    uaConfig.hack_ip_in_contact = true;
-    uaConfig.hack_wss_in_transport = true;
+    // Only use settings recognized by the installed JsSIP Config. Browser
+    // WebSocket APIs expose no client-side ping frames; WSS keepalive must
+    // be verified with the PBX on real devices before store distribution.
     uaConfig.use_preloaded_route = true;
     // eslint-disable-next-line no-console
     console.info('[SIP][android] JsSIP REGISTER config', {
       provider: 'jssip-wss',
       transport: 'WSS',
-      hack_via_tcp: false,
-      hack_wss_in_transport: true,
       use_preloaded_route: true,
       contact_uri: uaConfig.contact_uri,
       sockets: wssList,

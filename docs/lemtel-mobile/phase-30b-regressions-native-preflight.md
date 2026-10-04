@@ -1,0 +1,28 @@
+# Lemtel — phase 30B : régressions mobiles et préflight natif
+
+**Statut :** branche de revue empilée sur la phase 30A. Aucun déploiement de fonction Edge, synchronisation native, essai FusionPBX réel, migration, soumission App Store/Google Play ni modification de Planiprêt.
+
+## Résultat automatisé
+
+Les **14 échecs historiques** observés avant et après la phase 30A ont été résolus. La suite complète de l'application `apps/ava-softphone-mobile` donne désormais **202 tests réussis, 0 échec, 3 tests ignorés**, sur 32 suites réussies et une suite ignorée. Le contrôle TypeScript et le bundle Vite passent. Le pipeline CI Lemtel `lemtel-mobile-recording-authority.yml` exécute maintenant la **suite entière**, en plus du typage, du build et des contrats serveur.
+
+| Parcours | Correction ou clarification de contrat |
+| --- | --- |
+| Pavé de numérotation | Le dédoublonnage de 50 ms porte sur **la même touche**, pas sur toutes les touches : une saisie rapide `1`, `2` ne perd plus le `2`, et une double notification de `2` reste unique. |
+| Authentification SIP | Un refus `401/403/407` ou `Forbidden/Unauthorized` **même sans code SIP** reste en erreur sans probe WSS ni boucle de reconnexion. Un timer de re-REGISTER déjà armé est annulé et les événements `unregistered`, retour du réseau et premier plan ne contournent pas le verrou. L'utilisateur peut lancer une reconnexion explicite après correction des identifiants. Un `408` temporaire déclenche le probe WSS simulé puis le back-off réel de 2 s. |
+| Appel et session | L'état d'appel entrant est `ringing-in`. L'INVITE attend la résolution des serveurs ICE; si l'UA a changé entre-temps (déconnexion, nouveau compte ou poste), l'ancienne demande est abandonnée au lieu d'appeler via le nouvel UA. Le teardown réinitialise la sonnerie et le numéro; les événements et redials tardifs de l'ancien UA sont ignorés sans effacer un nouvel appel. Tests sans PBX ou réseau réel. |
+| Configuration WSS | L'ordre de repli est URL primaire fournie, URL supplémentaires fournies, URL dérivée du domaine. Aucun hôte de secours de fournisseur n'est ajouté en production. Les pseudo-options de ping/pong et `hack_*` non reconnues par JsSIP 3.13.8 ont été retirées; les tests vérifient les paramètres réellement configurés. **Cela ne démontre pas de keepalive réseau sur Android.** |
+| Thème et navigation | Une fiche Contacts utilisait un jeton inexistant et affichait toujours un fond sombre, même en mode clair. Le jeton existant `colors.midnight2` conserve le fond sombre et donne un fond clair lisible. Seuls les deux snapshots `BottomTabs` périmés ont été mis à jour pour la navigation actuelle à cinq onglets, avec `Contacts` sélectionné. |
+
+## Ce que ce préflight ne valide pas
+
+Le bac à sable Linux possède les deux projets natifs et `npx cap ls ios` / `npx cap ls android` identifie **13 plugins** pour chacun. `npx cap doctor` signale l'absence de **Xcode**; `sdkmanager` et le SDK Android ne sont pas présents. Il n'y a **aucun appareil autorisé attaché** à cette session. Le build Vite n'est donc **ni** une archive iOS **ni** un AAB Android; aucune compilation native, signature ou test sur appareil n'est revendiqué. L'option de ping/pong auparavant transmise au faux UA JsSIP était ignorée : la tenue réelle du WSS en arrière-plan et sous réseau mobile reste à démontrer avec Kenny et Phil.
+
+## Reprise en staging autorisé, puis sur appareils réels
+
+1. Faire revoir et intégrer les PR dans l'ordre **29C → 29D → 30A → 30B**. Déployer **d'abord** les fonctions serveur autoritaires de 30A dans un staging Lemtel isolé, vérifier les droits avec des comptes de test dédiés, puis seulement utiliser les builds mobiles issus de cette chaîne. Ne pas utiliser des paramètres, URL ou identifiants de production pour ces essais.
+2. Sur iPhone et Android de test, associer **A** et **B** à deux utilisateurs/postes différents de la même organisation. Faire télécharger un CDR par A, déconnecter A pendant un téléchargement/une transcription/une lecture vocale, connecter B et présenter le même identifiant CDR. Vérifier absence d'affichage, de lecture, de fichier réutilisé, de transcription tardive et d'appel sortant déclenché via l'UA de B. Rejouer avec changement de poste sur un même utilisateur, absence de réseau et retour en ligne. La lecture hors ligne déjà autorisée ne peut pas contrôler une révocation serveur immédiate avant reconnexion : c'est une limite documentée de 30A.
+3. Tester REGISTER/INVITE entrant et sortant, 401/403 sans boucle, timeout 408 puis reprise, changement Wi‑Fi ↔ cellulaire, arrière-plan prolongé, écran verrouillé, retour de veille, audio entrant/sortant, routage haut-parleur/écouteur et notifications d'appel. Relever les traces SIP/WSS/TLS **sans mot de passe ni URL signée** et comparer la durée de vie réelle du WSS aux paramètres PBX/TURN validés par Kenny et Phil. Un éventuel heartbeat client demandera un contrat PBX et des essais séparés; les options JsSIP ignorées ne doivent pas être réintroduites comme substitut.
+4. Une fois ces vérifications réussies, synchroniser les projets natifs sur machines équipées de Xcode et d'Android SDK, incrémenter versions/build numbers, signer et distribuer d'abord par **TestFlight interne** et **Google Play piste interne**. Aucun envoi ni publication n'est déclenché par la phase 30B.
+
+**Dépendances externes inchangées :** coordonnées et validation des domaines SIP/WSS/TLS, association poste ↔ utilisateur et droits d'enregistrements, configuration réseau/TURN, comptes de staging et scénarios d'appel de Kenny et Phil. Leur absence ne bloque pas la remise au vert de la suite, mais bloque la validation téléphonique réelle et la distribution native.

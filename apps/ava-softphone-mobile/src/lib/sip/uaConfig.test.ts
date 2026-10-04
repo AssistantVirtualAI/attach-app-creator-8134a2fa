@@ -1,13 +1,13 @@
 /**
- * Configuration parity tests — the mobile JsSIP UA must be set up with the
- * same critical flags as the desktop softphone over WSS on port 7443.
+ * Mobile JsSIP registration contract — caller-configured WSS transport and
+ * mobile keepalive, without a hardcoded provider backup hostname.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createSIPUA, buildWssFallbackList, type SIPConfig } from './jssipProvider';
 
 const cfg: SIPConfig = {
   extension: '300',
-  password: 'VirtualAI2026!',
+  password: 'test-only-password',
   domain: 'lemtel.lemtel.tel',
   wssUrl: 'wss://pbxnode.lemtel.tel:7443',
   displayName: 'Mobile 300',
@@ -42,9 +42,9 @@ describe('buildWssFallbackList', () => {
   it('honors caller-supplied WSS URLs before defaults', () => {
     const list = buildWssFallbackList({ ...cfg, wssUrls: ['wss://custom:7443'] });
     expect(list[0]).toBe('wss://pbxnode.lemtel.tel:7443');
-    expect(list[1]).toBe('wss://node.lemtelcloud.net:7443');
-    expect(list[2]).toBe('wss://custom:7443');
-    expect(list).toContain('wss://pbxnode.lemtel.tel:7443');
+    expect(list[1]).toBe('wss://custom:7443');
+    expect(list[2]).toBe('wss://lemtel.lemtel.tel:7443');
+    expect(list).toHaveLength(3);
   });
 });
 
@@ -68,16 +68,17 @@ describe('createSIPUA WSS configuration', () => {
     expect(ua.__opts.uri).toBe('sip:300@lemtel.lemtel.tel');
   });
 
-  it('passes the same critical flags as the desktop provider', async () => {
+  it('uses the supported mobile registration and recovery settings', async () => {
     await createSIPUA(cfg, 200);
     const o = ua.__opts;
-    expect(o.password).toBe('VirtualAI2026!');
+    expect(o.password).toBe('test-only-password');
     expect(o.display_name).toBe('Mobile 300');
     expect(o.register).toBe(true);
     expect(o.register_expires).toBe(300);
     expect(o.session_timers).toBe(false);
-    expect(o.ws_ping_pong).toBe(true);
-    expect(o.ws_ping_pong_interval).toBe(20);
+    expect(o.connection_recovery_min_interval).toBe(10);
+    expect(o.connection_recovery_max_interval).toBe(60);
+    expect(o).not.toHaveProperty('ws_ping_pong'); // JsSIP 3.13 ignores this option
     expect(o.user_agent).toMatch(/AVA Softphone/);
   });
 

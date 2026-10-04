@@ -1,11 +1,16 @@
 /**
  * Integration tests for SIP failure → user-facing message classification,
- * plus the "Retrying…" status that the UI surfaces during the 5 s / 15 s
+ * plus the "Retrying…" status that the UI surfaces during the 2 s / 5 s
  * back-off window.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSoftphone } from './useSoftphone';
+
+vi.mock('../lib/sip/sipPersistence', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../lib/sip/sipPersistence')>(),
+  probeWss: vi.fn(async () => ({ ok: true, ms: 1 })),
+}));
 
 type Handler = (...a: any[]) => void;
 
@@ -40,9 +45,9 @@ afterEach(() => { delete (window as any).JsSIP; });
 
 describe('SIP failure classification → UI message', () => {
   it.each([
-    { label: 'WSS connection failed',     emit: ['disconnected', { error: true, reason: 'WebSocket transport error' }],          match: /wss connection failed|websocket|network/i },
-    { label: 'Registration timeout',      emit: ['registrationFailed', { cause: 'Request Timeout', response: { status_code: 408 } }], match: /timeout/i },
-    { label: 'Authentication failed',     emit: ['registrationFailed', { cause: 'Forbidden', response: { status_code: 403 } }],        match: /authentication failed/i },
+    { label: 'WSS connection failed',     emit: ['disconnected', { error: true, reason: 'WebSocket transport error' }],          match: /cannot reach phone server/i },
+    { label: 'Registration timeout',      emit: ['registrationFailed', { cause: 'Request Timeout', response: { status_code: 408 } }], match: /phone server not responding/i },
+    { label: 'Authentication failed',     emit: ['registrationFailed', { cause: 'Forbidden', response: { status_code: 403 } }],        match: /extension not authorized/i },
     { label: 'DNS resolution failed',     emit: ['registrationFailed', { cause: 'DNS lookup failed' }],                                match: /dns/i },
   ])('surfaces "$label" when JsSIP fires the matching event', async ({ emit, match }) => {
     const ua = installFakeJsSIP();
@@ -61,14 +66,16 @@ describe('Retrying… status during back-off', () => {
       const { result } = renderHook(() => useSoftphone(cfg));
       await vi.waitFor(() => expect(ua.start).toHaveBeenCalled());
 
-      // 1. Auth failure → status flips to 'retrying' immediately, error set.
-      act(() => (ua as any).emit('registrationFailed', { cause: 'Forbidden', response: { status_code: 401 } }));
+      // 1. Temporary timeout → successful WSS probe → bounded retry.
+      await act(async () => { (ua as any).emit('registrationFailed', { cause: 'Request Timeout', response: { status_code: 408 } }); });
       expect(result.current.sipStatus).toBe('retrying');
-      expect(result.current.sipError).toMatch(/authentication failed/i);
+      expect(result.current.sipError).toMatch(/phone server not responding/i);
+      expect(result.current.retryAttempt).toBe(1);
 
-      // 2. Advance 5 s — retry fires, UA restarts, status returns to 'connecting'.
-      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+      // 2. Advance the first 2 s back-off — UA restarts and reconnects.
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
       expect(result.current.sipStatus).toBe('connecting');
+      expect(ua.start).toHaveBeenCalledTimes(2);
 
       // 3. PBX accepts → 'registered' and error cleared.
       act(() => (ua as any).emit('registered'));

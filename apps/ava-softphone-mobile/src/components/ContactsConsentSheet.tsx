@@ -74,7 +74,7 @@ export default function ContactsConsentSheet({ open, onClose }: Props) {
     }} role="dialog" aria-modal="true">
       <div style={{
         width: '100%', maxWidth: 520, maxHeight: '92vh', overflowY: 'auto',
-        background: colors.cardBg || '#0E1B3D', color: colors.textIce,
+        background: colors.midnight2, color: colors.textIce,
         borderTopLeftRadius: 22, borderTopRightRadius: 22,
         padding: '24px 20px 32px', border: `1px solid ${colors.border}`,
       }}>

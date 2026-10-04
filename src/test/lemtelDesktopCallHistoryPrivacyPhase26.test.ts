@@ -94,9 +94,16 @@ describe("Lemtel Phase 26B — Desktop call history privacy", () => {
     const s = rd(API);
     expect(s).toContain("personalCalls: async (limit = 100, opts?: { rangeDays?: 7 | 30 | null }) => {");
     expect(s).toContain("refreshPersonalCalls: async (limit = 150, opts?: { rangeDays?: 7 | 30 | null }) => {");
-    expect(s.match(/const ext = cleanText\(me\.extension\);/g)?.length).toBe(2);
-    expect(s.match(/if \(!ext\) return \[\] as CallRecord\[\];/g)?.length).toBe(2);
-    expect(s.match(/readCallRecordRows\(limit, \{ extension: ext, rangeDays: opts\?\.rangeDays \?\? null \}\)/g)?.length).toBe(2);
+    // Scoped to the two Phase 26B call-history bodies only (Phase 27B.1).
+    for (const sig of ["personalCalls: async (limit = 100,", "refreshPersonalCalls: async (limit = 150,"]) {
+      const start = s.indexOf(`  ${sig}`);
+      expect(start, sig).toBeGreaterThan(-1);
+      const body = s.slice(start, s.indexOf("\n  },", start));
+      expect(body).toContain("const me = await getMeContext();");
+      expect(body).toContain("const ext = cleanText(me.extension);");
+      expect(body).toContain("if (!ext) return [] as CallRecord[];");
+      expect(body).toContain("readCallRecordRows(limit, { extension: ext, rangeDays: opts?.rangeDays ?? null })");
+    }
     expect(s).toContain("calls: async (limit = 100, opts?: { scope?: 'mine' | 'org'; extension?: string | null; rangeDays?: 7 | 30 | null }) => {");
     expect(s).toContain("refreshCalls: async (limit = 150, opts?: { scope?: 'mine' | 'org'; extension?: string | null; rangeDays?: 7 | 30 | null }) => {");
     expect(s).toContain("scopedCallRecords: async (limit = 100,");

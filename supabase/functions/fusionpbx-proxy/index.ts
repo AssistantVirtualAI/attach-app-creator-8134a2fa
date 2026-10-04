@@ -2064,13 +2064,14 @@ const handler = async (req: Request): Promise<Response> => {
     // extension of one of their pbx_softphone_users rows in the same
     // organization. Admin roles, org membership and any client-supplied
     // organization/domain/path/extension never widen this access.
-    async function canReadCallRecording(xmlCdrUuid: string | null | undefined) {
-      if (isServiceCall) return true;
-      if (!userId) return false;
+    async function resolveAuthorizedRecording(xmlCdrUuid: string | null | undefined): Promise<{ allowed: boolean; record: any | null }> {
+      const DENY = { allowed: false, record: null };
+      if (isServiceCall) return { allowed: true, record: null };
+      if (!userId) return DENY;
       const cdrId = typeof xmlCdrUuid === "string" ? xmlCdrUuid.trim() : "";
-      if (!cdrId) return false;
+      if (!cdrId) return DENY;
 
-      const recordSelect = "id, organization_id, extension";
+      const recordSelect = "id, pbx_uuid, organization_id, extension, recording_path, recording_name, recording_url, domain_uuid, domain_name, start_at";
       const { data: byPbxUuid, error: pbxErr } = await admin
         .from("pbx_call_records")
         .select(recordSelect)
@@ -2078,7 +2079,7 @@ const handler = async (req: Request): Promise<Response> => {
         .limit(1);
       if (pbxErr) {
         console.warn("recording access lookup failed");
-        return false;
+        return DENY;
       }
 
       let record = byPbxUuid?.[0] || null;
@@ -2090,13 +2091,13 @@ const handler = async (req: Request): Promise<Response> => {
           .limit(1);
         if (idErr) {
           console.warn("recording access id lookup failed");
-          return false;
+          return DENY;
         }
         record = byId?.[0] || null;
       }
-      if (!record || !record.organization_id) return false;
+      if (!record || !record.organization_id) return DENY;
       const recordExtension = String(record.extension ?? "").trim();
-      if (!recordExtension) return false;
+      if (!recordExtension) return DENY;
 
       const { data: softphoneRows, error: softphoneErr } = await admin
         .from("pbx_softphone_users")
@@ -2107,9 +2108,26 @@ const handler = async (req: Request): Promise<Response> => {
         .limit(1);
       if (softphoneErr) {
         console.warn("recording softphone access lookup failed");
-        return false;
+        return DENY;
       }
-      return !!softphoneRows?.length;
+      return softphoneRows?.length ? { allowed: true, record } : DENY;
+    }
+
+    // Phase 29B.1 — pure normalizer: read parameters for a user call come only
+    // from the authorized server-side CDR. Empty values are omitted, never
+    // replaced by client input.
+    function serverRecordingParams(record: any): Record<string, string> {
+      const out: Record<string, string> = {};
+      const put = (k: string, v: unknown) => { const t = typeof v === "string" ? v.trim() : v == null ? "" : String(v); if (t) out[k] = t; };
+      put("xml_cdr_uuid", record?.pbx_uuid || record?.id);
+      put("record_path", record?.recording_path);
+      put("record_name", record?.recording_name);
+      put("domain_uuid", record?.domain_uuid);
+      put("domain_name", record?.domain_name);
+      put("recorded_at", record?.start_at);
+      put("local_recording_url", record?.recording_url);
+      put("organization_id", record?.organization_id);
+      return out;
     }
 
     function getPbxFileBases() {
@@ -2121,14 +2139,24 @@ const handler = async (req: Request): Promise<Response> => {
 
     // ---- Recording proxy ----
     if (action === "get-recording") {
-      const recordingParams = { ...(params || {}) } as any;
-      if (!recordingParams.xml_cdr_uuid) recordingParams.xml_cdr_uuid = body.xml_cdr_uuid || body.id;
-      const { record_path, record_name, xml_cdr_uuid, domain_uuid, domain_name, local_recording_url, recorded_at } = recordingParams;
-      const probeOnly = recordingParams.probe === true || recordingParams.probe === "true";
+      const clientParams = { ...(params || {}) } as any;
+      const requestedCdrId = clientParams.xml_cdr_uuid || body.xml_cdr_uuid || body.id || null;
+      const probeOnly = clientParams.probe === true || clientParams.probe === "true";
       // Phase 29B — access check first: user calls without a resolvable own CDR stop here.
-      if (!(await canReadCallRecording(xml_cdr_uuid ? String(xml_cdr_uuid) : null))) {
+      const recAccess = await resolveAuthorizedRecording(requestedCdrId ? String(requestedCdrId) : null);
+      if (!recAccess.allowed) {
         return json({ error: "Forbidden", message: "Recording is outside the signed-in user extension scope" }, 403);
       }
+      // Phase 29B.1 — user calls: REPLACE (never merge) client params with the
+      // authorized CDR. Service-role keeps historical params (internal jobs only).
+      let recordingParams: any;
+      if (isServiceCall) {
+        recordingParams = { ...clientParams, xml_cdr_uuid: requestedCdrId || undefined };
+      } else {
+        recordingParams = serverRecordingParams(recAccess.record);
+        organization_id = recAccess.record.organization_id;
+      }
+      const { record_path, record_name, xml_cdr_uuid, domain_uuid, domain_name, local_recording_url, recorded_at } = recordingParams;
       if (!xml_cdr_uuid && !record_name && !(record_path && record_name)) {
         return json({ error: "xml_cdr_uuid, record_name, or (record_path, record_name) required" }, 400);
       }
@@ -2535,11 +2563,19 @@ const handler = async (req: Request): Promise<Response> => {
         const signedParams = { ...(params || {}) } as any;
         const signedXmlCdrUuid = signedParams.xml_cdr_uuid || body.xml_cdr_uuid || body.id || null;
         // Phase 29B — validated before the service-role self-call; never a bypass.
-        if (!(await canReadCallRecording(signedXmlCdrUuid ? String(signedXmlCdrUuid) : null))) {
+        const signedAccess = await resolveAuthorizedRecording(signedXmlCdrUuid ? String(signedXmlCdrUuid) : null);
+        if (!signedAccess.allowed) {
           return json({ error: "Forbidden", message: "Recording is outside the signed-in user extension scope" }, 403);
         }
+        // Phase 29B.1 — for a user, the self-call carries ONLY server CDR params.
+        const userReadParams = isServiceCall ? null : serverRecordingParams(signedAccess.record);
+        const readParams: any = userReadParams ?? signedParams;
+        const auditOrgId = userReadParams ? signedAccess.record.organization_id : organization_id;
+        const auditResourceId = userReadParams ? (userReadParams.xml_cdr_uuid || null) : (signedParams.xml_cdr_uuid || null);
         // Reuse the proven byte-fetch path by self-invoking get-recording.
-        const selfBody = { ...body, action: "get-recording" };
+        const selfBody = userReadParams
+          ? { action: "get-recording", organization_id: userReadParams.organization_id, params: userReadParams }
+          : { ...body, action: "get-recording" };
         const selfUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/fusionpbx-proxy`;
         const selfRes = await fetch(selfUrl, {
           method: "POST",
@@ -2558,7 +2594,7 @@ const handler = async (req: Request): Promise<Response> => {
         const bytes = new Uint8Array(await selfRes.arrayBuffer());
         if (!bytes.byteLength) return json({ ok: false, error: "RECORDING_EMPTY", fallback: true }, 200);
 
-        const lower = String((params as any).record_name || "").toLowerCase();
+        const lower = String(readParams.record_name || "").toLowerCase();
         const ext = lower.endsWith(".mp3") ? "mp3"
                   : lower.endsWith(".ogg") ? "ogg"
                   : lower.endsWith(".m4a") ? "m4a"
@@ -2581,11 +2617,11 @@ const handler = async (req: Request): Promise<Response> => {
         // Audit
         try {
           await admin.from("audit_logs").insert({
-            organization_id,
+            organization_id: auditOrgId,
             user_id: userId,
             action: "recording.signed_url_issued",
             resource_type: "pbx_recording",
-            resource_id: (params as any).xml_cdr_uuid || null,
+            resource_id: auditResourceId,
             metadata: { object_path: objectPath, content_type: storageContentType, bytes: bytes.byteLength, ttl },
           });
         } catch { /* audit best-effort */ }

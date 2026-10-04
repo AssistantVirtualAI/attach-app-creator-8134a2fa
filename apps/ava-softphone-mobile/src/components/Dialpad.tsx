@@ -22,7 +22,7 @@ export default function Dialpad({
   onPress: (d: string) => void;
   onLongPressZero?: () => void;
 }) {
-  const handledRef = React.useRef<number>(0);
+  const handledRef = React.useRef<{ digit: string; time: number } | null>(null);
   const longTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   return (
@@ -34,8 +34,8 @@ export default function Dialpad({
           type="button"
           onPointerDown={(e) => {
             const now = Date.now();
-            if (now - handledRef.current < 50) return;
-            handledRef.current = now;
+            if (handledRef.current?.digit === k.d && now - handledRef.current.time < 50) return;
+            handledRef.current = { digit: k.d, time: now };
             e.preventDefault();
             if (navigator.vibrate) { try { navigator.vibrate(8); } catch { /* noop */ } }
             onPress(k.d);

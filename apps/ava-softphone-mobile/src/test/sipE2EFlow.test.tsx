@@ -60,18 +60,21 @@ describe('mobile softphone end-to-end flow', () => {
     act(() => ua.emit('registered'));
     expect(result.current.sipStatus).toBe('registered');
 
-    // Place the outbound call.
-    act(() => { result.current.call('15145550100'); });
-    expect(ua.call).toHaveBeenCalledTimes(1);
-    const [target] = (ua.call as any).mock.calls[0];
-    expect(target).toBe('sip:15145550100@lemtel.lemtel.tel');
+    try {
+      // ICE server retrieval is asynchronous; an immediate assertion would
+      // unmount the UA before call() can issue its SIP INVITE.
+      await act(async () => { expect(await result.current.call('15145550100')).toBe(true); });
+      expect(ua.call).toHaveBeenCalledTimes(1);
+      const [target] = (ua.call as any).mock.calls[0];
+      expect(target).toBe('sip:15145550100@lemtel.lemtel.tel');
 
-    // Make sure NO backend call hit any originate / mobile fallback endpoint.
-    const originateCalls = fetchSpy.mock.calls.filter(([url]) =>
-      typeof url === 'string' && /originate|click.to.call|mobile-calls-start/i.test(url),
-    );
-    expect(originateCalls).toHaveLength(0);
-
-    fetchSpy.mockRestore();
+      // No originate or click-to-call request is allowed on the backend.
+      const originateCalls = fetchSpy.mock.calls.filter(([url]) =>
+        typeof url === 'string' && /originate|click.to.call|mobile-calls-start/i.test(url),
+      );
+      expect(originateCalls).toHaveLength(0);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

@@ -33,19 +33,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check renderer types
         run: npx tsc --noEmit -p tsconfig.json
-      - name: Test recording, voicemail and session authority
-        run: >-
-          npx vitest run
-          src/lib/mobileApi.transcriptionAuthority.test.ts
-          src/lib/creds.logout.test.tsx
-          src/lib/mobileSupabase.recordingAuthority.test.ts
-          src/lib/recordingCache.privacy.test.ts
-          src/hooks/useCallAi.session.test.tsx
-          src/screens/RecordingsScreen.privacy.test.tsx
-          src/screens/CallDetailScreen.recordingAuthority.test.tsx
-          src/screens/VoicemailScreen.realtimePrivacy.test.tsx
-          src/screens/VoicemailScreen.portalPolicy.test.tsx
-          --reporter=dot
+      - name: Test full Lemtel mobile suite (including recording authority)
+        run: npm test -- --reporter=dot
       - name: Build mobile web bundle (no native submission)
         run: npm run build
 

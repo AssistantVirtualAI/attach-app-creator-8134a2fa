@@ -56,7 +56,7 @@ describe('light-mode responsive snapshots', () => {
         setViewport(bp.w, bp.h);
         const { container } = render(
           <ThemeProvider>
-            <BottomTabs active="home" onChange={() => {}} />
+            <BottomTabs active="contacts" onChange={() => {}} />
           </ThemeProvider>,
         );
         expect(container.innerHTML).toMatchSnapshot();

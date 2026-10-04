@@ -109,7 +109,10 @@ export default function PostCallConsentSheet() {
             .or(`id.eq.${pid},ns_callid.eq.${pid},ns_call_id.eq.${pid}`).limit(3);
           rows = (data as any as ConsentCall[]) ?? [];
           if (rows.length) source = "provider";
-        } else if (detail.number) {
+        }
+        // L'identifiant SIP local diffère souvent de celui du PBX : on retombe
+        // sur les appels récents du courtier avec le même numéro.
+        if (!rows.length && detail.number) {
           const since = new Date(Date.now() - 10 * 60_000).toISOString();
           const { data } = await supabase
             .from("planipret_phone_calls").select(SELECT)

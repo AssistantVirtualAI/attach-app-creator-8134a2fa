@@ -18,6 +18,8 @@ const DEFAULT_PORTAL_ORIGIN = "https://courtierai.planipret.com";
 // mener à https://courtierai.planipret.com (proxifié vers avastatistic.ca,
 // le sous-chemin /planipret est inclus dans target), peu importe PP_PORTAL_URL.
 const PORTAL_ORIGIN = DEFAULT_PORTAL_ORIGIN;
+const LEGACY_PORTAL_ORIGIN = "https://avastatistic.ca";
+void PORTAL_ORIGIN;
 
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -89,7 +91,9 @@ Deno.serve(async (req) => {
       // Capacitor's iOS in-app browser can discard URL fragments while opening
       // an external origin. Query parameters survive that handoff reliably;
       // the landing page removes them from browser history immediately.
-      url: `${PORTAL_ORIGIN}${target}?${handoffParams}`,
+      // Accepted by every installed app version: legacy landing page on the
+      // primary domain, which consumes the token then redirects to `to`.
+      url: `${LEGACY_PORTAL_ORIGIN}/planipret/portal-handoff?${handoffParams}`,
       expires_in: 300,
     });
   } catch (e) {

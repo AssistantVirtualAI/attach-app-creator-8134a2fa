@@ -27,14 +27,14 @@ import { useTr, useT } from '../lib/i18n';
 type Sub = null | 'voicemail' | 'messages' | 'contacts' | 'settings' | 'delete' | 'privacy' | 'datasafety' | 'permissions' | 'support' | 'aiaudit' | 'queues' | 'features' | 'sipdebug';
 
 export default function MoreScreen({
-  creds, sp, onSignOut, haptic, portalTelephonyPolicy = null,
-}: { creds: Creds; sp: any; onSignOut: () => void; haptic: (s?: ImpactStyle) => Promise<void>; portalTelephonyPolicy?: PortalTelephonyPolicy | null }) {
+  creds, sp, onSignOut, haptic, portalTelephonyPolicy = null, voicemailPolicy,
+}: { creds: Creds; sp: any; onSignOut: () => void; haptic: (s?: ImpactStyle) => Promise<void>; portalTelephonyPolicy?: PortalTelephonyPolicy | null; voicemailPolicy: 'enabled' | 'disabled' }) {
   const { tr } = useTr();
   const { tx } = useT();
   const [sub, setSub] = useState<Sub>(null);
 
 
-  if (sub === 'voicemail')   return <SubPage onBack={() => setSub(null)} title={tr.more.voicemail}><VoicemailScreen haptic={haptic} /></SubPage>;
+  if (sub === 'voicemail')   return <SubPage onBack={() => setSub(null)} title={tr.more.voicemail}><VoicemailScreen haptic={haptic} voicemailPolicy={voicemailPolicy} /></SubPage>;
   if (sub === 'messages')    return <SubPage onBack={() => setSub(null)} title={tr.more.messages}><MessagesScreen haptic={haptic} /></SubPage>;
   if (sub === 'contacts')    return <SubPage onBack={() => setSub(null)} title={tr.more.contacts}><ContactsScreen sp={sp} /></SubPage>;
   if (sub === 'settings')    return <SubPage onBack={() => setSub(null)} title={tr.more.settings}><SettingsScreen creds={creds} sp={sp} onSignOut={onSignOut} portalTelephonyPolicy={portalTelephonyPolicy} /></SubPage>;

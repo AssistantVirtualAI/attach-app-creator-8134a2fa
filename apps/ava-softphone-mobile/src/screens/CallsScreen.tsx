@@ -18,7 +18,7 @@ import { dialNumber } from '../lib/dialNumber';
 
 type SubTab = 'recents' | 'recordings' | 'voicemail' | 'dial';
 
-export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilter }: { sp: any; haptic: (s?: ImpactStyle) => Promise<void>; creds?: Creds | null; initialSub?: SubTab; initialFilter?: 'all' | 'missed' }) {
+export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilter, voicemailPolicy }: { sp: any; haptic: (s?: ImpactStyle) => Promise<void>; creds?: Creds | null; initialSub?: SubTab; initialFilter?: 'all' | 'missed'; voicemailPolicy: 'enabled' | 'disabled' }) {
   const { tr } = useTr();
 
   const [sub, setSub] = useState<SubTab>(initialSub || 'recents');
@@ -232,7 +232,7 @@ export default function CallsScreen({ sp, haptic, creds, initialSub, initialFilt
         </>
       )}
 
-      {sub === 'voicemail' && <div style={{ marginTop: 12 }}><VoicemailScreen haptic={haptic} /></div>}
+      {sub === 'voicemail' && <div style={{ marginTop: 12 }}><VoicemailScreen haptic={haptic} voicemailPolicy={voicemailPolicy} /></div>}
 
       <div style={{ height: 80 }} />
     </div>

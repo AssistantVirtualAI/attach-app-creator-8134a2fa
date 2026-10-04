@@ -9,8 +9,12 @@ import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { authedRealtime, edgeCall } from '../lib/mobileSupabase';
 import { useTr } from '../lib/i18n';
 
-export default function VoicemailScreen({ haptic }: { haptic?: (s?: ImpactStyle) => Promise<void> }) {
+export type VoicemailPolicy = 'enabled' | 'disabled';
+
+export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }: { haptic?: (s?: ImpactStyle) => Promise<void>; voicemailPolicy?: VoicemailPolicy }) {
   const { tr } = useTr();
+  // Phase 25A — portal is the sole authority on greeting configuration.
+  const greetingAllowed = voicemailPolicy === 'enabled';
 
   const mobile = useMobileCredentials();
   const [items, setItems] = useState<VoicemailEntry[] | null>(null);
@@ -43,7 +47,15 @@ export default function VoicemailScreen({ haptic }: { haptic?: (s?: ImpactStyle)
   useEffect(() => { reload(); }, []);
   useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
 
+  // Revocation: wipe local greeting editor state; never touch messages/history.
   useEffect(() => {
+    if (greetingAllowed) return;
+    setVoices([]); setGreetingText(''); setVoiceId('EXAVITQu4vr4xnSDxMaL');
+    setGreetingBusy(false); setGreetingMsg(null); setGreetingPreviewUrl(null);
+  }, [greetingAllowed]);
+
+  useEffect(() => {
+    if (!greetingAllowed) return;
     if (!mobile.accessToken) return;
     edgeCall<any>('user-voicemail-greeting', mobile.accessToken, { action: 'get_settings', payload: {} })
       .then((r) => {
@@ -53,9 +65,10 @@ export default function VoicemailScreen({ haptic }: { haptic?: (s?: ImpactStyle)
         setGreetingPreviewUrl(r.settings?.greeting_audio_url || null);
       })
       .catch(() => {});
-  }, [mobile.accessToken]);
+  }, [mobile.accessToken, greetingAllowed]);
 
   const saveGreeting = async () => {
+    if (voicemailPolicy !== 'enabled') return;
     if (!mobile.accessToken || !greetingText.trim()) return;
     setGreetingBusy(true); setGreetingMsg(null);
     try {
@@ -224,7 +237,13 @@ export default function VoicemailScreen({ haptic }: { haptic?: (s?: ImpactStyle)
   );
 
 
-  const GreetingEditor = (
+  const GreetingDisabled = (
+    <div data-testid="voicemail-greeting-disabled" role="note" style={{ margin: '0 14px 10px', padding: 12, borderRadius: radius.lg, border: `1px solid ${colors.border}`, background: 'rgba(255,255,255,0.04)', color: colors.mutedSilver, fontSize: 12 }}>
+      Voicemail is disabled in the Lemtel portal. The voicemail greeting is managed from the portal.
+    </div>
+  );
+
+  const GreetingEditor = !greetingAllowed ? GreetingDisabled : (
     <div style={{ padding: '0 14px 12px' }}>
       <Card accent="violet">
         <div style={{ fontSize: 11, color: colors.avaCyan, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8 }}>ElevenLabs greeting</div>

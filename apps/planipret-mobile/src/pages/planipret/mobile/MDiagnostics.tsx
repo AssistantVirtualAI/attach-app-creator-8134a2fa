@@ -1,3 +1,4 @@
+import { tr } from "@/hooks/useMplanipretLang";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Copy, CheckCircle2, XCircle, AlertTriangle, Loader2 } from "lucide-react";
@@ -225,7 +226,7 @@ export default function MDiagnostics() {
     <div className="min-h-full" style={{ background: "var(--pp-bg-base)", color: "var(--pp-text-primary)" }}>
       <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-3"
         style={{ background: "var(--pp-bg-base)", borderBottom: "1px solid var(--pp-bg-border-2)" }}>
-        <button onClick={() => navigate(-1)} style={{ color: "var(--pp-text-muted)" }} aria-label="Retour">
+        <button onClick={() => navigate(-1)} style={{ color: "var(--pp-text-muted)" }} aria-label={tr("Retour", "Back")}>
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1">

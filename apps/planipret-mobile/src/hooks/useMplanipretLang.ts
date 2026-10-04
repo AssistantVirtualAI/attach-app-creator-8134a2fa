@@ -84,3 +84,8 @@ export function useMplanipretLang() {
 
   return { lang, setLang, toggle, t, dict: MP_DICT[lang] as MpDict };
 }
+
+/** Inline bilingual string for text without a dictionary key. Reads the current app language. */
+export function tr(fr: string, en: string): string {
+  return detect() === "en" ? en : fr;
+}

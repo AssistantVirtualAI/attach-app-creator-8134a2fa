@@ -26,7 +26,7 @@ import MobileHeaderControls from "@/components/planipret/mobile/MobileHeaderCont
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import PostCallConsentSheet from "@/components/planipret/mobile/PostCallConsentSheet";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
-import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
 import { ROUTES } from "@/lib/routes";
 import { recordRedirect } from "@/lib/debug/navDebug";
 import { invokeEdge, onAuthRequired } from "@/lib/planipret/edgeAuth";
@@ -408,7 +408,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
                   ) : contactsError && contacts.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>
                       <div className="mb-2">{contactsError}</div>
-                      <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
+                      <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>{tr("Réessayer", "Retry")}</button>
                     </div>
                   ) : filtered.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{tokens.length ? t("dialer.noResults") : t("contacts.noDirectory")}</div>

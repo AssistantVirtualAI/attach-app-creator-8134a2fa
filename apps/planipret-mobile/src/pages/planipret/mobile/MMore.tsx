@@ -27,7 +27,7 @@ import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard
 import MaestroRelinkButton from "@/components/planipret/mobile/MaestroRelinkButton";
 import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings";
 import MRingtoneSettings from "@/components/planipret/mobile/MRingtoneSettings";
-import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { startMs365Authorize } from "@/lib/planipret/ms365Start";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
@@ -295,8 +295,8 @@ export default function MMore() {
       </Section>
 
       <Section title={t("more.sections.account")}>
-        <Row icon={<ExternalLink className="w-4 h-4" />} label="Ouvrir mon portail AVA Statistic"
-          sub="Connexion automatique avec votre compte"
+        <Row icon={<ExternalLink className="w-4 h-4" />} label={tr("Ouvrir mon portail AVA Statistic", "Open my AVA Statistic portal")}
+          sub={tr("Connexion automatique avec votre compte", "Automatic sign-in with your account")}
           onClick={async () => {
             if (openingPortal) return;
             setOpeningPortal(true);
@@ -499,7 +499,7 @@ export default function MMore() {
         <Row icon={<MessageCircle className="w-4 h-4" />} label={t("more.contactSupport")}
           onClick={() => { window.location.href = "mailto:support@avastatistic.ca?subject=Support%20Planipr%C3%AAt%20AI%20Portal"; }} chevron />
         <Row icon={<Bot className="w-4 h-4" />} label={aiOk ? "Consentement IA (AVA) : accordé" : "Consentement IA (AVA) : non accordé"}
-          sub="AVA envoie vos messages et transcriptions à OpenAI, Google (Gemini) et ElevenLabs. Touchez pour accorder ou retirer votre consentement."
+          sub={tr("AVA envoie vos messages et transcriptions à OpenAI, Google (Gemini) et ElevenLabs. Touchez pour accorder ou retirer votre consentement.", "AVA sends your messages and transcripts to OpenAI, Google (Gemini) and ElevenLabs. Tap to grant or withdraw consent.")}
           onClick={async () => {
             if (aiOk) {
               const revoked = await revokeAiConsent();

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, ArrowRightLeft } from "lucide-react";
 import { handoverController, type HandoverEvent } from "@/lib/planipret/net/handoverController";
-import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { useMplanipretLang, tr } from "@/hooks/useMplanipretLang";
 
 const MAX = 5;
 
@@ -37,7 +37,7 @@ export default function HandoverIndicator() {
         ) : (
           <>
             <RefreshCw className="w-3.5 h-3.5" />
-            <span className="font-medium">Contrôle REST actif</span>
+            <span className="font-medium">{tr("Contrôle REST actif", "REST control active")}</span>
           </>
         )}
       </div>

@@ -1,3 +1,4 @@
+import { tr } from "@/hooks/useMplanipretLang";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
@@ -492,7 +493,7 @@ export default function RecordingsList({
              style={{ background: "rgba(46,155,220,0.12)", color: "var(--pp-brand-accent)" }}>
           <Play className="w-6 h-6" />
         </div>
-        <div className="font-semibold" style={{ color: "var(--pp-text-secondary)" }}>Aucun enregistrement</div>
+        <div className="font-semibold" style={{ color: "var(--pp-text-secondary)" }}>{tr("Aucun enregistrement", "No recordings")}</div>
         <div className="text-xs mt-1" style={{ color: "var(--pp-text-muted)" }}>
           Les appels enregistrés et analysés apparaîtront ici.
         </div>
@@ -1197,7 +1198,7 @@ function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: Re
           )}
           {coaching.strengths?.length > 0 && (
             <div className="mb-1.5">
-              <div className="text-[10px] font-semibold uppercase mb-0.5" style={{ color: "var(--pp-success)" }}>Forces</div>
+              <div className="text-[10px] font-semibold uppercase mb-0.5" style={{ color: "var(--pp-success)" }}>{tr("Forces", "Strengths")}</div>
               {coaching.strengths.map((s: string, i: number) => (
                 <div key={i} className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>✓ {s}</div>
               ))}
@@ -1205,7 +1206,7 @@ function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: Re
           )}
           {coaching.improvements?.length > 0 && (
             <div>
-              <div className="text-[10px] font-semibold uppercase mb-0.5" style={{ color: "var(--pp-warning, #f59e0b)" }}>À améliorer</div>
+              <div className="text-[10px] font-semibold uppercase mb-0.5" style={{ color: "var(--pp-warning, #f59e0b)" }}>{tr("À améliorer", "To improve")}</div>
               {coaching.improvements.map((s: string, i: number) => (
                 <div key={i} className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>→ {s}</div>
               ))}

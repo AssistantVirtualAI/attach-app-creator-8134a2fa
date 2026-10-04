@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 
-// Phase 26B — Desktop softphone Recents are own_extension_only. Active-content contracts only;
+// Phase 26B — Desktop softphone Recents are own_extension_only. Historical scope frozen on BASE..PHASE26B_END;
 // read-only Git; never writes the real repository.
 const root = path.resolve(__dirname, "../..");
 const BASE = "8f93abed1";
@@ -13,13 +14,60 @@ const API = `${D}/lib/avaApi.ts`;
 const rd = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
 const git = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "utf8" });
 const guard = () => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { cwd: root, encoding: "utf8" });
-const added = (f: string) => git("diff", "--no-renames", "-U0", BASE, "--", f).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
+// Immutable Phase 26B end: historical scope is read only on BASE..PHASE26B_END.
+const PHASE26B_END = "01844a2e2";
+const RANGE = `${BASE}..${PHASE26B_END}`;
+const FILES = [
+  `${D}/components/RecentsList.privacy.test.tsx`, RECENTS, API,
+  "docs/lemtel-desktop/phase-26b-desktop-call-history-privacy.md",
+  "docs/lemtel-desktop/phase-26b-threat-model.md",
+  "src/test/lemtelDesktopCallHistoryPrivacyPhase26.test.ts",
+].sort();
+const isProtected = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
+const gitIn = (cwd: string, a: string[], env?: NodeJS.ProcessEnv, input?: string) =>
+  execFileSync("git", a, { cwd, encoding: "utf8", env: env ? { ...process.env, ...env } : process.env, input });
+const phaseFiles = (cwd = root) => gitIn(cwd, ["diff", "--name-only", "--no-renames", RANGE]).trim().split("\n").filter(Boolean).sort();
+const phaseAdded = (f: string, cwd = root) => gitIn(cwd, ["diff", "--no-renames", "-U0", RANGE, "--", f]).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
 
 describe("Lemtel Phase 26B — Desktop call history privacy", () => {
   const statusBefore = git("status", "--porcelain");
 
   it("permanent guard passes before", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
+  });
+
+  it("frozen bounds are commits, BASE strict ancestor, exactly six historical paths", () => {
+    expect(git("cat-file", "-t", BASE).trim()).toBe("commit");
+    expect(git("cat-file", "-t", PHASE26B_END).trim()).toBe("commit");
+    execFileSync("git", ["merge-base", "--is-ancestor", BASE, PHASE26B_END], { cwd: root });
+    expect(git("rev-parse", BASE).trim()).not.toBe(git("rev-parse", PHASE26B_END).trim());
+    const files = phaseFiles();
+    expect(files).toEqual(FILES);
+    expect(files.filter(isProtected)).toEqual([]);
+    expect(RANGE.includes("HEAD")).toBe(false);
+  });
+
+  it("a real later commit in a temporary clone does not change the frozen result", { timeout: 120000 }, () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lemtel-phase26b1-"));
+    try {
+      execFileSync("git", ["clone", "-q", "--no-checkout", root, tmp], { encoding: "utf8" });
+      const idx = path.join(tmp, ".git", "phase26b1-index");
+      const env = { GIT_INDEX_FILE: idx, GIT_AUTHOR_NAME: "Phase 26B.1 validation", GIT_AUTHOR_EMAIL: "phase26b1@example.invalid", GIT_COMMITTER_NAME: "Phase 26B.1 validation", GIT_COMMITTER_EMAIL: "phase26b1@example.invalid" };
+      gitIn(tmp, ["read-tree", PHASE26B_END], env);
+      const blob = gitIn(tmp, ["hash-object", "-w", "--stdin"], env, "future non-protected fixture\n").trim();
+      gitIn(tmp, ["update-index", "--add", "--cacheinfo", `100644,${blob},phase26b1_future_fixture.txt`], env);
+      const tree = gitIn(tmp, ["write-tree"], env).trim();
+      const end = gitIn(tmp, ["rev-parse", PHASE26B_END]).trim();
+      const commit = gitIn(tmp, ["commit-tree", tree, "-p", end, "-m", "Temporary future fixture"], env).trim();
+      gitIn(tmp, ["update-ref", "HEAD", commit]);
+      expect(gitIn(tmp, ["rev-parse", "HEAD~1"]).trim()).toBe(end);
+      expect(gitIn(tmp, ["diff", "--name-only", `${end}..HEAD`]).trim()).toBe("phase26b1_future_fixture.txt");
+      expect(phaseFiles(tmp)).toEqual(phaseFiles());
+      expect(phaseFiles(tmp)).not.toContain("phase26b1_future_fixture.txt");
+      for (const f of [RECENTS, API]) expect(phaseAdded(f, tmp)).toBe(phaseAdded(f));
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it("RecentsList uses only personal methods, no org/admin scope", () => {
@@ -56,7 +104,7 @@ describe("Lemtel Phase 26B — Desktop call history privacy", () => {
 
   it("added active lines contain no Verto, PJSIP, SIP URL, PBX write, credential or data write", () => {
     for (const f of [RECENTS, API]) {
-      const a = added(f);
+      const a = phaseAdded(f);
       for (const tok of ["ver" + "to", "Ver" + "to", "pjsip", "PJSIP", "sip:", "wss://", "https://", "fusionpbx", "FusionPBX", "invokeFusionSync", "functions/v1", "password", "sec" + "ret", ".insert(", ".update(", ".upsert(", ".delete(", "method: 'POST'", "import("]) {
         expect(a.includes(tok), `${f} ${tok}`).toBe(false);
       }

@@ -83,7 +83,11 @@ type Creds = {
 
 type ActiveCreds = Exclude<Creds, null>;
 
-function SipKeepAlive({ creds, allowNewActions, recordingPolicy, children }: { creds: ActiveCreds; allowNewActions: boolean; recordingPolicy: RecordingPolicy; children?: React.ReactNode }) {
+// Phase 24B — local carrier of the normalized portal recording policy into SipKeepAlive (restrictive default).
+const RecordingPolicyContext = React.createContext<RecordingPolicy>('not_allowed');
+
+function SipKeepAlive({ creds, allowNewActions, children }: { creds: ActiveCreds; allowNewActions: boolean; children?: React.ReactNode }) {
+  const recordingPolicy = React.useContext(RecordingPolicyContext);
   const sp = useSoftphone({
     allowNewActions,
     recordingPolicy,
@@ -383,7 +387,8 @@ function DesktopApp() {
 
   const lifecycleAllowed = lifecycleStatus === 'allowed';
   return (
-    <SipKeepAlive creds={creds} allowNewActions={lifecycleAllowed} recordingPolicy={recordingPolicy}>
+    <RecordingPolicyContext.Provider value={recordingPolicy}>
+    <SipKeepAlive creds={creds} allowNewActions={lifecycleAllowed}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
         {lifecycleAllowed && <AllowedCdrSync />}
         {lifecycleAllowed && <DesktopBackgroundSync fallbackExtension={creds.extension} />}
@@ -399,6 +404,7 @@ function DesktopApp() {
         {!IS_EMBED && <UpdateBanner />}
       </div>
     </SipKeepAlive>
+    </RecordingPolicyContext.Provider>
   );
 }
 

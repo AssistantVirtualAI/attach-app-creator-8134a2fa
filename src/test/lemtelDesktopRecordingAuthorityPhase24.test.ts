@@ -50,7 +50,9 @@ describe("Lemtel Phase 24B — Desktop manual recording authority", () => {
     const s = rd(APP);
     expect(s).toContain("const rawRecordingPolicy = portalTelephonyPolicy?.recordingPolicy;");
     expect(s).toMatch(/rawRecordingPolicy === 'user_allowed' \|\| rawRecordingPolicy === 'portal_managed' \? rawRecordingPolicy : 'not_allowed'/);
-    expect(s).toContain("recordingPolicy={recordingPolicy}>");
+    expect(s).toContain("<RecordingPolicyContext.Provider value={recordingPolicy}>");
+    expect(s).toContain("React.createContext<RecordingPolicy>('not_allowed')");
+    expect(s).toContain("const recordingPolicy = React.useContext(RecordingPolicyContext);");
     expect(s).toMatch(/useSoftphone\(\{\s*allowNewActions,\s*recordingPolicy,/);
   });
 

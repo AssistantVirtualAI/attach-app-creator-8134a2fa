@@ -4,7 +4,7 @@ Base de revue : `06c5a0197`.
 
 ## Source unique
 
-Le **manifeste de portail validé** (`useLemtelDesktopClientConfig`, inchangé) fournit `telephonyPolicy.recordingPolicy`. `App.tsx` la normalise strictement (`user_allowed` / `portal_managed`, tout le reste → `not_allowed`) et la transmet à `SipKeepAlive` → instance unique `useSoftphone`. Aucune inférence depuis le SIP, l'état d'enregistrement, le stockage local, la plateforme ou le réseau.
+Le **manifeste de portail validé** (`useLemtelDesktopClientConfig`, inchangé) fournit `telephonyPolicy.recordingPolicy`. `App.tsx` la normalise strictement (`user_allowed` / `portal_managed`, tout le reste → `not_allowed`) et la transmet à `SipKeepAlive` par un contexte React local à `App.tsx` (`RecordingPolicyContext`, défaut `not_allowed`) → instance unique `useSoftphone`. Le contexte remplace une prop afin de garder intacte la balise `<SipKeepAlive creds={creds} allowNewActions={lifecycleAllowed}>` vérifiée par le test historique 21B. Aucune inférence depuis le SIP, l'état d'enregistrement, le stockage local, la plateforme ou le réseau.
 
 ## Comportements
 

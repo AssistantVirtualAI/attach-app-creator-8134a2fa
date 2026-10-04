@@ -19,6 +19,7 @@ import { useTenant } from './hooks/useTenant';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useExtensionDataSync } from './hooks/useExtensionDataSync';
 import { useLemtelDesktopClientConfig } from './hooks/useLemtelDesktopClientConfig';
+import type { RecordingPolicy } from './lib/lemtelDesktopClientConfig';
 
 const LEMTEL_ORG_ID = '71755d33-ed64-4ad5-a828-61c9d2029eb7';
 
@@ -82,9 +83,14 @@ type Creds = {
 
 type ActiveCreds = Exclude<Creds, null>;
 
+// Phase 24B — local carrier of the normalized portal recording policy into SipKeepAlive (restrictive default).
+const RecordingPolicyContext = React.createContext<RecordingPolicy>('not_allowed');
+
 function SipKeepAlive({ creds, allowNewActions, children }: { creds: ActiveCreds; allowNewActions: boolean; children?: React.ReactNode }) {
+  const recordingPolicy = React.useContext(RecordingPolicyContext);
   const sp = useSoftphone({
     allowNewActions,
+    recordingPolicy,
     extension: creds.extension,
     displayName: creds.displayName,
     sipDomain: creds.sipDomain,
@@ -157,6 +163,10 @@ function DesktopApp() {
   const lifecycle = useLemtelDesktopClientConfig(creds?.accessToken || null);
   const lifecycleStatus = lifecycle.status;
   const portalTelephonyPolicy = lifecycle.manifest?.telephonyPolicy ?? null;
+  // Phase 24B — strict normalization from the validated manifest only; anything else is restrictive.
+  const rawRecordingPolicy = portalTelephonyPolicy?.recordingPolicy;
+  const recordingPolicy: RecordingPolicy =
+    rawRecordingPolicy === 'user_allowed' || rawRecordingPolicy === 'portal_managed' ? rawRecordingPolicy : 'not_allowed';
   const { refresh: refreshLifecycle, finalizeBlock } = lifecycle;
 
   useEffect(() => sipProvider.subscribe?.((snap) => setCallState(snap.callState)), []);
@@ -377,6 +387,7 @@ function DesktopApp() {
 
   const lifecycleAllowed = lifecycleStatus === 'allowed';
   return (
+    <RecordingPolicyContext.Provider value={recordingPolicy}>
     <SipKeepAlive creds={creds} allowNewActions={lifecycleAllowed}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
         {lifecycleAllowed && <AllowedCdrSync />}
@@ -393,6 +404,7 @@ function DesktopApp() {
         {!IS_EMBED && <UpdateBanner />}
       </div>
     </SipKeepAlive>
+    </RecordingPolicyContext.Provider>
   );
 }
 

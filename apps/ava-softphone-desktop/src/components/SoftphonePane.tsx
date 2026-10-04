@@ -1085,7 +1085,7 @@ function IncomingCall({ who, number, onAnswer, onDecline }: { who: string; numbe
   );
 }
 
-function ActiveCall({
+export function ActiveCall({
   sp, timer, showDTMF, toggleDTMF, dialKeys, onTransfer, compact = false, ultraCompact = false, audioEl = null,
   activeOutputLabel, autoResetOutput, onAutoResetChange, onActiveOutputLabel,
 }: {
@@ -1097,6 +1097,8 @@ function ActiveCall({
   onActiveOutputLabel: (label: string) => void;
 }) {
   const remote = sp.snap.remoteIdentity || sp.snap.remoteNumber || 'Unknown';
+  // Phase 24B — the manual control exists only for the exact validated 'user_allowed'.
+  const manualRecordingAllowed = sp.manualRecordingAllowed === true && sp.recordingPolicy === 'user_allowed';
 
   return (
     <div style={{
@@ -1127,6 +1129,11 @@ function ActiveCall({
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.green }} />
         {sp.snap.onHold ? 'On Hold' : 'Active Call'}
       </div>
+      {sp.recording && (
+        <div data-testid="desktop-recording-indicator" aria-live="polite" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: c.red, marginBottom: 6 }}>
+          ● Recording in progress
+        </div>
+      )}
       <div className="ava-display-num" style={{
         fontSize: 26, fontWeight: 600,
         color: c.gold, letterSpacing: '0.04em', marginBottom: 4, lineHeight: 1,
@@ -1219,10 +1226,17 @@ function ActiveCall({
         <ControlBtn iconOnly={ultraCompact} icon="🎤" label={sp.snap.muted ? 'Unmute' : 'Mute'} ariaLabel={`${sp.snap.muted ? 'Unmute microphone' : 'Mute microphone'} (shortcut M)`} active={sp.snap.muted} danger onClick={sp.snap.muted ? sp.unmute : sp.mute} />
         <ControlBtn iconOnly={ultraCompact} icon="⏸" label={sp.snap.onHold ? 'Resume' : 'Hold'} ariaLabel={`${sp.snap.onHold ? 'Resume call' : 'Place call on hold'} (shortcut H)`} active={sp.snap.onHold} warning onClick={sp.snap.onHold ? sp.unhold : sp.hold} />
         <ControlBtn iconOnly={ultraCompact} icon="#" label="Keypad" ariaLabel={`${showDTMF ? 'Hide DTMF keypad' : 'Show DTMF keypad'} (shortcut K)`} active={showDTMF} onClick={toggleDTMF} />
-        <ControlBtn iconOnly={ultraCompact} icon="⏺" label={sp.recording ? 'Stop' : 'Record'} ariaLabel={sp.recording ? 'Stop recording call' : 'Start recording call'} active={sp.recording} onClick={sp.toggleRecording} />
+        {manualRecordingAllowed && (
+          <ControlBtn iconOnly={ultraCompact} icon="⏺" label={sp.recording ? 'Stop' : 'Record'} ariaLabel={sp.recording ? 'Stop recording call' : 'Start recording call'} active={sp.recording} onClick={sp.toggleRecording} />
+        )}
         <ControlBtn iconOnly={ultraCompact} icon="↪" label="Blind Xfer" ariaLabel="Blind transfer call (shortcut T)" onClick={() => onTransfer('blind')} />
         <ControlBtn iconOnly={ultraCompact} icon="↗" label="Attended" ariaLabel="Attended transfer call (shortcut Shift+T)" onClick={() => onTransfer('attended')} disabled={sp.hasConsult()} active={sp.hasConsult()} />
       </div>
+      {!manualRecordingAllowed && (
+        <div data-testid="desktop-recording-policy-note" role="note" style={{ fontSize: 11, color: c.textDim, textAlign: 'center', marginBottom: 10 }}>
+          {sp.recordingPolicy === 'portal_managed' ? 'Recording managed in portal' : 'Manual recording is not allowed'}
+        </div>
+      )}
 
 
       {sp.hasConsult() ? (

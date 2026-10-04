@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { sipProvider, SoftphoneSnapshot, SoftphoneConfig } from '@/lib/sip/jssipProvider';
 import { ringtone } from '@/lib/sip/ringtonePlayer';
 import { supabase, SB_URL, SB_KEY } from '@/lib/supabaseClient';
+import type { RecordingPolicy } from '../lib/lemtelDesktopClientConfig';
 
 interface UseSoftphoneArgs {
   extension: string;
@@ -12,6 +13,8 @@ interface UseSoftphoneArgs {
   refreshToken?: string;
   /** Phase 21B: when false, new telephony actions (call, retry, restart, auto-heal, credential re-init) are refused. Existing call controls stay available. */
   allowNewActions?: boolean;
+  /** Phase 24B: validated portal recording policy. Only the exact 'user_allowed' grants manual recording. */
+  recordingPolicy?: RecordingPolicy;
 }
 
 interface FetchedCreds {
@@ -102,6 +105,11 @@ export function useSoftphone(args: UseSoftphoneArgs) {
   const allowNewActions = args.allowNewActions !== false;
   const allowRef = useRef(allowNewActions);
   allowRef.current = allowNewActions;
+  const recordingPolicy: RecordingPolicy =
+    args.recordingPolicy === 'user_allowed' || args.recordingPolicy === 'portal_managed' ? args.recordingPolicy : 'not_allowed';
+  const manualRecordingAllowed = recordingPolicy === 'user_allowed';
+  const manualRecRef = useRef(manualRecordingAllowed);
+  manualRecRef.current = manualRecordingAllowed;
 
   // Auto-heal: if PBX rejects registration (401/403/auth), force local password
   // into PBX once per (cause) so the saved password becomes the source of truth.
@@ -298,7 +306,10 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     manualStatus,
     setManualStatus,
     recording,
+    recordingPolicy,
+    manualRecordingAllowed,
     toggleRecording: useCallback(async () => {
+      if (!manualRecRef.current) return;
       const isRec = recording;
       setRecording(!isRec);
       // Always send DTMF *2 as primary signal to FusionPBX

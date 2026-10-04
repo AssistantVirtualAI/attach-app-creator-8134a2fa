@@ -6,7 +6,6 @@ import { theme } from '../lib/theme';
 import { formatAge, useSyncStatus } from '../hooks/useSyncStatus';
 
 const dragStyle: React.CSSProperties = {
-  // @ts-expect-error electron CSS
   WebkitAppRegion: 'drag',
 };
 

@@ -82,6 +82,9 @@ describe('PBX schema parity (desktop ↔ portal ↔ popup)', () => {
   for (const c of cases) {
     it(`${c.name}: every schema field exists on the FusionPBX sample row`, () => {
       const missing = keysOf(c.groups)
+        // Form-only relation to pbx_queue_agents, not a FusionPBX queue column.
+        // AdminView strips it from the queue payload and saves agents separately.
+        .filter((k) => k !== '_queue_agents')
         // tts-greeting fields are admin-side only; they map to a filename column
         // that may be absent on a freshly-created row.
         .filter((k) => !(k in c.sample))

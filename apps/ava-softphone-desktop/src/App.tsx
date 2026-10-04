@@ -169,7 +169,10 @@ function DesktopApp() {
     rawRecordingPolicy === 'user_allowed' || rawRecordingPolicy === 'portal_managed' ? rawRecordingPolicy : 'not_allowed';
   const { refresh: refreshLifecycle, finalizeBlock } = lifecycle;
 
-  useEffect(() => sipProvider.subscribe?.((snap) => setCallState(snap.callState)), []);
+  useEffect(() => {
+    const unsubscribe = sipProvider.subscribe?.((snap) => setCallState(snap.callState));
+    return () => { unsubscribe?.(); };
+  }, []);
 
   // Foreground refresh only when idle; the hook itself enforces the 900 s minimum.
   useEffect(() => {

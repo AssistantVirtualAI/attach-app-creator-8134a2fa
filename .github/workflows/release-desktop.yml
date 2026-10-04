@@ -1,49 +1,196 @@
-name: Release Desktop
+name: Lemtel Desktop — validate and release
 
 on:
+  pull_request:
+    paths:
+      - 'apps/ava-softphone-desktop/**'
+      - 'supabase/functions/fusionpbx-proxy/recordingAccess.contract.test.ts'
+      - '.github/workflows/release-desktop.yml'
   push:
     tags:
       - 'v*.*.*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  verify:
+    name: Desktop tests, contract and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify release tag points to a merged commit and the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin Planipret
+          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD || {
+            echo 'The Desktop release must be merged into the default branch first'; exit 1;
+          }
+          VERSION="$(node -p 'require("./apps/ava-softphone-desktop/package.json").version')"
+          test "$GITHUB_REF_NAME" = "v$VERSION" || {
+            echo 'Tag and Desktop package.json version differ'; exit 1;
+          }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
+      - name: Install locked dependencies
+        working-directory: apps/ava-softphone-desktop
+        run: npm ci --no-audit --no-fund
+      - name: Verify release artifact validator
+        working-directory: apps/ava-softphone-desktop
+        run: node --test scripts/validate-release-assets.test.mjs
+      - name: Run the complete Lemtel Desktop test suite
+        working-directory: apps/ava-softphone-desktop
+        run: npm test
+      - name: Typecheck the Desktop renderer
+        working-directory: apps/ava-softphone-desktop
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Build renderer and Electron main process
+        working-directory: apps/ava-softphone-desktop
+        run: npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.4
+      - name: Test authenticated recording contract without live PBX
+        run: deno test --no-check --allow-read --no-lock supabase/functions/fusionpbx-proxy/recordingAccess.contract.test.ts
+
   build-mac:
-    runs-on: self-hosted
+    name: Signed macOS x64 and arm64
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: macos-14
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
+      - name: Require macOS signing and notarization configuration
+        shell: bash
+        run: |
+          for key in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!key}" ]]; then echo "Missing required signing secret: $key"; exit 1; fi
+          done
+      - name: Install and build
         working-directory: apps/ava-softphone-desktop
-        run: npm install
-      - name: Build Vite + TypeScript
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: Package signed and notarized builds
         working-directory: apps/ava-softphone-desktop
-        run: npx vite build && npx tsc -p electron/tsconfig.json
-      - name: Package Mac
+        run: npx electron-builder --mac --x64 --arm64 --publish never
+      - name: Verify both packaged app signatures and Gatekeeper assessment
+        shell: bash
         working-directory: apps/ava-softphone-desktop
         run: |
-          APPLE_ID="mhassoun@assistantvirtualai.com" \
-          APPLE_APP_SPECIFIC_PASSWORD="xevv-jhkt-hdui-gepy" \
-          APPLE_TEAM_ID="64XSWWB49N" \
-          npx electron-builder --mac --arm64 --x64 --publish never
-      - name: Package Windows
+          set -euo pipefail
+          COUNT=0
+          for app in dist-electron/mac*/"Lemtel Telecom.app"; do
+            test -d "$app" || continue
+            codesign --verify --deep --strict --verbose=2 "$app"
+            spctl --assess --verbose=2 "$app"
+            COUNT=$((COUNT + 1))
+          done
+          test "$COUNT" -eq 2 && test -f dist-electron/latest-mac.yml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          if-no-files-found: error
+          path: |
+            apps/ava-softphone-desktop/dist-electron/*.dmg
+            apps/ava-softphone-desktop/dist-electron/*.zip
+            apps/ava-softphone-desktop/dist-electron/*.blockmap
+            apps/ava-softphone-desktop/dist-electron/latest-mac.yml
+
+  build-windows:
+    name: Signed Windows NSIS x64
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: windows-2022
+    env:
+      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
+      - name: Require Windows signing certificate
+        shell: pwsh
+        run: |
+          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD) { throw 'Missing Windows signing secrets' }
+      - name: Install and build
+        working-directory: apps/ava-softphone-desktop
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: Package NSIS installer
         working-directory: apps/ava-softphone-desktop
         run: npx electron-builder --win --x64 --publish never
-      - name: Create Release with files
+      - name: Verify Authenticode signature and updater manifest
+        shell: pwsh
         working-directory: apps/ava-softphone-desktop
         run: |
-          TAG="${{ github.ref_name }}"
-          gh release delete "$TAG" --yes 2>/dev/null || true
-          sleep 3
-          gh release create "$TAG" \
-            --title "Lemtel Telecom $TAG" \
-            --notes "Release $TAG" \
-            --latest
-          find dist-electron -maxdepth 1 \( -name "*.dmg" -o -name "*.exe" -o -name "*.zip" \) | while read f; do
-            gh release upload "$TAG" "$f" --clobber
-          done
+          $installers = @(Get-ChildItem dist-electron -Filter '*.exe')
+          if ($installers.Count -ne 1 -or -not (Test-Path dist-electron/latest.yml)) { throw 'Installer or latest.yml missing' }
+          $signature = Get-AuthenticodeSignature $installers[0].FullName
+          if ($signature.Status -ne 'Valid') { throw "Invalid installer signature: $($signature.Status)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          if-no-files-found: error
+          path: |
+            apps/ava-softphone-desktop/dist-electron/*.exe
+            apps/ava-softphone-desktop/dist-electron/*.blockmap
+            apps/ava-softphone-desktop/dist-electron/latest.yml
+
+  publish:
+    name: Publish complete verified Desktop release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, build-mac, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify all artifacts, manifest versions and SHA-512 hashes
+        shell: bash
+        run: |
+          VERSION="$(node -p 'require("./apps/ava-softphone-desktop/package.json").version')"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          node apps/ava-softphone-desktop/scripts/validate-release-assets.mjs release-assets "$VERSION"
+      - name: Create a new release without deleting or replacing an existing one
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo 'This release already exists; refusing to replace its signed binaries'; exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --draft --verify-tag --title "Lemtel Telecom $GITHUB_REF_NAME" \
+            --notes "Lemtel Desktop $GITHUB_REF_NAME — Windows x64 and macOS x64/arm64."
+          # A failed upload leaves only an unpublished draft, never a partial
+          # auto-update release for installed clients to discover.
+          diff -u \
+            <(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort) \
+            <(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | sort)
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

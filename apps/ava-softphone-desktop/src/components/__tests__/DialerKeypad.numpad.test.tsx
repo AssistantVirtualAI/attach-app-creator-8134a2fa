@@ -9,11 +9,24 @@
  *  - Presses are ignored while focus is inside a text input.
  *  - Presses are ignored when the keypad root is display:none (off-screen).
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import DialerKeypad from '../DialerKeypad';
 
-afterEach(() => cleanup());
+// JSDOM has no layout: offsetParent is null even for a visible keypad.
+// Model the browser's display:none behavior instead of weakening the
+// production visibility guard to satisfy these keyboard tests.
+beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
+    let element: HTMLElement | null = this;
+    while (element) {
+      if (getComputedStyle(element).display === 'none') return null;
+      element = element.parentElement;
+    }
+    return document.body;
+  });
+});
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function press(key: string) {
   fireEvent.keyDown(window, { key });
@@ -77,7 +90,7 @@ describe('DialerKeypad — physical numpad', () => {
     const onKey = vi.fn();
     const { container } = render(<DialerKeypad onKey={onKey} />);
     const root = container.querySelector('[role="grid"]') as HTMLElement;
-    // Force offsetParent === null (hidden). jsdom respects display:none for offsetParent.
+    // Force offsetParent === null (hidden) using the simulated browser layout.
     root.style.display = 'none';
     press('9');
     expect(onKey).not.toHaveBeenCalled();

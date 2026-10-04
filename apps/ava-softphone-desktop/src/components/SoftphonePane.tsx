@@ -1261,16 +1261,16 @@ export function ControlBtn({
   icon: string; label: string; ariaLabel?: string; onClick: () => void;
   active?: boolean; danger?: boolean; warning?: boolean; disabled?: boolean; iconOnly?: boolean;
 }) {
-  // Force high-contrast white text on a translucent surface so buttons stay
-  // readable on every theme (light, dark, midnight) and never blend in.
+  // Use the live theme surface and foreground in both light and dark modes;
+  // white-on-white and white-on-pale-accent made these controls unreadable.
   const accent = danger ? c.red : warning ? c.yellow : c.gold;
   const bg = active
-    ? `color-mix(in srgb, ${accent} 38%, rgba(0,200,200,0.18))`
-    : c.overlay10;
+    ? `color-mix(in srgb, ${accent} 18%, ${c.bgElev})`
+    : c.bgElev;
   const bd = active
-    ? `color-mix(in srgb, ${accent} 70%, rgba(255,255,255,0.35))`
-    : 'rgba(255,255,255,0.25)';
-  const col = c.onAccent;
+    ? `color-mix(in srgb, ${accent} 70%, ${c.borderStrong})`
+    : c.borderStrong;
+  const col = c.text;
   return (
     <button
       onClick={onClick}
@@ -1286,7 +1286,7 @@ export function ControlBtn({
         minWidth: iconOnly ? 48 : undefined,
         borderRadius: iconOnly ? 14 : 12,
         background: bg, border: `1px solid ${bd}`, color: col,
-        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.75 : 1,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         gap: iconOnly ? 0 : 6,
         fontSize: iconOnly ? 0 : 11, fontWeight: 800, letterSpacing: 0.3,
@@ -1295,11 +1295,10 @@ export function ControlBtn({
           ? `0 8px 18px -10px ${accent}, inset 0 0 0 1px ${c.overlay18}`
           : `0 6px 18px -12px rgba(0,0,0,0.45), inset 0 0 0 1px ${c.overlay12}`,
         whiteSpace: 'nowrap',
-        textShadow: '0 1px 2px rgba(0,0,0,0.55)',
       }}
     >
-      <span aria-hidden="true" style={{ fontSize: iconOnly ? 20 : 14, color: c.onAccent }}>{icon}</span>
-      {!iconOnly && <span style={{ color: c.onAccent }}>{label}</span>}
+      <span aria-hidden="true" style={{ fontSize: iconOnly ? 20 : 14, color: col }}>{icon}</span>
+      {!iconOnly && <span style={{ color: col }}>{label}</span>}
     </button>
   );
 }

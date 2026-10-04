@@ -7,6 +7,7 @@ import path from "node:path";
 // Read-only Git commands only; never writes the real repository.
 const root = path.resolve(__dirname, "../..");
 const BASE = "681346146";
+const PHASE25A_END = "35b35ca5f";
 const M = "apps/ava-softphone-mobile/src";
 const APP = `${M}/MobileApp.tsx`;
 const MORE = `${M}/screens/MoreScreen.tsx`;
@@ -24,39 +25,24 @@ const git = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "u
 const guard = () => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { cwd: root, encoding: "utf8" });
 const isProtected = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
 
-// Frozen end = last commit after BASE touching a phase-only file (this test or the component test);
-// automatic commits may split the phase. Pending phase changes are included until committed.
-const PHASE_ONLY = [SELF, VMTEST];
-const pendingPaths = () => git("status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3)).filter(Boolean);
-const frozenEnd = (): string | null => {
-  const out = git("log", "-1", "--format=%H", `${BASE}..HEAD`, "--", ...PHASE_ONLY).trim();
-  return out || null;
-};
-const hasPending = () => pendingPaths().some((p) => FILES.includes(p));
-const changed = () => {
-  const end = frozenEnd();
-  const committed = git("diff", "--name-only", "--no-renames", `${BASE}..${end ?? "HEAD"}`).split("\n");
-  const pending = hasPending() || !end ? pendingPaths() : [];
-  return [...new Set([...committed, ...pending].filter(Boolean))].sort();
-};
-const added = (f: string) => {
-  const end = frozenEnd();
-  const args = end && !hasPending() ? ["diff", "--no-renames", "-U0", `${BASE}..${end}`, "--", f] : ["diff", "--no-renames", "-U0", BASE, "--", f];
-  return git(...args).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
-};
+// Frozen historical range only (Phase 25A.1); later commits cannot move it.
+const changed = () => git("diff", "--name-only", "--no-renames", `${BASE}..${PHASE25A_END}`).split("\n").filter(Boolean).sort();
+const added = (f: string) => git("diff", "--no-renames", "-U0", `${BASE}..${PHASE25A_END}`, "--", f).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n");
 
 describe("Lemtel Phase 25A — Mobile voicemail greeting authority", () => {
   const statusBefore = git("status", "--porcelain");
 
-  it("BASE is a commit ancestor of HEAD; permanent guard passes before", { timeout: 60000 }, () => {
+  it("frozen bounds are distinct ordered commits; permanent guard passes before", { timeout: 60000 }, () => {
     expect(git("cat-file", "-t", BASE).trim()).toBe("commit");
-    execFileSync("git", ["merge-base", "--is-ancestor", BASE, "HEAD"], { cwd: root });
-    const end = frozenEnd();
-    if (end) {
-      expect(git("cat-file", "-t", end).trim()).toBe("commit");
-      expect(git("rev-parse", end).trim()).not.toBe(git("rev-parse", BASE).trim());
-    }
+    expect(git("cat-file", "-t", PHASE25A_END).trim()).toBe("commit");
+    expect(git("rev-parse", BASE).trim()).not.toBe(git("rev-parse", PHASE25A_END).trim());
+    execFileSync("git", ["merge-base", "--is-ancestor", BASE, PHASE25A_END], { cwd: root });
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
+  });
+
+  it("commits after PHASE25A_END do not move the frozen range", () => {
+    execFileSync("git", ["merge-base", "--is-ancestor", PHASE25A_END, "HEAD"], { cwd: root });
+    expect(changed()).toEqual(FILES);
   });
 
   it("exactly the eight allowed paths changed, none protected", () => {

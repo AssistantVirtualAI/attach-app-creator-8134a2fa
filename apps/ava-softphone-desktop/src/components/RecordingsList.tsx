@@ -1,9 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { theme } from '../lib/theme';
 import { ava, RecordingItem } from '../lib/avaApi';
-import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
-import { useOrgId } from '../lib/useOrgId';
 import { audit } from '../lib/audit';
 import SkeletonRows from './ui/SkeletonRows';
 
@@ -24,6 +22,15 @@ function isRecordingRealtimeChange(payload: unknown) {
     next.recording_path !== prev.recording_path ||
     next.recording_name !== prev.recording_name
   );
+}
+
+// Phase 27B — defensive local filter: a row is kept only if the connected
+// extension matches one of its existing number fields.
+export function isOwnRecording(r: any, ext: string): boolean {
+  const e = String(ext || '').trim();
+  if (!e || !r) return false;
+  return [r.extension, r.caller_number, r.destination_number, r.source_number, r.from, r.to]
+    .some((v) => v != null && String(v).trim() === e);
 }
 
 function displayError(e: any) {
@@ -49,7 +56,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
   const [error, setError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   const [itemSuccess, setItemSuccess] = useState<Record<string, string>>({});
-  const [audio, setAudio] = useState<Record<string, string>>(() => Object.fromEntries(audioCache));
+  const [audio, setAudio] = useState<Record<string, string>>({});
   const [audioErrors, setAudioErrors] = useState<Record<string, string>>({});
   const [audioLoading, setAudioLoading] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -85,39 +92,88 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
     });
   }, []);
 
+  // Phase 27B — session generation: any async answer from a previous
+  // extension is ignored; data and audio URLs never cross extensions.
+  const extRef = useRef<string>('');
+  const ext = String(extension || '').trim();
+  extRef.current = ext;
+
+  useEffect(() => {
+    audioCache.clear();
+    setItems([]); setAudio({}); setAudioErrors({}); setAudioLoading(null);
+    setError(null); setItemErrors({}); setItemSuccess({}); setStatuses({}); setWorking(null);
+    if (!ext) { setLoading(false); setRefreshing(false); }
+    return () => { audioCache.clear(); };
+  }, [ext]);
+
   const load = useCallback(async (silent = false, force = false) => {
+    const forExt = ext;
+    if (!forExt) { setItems([]); setLoading(false); return; }
     if (!silent) { setLoading(true); setError(null); }
     if (force) setRefreshing(true);
     try {
-      const data = force ? await ava.refreshRecordings(200, { extension, rangeDays }) : await ava.recordings(200, { extension, rangeDays });
-      const list = Array.isArray(data) ? data : [];
+      const data = force
+        ? await ava.refreshPersonalRecordings(200, { rangeDays })
+        : await ava.personalRecordings(200, { rangeDays });
+      if (extRef.current !== forExt) return;
+      const list = (Array.isArray(data) ? data : []).filter((r) => isOwnRecording(r, forExt));
       setItems(list);
-      // Hydrate persisted transcripts so reload shows them.
       void hydrateTranscripts(list);
     } catch (e: any) {
+      if (extRef.current !== forExt) return;
       if (!silent || force) {
         setError(e?.message || 'Unable to load recordings.');
         setItems([]);
       }
     } finally {
-      if (!silent) setLoading(false);
-      if (force) setRefreshing(false);
+      if (extRef.current === forExt) {
+        if (!silent) setLoading(false);
+        if (force) setRefreshing(false);
+      }
     }
-  }, [extension, rangeDays, hydrateTranscripts]);
+  }, [ext, rangeDays, hydrateTranscripts]);
 
   const silentLoad = useCallback(() => { void load(true); }, [load]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (ext) load(); }, [load, ext]);
   useEffect(() => {
+    if (!ext) return;
     window.addEventListener('lemtel:phone-sync-complete', silentLoad);
     return () => window.removeEventListener('lemtel:phone-sync-complete', silentLoad);
-  }, [silentLoad]);
+  }, [silentLoad, ext]);
 
-  // Realtime: new/updated call records with recordings trigger a silent refetch (no flicker).
-  const orgId = useOrgId();
-  useRealtimeRefresh({ table: 'pbx_call_records', organizationId: orgId, events: ['INSERT', 'UPDATE'], debounceMs: 10_000, throttleMs: 30_000, shouldRefresh: isRecordingRealtimeChange }, silentLoad);
-
-
+  // Realtime: personal recordings channel, filtered exactly by the extension.
+  useEffect(() => {
+    if (!ext) return;
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    let lastAt = 0;
+    const fire = () => {
+      if (pending) return;
+      pending = setTimeout(() => {
+        pending = null;
+        const now = Date.now();
+        if (now - lastAt < 5_000) return;
+        lastAt = now;
+        silentLoad();
+      }, 2_000);
+    };
+    const channel = supabase.channel(`rt-recordings-extension-${ext}`);
+    for (const ev of ['INSERT', 'UPDATE'] as const) {
+      channel.on(
+        // @ts-ignore — supabase-js types for postgres_changes
+        'postgres_changes',
+        { event: ev, schema: 'public', table: 'pbx_call_records', filter: `extension=eq.${ext}` },
+        (payload: any) => {
+          if (isOwnRecording(payload?.new, ext) && isRecordingRealtimeChange(payload)) fire();
+        },
+      );
+    }
+    channel.subscribe();
+    return () => {
+      if (pending) clearTimeout(pending);
+      try { supabase.removeChannel(channel); } catch { /* noop */ }
+    };
+  }, [ext, silentLoad]);
 
   const setStatus = (id: string, s: JobStatus) => setStatuses(prev => ({ ...prev, [id]: s }));
 
@@ -140,7 +196,6 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
           recording_name: r.recording_name,
           record_path: r.recording_path,
           record_name: r.recording_name,
-          domain_uuid: (r as any).domain_uuid,
         },
       });
       if (r1.error) throw r1.error;
@@ -248,6 +303,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
   };
 
 
+  if (!ext) return <div style={{ textAlign: 'center', padding: 40, color: c.textSub, fontSize: 12 }}>Recordings will be available as soon as an extension is assigned.</div>;
   if (loading) return <SkeletonRows rows={5} label="Loading recordings" />;
 
   return (

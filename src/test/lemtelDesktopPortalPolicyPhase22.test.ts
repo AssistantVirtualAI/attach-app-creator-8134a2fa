@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 
 const root = path.resolve(__dirname, "../..");
 const BASE = "63c6d5b72";
+const PHASE22C_END = "ef64f5dea";
 const D = "apps/ava-softphone-desktop/src";
 const LIB = `${D}/lib/lemtelDesktopClientConfig.ts`;
 const HOOK = `${D}/hooks/useLemtelDesktopClientConfig.ts`;
@@ -24,20 +25,25 @@ const git = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "u
 const guard = (...a: string[]) => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs", ...a], { cwd: root, encoding: "utf8" });
 const isProtected = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
 const between = (s: string, a: string, b: string) => s.slice(s.indexOf(a), s.indexOf(b, s.indexOf(a)));
-const changed = () => {
-  const committed = git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n");
-  const pending = git("status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3));
-  return [...new Set([...committed, ...pending].filter(Boolean))].sort();
-};
+const changed = () =>
+  git("diff", "--name-only", "--no-renames", `${BASE}..${PHASE22C_END}`).split("\n").filter(Boolean).sort();
 const V = "Ver" + "to";
 
 describe("Lemtel Phase 22C — Desktop read-only portal policy", () => {
   const statusBefore = git("status", "--porcelain");
 
-  it("base is ancestor of HEAD; guards pass before", { timeout: 60000 }, () => {
-    execFileSync("git", ["merge-base", "--is-ancestor", BASE, "HEAD"], { cwd: root });
+  it("frozen bounds are commits, BASE strict ancestor of PHASE22C_END; global guard passes before", { timeout: 60000 }, () => {
+    expect(git("cat-file", "-t", BASE).trim()).toBe("commit");
+    expect(git("cat-file", "-t", PHASE22C_END).trim()).toBe("commit");
+    expect(git("rev-parse", BASE).trim()).not.toBe(git("rev-parse", PHASE22C_END).trim());
+    execFileSync("git", ["merge-base", "--is-ancestor", BASE, PHASE22C_END], { cwd: root });
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${BASE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
+  });
+
+  it("later 22B.1 change is visible in BASE..HEAD but does not alter the frozen 22C range", () => {
+    const live = git("diff", "--name-only", "--no-renames", `${BASE}..HEAD`).split("\n");
+    expect(live).toContain("src/test/lemtelMobilePortalPolicyPhase22.test.ts");
+    expect(changed()).toEqual(FILES);
   });
 
   it("exactly the ten allowed files changed, none protected, no Electron/Mobile/Supabase/package/SIP file", () => {
@@ -126,7 +132,6 @@ describe("Lemtel Phase 22C — Desktop read-only portal policy", () => {
 
   it("guards pass after; status unchanged", { timeout: 60000 }, () => {
     expect(guard()).toBe("LEMTEL_ISOLATION_PASSED\n");
-    expect(guard(`--scope=${BASE}`)).toBe("LEMTEL_ISOLATION_PASSED\n");
     expect(git("status", "--porcelain")).toBe(statusBefore);
   });
 });

@@ -19,6 +19,7 @@ import { useTenant } from './hooks/useTenant';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useExtensionDataSync } from './hooks/useExtensionDataSync';
 import { useLemtelDesktopClientConfig } from './hooks/useLemtelDesktopClientConfig';
+import type { RecordingPolicy } from './lib/lemtelDesktopClientConfig';
 
 const LEMTEL_ORG_ID = '71755d33-ed64-4ad5-a828-61c9d2029eb7';
 

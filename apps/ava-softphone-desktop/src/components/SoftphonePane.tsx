@@ -692,6 +692,7 @@ export default function SoftphonePane({
               )}
               {callsSubTab === 'recordings' && (
                 <AppErrorBoundary compact onBack={() => setCallsSubTab('recents')}>
+                  {/* Phase 27B — personal surface: own extension only, no scope props. */}
                   <RecordingsList extension={creds.extension} />
                 </AppErrorBoundary>
               )}

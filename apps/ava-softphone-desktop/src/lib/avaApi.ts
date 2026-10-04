@@ -897,6 +897,34 @@ export const ava = {
       .map(mapCdrToRecording)
       .slice(0, limit);
   },
+  // Phase 27B — private softphone recordings (own_extension_only). The
+  // extension comes only from getMeContext(); callers cannot choose a scope.
+  // The general methods above stay for the administrative console.
+  personalRecordings: async (limit = 100, opts?: { rangeDays?: 7 | 30 | null }) => {
+    if (MOCK) return SAMPLE_RECORDING_EMPTY;
+    const me = await getMeContext();
+    const ext = cleanText(me.extension);
+    if (!ext) return [] as RecordingItem[];
+    await bestEffortCdrSync(Math.max(limit, 200));
+    const rows = await readCallRecordRows(Math.max(limit, 300), { extension: ext, rangeDays: opts?.rangeDays ?? null });
+    return rows
+      .filter((r) => r.has_recording === true || r.recording_path || r.recording_name)
+      .map(mapCdrToRecording)
+      .slice(0, limit);
+  },
+  refreshPersonalRecordings: async (limit = 100, opts?: { rangeDays?: 7 | 30 | null }) => {
+    if (MOCK) return SAMPLE_RECORDING_EMPTY;
+    const me = await getMeContext();
+    const ext = cleanText(me.extension);
+    if (!ext) return [] as RecordingItem[];
+    await bestEffortRecentTelephonySync(Math.max(limit, 250), true);
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('lemtel:recordings-updated'));
+    const rows = await readCallRecordRows(Math.max(limit, 300), { extension: ext, rangeDays: opts?.rangeDays ?? null });
+    return rows
+      .filter((r) => r.has_recording === true || r.recording_path || r.recording_name)
+      .map(mapCdrToRecording)
+      .slice(0, limit);
+  },
 
   /**
    * Get a short-lived signed URL (default 5 min) for a recording / voicemail.

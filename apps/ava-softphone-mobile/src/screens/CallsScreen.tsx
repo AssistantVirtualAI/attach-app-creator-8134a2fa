@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, Suspense, lazy } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { ImpactStyle } from '@capacitor/haptics';
 import { colors, font, radius, gradients } from '../lib/theme';
 import { mobileApi, CallRecord } from '../lib/mobileApi';
@@ -11,7 +11,6 @@ const RecordingsScreen = lazy(() => import('./RecordingsScreen'));
 import { useRealtimeCDR } from '../hooks/useRealtimeCDR';
 import type { Creds } from '../lib/creds';
 import { showMobileToast } from '../lib/mobileToast';
-import { restGet } from '../lib/mobileSupabase';
 import { useTr } from '../lib/i18n';
 import { dialNumber } from '../lib/dialNumber';
 

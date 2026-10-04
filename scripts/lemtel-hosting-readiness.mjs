@@ -34,25 +34,39 @@ export const pinnedIpv4Lookup = (ip) => (_host, options, cb) => options.all
 
 // Use the domain as Host/SNI, but connect to each IP independently. A valid
 // certificate on the primary is not proof that the standby can serve traffic.
-export function probeOrigin(domain, ip, timeoutMs = 3500) {
+export function probeOrigin(domain, ip, timeoutMs = 3500, transport = request) {
   return new Promise((resolveProbe) => {
     let settled = false;
-    const done = (result) => { if (!settled) { settled = true; resolveProbe(result); } };
-    const req = request({ hostname: domain, port: 443, path: HEALTH_PATH,
+    let deadline;
+    const done = (result) => {
+      if (!settled) { settled = true; clearTimeout(deadline); resolveProbe(result); }
+    };
+    let req;
+    const timeout = () => {
+      if (settled) return;
+      const error = Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' });
+      done({ outcome: 'timeout' });
+      req.destroy(error);
+    };
+    req = transport({ hostname: domain, port: 443, path: HEALTH_PATH,
       method: 'GET', servername: domain, rejectUnauthorized: true,
       agent: false, timeout: timeoutMs, headers: { accept: 'application/json' },
       lookup: pinnedIpv4Lookup(ip),
     }, (res) => {
       let body = '';
+      let bytes = 0;
       res.setEncoding('utf8');
       res.on('data', (chunk) => {
+        if (settled) return;
+        bytes += Buffer.byteLength(chunk, 'utf8');
+        if (bytes > 8192) { done({ outcome: 'response_too_large' }); req.destroy(); return; }
         body += chunk;
-        if (body.length > 8192) { req.destroy(); done({ outcome: 'response_too_large' }); }
       });
       res.on('end', () => done({ outcome: 'http_response', statusCode: res.statusCode,
         contentType: String(res.headers['content-type'] || ''), body }));
     });
-    req.on('timeout', () => { const error = new Error('timeout'); error.code = 'ETIMEDOUT'; req.destroy(error); });
+    deadline = setTimeout(timeout, timeoutMs);
+    req.on('timeout', timeout);
     req.on('error', (error) => done({ outcome: errorOutcome(error) }));
     req.end();
   });

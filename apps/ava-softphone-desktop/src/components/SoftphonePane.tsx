@@ -7,7 +7,6 @@ import VoicemailList from './VoicemailList';
 import SmsThreads from './SmsThreads';
 import OrgChatView from './console/OrgChatView';
 import RecordingsList from './RecordingsList';
-import CallForwarding from './CallForwarding';
 // ProfileMenu is rendered globally in TitleBar — no longer duplicated here.
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { theme } from '../lib/theme';
@@ -913,7 +912,6 @@ const Dialer = React.memo(function Dialer({
 
   return (
     <div style={{ animation: 'fadeIn .25s ease-out', padding: compact ? '2px 0 8px' : '4px 4px 8px', minWidth: 0 }}>
-      <CallForwarding extension={extension} />
 
       {/* Bannière de statut SIP — uniquement en cas de problème */}
       {!sipOk && <div style={{

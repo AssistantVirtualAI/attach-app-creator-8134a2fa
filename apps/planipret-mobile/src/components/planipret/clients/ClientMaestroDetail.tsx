@@ -62,7 +62,7 @@ export default function ClientMaestroDetail({
 
   // Calls/texts are stored under the broker's Planiprêt profile id, not the
   // auth user id: resolve every alias so the history is never empty.
-  const rawIdsKey = userIds.filter(Boolean).sort().join(",");
+  const rawIdsKey = [...new Set(userIds.filter(Boolean))].sort().join(",");
   const [idsKey, setIdsKey] = useState("");
   useEffect(() => {
     let alive = true;

@@ -6,9 +6,10 @@ import React from 'react';
 const h = vi.hoisted(() => {
   const handlers: Array<(p: any) => void> = [];
   const ch: any = { on: vi.fn(), subscribe: vi.fn() };
-  const q: any = { select: vi.fn(), in: vi.fn() };
+  const q: any = { select: vi.fn(), in: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };
+  const invoke = vi.fn();
   return {
-    handlers, ch, q,
+    handlers, ch, q, invoke,
     channel: vi.fn(() => ch),
     removeChannel: vi.fn(),
     from: vi.fn(() => q),
@@ -21,7 +22,7 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/supabaseClient', () => ({ supabase: { channel: h.channel, removeChannel: h.removeChannel, from: h.from, functions: { invoke: vi.fn() } } }));
+vi.mock('@/lib/supabaseClient', () => ({ supabase: { channel: h.channel, removeChannel: h.removeChannel, from: h.from, functions: { invoke: h.invoke } } }));
 vi.mock('@/lib/avaApi', () => ({
   ava: {
     personalRecordings: h.personalRecordings, refreshPersonalRecordings: h.refreshPersonalRecordings,
@@ -45,6 +46,7 @@ beforeEach(() => {
   h.ch.subscribe.mockImplementation(() => h.ch);
   h.q.select.mockImplementation(() => h.q);
   h.q.in.mockResolvedValue({ data: [] });
+  h.q.eq.mockImplementation(() => h.q);
   h.channel.mockImplementation(() => h.ch);
   h.from.mockImplementation(() => h.q);
   h.personalRecordings.mockResolvedValue([own, foreign]);
@@ -126,5 +128,94 @@ describe('Phase 27B — RecordingsList own_extension_only', () => {
     await flush();
     expect(container.querySelector('audio')).toBeNull();
     expect(h.getRecordingSignedUrl).toHaveBeenCalledTimes(1);
+  });
+});
+
+const deferred = <T,>() => { let resolve!: (v: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; };
+
+describe('Phase 27B.1 — stale async work from an old session is inert', () => {
+  it('late audio URL of A does not appear for B', async () => {
+    const d = deferred<any>();
+    h.getRecordingSignedUrl.mockImplementationOnce(() => d.promise);
+    h.personalRecordings.mockResolvedValueOnce([own]).mockResolvedValueOnce([rec('a', '305', '5145550001')]);
+    const { container, rerender } = render(<RecordingsList extension="201" />);
+    await flush();
+    fireEvent.click(screen.getByText(/Load PBX audio/));
+    rerender(<RecordingsList extension="305" />);
+    await flush();
+    await act(async () => { d.resolve({ url: 'blob:stale-a' }); });
+    await flush();
+    expect(container.querySelector('audio')).toBeNull();
+    expect(container.innerHTML).not.toContain('blob:stale-a');
+    expect(screen.queryByText(/Loading PBX audio/)).toBeNull();
+  });
+
+  it('late audio recovery of A does not modify B', async () => {
+    const d = deferred<any>();
+    h.getRecordingSignedUrl.mockResolvedValueOnce({ url: 'blob:broken-a' });
+    h.getRecordingAudioUrl.mockImplementationOnce(() => d.promise);
+    h.personalRecordings.mockResolvedValueOnce([own]).mockResolvedValueOnce([rec('a', '305', '5145550001')]);
+    const { container, rerender } = render(<RecordingsList extension="201" />);
+    await flush();
+    fireEvent.click(screen.getByText(/Load PBX audio/));
+    await flush();
+    fireEvent.error(container.querySelector('audio')!);
+    rerender(<RecordingsList extension="305" />);
+    await flush();
+    await act(async () => { d.resolve('blob:recovered-a'); });
+    await flush();
+    expect(container.querySelector('audio')).toBeNull();
+    expect(container.innerHTML).not.toContain('blob:recovered-a');
+  });
+
+  it('late transcript hydration of A does not modify B rows or statuses', async () => {
+    const d = deferred<any>();
+    h.q.in.mockImplementationOnce(() => d.promise);
+    h.personalRecordings.mockResolvedValueOnce([own]).mockResolvedValueOnce([rec('a', '305', '5145550001')]);
+    const { rerender } = render(<RecordingsList extension="201" />);
+    await flush();
+    rerender(<RecordingsList extension="305" />);
+    await flush();
+    await act(async () => { d.resolve({ data: [{ call_record_id: 'a', transcript_text: 'stale transcript', provider: 'x' }] }); });
+    await flush();
+    expect(screen.queryByText(/Succeeded/)).toBeNull();
+    expect(screen.queryByText(/stale transcript/)).toBeNull();
+  });
+
+  it('late analysis of A does not modify B and never calls onAnalyze', async () => {
+    const d = deferred<any>();
+    h.invoke.mockImplementationOnce(() => d.promise);
+    h.personalRecordings.mockResolvedValueOnce([own]).mockResolvedValueOnce([rec('a', '305', '5145550001')]);
+    const onAnalyze = vi.fn();
+    const { rerender } = render(<RecordingsList extension="201" onAnalyze={onAnalyze} />);
+    await flush();
+    const btn = screen.getAllByRole('button').find((b) => /analy|transcri/i.test(b.textContent || ''))!;
+    fireEvent.click(btn);
+    rerender(<RecordingsList extension="305" onAnalyze={onAnalyze} />);
+    await flush();
+    await act(async () => { d.resolve({ error: { message: 'stale failure' } }); });
+    await flush();
+    expect(onAnalyze).not.toHaveBeenCalled();
+    expect(screen.queryByText(/stale failure/)).toBeNull();
+    expect(screen.queryByText(/Failed/)).toBeNull();
+    expect(h.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('A → B → A ignores the first answer of A (session generation)', async () => {
+    const first = deferred<any>();
+    h.personalRecordings
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValueOnce([rec('b', '305', '5145550777')])
+      .mockResolvedValueOnce([rec('c', '201', '5145550888')]);
+    const { rerender } = render(<RecordingsList extension="201" />);
+    await flush();
+    rerender(<RecordingsList extension="305" />);
+    await flush();
+    rerender(<RecordingsList extension="201" />);
+    await flush();
+    await act(async () => { first.resolve([rec('old', '201', '5145550111')]); });
+    await flush();
+    expect(screen.queryByText(/5145550111/)).toBeNull();
+    expect(screen.queryByText(/5145550888/)).not.toBeNull();
   });
 });

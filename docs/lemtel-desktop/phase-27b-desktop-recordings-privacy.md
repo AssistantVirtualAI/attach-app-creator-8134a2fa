@@ -29,4 +29,15 @@ Test composant (7) exécuté avec une configuration temporaire hors dépôt (dé
 
 ## Limites
 
-Le serveur/RLS reste l'autorité finale; le filtrage client est une défense en profondeur. Aucun essai sur un vrai Mac/Windows ni appel PBX réel. Borne figée à fixer en 27B.1.
+Le serveur/RLS reste l'autorité finale; le filtrage client est une défense en profondeur. Aucun essai sur un vrai Mac/Windows ni appel PBX réel. Borne figée en 27B.1.
+
+## Phase 27B.1 — verrouillage et courses asynchrones
+
+- Borne historique figée : `c84166455..b7c17287a` (7 chemins). Le test racine ne lit plus `HEAD` ni les fichiers non suivis.
+- Génération de session : chaque changement d'extension ou démontage incrémente un compteur; une tâche capture `{ extension, génération }` et vérifie les deux après chaque attente avant toute écriture d'état ou de cache audio.
+- Familles neutralisées : chargement/rafraîchissement, hydratation des transcriptions, lecture audio (URL signée ou proxy), récupération audio, analyse (transcription, analyse IA, relecture). Une session obsolète retourne silencieusement : aucune erreur, aucun statut, aucun `onAnalyze`.
+- Avant `play`, `recoverAudio` et `analyze` : extension courante présente et ligne appartenant à cette extension, sinon aucune action.
+- A → B → A : la génération diffère, la première réponse de A est ignorée même si l'extension redevient identique.
+- Le champ de domaine reste relu côté serveur depuis la fiche d'appel autorisée; il n'est pas réintroduit.
+- Test historique 26B : le comptage global remplacé par des assertions limitées aux corps `personalCalls` et `refreshPersonalCalls`.
+- Validations : 12 scénarios composant (configuration temporaire hors dépôt), tests racine 24B/25B/26B/27A/27B, gardes, build.

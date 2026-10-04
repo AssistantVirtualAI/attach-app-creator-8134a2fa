@@ -1031,3 +1031,5 @@ function DndSheet({ profile, onClose, onSaved }: { profile: any; onClose: () => 
     </Sheet>
   );
 }
+
+export { Sheet as MMoreSheet };

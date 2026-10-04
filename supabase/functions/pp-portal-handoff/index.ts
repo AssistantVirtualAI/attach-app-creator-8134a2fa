@@ -21,8 +21,12 @@ const PORTAL_ORIGIN = DEFAULT_PORTAL_ORIGIN;
 const LEGACY_PORTAL_ORIGIN = "https://avastatistic.ca";
 void PORTAL_ORIGIN;
 
-const json = (b: unknown, status = 200) =>
-  new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+// Always HTTP 200: installed app versions only read `error` from the body
+// (a non-2xx hides it behind a generic "invalid link" message).
+const json = (b: unknown, status = 200) => {
+  if (status !== 200) console.warn("[pp-portal-handoff] refused", status, (b as any)?.error);
+  return new Response(JSON.stringify(b), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -33,8 +37,9 @@ Deno.serve(async (req) => {
     if (!authHeader) return json({ ok: false, error: "not_authenticated" }, 401);
 
     const userClient = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
-    const { data: u } = await userClient.auth.getUser();
+    const { data: u, error: uErr } = await userClient.auth.getUser();
     const user = u?.user;
+    if (!user) console.warn("[pp-portal-handoff] getUser failed", uErr?.message);
     if (!user?.email) return json({ ok: false, error: "not_authenticated" }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
@@ -44,6 +49,7 @@ Deno.serve(async (req) => {
       .select("id, user_id, role, email, full_name")
       .eq("user_id", user.id)
       .maybeSingle();
+    if (!profile) console.warn("[pp-portal-handoff] no profile for", user.id);
     if (!profile) return json({ ok: false, error: "no_planipret_profile" }, 403);
 
     let isAdmin = String((profile as any).role ?? "").toLowerCase().includes("admin");

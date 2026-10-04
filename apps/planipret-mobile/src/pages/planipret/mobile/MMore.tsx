@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import TaskAssignmentDiagnostic from "@/components/planipret/mobile/TaskAssignmentDiagnostic";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
@@ -778,9 +779,9 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
     return () => { document.body.style.overflow = previousOverflow; };
   }, []);
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-end md:absolute"
+      className="fixed inset-0 z-[1000] flex items-end"
       style={{ background: "rgba(4,11,22,0.7)", backdropFilter: "blur(6px)", touchAction: "none" }}
       onClick={onClose}
       role="presentation"
@@ -817,7 +818,8 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

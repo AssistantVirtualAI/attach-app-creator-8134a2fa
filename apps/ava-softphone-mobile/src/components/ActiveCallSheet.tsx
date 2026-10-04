@@ -19,13 +19,20 @@ import { useT } from '../lib/i18n';
 
 const PROFILE_CYCLE: AudioProfile[] = ['auto', 'hd', 'low-bandwidth'];
 
+// Phase 24A — manual recording authority comes only from the validated portal manifest.
+export type MobileRecordingPolicy = 'not_allowed' | 'user_allowed' | 'portal_managed';
+
 export default function ActiveCallSheet({
   sp,
   haptic,
+  recordingPolicy = 'not_allowed',
 }: {
   sp: any;
   haptic: (s?: ImpactStyle) => Promise<void>;
+  recordingPolicy?: MobileRecordingPolicy;
 }) {
+  // Any absent/unexpected value is restrictive; only the exact 'user_allowed' grants the manual control.
+  const manualRecordAllowed = recordingPolicy === 'user_allowed';
   const { tx } = useT();
   const { organizationId } = useMobileCredentials();
   const [timer, setTimer] = useState(0);
@@ -135,6 +142,7 @@ export default function ActiveCallSheet({
     if (target) safeCall('addCall', () => sp.addCall?.(target) ?? sp.call?.(target));
   };
   const record = async () => {
+    if (!manualRecordAllowed) return;
     const isRec = !!sp.snap.recording;
     const fn = isRec ? sp.stopRecord : sp.startRecord;
     setRecPending(true);
@@ -349,18 +357,26 @@ export default function ActiveCallSheet({
             onClick={() => { haptic(ImpactStyle.Medium); addCall(); }} />
           <Ctrl label="Park" icon="🅿" disabled={audioBusy}
             onClick={() => { haptic(ImpactStyle.Medium); park(); }} />
-          <Ctrl
-            label={
-              audioBusy ? (audioStatus === 'retrying' ? `Retry ${audioRestartAttempts}` : 'Audio…')
-              : recPending ? (sp.snap.recording ? tx('Arrêt…', 'Stopping…') : tx('Démarrage…', 'Starting…'))
-              : sp.snap.recording ? 'Stop Rec' : 'Record'
-            }
-            icon={audioBusy || recPending ? '…' : sp.snap.recording ? '■' : '●'}
-            tone={audioFailed ? 'danger' : sp.snap.recording ? 'danger' : 'default'}
-            active={!!sp.snap.recording}
-            disabled={audioBusy || audioFailed || recPending}
-            onClick={() => { haptic(ImpactStyle.Medium); record(); }}
-          />
+          {manualRecordAllowed ? (
+            <Ctrl
+              label={
+                audioBusy ? (audioStatus === 'retrying' ? `Retry ${audioRestartAttempts}` : 'Audio…')
+                : recPending ? (sp.snap.recording ? tx('Arrêt…', 'Stopping…') : tx('Démarrage…', 'Starting…'))
+                : sp.snap.recording ? 'Stop Rec' : 'Record'
+              }
+              icon={audioBusy || recPending ? '…' : sp.snap.recording ? '■' : '●'}
+              tone={audioFailed ? 'danger' : sp.snap.recording ? 'danger' : 'default'}
+              active={!!sp.snap.recording}
+              disabled={audioBusy || audioFailed || recPending}
+              onClick={() => { haptic(ImpactStyle.Medium); record(); }}
+            />
+          ) : (
+            <div data-testid="recording-policy-note" role="note" style={{ gridColumn: '1 / -1', fontSize: 11, color: colors.mutedSilver, textAlign: 'center', padding: '4px 0' }}>
+              {recordingPolicy === 'portal_managed'
+                ? tx('Enregistrement géré par le portail', 'Recording managed in portal')
+                : tx('Enregistrement manuel non autorisé', 'Manual recording is not allowed')}
+            </div>
+          )}
           <Ctrl label="AVA" icon="✦" tone="ai" active={aiOpen}
             onClick={() => { haptic(); setAiOpen((v) => !v); }} />
         </div>

@@ -419,8 +419,7 @@ export const mobileApi = {
   }),
   callDetail: (id: string) => call<CallDetail>(`/mobile-calls?id=${encodeURIComponent(id)}`, undefined, callDetailMock(id)),
 
-  // Recordings: list of completed calls with audio. Scoped server-side
-  // (admins see the whole domain, regular users only their extension).
+  // Recordings: list of completed calls with audio.
   // Phase 27A — own_extension_only: the server imposes the connected extension;
   // the Mobile API cannot target another extension.
   recordings: (opts?: { rangeDays?: 7 | 30 }) => call<RecordingEntry[] | any>(

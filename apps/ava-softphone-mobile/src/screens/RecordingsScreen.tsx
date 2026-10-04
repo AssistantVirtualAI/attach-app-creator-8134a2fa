@@ -4,7 +4,7 @@ import { colors, font, radius, gradients } from '../lib/theme';
 import { mobileApi, RecordingEntry } from '../lib/mobileApi';
 import { Card, Chip, EmptyState, Skeleton, AIPanel } from '../components/ui/Primitives';
 import type { Creds } from '../lib/creds';
-import { restGet, loadPbxRecordingAudioMobile } from '../lib/mobileSupabase';
+import { loadPbxRecordingAudioMobile } from '../lib/mobileSupabase';
 import { downloadRecording, getCachedRecordingUrl } from '../lib/recordingCache';
 import { showMobileToast } from '../lib/mobileToast';
 import { useCallAi } from '../hooks/useCallAi';
@@ -12,21 +12,16 @@ import { useT } from '../lib/i18n';
 
 export default function RecordingsScreen({
   creds,
-  isAdmin,
   myExtension,
   rangeDays,
   onRangeDaysChange,
 }: {
   creds?: Creds | null;
-  isAdmin: boolean;
   myExtension: string | null;
   rangeDays: 7 | 30;
   onRangeDaysChange: (days: 7 | 30) => void;
 }) {
   const [items, setItems] = useState<RecordingEntry[] | null>(null);
-  const [extFilter, setExtFilter] = useState<string>(isAdmin ? 'all' : (myExtension || 'all'));
-  const [domainExtensions, setDomainExtensions] = useState<string[]>([]);
-  const [fallbackDomainUuid, setFallbackDomainUuid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -46,16 +41,18 @@ export default function RecordingsScreen({
   // Load recordings (real-time: refresh on focus + every 30s + after a call ends).
   const reload = React.useCallback(() => {
     let cancelled = false;
-    const ext = isAdmin ? (extFilter === 'all' ? undefined : extFilter) : (myExtension || undefined);
-    mobileApi.recordings(ext, { rangeDays })
+    // Phase 27A — own_extension_only: the server imposes the connected extension.
+    if (!myExtension) return () => { cancelled = true; };
+    mobileApi.recordings({ rangeDays })
       .then((rows) => { if (!cancelled) setItems(rows); })
       .catch((e: any) => { if (!cancelled) { setError(e?.message || 'Failed to load recordings'); setItems((prev) => prev ?? []); } });
     return () => { cancelled = true; };
-  }, [extFilter, isAdmin, myExtension, rangeDays]);
+  }, [myExtension, rangeDays]);
 
   useEffect(() => {
-    setItems(null);
     setError(null);
+    if (!myExtension) { setItems([]); return; }
+    setItems(null);
     const cancel = reload();
     // 30s polling removed — realtime subscriptions + focus + callEnded events handle refresh.
     const onFocus = () => reload();
@@ -63,18 +60,16 @@ export default function RecordingsScreen({
     window.addEventListener('focus', onFocus);
     window.addEventListener('ava:callEnded', onCallEnded as any);
 
-    // Live realtime: any new call recording row for this org/extension triggers
-    // an immediate reload so users see brand-new recordings without polling.
+    // Live realtime: channel scoped exactly to the connected extension.
     let ch: any = null;
     (async () => {
       try {
         const { supabase } = await import('../lib/mobileSupabase');
         if (creds?.accessToken) { try { supabase.realtime.setAuth(creds.accessToken); } catch {} }
-        const orgId = creds?.organizationId;
-        const filter = orgId ? `organization_id=eq.${orgId}` : undefined;
-        ch = supabase.channel(`recordings-live-${orgId || 'all'}`)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pbx_call_recordings', ...(filter ? { filter } : {}) } as any, () => reload())
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pbx_call_recordings', ...(filter ? { filter } : {}) } as any, () => reload())
+        const filter = `extension=eq.${myExtension}`;
+        ch = supabase.channel(`recordings-ext-${myExtension}`)
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pbx_call_recordings', filter } as any, () => reload())
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pbx_call_recordings', filter } as any, () => reload())
           .subscribe();
       } catch {}
     })();
@@ -85,7 +80,7 @@ export default function RecordingsScreen({
       window.removeEventListener('ava:callEnded', onCallEnded as any);
       (async () => { try { const { supabase } = await import('../lib/mobileSupabase'); ch && supabase.removeChannel(ch); } catch {} })();
     };
-  }, [reload, creds?.accessToken, creds?.organizationId]);
+  }, [reload, myExtension, creds?.accessToken]);
 
   // cachedIdsRef mirrors cachedIds state but is updated without triggering
   // re-renders, so background probes and prefetches can update it safely.
@@ -108,7 +103,7 @@ export default function RecordingsScreen({
   useEffect(() => {
     if (!items || items.length === 0 || !itemsIdsKey) return;
     const accessToken = creds?.accessToken || null;
-    const domainUuid = creds?.domainUuid || creds?.fusionpbxDomainUuid || fallbackDomainUuid || null;
+    const domainUuid = creds?.domainUuid || creds?.fusionpbxDomainUuid || null;
     const orgId = creds?.organizationId || null;
 
     // Full guard key: IDs + token. If neither changed, skip entirely.
@@ -151,34 +146,6 @@ export default function RecordingsScreen({
   }, [itemsIdsKey, creds?.accessToken]);
 
 
-  // Fallback: derive domain_uuid from /mobile-me when creds lack it.
-  useEffect(() => {
-    if (!isAdmin) return;
-    if (creds?.domainUuid || creds?.fusionpbxDomainUuid || fallbackDomainUuid) return;
-    mobileApi.me()
-      .then((m) => setFallbackDomainUuid(m?.domain?.fusionpbxDomainUuid || m?.organization?.fusionpbxDomainUuid || null))
-      .catch(() => {});
-  }, [isAdmin, creds?.domainUuid, creds?.fusionpbxDomainUuid, fallbackDomainUuid]);
-
-  // Load domain extensions for the filter
-  useEffect(() => {
-    if (!isAdmin) return;
-    const domainUuid = creds?.domainUuid || creds?.fusionpbxDomainUuid || fallbackDomainUuid;
-    if (!creds?.accessToken || !domainUuid) return;
-    restGet<{ extension: string }[]>(
-      `/rest/v1/pbx_extensions_directory?select=extension&domain_uuid=eq.${encodeURIComponent(domainUuid)}&enabled=eq.true&order=extension.asc`,
-      creds.accessToken,
-    ).then((rows) => setDomainExtensions((rows || []).map((r) => String(r.extension)).filter(Boolean)))
-      .catch(() => setDomainExtensions([]));
-  }, [creds?.accessToken, creds?.domainUuid, creds?.fusionpbxDomainUuid, fallbackDomainUuid, isAdmin]);
-
-  const extensionOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of domainExtensions) set.add(e);
-    for (const r of items || []) if (r.extension) set.add(r.extension);
-    if (myExtension) set.add(myExtension);
-    return Array.from(set).sort();
-  }, [items, domainExtensions, myExtension]);
 
   const recMeta = (rec: RecordingEntry) => ({
     recording_path: rec.record_path, recording_name: rec.record_name,
@@ -219,7 +186,7 @@ export default function RecordingsScreen({
           rec.id, recMeta(rec),
           creds?.accessToken || null,
           creds?.organizationId || null,
-          creds?.domainUuid || creds?.fusionpbxDomainUuid || fallbackDomainUuid || null,
+          creds?.domainUuid || creds?.fusionpbxDomainUuid || null,
         );
         setCachedIds((prev) => new Set(prev).add(rec.id));
       }
@@ -249,7 +216,7 @@ export default function RecordingsScreen({
         rec.id, recMeta(rec),
         creds?.accessToken || null,
         creds?.organizationId || null,
-        creds?.domainUuid || creds?.fusionpbxDomainUuid || fallbackDomainUuid || null,
+        creds?.domainUuid || creds?.fusionpbxDomainUuid || null,
         { force: true },
       );
       setCachedIds((prev) => new Set(prev).add(rec.id));
@@ -269,27 +236,10 @@ export default function RecordingsScreen({
 
   return (
     <div>
-      {isAdmin ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 2px 10px' }}>
-          <label style={{ fontSize: font.xs, color: colors.mutedSilver, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>Extension</label>
-          <select value={extFilter} onChange={(e) => setExtFilter(e.target.value)} style={{
-            flex: 1, padding: '7px 10px', borderRadius: 10, border: `1px solid ${colors.border}`,
-            background: 'rgba(255,255,255,0.06)', color: colors.textIce, fontSize: 12, fontWeight: 700,
-          }}>
-            <option value="all">{fr ? 'Toutes les extensions (domaine)' : 'All extensions (domain)'}</option>
-            {myExtension && <option value={myExtension}>{fr ? `La mienne (${myExtension})` : `Mine (${myExtension})`}</option>}
-            {extensionOptions.filter((e) => e !== myExtension).map((e) => <option key={e} value={e}>{e}</option>)}
-          </select>
-          {extensionOptions.length === 0 && (
-            <span style={{ fontSize: 10, color: colors.mutedSilver }}>{fr ? 'Chargement…' : 'Loading…'}</span>
-          )}
+      {myExtension && (
+        <div data-testid="recordings-own-extension" style={{ fontSize: font.xs, color: colors.mutedSilver, margin: '6px 2px 10px' }}>
+          {fr ? `Enregistrements de votre extension connectée ${myExtension}.` : `Showing recordings for your connected extension ${myExtension}.`}
         </div>
-      ) : (
-        myExtension && (
-          <div style={{ fontSize: font.xs, color: colors.mutedSilver, margin: '6px 2px 10px' }}>
-            {fr ? `Enregistrements de votre extension ${myExtension}.` : `Showing recordings for your extension ${myExtension}.`}
-          </div>
-        )
       )}
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', margin: '0 2px 10px' }}>
@@ -320,7 +270,7 @@ export default function RecordingsScreen({
               rec.id, recMeta(rec),
               creds?.accessToken || null,
               creds?.organizationId || null,
-              creds?.domainUuid || creds?.fusionpbxDomainUuid || fallbackDomainUuid || null,
+              creds?.domainUuid || creds?.fusionpbxDomainUuid || null,
               { force: true },
             );
             setPlaybackErrors((prev) => { const n = { ...prev }; delete n[rec.id]; return n; });
@@ -354,7 +304,7 @@ export default function RecordingsScreen({
 
       {!items && <ListSkeleton rows={5} />}
       {items && items.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension, r.summary].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).length === 0 && (
-        <EmptyState icon="🎙" title={fr ? 'Aucun enregistrement' : 'No recordings yet'} hint={isAdmin ? (fr ? 'Aucun enregistrement du domaine ne correspond à ce filtre.' : 'No domain recordings match this filter.') : (fr ? 'Les enregistrements de votre extension apparaîtront ici.' : 'Recordings for your extension will appear here.')} />
+        <EmptyState icon="🎙" title={fr ? 'Aucun enregistrement' : 'No recordings yet'} hint={fr ? 'Les enregistrements de votre extension apparaîtront ici.' : 'Recordings for your extension will appear here.'} />
       )}
       {items && items.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension, r.summary].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).map((r) => (
         <div key={r.id} style={{ marginBottom: 8 }}>

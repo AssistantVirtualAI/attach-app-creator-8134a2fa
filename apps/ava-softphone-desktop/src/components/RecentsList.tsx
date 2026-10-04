@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ava, CallRecord } from '@/lib/avaApi';
 import { ArrowUpRight, ArrowDownLeft, PhoneMissed, PhoneCall } from './RowIcons';
-import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh';
-import { useOrgId } from '@/lib/useOrgId';
+import { supabase } from '@/lib/supabaseClient';
 import SkeletonRows from './ui/SkeletonRows';
 import { theme } from '../lib/theme';
 
@@ -33,6 +32,14 @@ function fmtDur(s: number) {
   return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
 }
 
+// Phase 26B — own_extension_only: a row stays visible only if it belongs to the
+// connected extension. Applies to every user, with no administrative bypass.
+export function isOwnRow(r: any, ext: string): boolean {
+  if (!r || !ext) return false;
+  return [r.extension, r.caller_number, r.destination_number, r.source_number, r.from, r.to]
+    .some((v) => v != null && String(v) === ext);
+}
+
 function RecentsListImpl({ extension, onCall }: Props) {
   const [rows, setRows] = useState<CallRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,13 +50,14 @@ function RecentsListImpl({ extension, onCall }: Props) {
   const [rangeDays, setRangeDays] = useState<7 | 30>(7);
 
   const load = useCallback(async (silent = false, force = false) => {
+    if (!extension) { setRows([]); setLoading(false); return; }
     if (!silent) { setLoading(true); setErr(null); }
     if (force) { setRefreshing(true); setErr(null); }
     try {
       let data: CallRecord[] = [];
       if (force) {
         try {
-          data = await ava.refreshCalls(200, { extension, rangeDays });
+          data = await ava.refreshPersonalCalls(200, { rangeDays });
         } catch (e: any) {
           const msg = String(e?.message || '');
           if (/NO_CDR_ENDPOINT/i.test(msg)) {
@@ -57,12 +65,12 @@ function RecentsListImpl({ extension, onCall }: Props) {
           } else {
             setErr(msg || 'Reconnecting to PBX… realtime updates continue in the background.');
           }
-          data = await ava.calls(200, { extension, rangeDays });
+          data = await ava.personalCalls(200, { rangeDays });
         }
       } else {
-        data = await ava.calls(200, { extension, rangeDays });
+        data = await ava.personalCalls(200, { rangeDays });
       }
-      setRows(Array.isArray(data) ? data : []);
+      setRows((Array.isArray(data) ? data : []).filter((r) => isOwnRow(r, extension)));
       setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (e: any) {
       if (!silent || force) {
@@ -102,16 +110,41 @@ function RecentsListImpl({ extension, onCall }: Props) {
     };
   }, [load]);
 
-  // Realtime: refresh on new CDR rows
-  const orgId = useOrgId();
-  useRealtimeRefresh({
-    table: 'pbx_call_records', organizationId: orgId, events: ['INSERT', 'UPDATE', 'DELETE'], debounceMs: 300, throttleMs: 1_000,
-    shouldRefresh: (payload: any) => {
-      const row = payload?.new || payload?.old || {};
-      return !extension || row.extension === extension || row.caller_number === extension || row.destination_number === extension || row.source_number === extension;
-    },
-  }, silentLoad);
+  // Realtime: personal CDR channel, filtered exactly by the connected extension.
+  useEffect(() => {
+    if (!extension) return;
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    let lastAt = 0;
+    const fire = () => {
+      if (pending) return;
+      pending = setTimeout(() => {
+        pending = null;
+        const now = Date.now();
+        if (now - lastAt < 1_000) return;
+        lastAt = now;
+        silentLoad();
+      }, 300);
+    };
+    const channel = supabase.channel(`rt-pbx_call_records-extension-${extension}`);
+    for (const ev of ['INSERT', 'UPDATE', 'DELETE'] as const) {
+      channel.on(
+        // @ts-ignore — supabase-js types for postgres_changes
+        'postgres_changes',
+        { event: ev, schema: 'public', table: 'pbx_call_records', filter: `extension=eq.${extension}` },
+        (payload: any) => {
+          const row = payload?.new && Object.keys(payload.new).length ? payload.new : payload?.old;
+          if (isOwnRow(row, extension)) fire();
+        },
+      );
+    }
+    channel.subscribe();
+    return () => {
+      if (pending) clearTimeout(pending);
+      try { supabase.removeChannel(channel); } catch { /* noop */ }
+    };
+  }, [extension, silentLoad]);
 
+  if (!extension) return <div style={center}>Call history will be available as soon as an extension is assigned.</div>;
   if (loading) return <SkeletonRows rows={6} label="Loading recents" />;
   if (err && rows.length === 0) return <div style={{ ...center, color: c.danger }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
 
@@ -139,6 +172,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, padding: '0 2px' }}>
         <span style={{ fontSize: 10, opacity: 0.5, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 600 }}>
           {rows.length} call{rows.length > 1 ? 's' : ''}{lastUpdated ? ` · ${lastUpdated}` : ''}
+          <span data-testid="recents-own-extension" style={{ marginLeft: 6 }}>· My extension {extension}</span>
         </span>
         <button
           onClick={() => load(true, true)}

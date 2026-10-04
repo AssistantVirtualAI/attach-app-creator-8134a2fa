@@ -53,7 +53,7 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
   const firstIdRef = useRef(true);
   useEffect(() => {
     if (firstIdRef.current) { firstIdRef.current = false; return; }
-    setData(null); setAudioUrl(null); setAudioError(null); setPlaying(false); setCur(0); setDur(0);
+    setData(null); setAudioUrl(null); setAudioError(null); setLoadingAudio(false); setPlaying(false); setCur(0); setDur(0);
   }, [id]);
 
   // Phase 29B — single authenticated audio path: the shared helper. Metadata

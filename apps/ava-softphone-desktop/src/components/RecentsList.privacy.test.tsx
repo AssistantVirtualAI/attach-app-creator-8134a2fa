@@ -10,7 +10,7 @@ const h = vi.hoisted(() => {
   ch.subscribe.mockImplementation(() => ch);
   return {
     handlers, ch,
-    channel: vi.fn(() => ch),
+    channel: vi.fn((_key: string) => ch),
     removeChannel: vi.fn(),
     personalCalls: vi.fn(),
     refreshPersonalCalls: vi.fn(),
@@ -70,7 +70,7 @@ describe('Phase 26B — RecentsList own_extension_only', () => {
     render(<RecentsList extension="201" onCall={() => {}} />);
     await flush();
     expect(h.channel).toHaveBeenCalledTimes(1);
-    const key = h.channel.mock.calls[0][0] as string;
+    const key = h.channel.mock.calls[0][0];
     expect(key).toContain('201');
     expect(key).not.toContain('org');
     const filters = h.ch.on.mock.calls.map((c: any[]) => c[1]);

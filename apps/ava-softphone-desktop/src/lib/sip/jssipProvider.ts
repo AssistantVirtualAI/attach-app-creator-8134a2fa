@@ -643,7 +643,9 @@ class JsSipProvider {
         }
       } catch { deviceId = String(Date.now()); }
 
-      const ua = new JsSIP.UA({
+      // JsSIP accepts these runtime Contact parameters; its public TypeScript
+      // UAConfiguration declaration omits contact_params for an inline literal.
+      const uaConfig = {
         sockets,
         uri: `sip:${cfg.extension}@${cfg.sipDomain}`,
         password: cfg.password,
@@ -666,7 +668,8 @@ class JsSipProvider {
         hackIpInContact: true,
         hackViaBranch: true,
         sessionDescriptionHandlerOptions,
-      });
+      };
+      const ua = new JsSIP.UA(uaConfig);
 
       ua.on('connecting', () => {
         this.logEvent('info', 'WebSocket connecting…');

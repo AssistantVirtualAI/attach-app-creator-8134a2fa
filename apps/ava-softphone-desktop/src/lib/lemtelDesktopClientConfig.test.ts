@@ -240,7 +240,7 @@ describe('Phase 21B.1 — useSoftphone async races during revocation', () => {
 
   it('credential fetch in flight: revocation before resolve never reaches sipProvider.init nor retries', async () => {
     const d = deferred<Response>();
-    const fetchMock = vi.fn(() => d.promise);
+    const fetchMock = vi.fn((_url: string) => d.promise);
     vi.stubGlobal('fetch', fetchMock);
     try {
       const { rerender } = renderHook((p: { allow: boolean }) => useSoftphone({ extension: '100', accessToken: 't', allowNewActions: p.allow }), { initialProps: { allow: true } });

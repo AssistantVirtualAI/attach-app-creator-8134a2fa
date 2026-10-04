@@ -23,6 +23,7 @@ const APP_NAME = 'Lemtel';
 const store = new Store();
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+let updateReady = false;
 
 app.setName(APP_NAME);
 
@@ -362,6 +363,7 @@ autoUpdater.on('download-progress', (progress) => {
   });
 });
 autoUpdater.on('update-downloaded', (info) => {
+  updateReady = true;
   mainWindow?.webContents.send('update-downloaded', { version: info.version });
 });
 autoUpdater.on('error', (err) => {
@@ -369,28 +371,25 @@ autoUpdater.on('error', (err) => {
 });
 // IPC handlers — preload uses 'updater:*' namespace
 function doInstallUpdate() {
-  isQuitting = true;
-  // Close all windows first so macOS doesn't block the quit.
-  try { BrowserWindow.getAllWindows().forEach((w) => w.destroy()); } catch { /* noop */ }
-  // On macOS, quitAndInstall() can silently fail when the app is not signed
-  // with a valid Apple Developer certificate. We use app.relaunch() as a
-  // guaranteed fallback: schedule a relaunch BEFORE calling quitAndInstall,
-  // then force process.exit() after 1200ms if the process is still alive.
-  try {
-    app.relaunch();
-    autoUpdater.quitAndInstall(false, true);
-  } catch {
-    // quitAndInstall threw — fall through to forced exit below
+  if (!updateReady) {
+    mainWindow?.webContents.send('update-error', 'Aucune mise à jour téléchargée');
+    return false;
   }
-  // Belt-and-suspenders: if quitAndInstall didn't exit within 1200ms, force it.
-  setTimeout(() => {
-    try { app.quit(); } catch { /* noop */ }
-    setTimeout(() => process.exit(0), 300);
-  }, 1200);
+  try {
+    isQuitting = true;
+    // The signed platform installer owns the quit/relaunch sequence. Forcing
+    // process.exit or app.relaunch can interrupt installation or reopen the old build.
+    autoUpdater.quitAndInstall(false, true);
+    return true;
+  } catch (err) {
+    isQuitting = false;
+    mainWindow?.webContents.send('update-error', err instanceof Error ? err.message : String(err));
+    return false;
+  }
 }
-ipcMain.handle('updater:install', () => { doInstallUpdate(); });
+ipcMain.handle('updater:install', () => doInstallUpdate());
 ipcMain.handle('updater:check',       () => autoUpdater.checkForUpdates());
 ipcMain.handle('updater:app-version', () => app.getVersion());
 // Legacy aliases kept for compatibility
-ipcMain.handle('install-update', () => { doInstallUpdate(); });
+ipcMain.handle('install-update', () => doInstallUpdate());
 ipcMain.handle('check-for-updates',   () => autoUpdater.checkForUpdates());

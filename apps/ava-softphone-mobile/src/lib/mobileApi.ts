@@ -1,3 +1,4 @@
+import { BACKEND_URL, BACKEND_ANON_KEY } from './backendOrigin';
 /**
  * Lemtel AI Phone — Mobile API client.
  *
@@ -12,16 +13,12 @@ import { isMockMode } from './buildGuard';
 import { supabase } from './mobileSupabase';
 import { perf } from './perfMetrics';
 
-export const MOBILE_DEFAULT_PORTAL = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
+export const MOBILE_DEFAULT_PORTAL = BACKEND_URL;
 
-let portalUrl: string = MOBILE_DEFAULT_PORTAL;
 let authToken: string | null = null;
-let anonKey: string | null = null;
 
-export function configureMobileApi(opts: { portalUrl?: string; accessToken?: string | null; anonKey?: string | null }) {
-  if (opts.portalUrl) portalUrl = opts.portalUrl.replace(/\/$/, '');
+export function configureMobileApi(opts: { accessToken?: string | null }) {
   if (opts.accessToken !== undefined) authToken = opts.accessToken;
-  if (opts.anonKey !== undefined) anonKey = opts.anonKey;
 }
 
 export function setAuthToken(t: string | null) { authToken = t; }
@@ -35,7 +32,8 @@ async function getFreshToken(): Promise<string | null> {
       return t;
     }
   } catch {}
-  return authToken;
+  authToken = null;
+  return null;
 }
 
 function emitAuthRequired() {
@@ -48,13 +46,17 @@ function emitAuthRequired() {
 
 async function liveCall<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getFreshToken();
+  if (!token) {
+    emitAuthRequired();
+    throw new Error('Session utilisateur requise');
+  }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(anonKey ? { apikey: anonKey } : {}),
+    Authorization: `Bearer ${token}`,
+    apikey: BACKEND_ANON_KEY,
     ...((init.headers as Record<string, string>) || {}),
   };
-  const res = await fetch(`${portalUrl}/functions/v1${path}`, { ...init, headers });
+  const res = await fetch(`${BACKEND_URL}/functions/v1${path}`, { ...init, headers });
   if (!res.ok) {
     let detail: any = null;
     let text = '';

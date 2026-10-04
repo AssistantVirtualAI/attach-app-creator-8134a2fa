@@ -1,11 +1,9 @@
 /**
- * Tests the TURN probe fallback behaviour.
+ * Tests the TURN probe diagnostics and safe STUN-only bootstrap.
  *
  * Strategy: mock global `RTCPeerConnection` with a stub that NEVER emits a
- * relay candidate. The probe should time out on Metered, time out again on
- * the fallback, and `ensureActivePcConfig()` should expose the fallback
- * server list. A second variant emits a relay candidate immediately on the
- * second (fallback) probe to assert the bascule wires up correctly.
+ * relay candidate. Explicit diagnostics still probe; bootstrap no longer
+ * waits for TURN when build-time config contains only public STUN servers.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -68,32 +66,25 @@ describe('rtcConfig — TURN probe fallback', () => {
     expect(res.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it('ensureActivePcConfig falls back to FALLBACK_ICE_SERVERS when metered probe times out', async () => {
-    // First PC (metered probe) never emits, second PC (fallback probe) emits relay.
-    let callCount = 0;
-    (globalThis as any).RTCPeerConnection = vi.fn(() => {
-      callCount += 1;
-      return makeStubPC({ emitRelay: callCount >= 2 });
-    });
+  it('bootstrap uses STUN without probing an unavailable embedded TURN service', async () => {
+    (globalThis as any).RTCPeerConnection = vi.fn(() => makeStubPC({ emitRelay: false }));
     const mod = await import('./rtcConfig');
     mod.__resetActivePcConfig();
 
     const events: any[] = [];
     const off = mod.onIceDiagnostic((e) => events.push(e));
 
-    const promise = mod.ensureActivePcConfig();
-    await vi.advanceTimersByTimeAsync(5000); // metered probe times out
-    await vi.runOnlyPendingTimersAsync();    // fallback probe resolves on microtask
-    const cfg = await promise;
+    const cfg = await mod.ensureActivePcConfig();
     off();
 
     expect(mod.getActiveTurnProvider()).toBe('fallback');
     expect(cfg.iceServers).toBe(mod.FALLBACK_ICE_SERVERS);
-    expect(events.some((e) => e.kind === 'probe-started')).toBe(true);
+    expect((globalThis as any).RTCPeerConnection).not.toHaveBeenCalled();
+    expect(events.some((e) => e.kind === 'probe-started')).toBe(false);
     expect(events.some((e) => e.kind === 'pc-config' && e.provider === 'fallback')).toBe(true);
   });
 
-  it('telemetry sink receives probe_result and provider_selected', async () => {
+  it('telemetry sink reports provider_selected without pretending relay was found', async () => {
     (globalThis as any).RTCPeerConnection = vi.fn(() => makeStubPC({ emitRelay: false }));
     const mod = await import('./rtcConfig');
     mod.__resetActivePcConfig();
@@ -101,18 +92,13 @@ describe('rtcConfig — TURN probe fallback', () => {
     const calls: any[] = [];
     mod.setTelemetrySink((e) => calls.push(e));
 
-    const promise = mod.ensureActivePcConfig();
-    await vi.advanceTimersByTimeAsync(5000);
-    await vi.advanceTimersByTimeAsync(5000);
-    await promise;
+    await mod.ensureActivePcConfig();
     mod.setTelemetrySink(null);
 
     const names = calls.map((c) => c.name);
-    expect(names).toContain('sip.turn.probe_started');
-    expect(names).toContain('sip.turn.probe_result');
+    expect(names).not.toContain('sip.turn.probe_started');
+    expect(names).not.toContain('sip.turn.probe_result');
     expect(names).toContain('sip.turn.provider_selected');
-    const probeResult = calls.find((c) => c.name === 'sip.turn.probe_result');
-    expect(probeResult.meta.provider).toBe('fallback');
-    expect(probeResult.meta.relayFound).toBe(false);
+    expect(calls.find((c) => c.name === 'sip.turn.provider_selected')?.meta?.provider).toBe('fallback');
   });
 });

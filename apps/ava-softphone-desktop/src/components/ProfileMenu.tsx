@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { theme } from '../lib/theme';
 import { supabase } from '../lib/supabaseClient';
+import { getResetRedirect } from '../lib/backendOrigin';
 import { setAuthToken } from '../lib/avaApi';
 import { useCallBus } from '../hooks/useCallBus';
 
@@ -736,9 +737,7 @@ function ProfileEditor({
     setSaving(true); setEmError(null);
     try {
       // Reset links must open in a public browser, not the Electron app shell.
-      const origin = window.location.origin;
-      const isPublic = /^https?:\/\//i.test(origin) && !origin.includes('localhost') && !origin.startsWith('file:');
-      const redirectTo = isPublic ? `${origin}/reset-password` : 'https://avastatistic.ca/reset-password';
+      const redirectTo = getResetRedirect();
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
       setEmStep('sent');

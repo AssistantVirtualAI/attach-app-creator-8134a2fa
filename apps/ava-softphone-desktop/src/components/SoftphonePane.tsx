@@ -1,3 +1,5 @@
+import { BACKEND_URL, BACKEND_ANON_KEY } from '../lib/backendOrigin';
+import { supabase } from '../lib/supabaseClient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSoftphone } from '@/hooks/useSoftphone';
 import { useSoftphoneContextSafe } from '@/contexts/SoftphoneContext';
@@ -1578,14 +1580,14 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
     setMsgs((m) => [...m, userMsg, placeholder]);
     setInput(''); setBusy(true);
     try {
-      const res = await fetch(`https://gejxisrqtvxavbrfcoxz.supabase.co/functions/v1/ava-assistant`, {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Session expirée : reconnectez-vous.');
+      const res = await fetch(`${BACKEND_URL}/functions/v1/ava-assistant`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo',
-          ...(localStorage.getItem('sb-gejxisrqtvxavbrfcoxz-auth-token')
-            ? { Authorization: `Bearer ${JSON.parse(localStorage.getItem('sb-gejxisrqtvxavbrfcoxz-auth-token') || '{}')?.access_token || ''}` }
-            : {}),
+          'apikey': BACKEND_ANON_KEY,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ message: text, history: msgs.map((m) => ({ role: m.role, content: m.text })) }),
       });

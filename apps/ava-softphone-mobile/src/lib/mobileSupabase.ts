@@ -1,15 +1,11 @@
+import { BACKEND_URL, BACKEND_ANON_KEY, BACKEND_STORAGE_SUFFIX } from './backendOrigin';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 
-export const SUPABASE_URL =
-  (import.meta as any).env?.VITE_SUPABASE_URL ||
-  'https://gejxisrqtvxavbrfcoxz.supabase.co';
+export const SUPABASE_URL = BACKEND_URL;
 
-export const SUPABASE_ANON =
-  (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
+export const SUPABASE_ANON = BACKEND_ANON_KEY;
 
 // Capacitor Preferences-backed storage so the SDK can persist and refresh
 // sessions across native app restarts (where localStorage is unreliable).
@@ -40,7 +36,7 @@ export function getMobileSupabaseClient(): SupabaseClient {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
-      storageKey: 'lemtel-mobile-auth',
+      storageKey: `lemtel-mobile-auth${BACKEND_STORAGE_SUFFIX}`,
       storage: (Capacitor.isNativePlatform() ? nativeStorage : webStorage) as any,
     },
     realtime: { params: { eventsPerSecond: 2 } },

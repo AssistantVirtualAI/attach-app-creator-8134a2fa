@@ -10,6 +10,7 @@ import DialerBaselineCheck from './components/DialerBaselineCheck';
 import { useTheme } from './lib/theme';
 import { useContrast } from './hooks/useContrast';
 import { supabase } from './lib/supabaseClient';
+import { BACKEND_URL, BACKEND_STORAGE_SUFFIX, LEGACY_BACKEND_URL } from './lib/backendOrigin';
 import { setAuthToken } from './lib/avaApi';
 import { audit } from './lib/audit';
 import { sipProvider } from './lib/sip/jssipProvider';
@@ -64,6 +65,8 @@ async function clearDesktopAuthState() {
   try {
     window.localStorage.removeItem('lemtel-desktop-auth');
     window.sessionStorage.removeItem('lemtel-desktop-auth');
+    window.localStorage.removeItem(`lemtel-desktop-auth${BACKEND_STORAGE_SUFFIX}`);
+    window.sessionStorage.removeItem(`lemtel-desktop-auth${BACKEND_STORAGE_SUFFIX}`);
   } catch { /* noop */ }
   try { await window.electronAPI?.saveCredentials?.(null); } catch { /* noop */ }
   setAuthToken(null);
@@ -71,6 +74,7 @@ async function clearDesktopAuthState() {
 
 type Creds = {
   portalUrl: string;
+  backendOrigin?: string;
   email: string;
   extension: string;
   displayName?: string;
@@ -213,7 +217,15 @@ function DesktopApp() {
     let cancelled = false;
 
     const init = async () => {
-      const saved = await window.electronAPI?.getCredentials?.().catch(() => null);
+      const saved = await window.electronAPI?.getCredentials?.().catch(() => null) as ActiveCreds | null;
+
+      // Untagged Electron credentials were issued by the historical backend.
+      // Never send them to a new Auth issuer, even if the user UUID is unchanged.
+      if (saved && (saved.backendOrigin || LEGACY_BACKEND_URL) !== BACKEND_URL) {
+        await clearDesktopAuthState();
+        if (!cancelled) { setCreds(null); setLoading(false); }
+        return;
+      }
 
       // Restore session from saved tokens BEFORE checking session
       if (saved?.accessToken && saved?.refreshToken) {
@@ -255,6 +267,7 @@ function DesktopApp() {
           if (row?.extension) {
             refreshed = {
               ...refreshed,
+              backendOrigin: BACKEND_URL,
               extension: String(row.extension),
               displayName: row.display_name || refreshed.displayName,
               sipDomain: row.sip_domain || refreshed.sipDomain,

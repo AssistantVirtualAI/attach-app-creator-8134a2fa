@@ -1,3 +1,4 @@
+import { BACKEND_URL, BACKEND_ANON_KEY, getResetRedirect } from '../lib/backendOrigin';
 import React, { useEffect, useState } from 'react';
 import type { Creds } from '../lib/creds';
 import SipConfigScreen from './SipConfigScreen';
@@ -36,8 +37,8 @@ const C = {
   red: '#EF4444',
 };
 
-const SUPABASE_URL = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
+const SUPABASE_URL = BACKEND_URL;
+const SUPABASE_ANON = BACKEND_ANON_KEY;
 
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 
@@ -332,7 +333,7 @@ function ForgotPasswordScreen({ initialEmail, accent, onBack }: { initialEmail: 
     if (busy || cooldown > 0) return; // multi-click guard
     setBusy(true); setError(null); setResentInfo(null);
     try {
-      const redirectTo = 'https://avastatistic.ca/reset-password';
+      const redirectTo = getResetRedirect();
       const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
         method: 'POST',
         headers: {

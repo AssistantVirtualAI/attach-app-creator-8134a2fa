@@ -1,11 +1,14 @@
+import { BACKEND_URL, BACKEND_ANON_KEY, BACKEND_STORAGE_SUFFIX } from './backendOrigin';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { supabase, clearRecordingAudioCache } from './mobileSupabase';
 import { clearRecordingCache } from './recordingCache';
+import { clearIceServerCache } from './sip/iceServers';
 import { setAuthToken } from './mobileApi';
 
 export type Creds = {
   portalUrl?: string;
+  backendOrigin?: string;
   email: string;
   extension: string;
   displayName?: string;
@@ -28,7 +31,8 @@ export type Creds = {
 };
 
 
-const KEY = 'lemtel.creds.v1';
+const KEY = `lemtel.creds.v1${BACKEND_STORAGE_SUFFIX}`;
+let legacyCleared = false;
 let credentialEpoch = 0;
 let storageQueue: Promise<void> = Promise.resolve();
 let authQueue: Promise<void> = Promise.resolve();
@@ -49,15 +53,35 @@ export function getCredentialEpoch(): number { return credentialEpoch; }
 export function restoreSupabaseSession(c: Creds): Promise<{ access_token: string; refresh_token: string; user: { id: string } } | null> {
   const epoch = credentialEpoch;
   return ordered('auth', async () => {
-    if (epoch !== credentialEpoch || !c.userId || !c.accessToken || !c.refreshToken) return null;
+    if (epoch !== credentialEpoch || !c.userId || !c.accessToken || !c.refreshToken ||
+        (c.backendOrigin && c.backendOrigin !== BACKEND_URL)) return null;
+    const usable = async (candidate: any) => {
+      if (!candidate || candidate.user?.id !== c.userId) return null;
+      if (!candidate.expires_at || candidate.expires_at * 1000 <= Date.now() + 5_000) {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (error || epoch !== credentialEpoch || data.session?.user?.id !== c.userId ||
+            !data.session?.expires_at || data.session.expires_at * 1000 <= Date.now()) return null;
+        return data.session;
+      }
+      return epoch === credentialEpoch ? candidate : null;
+    };
     const { data: existing } = await supabase.auth.getSession();
     if (epoch !== credentialEpoch) return null;
-    if (existing.session?.user?.id === c.userId) return existing.session;
+    if (existing.session?.user?.id === c.userId) return usable(existing.session);
     if (existing.session?.user?.id) return null;
     const { data, error } = await supabase.auth.setSession({ access_token: c.accessToken, refresh_token: c.refreshToken });
     if (epoch !== credentialEpoch || error || data.session?.user?.id !== c.userId) return null;
-    return data.session;
+    return usable(data.session);
   });
+}
+
+async function clearLegacySessionOnCutover(): Promise<void> {
+  if (!BACKEND_STORAGE_SUFFIX || legacyCleared) return;
+  legacyCleared = true;
+  for (const key of ['lemtel.creds.v1', 'lemtel-mobile-auth']) {
+    try { await Preferences.remove({ key }); } catch { /* no native storage */ }
+    try { if (typeof localStorage !== 'undefined') localStorage.removeItem(key); } catch { /* private mode */ }
+  }
 }
 
 function signOutSupabaseSession(): Promise<void> {
@@ -75,20 +99,27 @@ function signOutSupabaseSession(): Promise<void> {
 export const Store = {
   async get(): Promise<Creds | null> {
     return ordered('storage', async () => {
+      await clearLegacySessionOnCutover();
       try {
         if ((Preferences as any)?.get) {
           const { value } = await Preferences.get({ key: KEY });
-          if (value) return JSON.parse(value);
+          if (value) {
+            const parsed = JSON.parse(value) as Creds;
+            return !BACKEND_STORAGE_SUFFIX || parsed.backendOrigin === BACKEND_URL ? parsed : null;
+          }
         }
       } catch {}
       const v = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null;
-      try { return v ? JSON.parse(v) : null; } catch { return null; }
+      try {
+        const parsed = v ? JSON.parse(v) as Creds : null;
+        return parsed && BACKEND_STORAGE_SUFFIX && parsed.backendOrigin !== BACKEND_URL ? null : parsed;
+      } catch { return null; }
     });
   },
   async set(c: Creds, expectedEpoch = credentialEpoch): Promise<void> {
     return ordered('storage', async () => {
       if (expectedEpoch !== credentialEpoch) return;
-      const v = JSON.stringify(c);
+      const v = JSON.stringify({ ...c, backendOrigin: BACKEND_URL });
       try {
         if ((Preferences as any)?.set) {
           await Preferences.set({ key: KEY, value: v });
@@ -150,6 +181,7 @@ export function useStoredCreds() {
     // Lock media immediately, before asynchronous native disk cleanup or
     // remote refresh-token revocation completes.
     clearRecordingAudioCache();
+    clearIceServerCache();
     setAuthToken(null);
     setSigningOut(true);
     credsRef.current = null;
@@ -168,8 +200,8 @@ export function useStoredCreds() {
  * (e.g. legacy sessions or email-only sign-in before this fix).
  * Persists the resolved value back into Store so subsequent calls are instant.
  */
-const SUPABASE_URL_DEF = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
-const SUPABASE_ANON_DEF = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
+const SUPABASE_URL_DEF = BACKEND_URL;
+const SUPABASE_ANON_DEF = BACKEND_ANON_KEY;
 
 export async function fetchOrganizationIdForUser(accessToken: string, userId: string): Promise<string | null> {
   if (!accessToken || !userId) return null;

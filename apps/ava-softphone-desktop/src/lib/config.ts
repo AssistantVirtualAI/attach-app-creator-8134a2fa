@@ -1,3 +1,4 @@
+import { BACKEND_URL, BACKEND_ANON_KEY } from './backendOrigin';
 /**
  * Lemtel AI Phone Desktop — runtime config & backend wiring.
  *
@@ -9,10 +10,8 @@
 /* ---------- Supabase backend ---------- */
 export const BACKEND = {
   projectRef: 'gejxisrqtvxavbrfcoxz',
-  url: 'https://gejxisrqtvxavbrfcoxz.supabase.co',
-  anonKey:
-    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo',
+  url: BACKEND_URL,
+  anonKey: BACKEND_ANON_KEY,
 } as const;
 
 /* ---------- Database tables (read via PostgREST / SDK) ---------- */

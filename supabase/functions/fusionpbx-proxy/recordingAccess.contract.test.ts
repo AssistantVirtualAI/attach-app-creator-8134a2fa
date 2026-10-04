@@ -12,7 +12,7 @@ function slice(from: string, to: string): string {
 }
 
 const helper = slice("async function canReadCallRecording(", "function getPbxFileBases()");
-const getRec = slice('if (action === "get-recording") {', "const probeUrls");
+const getRec = slice('if (action === "get-recording") {', 'required" }, 400);') + 'required" }, 400);';
 const signed = slice('if (action === "get-recording-signed-url") {', "const selfRes = await fetch");
 const FORBID = 'return json({ error: "Forbidden", message: "Recording is outside the signed-in user extension scope" }, 403);';
 

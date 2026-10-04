@@ -57,7 +57,7 @@ describe("Lemtel Phase 29B — Mobile recording audio authority", () => {
     expect(helper).toContain('.eq("portal_user_id", userId)');
     expect(helper).toContain('.eq("organization_id", record.organization_id)');
     expect(helper).toContain('.eq("extension", recordExtension)');
-    const getRec = block(s, 'if (action === "get-recording") {', "const probeUrls");
+    const getRec = block(s, 'if (action === "get-recording") {', 'required" }, 400);');
     const signed = block(s, 'if (action === "get-recording-signed-url") {', "const selfRes = await fetch");
     expect(getRec).toContain("if (!(await canReadCallRecording(xml_cdr_uuid ? String(xml_cdr_uuid) : null)))");
     expect(signed).toContain("if (!(await canReadCallRecording(signedXmlCdrUuid ? String(signedXmlCdrUuid) : null)))");

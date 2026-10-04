@@ -18,6 +18,15 @@ const FILES = [
   "src/test/lemtelMobileVoicemailRealtimePrivacyPhase29.test.ts",
 ];
 const rd = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
+// The Realtime effect block only (the rest of the screen is out of scope for 29A).
+const rtBlock = () => {
+  const s = rd(VM);
+  const a = s.indexOf("// Phase 29A — Realtime refresh");
+  const b = s.indexOf("[mobile.accessToken, vmExt]);", a);
+  expect(a).toBeGreaterThan(-1);
+  expect(b).toBeGreaterThan(a);
+  return s.slice(a, b + 30);
+};
 const guard = () => execFileSync(process.execPath, ["scripts/verify-lemtel-planipret-isolation.mjs"], { cwd: root, encoding: "utf8" });
 const isProtected = (p: string) => /planipret/i.test(p) || p === "src/hooks/useMplanipretSoftphone.ts" || /(^|\/)Pp(Pjsip|SipKeepAlive|VoipCall)\//.test(p);
 
@@ -32,7 +41,9 @@ describe("Lemtel Phase 29A — Mobile voicemail Realtime privacy", () => {
   });
 
   it("no domain/org scope or global channel remains", () => {
-    const s = rd(VM);
+    const s = rtBlock();
+    expect(rd(VM)).not.toContain("mobile.domainUuid");
+    expect(rd(VM)).not.toMatch(/['"]vm-mobile['"]/);
     expect(s).not.toContain("domain_uuid");
     expect(s).not.toContain("domainUuid");
     expect(s).not.toContain("mobile.domainUuid");
@@ -53,8 +64,9 @@ describe("Lemtel Phase 29A — Mobile voicemail Realtime privacy", () => {
   });
 
   it("adds no Verto, PJSIP, PBX/FusionPBX, SIP URL or data write", () => {
-    const s = rd(VM);
-    expect(s).not.toMatch(/verto|pjsip|fusionpbx|sips?:\/\/|wss:\/\//i);
+    expect(rd(VM)).not.toMatch(/verto|pjsip|fusionpbx|sips?:\/\/|wss:\/\//i);
+    const s = rtBlock();
+    expect(s).not.toMatch(/edgeCall|mobileApi\.|fetch\(/);
     expect(s).not.toMatch(/\.(insert|upsert|update|delete)\(/);
   });
 

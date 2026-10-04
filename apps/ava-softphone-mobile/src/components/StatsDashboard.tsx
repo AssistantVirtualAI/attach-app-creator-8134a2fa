@@ -73,7 +73,7 @@ export default function StatsDashboard() {
         try {
           const [c, r, v, th] = await Promise.all([
             mobileApi.calls({ rangeDays: 30, limit: 500 }).catch(() => [] as CallRecord[]),
-            mobileApi.recordings(undefined, { rangeDays: 30 }).catch(() => [] as RecordingEntry[]),
+            mobileApi.recordings({ rangeDays: 30 }).catch(() => [] as RecordingEntry[]),
             mobileApi.voicemails().catch(() => [] as VoicemailEntry[]),
             mobileApi.threads().catch(() => [] as SmsThread[]),
           ]);

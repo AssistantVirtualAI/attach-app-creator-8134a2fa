@@ -1,5 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
+import { LEGACY_CONTACTS_ENABLED } from './contactScope';
+import { hasConsent } from './contactsConsent';
 
 function safeStringify(v: any): string {
   try { return JSON.stringify(v); } catch { return String(v); }
@@ -156,9 +158,9 @@ export async function requestPermissionsAfterLogin(): Promise<void> {
     await log('STEP E: skipping microphone on Android');
   }
 
-  // STEP F: Contacts (iOS only)
+  // STEP F: Contacts (iOS only, after the historical in-app consent).
   await log('STEP F: contacts check', { platform });
-  if (platform === 'ios') {
+  if (platform === 'ios' && LEGACY_CONTACTS_ENABLED && await hasConsent()) {
     try {
       await log('STEP F: importing Contacts');
       const { Contacts } = await import('@capacitor-community/contacts');
@@ -169,7 +171,7 @@ export async function requestPermissionsAfterLogin(): Promise<void> {
       await log('STEP F: contacts FAILED', { error: String(e), ctx });
     }
   } else {
-    await log('STEP F: skipping contacts on Android');
+    await log('STEP F: skipping contacts (platform, backend or in-app consent)');
   }
 
   // Save flag

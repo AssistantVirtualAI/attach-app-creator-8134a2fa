@@ -6,6 +6,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import PermissionSoftPrompt from './PermissionSoftPrompt';
 import PermissionBlockedScreen from './PermissionBlockedScreen';
 import type { PermKey, PermState } from '../lib/permissionState';
+import { LEGACY_CONTACTS_ENABLED } from '../lib/contactScope';
 
 interface PermissionGateProps {
   onComplete: () => void;
@@ -13,7 +14,9 @@ interface PermissionGateProps {
 
 type Step = 'intro' | PermKey | 'done';
 
-const ORDER: PermKey[] = ['microphone', 'contacts', 'notifications'];
+const ORDER: PermKey[] = LEGACY_CONTACTS_ENABLED
+  ? ['microphone', 'contacts', 'notifications']
+  : ['microphone', 'notifications'];
 
 /**
  * Just-in-time onboarding gate — Apple 5.1.1 + Google UX compliant.
@@ -76,7 +79,7 @@ export default function PermissionGate({ onComplete }: PermissionGateProps) {
   if (step === 'intro') {
     const rows = [
       { icon: '🎤', label: fr ? 'Microphone' : 'Microphone', hint: fr ? 'pour passer des appels' : 'to make calls' },
-      { icon: '👥', label: 'Contacts', hint: fr ? 'optionnel' : 'optional' },
+      ...(LEGACY_CONTACTS_ENABLED ? [{ icon: '👥', label: 'Contacts', hint: fr ? 'optionnel' : 'optional' }] : []),
       { icon: '🔔', label: 'Notifications', hint: fr ? 'optionnel' : 'optional' },
     ];
     return (

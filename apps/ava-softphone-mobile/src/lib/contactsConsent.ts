@@ -12,6 +12,7 @@
  */
 import { Preferences } from '@capacitor/preferences';
 import { supabase } from './mobileSupabase';
+import { LEGACY_CONTACTS_ENABLED } from './contactScope';
 
 const KEY = 'contacts_consent_v1';
 
@@ -24,6 +25,7 @@ export interface ConsentRecord {
 let cached: ConsentRecord | null | undefined;
 
 export async function loadConsent(): Promise<ConsentRecord | null> {
+  if (!LEGACY_CONTACTS_ENABLED) return null;
   if (cached !== undefined) return cached;
   try {
     const { value } = await Preferences.get({ key: KEY });
@@ -35,10 +37,12 @@ export async function loadConsent(): Promise<ConsentRecord | null> {
 }
 
 export function getConsentSync(): ConsentRecord | null {
+  if (!LEGACY_CONTACTS_ENABLED) return null;
   return cached ?? null;
 }
 
 export function hasConsentSync(): boolean {
+  if (!LEGACY_CONTACTS_ENABLED) return false;
   return !!cached?.given;
 }
 
@@ -48,6 +52,7 @@ export async function hasConsent(): Promise<boolean> {
 }
 
 export async function setConsent(given: boolean): Promise<void> {
+  if (!LEGACY_CONTACTS_ENABLED) return;
   const rec: ConsentRecord = { given, timestamp: new Date().toISOString(), version: '1.0' };
   cached = rec;
   try {
@@ -56,6 +61,7 @@ export async function setConsent(given: boolean): Promise<void> {
 }
 
 export async function revokeConsent(): Promise<void> {
+  if (!LEGACY_CONTACTS_ENABLED) return;
   cached = null;
   try {
     await Preferences.remove({ key: KEY });
@@ -69,6 +75,7 @@ export async function revokeConsent(): Promise<void> {
  * Called from "Delete my contacts from our servers" in Settings.
  */
 export async function deleteServerContacts(userId?: string | null): Promise<{ ok: boolean; error?: string }> {
+  if (!LEGACY_CONTACTS_ENABLED) return { ok: false, error: 'lemtel-contacts-service-not-configured' };
   try {
     let q = supabase.from('org_contacts' as any).delete().eq('source', 'device');
     if (userId) q = q.eq('owner_user_id', userId);

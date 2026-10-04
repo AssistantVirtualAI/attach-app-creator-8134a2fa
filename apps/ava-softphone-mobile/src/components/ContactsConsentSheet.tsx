@@ -10,6 +10,7 @@ import { Capacitor } from '@capacitor/core';
 import { colors, font } from '../lib/theme';
 import { setConsent } from '../lib/contactsConsent';
 import { useT } from '../lib/i18n';
+import { LEGACY_CONTACTS_ENABLED } from '../lib/contactScope';
 
 interface Props {
   open: boolean;
@@ -19,7 +20,7 @@ interface Props {
 export default function ContactsConsentSheet({ open, onClose }: Props) {
   const { tx } = useT();
   const [busy, setBusy] = useState(false);
-  if (!open) return null;
+  if (!open || !LEGACY_CONTACTS_ENABLED) return null;
 
   const t = {
     title: tx('Accès à vos contacts', 'Access to your contacts'),

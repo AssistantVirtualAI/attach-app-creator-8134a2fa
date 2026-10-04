@@ -5,6 +5,7 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { hasConsent, hasConsentSync } from './contactsConsent';
+import { LEGACY_CONTACTS_ENABLED } from './contactScope';
 
 export interface PhoneEntry { number: string; label?: string }
 export interface DeviceContact {
@@ -20,6 +21,8 @@ export interface DeviceContact {
 const CACHE_KEY = 'lemtel-device-contacts';
 
 export async function syncDeviceContacts(): Promise<DeviceContact[]> {
+  // Must precede plugin loading, consent, permissions and legacy cache reads.
+  if (!LEGACY_CONTACTS_ENABLED) return [];
   if (!Capacitor.isNativePlatform()) return [];
   // App Store 5.1.2: never read the device address book unless the user has
   // given explicit in-app consent via the ContactsConsentSheet.
@@ -59,6 +62,7 @@ export async function syncDeviceContacts(): Promise<DeviceContact[]> {
 }
 
 export function loadCachedContacts(): DeviceContact[] {
+  if (!LEGACY_CONTACTS_ENABLED) return [];
   try {
     const raw = sessionStorage.getItem(CACHE_KEY);
     const list: any[] = raw ? JSON.parse(raw) : [];
@@ -73,6 +77,7 @@ export function loadCachedContacts(): DeviceContact[] {
 }
 
 export function searchContacts(query: string, contacts?: DeviceContact[]): DeviceContact[] {
+  if (!LEGACY_CONTACTS_ENABLED) return [];
   const pool = contacts || loadCachedContacts();
   if (!query) return pool.slice(0, 50);
   const q = query.toLowerCase().replace(/\s+/g, '');

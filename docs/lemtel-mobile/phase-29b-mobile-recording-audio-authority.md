@@ -14,3 +14,6 @@ Le service-role interne reste le seul contournement (tâches backend existantes,
 
 ## Inchangé
 PBX, SIP, politique du portail, migrations, Desktop, autres actions du proxy.
+
+## Phase 29B.1 — métadonnées autoritaires côté serveur
+La Phase 29B.1 élimine la confiance résiduelle dans les métadonnées PBX envoyées par l'utilisateur. Le client ne peut fournir que l'identifiant de demande du CDR, jamais le chemin réel de lecture : après autorisation, le serveur remplace (sans fusion) chemin, nom, domaine, date, URL locale, organisation et identifiant par ceux du CDR validé. L'auto-appel service-role de `get-recording-signed-url` reçoit uniquement ces métadonnées serveur pour un utilisateur, et l'audit prend organisation et identifiant de ressource du CDR autorisé. Le service-role interne demeure le seul chemin historique compatible, non exposé au client.

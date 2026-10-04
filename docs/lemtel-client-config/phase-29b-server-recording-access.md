@@ -8,3 +8,8 @@ Actions concernées : `get-recording`, `get-recording-signed-url` (fonction `fus
 4. Rôles administratifs, appartenance à l'organisation, et `organization_id` / `domain_uuid` / `domain_name` / `record_path` / `record_name` / `local_recording_url` / extension envoyés par le client n'accordent jamais l'accès.
 
 La configuration du portail ne peut jamais contourner cette portée extension par extension.
+
+## Phase 29B.1
+5. Le client ne fournit que l'identifiant de demande du CDR. Après autorisation, le serveur remplace les paramètres de lecture par le CDR validé (`pbx_uuid`/`id`, `recording_path`, `recording_name`, `domain_uuid`, `domain_name`, `start_at`, `recording_url`, `organization_id`); toute valeur client est ignorée, jamais fusionnée.
+6. L'auto-appel service-role signed URL reçoit uniquement ces métadonnées serveur pour un utilisateur; l'audit utilise l'organisation et l'identifiant du CDR autorisé.
+7. Le service-role interne demeure le seul chemin historique compatible, non exposé au client.

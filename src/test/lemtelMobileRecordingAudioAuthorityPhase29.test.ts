@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-// Phase 29B — server authority on Mobile recording audio. Read-only checks;
+// Phase 29B / 29B.1 — server authority on Mobile recording audio. Read-only checks;
 // no Git range comparison, no untracked file reads.
 const root = path.resolve(__dirname, "../..");
 const PROXY = "supabase/functions/fusionpbx-proxy/index.ts";
@@ -51,16 +51,32 @@ describe("Lemtel Phase 29B — Mobile recording audio authority", () => {
 
   it("proxy audio actions share the strict extension check; admin bypass gone from the helper", () => {
     const s = rd(PROXY);
-    const helper = block(s, "async function canReadCallRecording(", "function getPbxFileBases()");
+    const helper = block(s, "async function resolveAuthorizedRecording(", "function serverRecordingParams(");
     expect(helper).not.toMatch(/is_lemtel_admin|org_members|is_lemtel_member/);
-    expect(helper).toContain("if (isServiceCall) return true;");
+    expect(helper).toContain("if (isServiceCall) return { allowed: true, record: null };");
     expect(helper).toContain('.eq("portal_user_id", userId)');
     expect(helper).toContain('.eq("organization_id", record.organization_id)');
     expect(helper).toContain('.eq("extension", recordExtension)');
+    expect(helper.match(/allowed: true/g)?.length).toBe(2);
     const getRec = block(s, 'if (action === "get-recording") {', 'required" }, 400);');
     const signed = block(s, 'if (action === "get-recording-signed-url") {', "const selfRes = await fetch");
-    expect(getRec).toContain("if (!(await canReadCallRecording(xml_cdr_uuid ? String(xml_cdr_uuid) : null)))");
-    expect(signed).toContain("if (!(await canReadCallRecording(signedXmlCdrUuid ? String(signedXmlCdrUuid) : null)))");
+    expect(getRec).toContain("if (!recAccess.allowed)");
+    expect(signed).toContain("if (!signedAccess.allowed)");
+  });
+
+  it("29B.1 — no confused deputy: user read params are replaced by the server CDR", () => {
+    const s = rd(PROXY);
+    const norm = block(s, "function serverRecordingParams(", "function getPbxFileBases()");
+    expect(norm).not.toMatch(/params|body|await|admin\./);
+    const getRec = block(s, 'if (action === "get-recording") {', 'required" }, 400);');
+    const userBranch = getRec.slice(getRec.indexOf("} else {"), getRec.indexOf("const { record_path"));
+    expect(userBranch).toContain("recordingParams = serverRecordingParams(recAccess.record);");
+    expect(userBranch).not.toMatch(/clientParams/);
+    expect(getRec).not.toMatch(/clientParams\.(record_|recording_|domain_|recorded_at|start_at|local_recording_url|organization_id)/);
+    const signed = block(s, 'if (action === "get-recording-signed-url") {', "const selfRes = await fetch");
+    expect(signed).toContain('{ action: "get-recording", organization_id: userReadParams.organization_id, params: userReadParams }');
+    expect(signed).not.toMatch(/params: signedParams|params: params/);
+    expect(getRec).toContain("if (isServiceCall) {");
   });
 
   it("phase files add no Verto, PJSIP, endpoint, migration, SIP URL or credential", () => {

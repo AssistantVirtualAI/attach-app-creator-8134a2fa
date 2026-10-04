@@ -1,6 +1,6 @@
 /**
  * Lemtel Phase 25A — the portal voicemailPolicy is the sole authority on greeting
- * configuration. Local mocks only: no network, no call, no write, no env, no secret.
+ * configuration. Local mocks only: no network, no call, no write, no env, no credential.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';

@@ -14,7 +14,9 @@ Des tests à `fetch` entièrement simulé vérifient que :
 - Mobile conserve cette origine pour `restGet`, `restPost` et `edgeCall`, avec la même clé publique; un appel Edge sans session ne réutilise pas de Bearer précédent.
 - Les suites existantes de `backendOrigin` continuent à refuser une origine HTTP, non nue ou une nouvelle origine sans clé publishable distincte. Le mode historique par défaut reste inchangé; aucune valeur de production Hostinger ou DigitalOcean n’est introduite dans les builds.
 
-**Validation locale :** typage Desktop et mobile réussis; suites complètes Desktop **173/173**, mobile **242 réussis, 3 ignorés**. Les appels réseau et identifiants de tests sont synthétiques. La CI de PR doit confirmer séparément ces résultats.
+Les tests de composition injectent également une origine HTTPS **fictive** et sa clé publique de test au module de configuration : les routes Desktop et mobile continuent à viser cette unique origine. La validation de la paire de variables de build reste couverte séparément par `backendOrigin.test.ts` ; changer `import.meta.env` après l’import n’est pas un substitut à un nouveau build.
+
+**Validation locale :** typage Desktop et mobile réussis; suites complètes Desktop **175/175**, mobile **243 réussis, 3 ignorés**. Les appels réseau et identifiants de tests sont synthétiques. La CI de PR doit confirmer séparément ces résultats.
 
 ## Reste bloqué
 

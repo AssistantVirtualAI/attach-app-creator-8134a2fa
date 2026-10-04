@@ -34,4 +34,24 @@ describe('Phase 31I — résolution des routes Desktop (réseau simulé)', () =>
     }));
     for (const [value] of vi.mocked(fetch).mock.calls) expect(new URL(String(value)).origin).toBe(BACKEND.url);
   });
+
+  it('ne revient pas à l’origine historique pour Edge ou REST avec un build isolé', async () => {
+    vi.doMock('./backendOrigin', () => ({
+      BACKEND_URL: 'https://self-hosted.example', BACKEND_ANON_KEY: 'sb_publishable_synthetic',
+    }));
+    vi.resetModules();
+    try {
+      const { ava: customAva, setAuthToken: setCustomToken } = await import('./avaApi');
+      setCustomToken('synthetic-jwt');
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) } as Response)
+        .mockResolvedValueOnce({ ok: true, json: async () => [] } as Response);
+      await customAva.systemStatus();
+      await customAva.devices();
+      expect(vi.mocked(fetch).mock.calls.map(([value]) => String(value))).toEqual([
+        'https://self-hosted.example/functions/v1/fusionpbx-proxy',
+        'https://self-hosted.example/rest/v1/pbx_devices?select=*&order=label.asc',
+      ]);
+    } finally { vi.doUnmock('./backendOrigin'); vi.resetModules(); }
+  });
 });

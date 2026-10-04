@@ -27,4 +27,20 @@ describe('Phase 31I — routes Edge du Desktop (réseau simulé)', () => {
     await expect(fetchSoftphoneCredentials('synthetic-jwt')).rejects.toThrow('softphone-credentials 403');
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('utilise la paire origine/clé distincte dans un build auto-hébergé de test', async () => {
+    vi.doMock('./backendOrigin', () => ({
+      BACKEND_URL: 'https://self-hosted.example', BACKEND_ANON_KEY: 'sb_publishable_synthetic',
+    }));
+    vi.resetModules();
+    try {
+      const custom = await import('./config');
+      vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ extension: '302', password: 'mock-only' }) } as Response);
+      expect(custom.BACKEND.url).toBe('https://self-hosted.example');
+      await custom.fetchSoftphoneCredentials('synthetic-jwt');
+      expect(fetch).toHaveBeenCalledWith('https://self-hosted.example/functions/v1/softphone-credentials', expect.objectContaining({
+        headers: expect.objectContaining({ apikey: 'sb_publishable_synthetic', Authorization: 'Bearer synthetic-jwt' }),
+      }));
+    } finally { vi.doUnmock('./backendOrigin'); vi.resetModules(); }
+  });
 });

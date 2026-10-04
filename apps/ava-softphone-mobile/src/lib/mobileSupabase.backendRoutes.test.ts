@@ -41,4 +41,21 @@ describe('Phase 31I — routes backend mobile (réseau simulé)', () => {
     const [, options] = mock.fetch.mock.calls[0];
     expect(options.headers).toEqual({ 'Content-Type': 'application/json', apikey: SUPABASE_ANON });
   });
+
+  it('conserve la nouvelle clé publique et l’origine isolée pour REST et Edge', async () => {
+    vi.doMock('./backendOrigin', () => ({
+      BACKEND_URL: 'https://self-hosted.example', BACKEND_ANON_KEY: 'sb_publishable_synthetic',
+      BACKEND_STORAGE_SUFFIX: ':synthetic',
+    }));
+    vi.resetModules();
+    try {
+      const custom = await import('./mobileSupabase');
+      await custom.restGet('/rest/v1/pbx_call_records?select=id', 'synthetic-jwt');
+      await custom.edgeCall('ai-analyze-call', 'synthetic-jwt', { call_record_id: 'synthetic-cdr' });
+      expect(mock.fetch.mock.calls.map(([url, options]) => [String(url), options.headers.apikey])).toEqual([
+        ['https://self-hosted.example/rest/v1/pbx_call_records?select=id', 'sb_publishable_synthetic'],
+        ['https://self-hosted.example/functions/v1/ai-analyze-call', 'sb_publishable_synthetic'],
+      ]);
+    } finally { vi.doUnmock('./backendOrigin'); vi.resetModules(); }
+  });
 });

@@ -10,6 +10,7 @@ import { hasConsent, loadConsent } from '../lib/contactsConsent';
 import ContactsConsentSheet from '../components/ContactsConsentSheet';
 import { usePermissions } from '../hooks/usePermissions';
 import PermissionBlockedScreen from '../components/PermissionBlockedScreen';
+import { LEGACY_CONTACTS_ENABLED } from '../lib/contactScope';
 
 
 export default function DialerScreen({ sp, haptic, preferClickToCall: _preferClickToCall = false }: { sp: any; haptic: (s?: ImpactStyle) => Promise<void>; preferClickToCall?: boolean }) {
@@ -25,7 +26,7 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
   const [contactsBusy, setContactsBusy] = useState(false);
   const [contactsQuery, setContactsQuery] = useState('');
   const [consentOpen, setConsentOpen] = useState(false);
-  useEffect(() => { loadConsent().catch(() => {}); }, []);
+  useEffect(() => { if (LEGACY_CONTACTS_ENABLED) loadConsent().catch(() => {}); }, []);
 
   const status: string = sp.sipStatus || sp.snap?.status || 'connecting';
   const sipError: string = sp.sipError || sp.snap?.error || '';
@@ -77,6 +78,7 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
   // Just-in-time contacts permission. Called only after the user taps
   // "Continue" in the pre-permission sheet (Apple Guideline 5.1.1).
   const grantAndOpenContacts = async () => {
+    if (!LEGACY_CONTACTS_ENABLED) return;
     setContactsBusy(true);
     try {
       let granted = true;
@@ -106,6 +108,7 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
   };
 
   const openContactsFlow = async () => {
+    if (!LEGACY_CONTACTS_ENABLED) return;
     await haptic(ImpactStyle.Light);
     // App Store 5.1.2: require our own consent screen before iOS prompt.
     if (!(await hasConsent())) { setConsentOpen(true); return; }
@@ -165,11 +168,11 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
         </div>
         <Dialpad onPress={(d) => { haptic(ImpactStyle.Light); setNum((n) => n + d); }} onLongPressZero={() => setNum((n) => n.slice(0, -1) + '+')} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-evenly', padding: '16px 24px 8px' }}>
-          <button
+          {LEGACY_CONTACTS_ENABLED && <button
             className="dialer-contacts-btn"
             aria-label="Contacts"
             onClick={openContactsFlow}
-          >👤</button>
+          >👤</button>}
           <button
             className="dialer-call-orb"
             disabled={!num || dialing || !isRegistered || micStatus === 'blocked'}
@@ -188,7 +191,7 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
       )}
 
       {/* Contacts pre-permission sheet — single "Continue" action per Apple 5.1.1 */}
-      {contactsPrePrompt && (
+      {LEGACY_CONTACTS_ENABLED && contactsPrePrompt && (
         <div role="dialog" aria-modal="true" style={sheetBackdrop}>
           <div style={sheetCard}>
             <div style={{ fontSize: 44, textAlign: 'center', marginBottom: 8 }}>👥</div>
@@ -269,7 +272,7 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
         </div>
       )}
       <ContactsConsentSheet
-        open={consentOpen}
+        open={LEGACY_CONTACTS_ENABLED && consentOpen}
         onClose={(result) => {
           setConsentOpen(false);
           if (result === 'allowed') {

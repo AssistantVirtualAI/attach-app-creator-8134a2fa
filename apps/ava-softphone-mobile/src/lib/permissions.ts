@@ -6,6 +6,7 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { CapacitorPjsip } from './sip/nativeSipProvider';
+import { LEGACY_CONTACTS_ENABLED } from './contactScope';
 
 export type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'unsupported';
 
@@ -82,6 +83,7 @@ export async function unlockAudioOutput(): Promise<PermissionStatus> {
 
 /** Contacts permission via @capacitor-community/contacts. */
 export async function requestContacts(): Promise<PermissionStatus> {
+  if (!LEGACY_CONTACTS_ENABLED) return 'unsupported';
   if (!Capacitor.isNativePlatform()) return 'unsupported';
   // App Store 5.1.2: NEVER trigger the iOS contacts prompt automatically.
   // The prompt is only requested from ContactsConsentSheet after the user
@@ -166,7 +168,7 @@ export async function checkAllPermissions(): Promise<AllPermissions> {
   const perms: AllPermissions = {
     microphone: 'prompt',
     speaker: 'granted', // playback never gated
-    contacts: 'prompt',
+    contacts: LEGACY_CONTACTS_ENABLED ? 'prompt' : 'unsupported',
     notifications: 'prompt',
     camera: 'prompt',
   };
@@ -208,7 +210,7 @@ export async function checkAllPermissions(): Promise<AllPermissions> {
   }
 
   // Contacts (native only).
-  if (Capacitor.isNativePlatform()) {
+  if (LEGACY_CONTACTS_ENABLED && Capacitor.isNativePlatform()) {
     try {
       const { Contacts } = await import('@capacitor-community/contacts');
       const res = await Contacts.checkPermissions();

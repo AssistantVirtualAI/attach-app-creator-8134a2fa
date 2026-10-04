@@ -11,6 +11,7 @@ import ContactsSyncCard from '../components/ContactsSyncCard';
 import NumberPickerSheet, { NumberOption } from '../components/NumberPickerSheet';
 import { dialNumber } from '../lib/dialNumber';
 import { useT } from '../lib/i18n';
+import { LEGACY_CONTACTS_ENABLED } from '../lib/contactScope';
 
 
 type Kind = 'domain' | 'manual' | 'mobile';
@@ -32,7 +33,7 @@ export default function ContactsScreen({ sp }: { sp: any }) {
   const [error, setError] = useState<string | null>(null);
   const [picker, setPicker] = useState<{ title: string; options: NumberOption[] } | null>(null);
   const [consentOpen, setConsentOpen] = useState(false);
-  useEffect(() => { loadConsent().catch(() => {}); }, []);
+  useEffect(() => { if (LEGACY_CONTACTS_ENABLED) loadConsent().catch(() => {}); }, []);
 
 
 
@@ -108,10 +109,12 @@ export default function ContactsScreen({ sp }: { sp: any }) {
     if (!mobile.accessToken || (!mobile.domainUuid && !mobile.organizationId)) { setContacts([]); return; }
     let cancelled = false;
     // Only touch the device address book if the user has already consented.
-    (async () => {
-      if (await hasConsent()) syncDeviceContacts().then(() => loadContacts()).catch(() => {});
-      else setConsentOpen(true);
-    })();
+    if (LEGACY_CONTACTS_ENABLED) {
+      (async () => {
+        if (await hasConsent()) syncDeviceContacts().then(() => loadContacts()).catch(() => {});
+        else setConsentOpen(true);
+      })();
+    }
 
     loadContacts().then(() => !cancelled && setError(null)).catch((e) => {
       if (!cancelled) { setContacts([]); setError(e?.message || 'Échec du chargement des contacts'); }
@@ -148,12 +151,18 @@ export default function ContactsScreen({ sp }: { sp: any }) {
     <div style={{ height: '100%', overflow: 'auto', padding: '14px 14px 24px' }}>
       <SectionTitle eyebrow={mobile.sipDomain || 'Répertoire'} title="Personnes" right={<button onClick={() => setAddOpen(true)} style={{ width: 34, height: 34, borderRadius: 17, border: `1px solid ${colors.border}`, background: 'rgba(255,255,255,0.06)', color: colors.textIce, display: 'grid', placeItems: 'center' }}><Plus size={16} /></button>} />
       <ContactsSyncCard />
+      {!LEGACY_CONTACTS_ENABLED && (
+        <div style={{ marginBottom: 12, fontSize: font.xs, color: colors.mutedSilver }}>
+          {fr ? 'Le carnet du téléphone n’est pas accessible sur ce serveur Lemtel. Les extensions et contacts saisis manuellement restent disponibles.'
+            : 'The phone address book is not available on this Lemtel server. Extensions and manually added contacts remain available.'}
+        </div>
+      )}
       <div style={{ position: 'relative', marginBottom: 12 }}>
         <Search size={16} color={colors.mutedSilver} style={{ position: 'absolute', left: 12, top: 13 }} />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un nom ou une extension" style={{ width: '100%', height: 42, boxSizing: 'border-box', padding: '0 14px 0 36px', borderRadius: radius.lg, background: 'rgba(255,255,255,0.06)', border: `1px solid ${colors.border}`, color: colors.textIce, fontSize: 14, outline: 'none' }} />
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, overflowX: 'auto', paddingBottom: 2 }}>
-        {(['all', 'domain', 'mobile', 'manual'] as const).map((k) => {
+        {(['all', 'domain', ...(LEGACY_CONTACTS_ENABLED ? ['mobile'] : []), 'manual'] as ('all' | Kind)[]).map((k) => {
           const label = k === 'all' ? 'Tous' : k === 'domain' ? 'Mon domaine' : k === 'mobile' ? 'Mobile' : 'Manuel';
           return <button key={k} onClick={() => setSelectedKind(k)} style={{ flexShrink: 0, padding: '7px 10px', borderRadius: 999, border: `1px solid ${selectedKind === k ? colors.lemtelBlue : colors.border}`, background: selectedKind === k ? 'rgba(0,35,230,0.22)' : 'rgba(255,255,255,0.04)', color: selectedKind === k ? colors.textIce : colors.mutedSilver, fontSize: 12, fontWeight: 800 }}>{label}</button>;
         })}
@@ -199,7 +208,7 @@ export default function ContactsScreen({ sp }: { sp: any }) {
       {addOpen && <AddContactSheet value={newContact} setValue={setNewContact} onClose={() => setAddOpen(false)} onSave={addContact} />}
       {picker && <NumberPickerSheet title={picker.title} options={picker.options} onPick={(n) => dialNumber(sp, n)} onClose={() => setPicker(null)} />}
       <ContactsConsentSheet
-        open={consentOpen}
+        open={LEGACY_CONTACTS_ENABLED && consentOpen}
         onClose={(result) => {
           setConsentOpen(false);
           if (result === 'allowed') syncDeviceContacts().then(() => loadContacts()).catch(() => {});

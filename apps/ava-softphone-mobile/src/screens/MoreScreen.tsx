@@ -2,7 +2,7 @@ import React, { useState, Suspense, lazy } from 'react';
 import type { ImpactStyle } from '@capacitor/haptics';
 import { colors, font } from '../lib/theme';
 import { deleteServerContacts, revokeConsent } from '../lib/contactsConsent';
-
+import { LEGACY_CONTACTS_ENABLED } from '../lib/contactScope';
 import type { Creds } from '../lib/creds';
 import { Card, SectionTitle, SettingsRow } from '../components/ui/Primitives';
 import { LemtelMark, AvaBadge } from '../components/Brand';
@@ -96,6 +96,7 @@ export default function MoreScreen({
       <Card padded={false}>
         <SettingsRow label={tr.more.signOut} icon="⎋" onPress={onSignOut} />
         <SettingsRow label={tr.more.deleteAccount} icon="🗑" onPress={() => setSub('delete')} />
+        {LEGACY_CONTACTS_ENABLED && (
         <SettingsRow
           label={tx('Supprimer mes contacts du serveur', 'Delete my contacts from server')}
           icon="🧹"
@@ -114,6 +115,7 @@ export default function MoreScreen({
             );
           }}
         />
+        )}
       </Card>
 
 

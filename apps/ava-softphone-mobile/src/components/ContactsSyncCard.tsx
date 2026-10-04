@@ -4,6 +4,7 @@ import { colors, font, radius } from '../lib/theme';
 import { Card } from './ui/Primitives';
 import { getLastSync, runContactsSync, type SyncReport } from '../lib/contactsSync';
 import { useT } from '../lib/i18n';
+import { BACKEND_URL, LEGACY_BACKEND_URL } from '../lib/backendOrigin';
 
 function fmtAgo(at: number | null, fr: boolean): string {
   if (!at) return fr ? 'jamais' : 'never';
@@ -37,6 +38,7 @@ export default function ContactsSyncCard() {
   };
 
   const native = Capacitor.isNativePlatform();
+  const serviceAvailable = BACKEND_URL === LEGACY_BACKEND_URL;
 
   return (
     <Card padded={true} accent="blue" style={{ marginBottom: 12 }}>
@@ -59,13 +61,13 @@ export default function ContactsSyncCard() {
         </div>
         <button
           onClick={onSync}
-          disabled={busy || !native}
+          disabled={busy || !native || !serviceAvailable}
           style={{
             padding: '8px 14px', borderRadius: radius.md,
             background: busy ? 'rgba(255,255,255,0.08)' : colors.lemtelBlue,
             color: '#fff', border: 'none',
-            fontSize: 12, fontWeight: 700, cursor: busy || !native ? 'not-allowed' : 'pointer',
-            opacity: native ? 1 : 0.5,
+            fontSize: 12, fontWeight: 700, cursor: busy || !native || !serviceAvailable ? 'not-allowed' : 'pointer',
+            opacity: native && serviceAvailable ? 1 : 0.5,
           }}
         >
           {busy ? (fr ? 'Sync…' : 'Syncing…') : (fr ? 'Synchroniser' : 'Sync now')}
@@ -74,6 +76,12 @@ export default function ContactsSyncCard() {
       {!native && (
         <div style={{ marginTop: 8, fontSize: 11, color: colors.mutedSilver }}>
           {fr ? 'Disponible uniquement sur l\'app mobile.' : 'Available only on the mobile app.'}
+        </div>
+      )}
+      {!serviceAvailable && (
+        <div style={{ marginTop: 8, fontSize: 11, color: colors.mutedSilver }}>
+          {fr ? 'La synchronisation serveur des contacts n’est pas encore configurée pour Lemtel.'
+            : 'Server contact sync is not yet configured for Lemtel.'}
         </div>
       )}
       {report && (

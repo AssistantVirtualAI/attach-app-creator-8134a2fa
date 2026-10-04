@@ -9,6 +9,7 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { requestMicrophone, requestContacts, requestNotifications, openAppSettings } from './permissions';
+import { LEGACY_CONTACTS_ENABLED } from './contactScope';
 
 export type PermKey = 'microphone' | 'contacts' | 'notifications';
 export type PermState = 'unknown' | 'granted' | 'denied' | 'blocked' | 'unavailable';
@@ -47,6 +48,7 @@ export async function markMicrophoneAsked(): Promise<void> { await markAsked('mi
  * Web: `navigator.permissions.query`.
  */
 export async function getPermState(key: PermKey): Promise<PermState> {
+  if (key === 'contacts' && !LEGACY_CONTACTS_ENABLED) return 'unavailable';
   const native = Capacitor.isNativePlatform();
   if (!native) return webCheck(key);
 
@@ -109,6 +111,7 @@ async function webCheck(key: PermKey): Promise<PermState> {
  * the dialog silently (permanent denial).
  */
 export async function requestPerm(key: PermKey): Promise<PermState> {
+  if (key === 'contacts' && !LEGACY_CONTACTS_ENABLED) return 'unavailable';
   await markAsked(key);
   let raw: string = 'denied';
   try {

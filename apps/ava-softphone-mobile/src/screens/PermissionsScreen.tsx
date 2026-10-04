@@ -3,6 +3,7 @@ import { colors, font } from '../lib/theme';
 import { Card, SectionTitle, PrimaryButton, GhostButton } from '../components/ui/Primitives';
 import { checkAllPermissions, requestAllPermissions } from '../lib/permissions';
 import { useT } from '../lib/i18n';
+import { LEGACY_CONTACTS_ENABLED } from '../lib/contactScope';
 
 type PermMap = Record<string, string>;
 
@@ -21,11 +22,11 @@ export default function PermissionsScreen() {
   const rows: { key: string; label: string; why: string }[] = fr ? [
     { key: 'microphone',    label: 'Microphone',    why: 'Indispensable pour la voix bidirectionnelle pendant les appels.' },
     { key: 'notifications', label: 'Notifications', why: 'Vous alerte des appels entrants, manqués et messageries.' },
-    { key: 'contacts',      label: 'Contacts',      why: 'Optionnel. Accélère la composition et affiche les noms.' },
+    ...(LEGACY_CONTACTS_ENABLED ? [{ key: 'contacts', label: 'Contacts', why: 'Optionnel. Accélère la composition et affiche les noms.' }] : []),
   ] : [
     { key: 'microphone',    label: 'Microphone',    why: 'Needed for two-way voice on every call.' },
     { key: 'notifications', label: 'Notifications', why: 'Alerts you of incoming calls, missed calls and voicemail.' },
-    { key: 'contacts',      label: 'Contacts',      why: 'Optional. Speeds up dialing and shows caller names.' },
+    ...(LEGACY_CONTACTS_ENABLED ? [{ key: 'contacts', label: 'Contacts', why: 'Optional. Speeds up dialing and shows caller names.' }] : []),
   ];
 
   const statusLabel = (s?: string) => {

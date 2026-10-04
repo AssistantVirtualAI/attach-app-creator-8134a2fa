@@ -1,10 +1,11 @@
 /**
- * Caller-ID lookup helper. Calls `pp-caller-lookup` edge function and
- * caches results client-side for the duration of the session.
+ * Caller-ID lookup helper. The historical backend uses its legacy endpoint;
+ * a self-hosted build falls back to the number until a Lemtel-only service exists.
  */
 import { supabase } from '../mobileSupabase';
 import { normalizePhone, formatDisplay } from '../phoneNormalize';
 import { txStatic } from '../i18n';
+import { BACKEND_URL, LEGACY_BACKEND_URL } from '../backendOrigin';
 
 export interface CallerLookup {
   found: boolean;
@@ -33,7 +34,9 @@ export async function lookupCaller(rawNumber: string): Promise<CallerLookup> {
     raw_number: rawNumber,
     phone_normalized: normalized,
   };
-  if (!normalized) return fallback;
+  // Never send a caller's number to a Planiprêt-specific function on a new
+  // Lemtel backend. Existing installations retain the historical behavior.
+  if (!normalized || BACKEND_URL !== LEGACY_BACKEND_URL) return fallback;
 
   const hit = cache.get(normalized);
   if (hit && Date.now() - hit.at < TTL) return hit.v;

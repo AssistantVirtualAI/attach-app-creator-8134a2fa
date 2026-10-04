@@ -12,10 +12,12 @@ import { Capacitor } from '@capacitor/core';
 import { syncDeviceContacts } from './contacts';
 import { normalizePhone, formatDisplay } from './phoneNormalize';
 import { supabase } from './mobileSupabase';
+import { BACKEND_URL, LEGACY_BACKEND_URL } from './backendOrigin';
 
 const LAST_SYNC_KEY = 'planipret.contactsSync.lastAt';
 const LAST_COUNT_KEY = 'planipret.contactsSync.lastCount';
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const legacyBackend = BACKEND_URL === LEGACY_BACKEND_URL;
 
 export interface SyncReport {
   ok: boolean;
@@ -27,6 +29,8 @@ export interface SyncReport {
 }
 
 export async function getLastSync(): Promise<{ at: number | null; count: number | null }> {
+  // Historic Preferences must not be shown as a successful sync on a new issuer.
+  if (!legacyBackend) return { at: null, count: null };
   try {
     const [{ value: at }, { value: count }] = await Promise.all([
       Preferences.get({ key: LAST_SYNC_KEY }),
@@ -39,6 +43,7 @@ export async function getLastSync(): Promise<{ at: number | null; count: number 
 }
 
 async function persistLastSync(count: number) {
+  if (!legacyBackend) return;
   try {
     await Preferences.set({ key: LAST_SYNC_KEY, value: String(Date.now()) });
     await Preferences.set({ key: LAST_COUNT_KEY, value: String(count) });
@@ -47,6 +52,11 @@ async function persistLastSync(count: number) {
 
 export async function runContactsSync(opts: { force?: boolean } = {}): Promise<SyncReport> {
   const ranAt = Date.now();
+  // Fail before reading a device contact or asking consent: this endpoint is
+  // Planiprêt-specific and no approved Lemtel contacts service exists yet.
+  if (!legacyBackend) {
+    return { ok: false, inserted: 0, total: 0, error: 'lemtel-contacts-service-not-configured', ranAt };
+  }
   if (!Capacitor.isNativePlatform()) {
     return { ok: false, inserted: 0, total: 0, error: 'native-only', ranAt };
   }
@@ -109,6 +119,7 @@ export async function runContactsSync(opts: { force?: boolean } = {}): Promise<S
 
 /** Runs a sync only if the last successful one is older than 24h. */
 export async function maybeRunDeltaSync(): Promise<SyncReport | null> {
+  if (!legacyBackend) return null;
   const { at } = await getLastSync();
   if (at && Date.now() - at < SYNC_INTERVAL_MS) return null;
   return runContactsSync();

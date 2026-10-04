@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { theme } from '../lib/theme';
 import { ava, RecordingItem } from '../lib/avaApi';
@@ -24,13 +24,11 @@ function isRecordingRealtimeChange(payload: unknown) {
   );
 }
 
-// Phase 27B — defensive local filter: a row is kept only if the connected
-// extension matches one of its existing number fields.
+// Other parties may dial the extension number; only the CDR's own extension
+// identifies the recording's owner in this personal view.
 export function isOwnRecording(r: any, ext: string): boolean {
   const e = String(ext || '').trim();
-  if (!e || !r) return false;
-  return [r.extension, r.caller_number, r.destination_number, r.source_number, r.from, r.to]
-    .some((v) => v != null && String(v).trim() === e);
+  return Boolean(e && r && String(r.extension ?? '').trim() === e);
 }
 
 function displayError(e: any) {
@@ -41,13 +39,13 @@ function displayError(e: any) {
   return text;
 }
 
-// Module-level cache: survives unmount/remount when navigating between pages,
-// so users don't have to re-download the same PBX audio every time they revisit.
-const audioCache = new Map<string, string>();
+function revokeBlob(url: string | null | undefined) {
+  if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+}
 
 type JobStatus = 'idle' | 'queued' | 'running' | 'succeeded' | 'failed';
 
-export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (id: string) => void; extension?: string | null }) {
+export default function RecordingsList({ onAnalyze, extension, sessionUserId }: { onAnalyze?: (id: string) => void; extension?: string | null; sessionUserId?: string | null }) {
   const [items, setItems] = useState<RecordingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,15 +60,22 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
   const [search, setSearch] = useState('');
   const [rangeDays, setRangeDays] = useState<7 | 30>(7);
 
-  // Phase 27B.1 — session generation: every extension change or unmount
-  // invalidates the session; async work from an old session becomes inert.
+  // Phase 29C — URLs and blobs are scoped to this mounted user + extension.
+  const audioCache = useRef(new Map<string, { url: string; expiresAt: number }>());
+  const clearAudioCache = useCallback(() => {
+    for (const entry of audioCache.current.values()) revokeBlob(entry.url);
+    audioCache.current.clear();
+  }, []);
   const extRef = useRef<string>('');
   const genRef = useRef(0);
+  const activeRef = useRef(true);
+  const [sessionActive, setSessionActive] = useState(true);
   const ext = String(extension || '').trim();
-  extRef.current = ext;
-  type Session = { ext: string; gen: number };
-  const captureSession = useCallback((): Session => ({ ext: extRef.current, gen: genRef.current }), []);
-  const isCurrent = useCallback((sess: Session) => sess.gen === genRef.current && sess.ext === extRef.current && sess.ext !== '', []);
+  const scope = `${sessionUserId || ''}:${ext}`;
+  extRef.current = scope;
+  type Session = { scope: string; gen: number };
+  const captureSession = useCallback((): Session => ({ scope: extRef.current, gen: genRef.current }), []);
+  const isCurrent = useCallback((sess: Session) => activeRef.current && sess.gen === genRef.current && sess.scope === extRef.current && Boolean(ext) && Boolean(sessionUserId), [ext, sessionUserId]);
 
   const hydrateTranscripts = useCallback(async (rows: RecordingItem[]) => {
     const sess = captureSession();
@@ -107,18 +112,33 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
 
   // Phase 27B — session generation: any async answer from a previous
   // extension is ignored; data and audio URLs never cross extensions.
-  useEffect(() => {
+  useLayoutEffect(() => {
     genRef.current += 1;
-    audioCache.clear();
+    activeRef.current = true;
+    setSessionActive(true);
+    clearAudioCache();
     setItems([]); setAudio({}); setAudioErrors({}); setAudioLoading(null);
     setError(null); setItemErrors({}); setItemSuccess({}); setStatuses({}); setWorking(null);
-    if (!ext) { setLoading(false); setRefreshing(false); }
-    return () => { genRef.current += 1; audioCache.clear(); };
-  }, [ext]);
+    if (!ext || !sessionUserId) { setLoading(false); setRefreshing(false); }
+    return () => { genRef.current += 1; activeRef.current = false; clearAudioCache(); };
+  }, [scope, ext, sessionUserId, clearAudioCache]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== 'SIGNED_OUT' && session?.user?.id === sessionUserId) return;
+      if (event !== 'SIGNED_OUT' && event !== 'SIGNED_IN' && session) return;
+      genRef.current += 1;
+      activeRef.current = false;
+      clearAudioCache();
+      setSessionActive(false);
+      setItems([]); setAudio({}); setAudioLoading(null); setAudioErrors({});
+    });
+    return () => subscription.unsubscribe();
+  }, [sessionUserId, clearAudioCache]);
 
   const load = useCallback(async (silent = false, force = false) => {
     const sess = captureSession();
-    const forExt = sess.ext;
+    const forExt = ext;
     if (!forExt || !isCurrent(sess)) return;
     if (!silent) { setLoading(true); setError(null); }
     if (force) setRefreshing(true);
@@ -146,16 +166,16 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
 
   const silentLoad = useCallback(() => { void load(true); }, [load]);
 
-  useEffect(() => { if (ext) load(); }, [load, ext]);
+  useEffect(() => { if (ext && sessionActive) load(); }, [load, ext, sessionActive]);
   useEffect(() => {
-    if (!ext) return;
+    if (!ext || !sessionActive) return;
     window.addEventListener('lemtel:phone-sync-complete', silentLoad);
     return () => window.removeEventListener('lemtel:phone-sync-complete', silentLoad);
-  }, [silentLoad, ext]);
+  }, [silentLoad, ext, sessionActive]);
 
   // Realtime: personal recordings channel, filtered exactly by the extension.
   useEffect(() => {
-    if (!ext) return;
+    if (!ext || !sessionActive) return;
     let pending: ReturnType<typeof setTimeout> | null = null;
     let lastAt = 0;
     const fire = () => {
@@ -184,11 +204,11 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
       if (pending) clearTimeout(pending);
       try { supabase.removeChannel(channel); } catch { /* noop */ }
     };
-  }, [ext, silentLoad]);
+  }, [ext, silentLoad, sessionActive]);
 
   const setStatus = (id: string, s: JobStatus) => setStatuses(prev => ({ ...prev, [id]: s }));
 
-  const ownsRow = (r: RecordingItem) => Boolean(extRef.current) && isOwnRecording(r, extRef.current);
+  const ownsRow = (r: RecordingItem) => isOwnRecording(r, ext);
 
   const analyze = async (r: RecordingItem) => {
     const sess = captureSession();
@@ -205,12 +225,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
         body: {
           callId: r.callId || r.id,
           call_record_id: r.callId || r.id,
-          xml_cdr_uuid: (r as any).xml_cdr_uuid || r.callId || r.id,
           organization_id,
-          recording_path: r.recording_path,
-          recording_name: r.recording_name,
-          record_path: r.recording_path,
-          record_name: r.recording_name,
         },
       });
       if (!isCurrent(sess)) return;
@@ -227,8 +242,6 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
           callId: r.callId || r.id,
           call_record_id: r.callId || r.id,
           organization_id,
-          recording_path: r.recording_path,
-          recording_name: r.recording_name,
           transcript_text,
         },
       });
@@ -276,18 +289,23 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
     if (!isCurrent(sess) || !ownsRow(r)) return;
     setError(null);
     setAudioErrors((all) => { const next = { ...all }; delete next[r.id]; return next; });
-    if (audio[r.id] || audioCache.has(r.id)) {
-      const cached = audio[r.id] || audioCache.get(r.id)!;
-      if (!audio[r.id]) setAudio((a) => ({ ...a, [r.id]: cached }));
+    const cached = audioCache.current.get(r.id);
+    if (cached && cached.expiresAt > Date.now()) {
+      if (!audio[r.id]) setAudio((a) => ({ ...a, [r.id]: cached.url }));
       return;
+    }
+    if (cached) {
+      revokeBlob(cached.url);
+      audioCache.current.delete(r.id);
+      setAudio((a) => { const next = { ...a }; delete next[r.id]; return next; });
     }
     setAudioLoading(r.id);
     try {
       // Prefer short-lived signed URL (no client download); fallback to proxy blob.
-      const signed = await ava.getRecordingSignedUrl(r as any);
+      const signed = await ava.getRecordingSignedUrl(r);
       if (!isCurrent(sess)) return;
-      const url = signed?.url || (await ava.getRecordingAudioUrl(r as any));
-      if (!isCurrent(sess)) return;
+      const url = signed?.url || (await ava.getRecordingAudioUrl(r));
+      if (!isCurrent(sess)) { revokeBlob(url); return; }
       if (!url) {
         setAudioErrors((all) => ({
           ...all,
@@ -295,7 +313,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
         }));
         return;
       }
-      audioCache.set(r.id, url);
+      audioCache.current.set(r.id, { url, expiresAt: signed?.url ? Date.now() + Math.max(0, (signed.expiresInSec || 300) - 15) * 1000 : Infinity });
       setAudio((a) => ({ ...a, [r.id]: url }));
       audit('recording.played', r.callId || r.id, { recording_name: r.recording_name });
     } finally {
@@ -306,7 +324,8 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
   const recoverAudio = async (r: RecordingItem) => {
     const sess = captureSession();
     if (!isCurrent(sess) || !ownsRow(r)) return;
-    audioCache.delete(r.id);
+    revokeBlob(audioCache.current.get(r.id)?.url);
+    audioCache.current.delete(r.id);
     setAudio((a) => {
       const next = { ...a };
       delete next[r.id];
@@ -315,10 +334,10 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
     setAudioLoading(r.id);
     setError(null);
     try {
-      const url = await ava.getRecordingAudioUrl(r as any);
-      if (!isCurrent(sess)) return;
+      const url = await ava.getRecordingAudioUrl(r);
+      if (!isCurrent(sess)) { revokeBlob(url); return; }
       if (url) {
-        audioCache.set(r.id, url);
+        audioCache.current.set(r.id, { url, expiresAt: Infinity });
         setAudio((a) => ({ ...a, [r.id]: url }));
         return;
       }
@@ -329,7 +348,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
   };
 
 
-  if (!ext) return <div style={{ textAlign: 'center', padding: 40, color: c.textSub, fontSize: 12 }}>Recordings will be available as soon as an extension is assigned.</div>;
+  if (!ext || !sessionUserId || !sessionActive) return <div style={{ textAlign: 'center', padding: 40, color: c.textSub, fontSize: 12 }}>Recordings will be available as soon as an extension and session are assigned.</div>;
   if (loading) return <SkeletonRows rows={5} label="Loading recordings" />;
 
   return (
@@ -393,6 +412,8 @@ autoPlay
                 style={{ width: '100%', marginTop: 8, height: 32 }}
                 onError={() => {
                   if (String(audio[r.id] || '').startsWith('blob:')) {
+                    revokeBlob(audioCache.current.get(r.id)?.url);
+                    audioCache.current.delete(r.id);
                     setAudio((a) => {
                       const next = { ...a };
                       delete next[r.id];

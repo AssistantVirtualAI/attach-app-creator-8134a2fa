@@ -78,9 +78,13 @@ function mapInsightRow(callId: string, row: any): CallInsight {
 
 
 let authToken: string | null = null;
+let authGeneration = 0;
 export function setAuthToken(token: string | null) {
+  if (authToken === token) return;
   authToken = token;
+  authGeneration += 1;
   _meCache = null;
+  _meInflight = null;
 }
 
 type MeContext = {
@@ -97,7 +101,8 @@ const EMPTY_ME: MeContext = { organization_id: null, extension: null, display_na
 export async function getMeContext(): Promise<MeContext> {
   if (_meCache) return _meCache;
   if (_meInflight) return _meInflight;
-  _meInflight = (async () => {
+  const generation = authGeneration;
+  const request = (async (): Promise<MeContext> => {
     try {
       if (!authToken) return EMPTY_ME;
       // Decode current auth user id from JWT payload (no network round-trip).
@@ -123,19 +128,20 @@ export async function getMeContext(): Promise<MeContext> {
           }
         } catch { /* noop */ }
       }
-      _meCache = {
+      const context: MeContext = {
         organization_id: row.organization_id ?? null,
         extension: row.extension ?? null,
         display_name: row.display_name ?? null,
         user_id: row.portal_user_id ?? uid,
       };
-      return _meCache;
+      if (generation === authGeneration) _meCache = context;
+      return generation === authGeneration ? context : EMPTY_ME;
     } catch {
       return EMPTY_ME;
-    } finally {
-      _meInflight = null;
     }
   })();
+  _meInflight = request;
+  void request.finally(() => { if (_meInflight === request) _meInflight = null; });
   return _meInflight;
 }
 
@@ -933,29 +939,26 @@ export const ava = {
    * FusionPBX URLs or PHP endpoints. Every issuance is audited.
    */
   getRecordingSignedUrl: async (
-    recording: Partial<RecordingItem & VoicemailItem & CallRecord & { record_path?: string | null; record_name?: string | null }>,
+    recording: Partial<RecordingItem> | Partial<VoicemailItem> | Partial<CallRecord>,
     expiresInSec = 300,
   ): Promise<{ url: string; expiresInSec: number; contentType: string } | null> => {
-    const record_path = cleanText(recording.record_path ?? recording.recording_path);
-    const record_name = cleanText(recording.record_name ?? recording.recording_name);
-    const xml_cdr_uuid = cleanText(recording.pbx_uuid || (recording as any).callId || recording.id);
-    const domain_uuid = cleanText(recording.domain_uuid);
-    const domain_name = cleanText(recording.domain_name);
-    const recorded_at = cleanText((recording as any).recordedAt ?? (recording as any).start_at ?? (recording as any).startedAt ?? (recording as any).receivedAt);
-    const local_recording_url = cleanText(recording.recording_url ?? (recording as any).recordingUrl);
-    if (!xml_cdr_uuid && !record_name && (!record_path || !record_name)) return null;
+    // Phase 29C: the Desktop sends only a CDR lookup key. The proxy resolves
+    // authorization and ALL playback metadata from its own CDR row.
+    const xml_cdr_uuid = cleanText(('callId' in recording && recording.callId) || recording.id || recording.pbx_uuid);
+    if (!xml_cdr_uuid || !authToken) return null;
+    const generation = authGeneration;
     try {
       const res = await fetch(resolveUrl(`/fn/${FN.fusionpbxProxy}`), {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
           action: 'get-recording-signed-url',
-          organization_id: recording.organization_id,
-          params: { xml_cdr_uuid, record_path, record_name, domain_uuid, domain_name, recorded_at, local_recording_url, expires_in: expiresInSec },
+          params: { xml_cdr_uuid, expires_in: expiresInSec },
         }),
       });
-      if (!res.ok) return null;
+      if (generation !== authGeneration || !res.ok) return null;
       const data = await res.json();
+      if (generation !== authGeneration) return null;
       if (!data?.ok || !data?.url) return null;
       return { url: data.url, expiresInSec: data.expiresInSec, contentType: data.contentType };
     } catch (err) {
@@ -969,24 +972,18 @@ export const ava = {
    * Kept for callers that need a guaranteed-local URL (e.g. download button).
    * Prefer `getRecordingSignedUrl` for `<audio>` playback.
    */
-  getRecordingAudioUrl: async (recording: Partial<RecordingItem & VoicemailItem & CallRecord & { record_path?: string | null; record_name?: string | null }>) => {
-    // SECURITY: never trust a raw `recording_url` value — that would bypass the
-    // proxy and leak FusionPBX paths / credentials to the client. Always go
-    // through the edge function.
-    const record_path = cleanText(recording.record_path ?? recording.recording_path);
-    const record_name = cleanText(recording.record_name ?? recording.recording_name);
-    const xml_cdr_uuid = cleanText(recording.pbx_uuid || (recording as any).callId || recording.id);
-    const domain_uuid = cleanText(recording.domain_uuid);
-    const domain_name = cleanText(recording.domain_name);
-    const recorded_at = cleanText((recording as any).recordedAt ?? (recording as any).start_at ?? (recording as any).startedAt ?? (recording as any).receivedAt);
-    const local_recording_url = cleanText(recording.recording_url ?? (recording as any).recordingUrl);
-    if (!xml_cdr_uuid && !record_name && (!record_path || !record_name)) return null;
+  getRecordingAudioUrl: async (recording: Partial<RecordingItem> | Partial<VoicemailItem> | Partial<CallRecord>) => {
+    // Same authenticated server authority as signed playback, including fallback.
+    const xml_cdr_uuid = cleanText(('callId' in recording && recording.callId) || recording.id || recording.pbx_uuid);
+    if (!xml_cdr_uuid || !authToken) return null;
+    const generation = authGeneration;
     try {
       const res = await fetch(resolveUrl(`/fn/${FN.fusionpbxProxy}`), {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ action: 'get-recording', organization_id: recording.organization_id, params: { xml_cdr_uuid, record_path, record_name, domain_uuid, domain_name, recorded_at, local_recording_url } }),
+        body: JSON.stringify({ action: 'get-recording', params: { xml_cdr_uuid } }),
       });
+      if (generation !== authGeneration) return null;
       if (!res.ok) throw new Error(`Recording unavailable (${res.status})`);
       const ct = res.headers.get('content-type') || '';
       if (!ct.startsWith('audio/') && !ct.includes('octet-stream')) {
@@ -994,13 +991,9 @@ export const ava = {
         throw new Error(msg.slice(0, 180) || 'PBX did not return audio');
       }
       const buf = await res.arrayBuffer();
+      if (generation !== authGeneration) return null;
       if (!buf.byteLength) throw new Error('Empty recording');
-      const lower = record_name.toLowerCase();
-      const fallbackMime = lower.endsWith('.mp3') ? 'audio/mpeg'
-        : lower.endsWith('.ogg') ? 'audio/ogg'
-        : lower.endsWith('.m4a') ? 'audio/mp4'
-        : 'audio/wav';
-      const blob = new Blob([buf], { type: ct.split(';')[0].trim() || fallbackMime });
+      const blob = new Blob([buf], { type: ct.split(';')[0].trim() });
       return URL.createObjectURL(blob);
     } catch (err) {
       console.warn('[avaApi] get-recording failed:', err);
@@ -1136,4 +1129,3 @@ import { supabase as _sb } from './supabaseClient';
   if (session?.access_token) setAuthToken(session.access_token);
   _sb.auth.onAuthStateChange((_ev, s) => setAuthToken(s?.access_token ?? null));
 })();
-

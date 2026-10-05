@@ -1,0 +1,40 @@
+{
+  "policy_version": "lemtel_two_vps_delivery_gate_v1",
+  "scope": "offline_automation_gate_only",
+  "source_branch": "lemtel/integration",
+  "initial_delivery_unit": "lemtel_edge_functions",
+  "artifact": {
+    "build_once": true,
+    "digest_required": true,
+    "same_artifact_for_standby": true
+  },
+  "destinations": [
+    {
+      "target": "hostinger_primary",
+      "order": 1,
+      "deploy_authorized": false,
+      "deploy_identity_verified": false,
+      "runtime_verified": false,
+      "healthcheck_verified": false
+    },
+    {
+      "target": "digitalocean_standby",
+      "order": 2,
+      "deploy_authorized": false,
+      "deploy_identity_verified": false,
+      "runtime_verified": false,
+      "backups_verified": false,
+      "healthcheck_verified": false
+    }
+  ],
+  "resilience": {
+    "offserver_backup_verified": false,
+    "restore_tested": false,
+    "external_failover_tested": false
+  },
+  "automation": {
+    "github_gate_present": true,
+    "delivery_enabled": false,
+    "secrets_configured": false
+  }
+}

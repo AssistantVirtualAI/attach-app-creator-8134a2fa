@@ -1,0 +1,46 @@
+name: Lemtel delivery — two VPS gate
+
+on:
+  push:
+    branches:
+      - lemtel/integration
+    paths:
+      - '.github/workflows/lemtel-two-vps-delivery-gate.yml'
+      - 'infra/lemtel-delivery/two-vps-delivery-gate.json'
+      - 'infra/lemtel-self-hosted/edge-functions/**'
+      - 'scripts/lemtel-two-vps-delivery-gate*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-two-vps-delivery-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  enforce-inactive-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require the delivery gate to remain inactive
+        shell: bash
+        run: |
+          set +e
+          report="$(node scripts/lemtel-two-vps-delivery-gate.mjs)"
+          result=$?
+          set -e
+          test "$result" -eq 78
+          printf '%s' "$report" | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x=JSON.parse(s); if (x.status !== "two_vps_delivery_blocked" || x.authorization || x.hostinger_deployment_authorized || x.digitalocean_deployment_authorized || x.delivery_enabled || x.automatic_failover_authorized) process.exit(1) })'
+      - name: Confirm the Edge Function package is sealed but non-deployable
+        run: |
+          set +e
+          report="$(node scripts/lemtel-self-hosted-edge-function-package.mjs)"
+          result=$?
+          set -e
+          test "$result" -eq 78
+          printf '%s' "$report" | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x=JSON.parse(s); if (x.status !== "edge_function_package_offline_ready" || x.authorization || x.external_write_authorized || x.functions_restart_authorized || x.client_cutover_authorized) process.exit(1) })'

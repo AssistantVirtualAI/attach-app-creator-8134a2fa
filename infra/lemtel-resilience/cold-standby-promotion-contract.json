@@ -1,0 +1,44 @@
+{
+  "policy_version": "lemtel_cold_standby_promotion_v1",
+  "scope": "offline_cold_standby_promotion_gate_only",
+  "topology": {
+    "primary": "hostinger_primary",
+    "standby": "digitalocean_standby",
+    "standby_mode": "cold_restorable_private",
+    "replication_mode": "daily_encrypted_backup_not_continuous_replication",
+    "automatic_failover": false
+  },
+  "promotion": {
+    "authorized": false,
+    "incident_owner_confirmed": false,
+    "approved_runbook_confirmed": false,
+    "runtime_start_authorized": false,
+    "public_exposure_authorized": false,
+    "dns_or_router_cutover_authorized": false
+  },
+  "evidence": {
+    "fresh_backup_snapshot_checked": false,
+    "restic_integrity_check_passed": false,
+    "restore_test_passed": false,
+    "exact_compose_provenance_verified": false,
+    "image_digest_manifest_match": false,
+    "configuration_compatibility_verified": false,
+    "database_restored_from_consistent_dump": false,
+    "database_import_validated": false,
+    "private_healthchecks_passed": false,
+    "external_healthchecks_passed": false,
+    "rollback_ready": false,
+    "failback_plan_validated": false
+  },
+  "network": {
+    "database_public_exposure": false,
+    "standby_public_exposure": false,
+    "external_health_checked_routing_ready": false,
+    "separate_standby_hostnames_verified": false
+  },
+  "boundaries": {
+    "planipret_data_copy": false,
+    "fusionpbx_change": false,
+    "delivery_automation_enabled": false
+  }
+}

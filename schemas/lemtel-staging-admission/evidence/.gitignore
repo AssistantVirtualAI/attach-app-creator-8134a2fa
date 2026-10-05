@@ -1,0 +1,3 @@
+# Admission evidence remains local and non-secret; do not commit operational observations.
+*.json
+!.gitignore

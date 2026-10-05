@@ -1,0 +1,40 @@
+name: Lemtel resilience — cold standby promotion gate
+
+on:
+  push:
+    branches:
+      - lemtel/integration
+    paths:
+      - '.github/workflows/lemtel-cold-standby-promotion-gate.yml'
+      - 'infra/lemtel-resilience/cold-standby-promotion-contract.json'
+      - 'scripts/lemtel-cold-standby-promotion-gate*'
+      - 'docs/lemtel-mobile/phase-38a-cold-standby-promotion.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-cold-standby-promotion-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  enforce-inactive-promotion-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require cold-standby promotion to remain blocked
+        shell: bash
+        run: |
+          set +e
+          report="$(node scripts/lemtel-cold-standby-promotion-gate.mjs)"
+          result=$?
+          set -e
+          test "$result" -eq 78
+          printf '%s' "$report" | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x=JSON.parse(s); if (x.status !== "cold_standby_promotion_blocked" || x.authorization || x.runtime_start_authorized || x.public_exposure_authorized || x.dns_or_router_cutover_authorized || x.automatic_failover_authorized) process.exit(1) })'
+      - name: Test fail-closed contract validator
+        run: node --test scripts/lemtel-cold-standby-promotion-gate.test.mjs

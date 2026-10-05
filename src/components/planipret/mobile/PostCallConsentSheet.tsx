@@ -111,19 +111,18 @@ export default function PostCallConsentSheet() {
           if (rows.length) source = "provider";
         }
         // L'identifiant SIP local diffère souvent de celui du PBX : on retombe
-        // sur les appels récents du courtier avec le même numéro.
+        // sur les appels récents du courtier avec le même numéro. Aucune borne
+        // de durée : la feuille doit s'afficher après CHAQUE appel répondu,
+        // peu importe sa longueur. La correspondance exacte est garantie par
+        // pickEndedCall (numéro + sens + ended_at proche de la fin).
         if (!rows.length && detail.number) {
-          // Borne sur la FIN de l'appel (un appel de 30 min a été créé il y a
-          // 30 min). Les lignes dont ended_at n'est pas encore écrit restent
-          // admises, limitées aux appels commencés dans les 12 dernières heures.
           const endMs = Date.parse(endedIso);
-          const since = new Date(endMs - 10 * 60_000).toISOString();
           const openSince = new Date(endMs - 12 * 3_600_000).toISOString();
           const { data } = await supabase
             .from("planipret_phone_calls").select(SELECT)
             .in("user_id", owners)
-            .or(`ended_at.gte.${since},and(ended_at.is.null,created_at.gte.${openSince})`)
-            .order("created_at", { ascending: false }).limit(20);
+            .or(`ended_at.gte.${openSince},and(ended_at.is.null,created_at.gte.${openSince})`)
+            .order("created_at", { ascending: false }).limit(50);
           rows = (data as any as ConsentCall[]) ?? [];
           source = "recent";
         }

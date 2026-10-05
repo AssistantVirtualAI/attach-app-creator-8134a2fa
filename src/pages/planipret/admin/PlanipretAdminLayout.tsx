@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
-  BarChart3, LogOut, Sun, Moon, ShieldCheck, ShieldAlert, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket, UserSquare2, AlertTriangle, FileText,
+  BarChart3, LogOut, Sun, Moon, ShieldCheck, ShieldAlert, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket, UserSquare2, AlertTriangle, FileText, Menu,
 } from "lucide-react";
 import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
@@ -237,9 +237,8 @@ export default function PlanipretAdminLayout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [dialNumber, setDialNumber] = useState("");
   const [dialing, setDialing] = useState(false);
-  const [mobileNoticeDismissed, setMobileNoticeDismissed] = useState(() => {
-    try { return localStorage.getItem("pp_admin_mobile_notice") === "dismissed"; } catch { return false; }
-  });
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
 
   // Auto-sync NS-API in the background for every admin page. Idempotent via
   // module-level in-flight guard, safe to mount once at the layout.
@@ -459,42 +458,8 @@ export default function PlanipretAdminLayout() {
     <PortalDomainGate>
     <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope min-h-screen flex"
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
-      {/* Mobile redirect notice (dismissible) */}
-      {!mobileNoticeDismissed && (
-        <div className="md:hidden fixed inset-0 z-50 flex items-center justify-center p-6"
-          style={{ background: "var(--pp-bg-base)" }}>
-          <div className="text-center max-w-xs pp-card" style={{ padding: 24 }}>
-            <h2 className="pp-heading" style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
-              {tt("adminPortal.mobileNoticeTitle")}
-            </h2>
-            <p style={{ fontSize: 13, color: "var(--pp-text-secondary)", marginBottom: 16 }}>
-              {tt("adminPortal.mobileNoticeBody")}
-            </p>
-            <div className="flex flex-col gap-2">
-              <button onClick={() => navigate("/mplanipret")} className="pp-btn-primary">
-                {tt("adminPortal.openMobileApp")}
-              </button>
-              <button
-                onClick={() => {
-                  try { localStorage.setItem("pp_admin_mobile_notice", "dismissed"); } catch { /* noop */ }
-                  setMobileNoticeDismissed(true);
-                }}
-                style={{
-                  fontSize: 13, padding: "8px 12px", borderRadius: 10,
-                  border: "1px solid var(--pp-bg-border)", background: "transparent",
-                  color: "var(--pp-text-secondary)",
-                }}
-              >
-                Continuer sur mobile
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {/* Sidebar */}
-      <aside className="pp-sidebar hidden md:flex flex-col fixed left-0 top-0 h-screen w-[248px] z-40">
+      {/* Sidebar — tiroir sur mobile, fixe sur ordinateur */}
+      <aside className={`pp-sidebar ${mobileNavOpen ? "flex" : "hidden"} md:flex flex-col fixed left-0 top-0 h-screen w-[248px] z-[60] md:z-40`}>
         {/* Brand */}
         <div className="px-5 pt-5 pb-4" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
           <div className="flex items-center gap-3">
@@ -587,12 +552,22 @@ export default function PlanipretAdminLayout() {
         </div>
       </aside>
 
+      {mobileNavOpen && (
+        <div className="md:hidden fixed inset-0 z-[55]" style={{ background: "rgba(10,20,37,0.45)" }}
+          onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+      )}
+
       {/* Main */}
-      <div className="hidden md:flex flex-1 min-w-0 flex-col ml-[248px]">
-        <header className="pp-app-header sticky top-0 flex items-center justify-between gap-4 px-5 xl:px-7 z-30 overflow-hidden" style={{ height: 64 }}>
+      <div className="flex flex-1 min-w-0 flex-col md:ml-[248px]">
+        <header className="pp-app-header sticky top-0 flex items-center justify-between gap-2 md:gap-4 px-3 md:px-5 xl:px-7 z-30 overflow-hidden" style={{ height: 64 }}>
           <div className="flex items-center gap-2 min-w-0">
-            <span className="pp-eyebrow">{sectionLabel}</span>
-            <ChevronRight className="w-3.5 h-3.5" style={{ color: "var(--pp-text-faint)" }} />
+            <button type="button" onClick={() => setMobileNavOpen(true)} aria-label="Menu"
+              className="md:hidden flex items-center justify-center rounded-lg shrink-0"
+              style={{ width: 36, height: 36, color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-elevated)" }}>
+              <Menu className="w-5 h-5" />
+            </button>
+            <span className="pp-eyebrow hidden sm:inline">{sectionLabel}</span>
+            <ChevronRight className="w-3.5 h-3.5 hidden sm:inline" style={{ color: "var(--pp-text-faint)" }} />
             <h1 className="pp-heading truncate" style={{ fontWeight: 700, fontSize: 18 }}>{title}</h1>
           </div>
 

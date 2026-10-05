@@ -1,0 +1,44 @@
+{
+  "contract_version": "lemtel_lovable_github_delivery_v1",
+  "scope": "offline_delivery_contract_only",
+  "source": {
+    "canonical_repository": "github",
+    "lovable_change_ingress": "pull_request_only",
+    "direct_lovable_to_hostinger": false,
+    "direct_lovable_to_digitalocean": false,
+    "bidirectional_sync": false
+  },
+  "artifact": {
+    "build_once": true,
+    "immutable_identity": ["git_sha", "container_digest"],
+    "rebuild_on_standby": false,
+    "checksum_match_required": true,
+    "source_maps_private": true
+  },
+  "promotion": [
+    {
+      "target": "hostinger_primary",
+      "order": 1,
+      "requires": ["ci_passed", "fresh_snapshot", "restricted_deploy_identity", "healthcheck"]
+    },
+    {
+      "target": "digitalocean_standby",
+      "order": 2,
+      "requires": ["hostinger_artifact_verified", "same_artifact_digest", "restricted_deploy_identity", "healthcheck"]
+    }
+  ],
+  "automation": {
+    "workflow_enabled": false,
+    "deploy_authorized": false,
+    "secrets_configured": false,
+    "target_access_verified": false
+  },
+  "failover": {
+    "automatic": false,
+    "requires": ["replicated_data", "tested_restore", "external_health_checked_routing", "failover_and_failback_test"]
+  },
+  "client_cutover": {
+    "authorized": false,
+    "requires": ["new_publishable_key", "new_auth_accounts", "deployed_backend_contracts", "physical_device_tests"]
+  }
+}

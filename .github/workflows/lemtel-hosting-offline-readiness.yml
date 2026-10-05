@@ -6,11 +6,13 @@ on:
       - '.github/workflows/lemtel-hosting-offline-readiness.yml'
       - 'scripts/lemtel-hosting-preflight*'
       - 'scripts/lemtel-hosting-admission-evidence*'
+      - 'scripts/lemtel-hostinger-empty-staging-admission*'
       - 'scripts/lemtel-hosting-readiness*'
       - 'scripts/inventory-lemtel-hosting*'
       - 'scripts/lemtel-dependency-closure*'
       - 'schemas/lemtel-staging-admission/staging-admission-policy.json'
       - 'schemas/lemtel-staging-admission/evidence/.gitignore'
+      - 'schemas/lemtel-hostinger-empty-staging/policy.json'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
       - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
@@ -19,6 +21,7 @@ on:
       - 'docs/lemtel-mobile/phase-31h-computed-client-dependencies.md'
       - 'docs/lemtel-mobile/phase-31i-client-route-contracts.md'
       - 'docs/lemtel-mobile/phase-32a-hostinger-admission-evidence.md'
+      - 'docs/lemtel-mobile/phase-32b-hostinger-empty-staging-admission.md'
       - 'services/lemtel-control-plane/**'
       - 'infra/lemtel-control-plane/**'
       - 'apps/ava-softphone-mobile/src/**'
@@ -30,11 +33,13 @@ on:
       - '.github/workflows/lemtel-hosting-offline-readiness.yml'
       - 'scripts/lemtel-hosting-preflight*'
       - 'scripts/lemtel-hosting-admission-evidence*'
+      - 'scripts/lemtel-hostinger-empty-staging-admission*'
       - 'scripts/lemtel-hosting-readiness*'
       - 'scripts/inventory-lemtel-hosting*'
       - 'scripts/lemtel-dependency-closure*'
       - 'schemas/lemtel-staging-admission/staging-admission-policy.json'
       - 'schemas/lemtel-staging-admission/evidence/.gitignore'
+      - 'schemas/lemtel-hostinger-empty-staging/policy.json'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
       - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
@@ -43,6 +48,7 @@ on:
       - 'docs/lemtel-mobile/phase-31h-computed-client-dependencies.md'
       - 'docs/lemtel-mobile/phase-31i-client-route-contracts.md'
       - 'docs/lemtel-mobile/phase-32a-hostinger-admission-evidence.md'
+      - 'docs/lemtel-mobile/phase-32b-hostinger-empty-staging-admission.md'
       - 'services/lemtel-control-plane/**'
       - 'infra/lemtel-control-plane/**'
       - 'apps/ava-softphone-mobile/src/**'
@@ -63,7 +69,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test fail-closed hosting gate, evidence, inventory and readiness probe (offline mocks)
-        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/lemtel-hosting-admission-evidence.test.mjs scripts/lemtel-hosting-readiness.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
+        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/lemtel-hosting-admission-evidence.test.mjs scripts/lemtel-hostinger-empty-staging-admission.test.mjs scripts/lemtel-hosting-readiness.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
       - name: Both destinations must remain blocked by the current policy
         shell: bash
         run: |

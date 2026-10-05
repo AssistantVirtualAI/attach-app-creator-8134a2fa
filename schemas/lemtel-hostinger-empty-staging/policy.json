@@ -1,0 +1,29 @@
+{
+  "policy_version": "lemtel_hostinger_empty_staging_v1",
+  "admission_ref": "admission-32000001",
+  "scope": "hostinger_empty_staging",
+  "decision": "admitted",
+  "expires_at": "2026-10-05T02:30:00.000Z",
+  "snapshot_current_checked": true,
+  "monitoring_owner_confirmed": true,
+  "secrets_owner_confirmed": true,
+  "logs_retention_days": 30,
+  "allowed_actions": [
+    "create_empty_persistent_volumes",
+    "generate_host_local_secrets",
+    "install_official_supabase_docker",
+    "install_reverse_proxy",
+    "issue_tls_certificate",
+    "open_ingress_ports_80_443",
+    "verify_auth_api"
+  ],
+  "forbidden_actions": [
+    "client_cutover",
+    "digitalocean_change",
+    "fusionpbx_change",
+    "pbx_credentials",
+    "planipret_data_access",
+    "planipret_data_migration",
+    "production_user_onboarding"
+  ]
+}

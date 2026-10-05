@@ -72,5 +72,8 @@ export async function consumePortalHandoff(): Promise<HandoffResult> {
   }
 
   try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch { /* ignore */ }
+  // Ouvert volontairement depuis l'app mobile : ne jamais masquer le portail
+  // derrière l'avis « optimisé pour ordinateur ».
+  try { localStorage.setItem("pp_admin_mobile_notice", "dismissed"); } catch { /* ignore */ }
   return "ok";
 }

@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
   if (cErr || !camp) return json({ ok: false, error: "campaign_insert_failed" }, 500);
 
   const { data: recips, error: rErr } = await admin.from("planipret_marketing_recipients")
-    .insert(rows.map((r) => ({ ...r, campaign_id: camp.id }))).select("id, channel, phone, email, status, track_token");
+    .insert(rows.map((r) => ({ ...r, campaign_id: camp.id }))).select("id, channel, phone, email, status, track_token, client_name");
   if (rErr) return json({ ok: false, error: "recipients_insert_failed" }, 500);
   if (scheduledAt) return json({ ok: true, scheduled: true, campaign_id: camp.id, scheduled_at: scheduledAt, total: rows.length });
   const r = await dispatch(admin, profile, userId, camp.id, { subject, emailBody, smsText }, token!, recips ?? []);

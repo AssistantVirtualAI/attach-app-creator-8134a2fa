@@ -1,0 +1,11 @@
+{
+  "package_version": "lemtel_mobile_config_admin_drafts_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "data_import_authorized": false,
+  "required_schema_package": "lemtel_mobile_config_schema_v1",
+  "capabilities": ["admin_draft_create", "admin_draft_update", "admin_draft_list"],
+  "explicitly_excluded": ["publish", "retire", "storage_upload", "artifact_registration", "public_client_manifest", "pbx", "push", "external_calls"],
+  "deployment_prerequisites": ["new_auth_test_accounts", "lemtel_organization_memberships", "synthetic_rbac_validation", "approved_function_secret_workflow", "approved_atomic_draft_rpc", "approved_edge_deployment"]
+}

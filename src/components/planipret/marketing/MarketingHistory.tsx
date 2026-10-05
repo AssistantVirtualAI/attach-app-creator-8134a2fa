@@ -119,6 +119,9 @@ export default function MarketingHistory({ lang, adminView = false, reloadKey = 
                   {c.failed_count > 0 && <span className="text-destructive">{c.failed_count} {L("échecs", "failed")}</span>}
                 </div>
               </button>
+              {c.status === "scheduled" && !adminView && (
+                <div className="px-3 pb-3"><button onClick={() => void cancel(c.id)} className="rounded-lg border border-border px-3 py-1 text-xs text-destructive">{L("Annuler l'envoi planifié", "Cancel scheduled send")}</button></div>
+              )}
               {open === c.id && (
                 <div className="border-t border-border p-3 overflow-x-auto">
                   <table className="w-full text-sm">

@@ -12,7 +12,7 @@ const h = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { auth: { getSession: h.getSession, refreshSession: vi.fn() }, functions: { invoke: h.invoke } },
 }));
-vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => false } }));
+vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => false }, registerPlugin: () => ({}) }));
 
 import { validPortalHandoffUrl } from "@/lib/planipret/portalHandoffUrl";
 import { openBrokerPortal } from "@/lib/planipret/openBrokerPortal";

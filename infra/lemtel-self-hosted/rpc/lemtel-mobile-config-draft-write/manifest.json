@@ -1,0 +1,17 @@
+{
+  "package_version": "lemtel_mobile_config_draft_rpc_v1",
+  "scope": "offline_atomic_rpc_package",
+  "apply_authorized": false,
+  "data_import_authorized": false,
+  "function_deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "required_schema_package": "lemtel_mobile_config_schema_v1",
+  "required_preconditions": [
+    "new_lemtel_auth_accounts_only",
+    "lemtel_organization_and_membership_bootstrap",
+    "synthetic_rbac_and_rollback_validation",
+    "explicit_target_schema_write_approval",
+    "approved_edge_deployment"
+  ],
+  "migration": "0001_lemtel_mobile_config_draft_write.sql"
+}

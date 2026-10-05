@@ -1,0 +1,57 @@
+{
+  "policy_version": "lemtel_blocked_function_dispositions_v1",
+  "scope": "static_review_only",
+  "authorization": false,
+  "functions": [
+    {
+      "function": "ai-analyze-call",
+      "disposition": "manual_boundary_trace_required",
+      "prerequisite_categories": ["access_control", "consent_and_retention", "media_contract", "external_boundary"]
+    },
+    {
+      "function": "ai-transcribe-call",
+      "disposition": "manual_boundary_trace_required",
+      "prerequisite_categories": ["access_control", "media_contract", "fallback_behavior", "external_boundary"]
+    },
+    {
+      "function": "fusionpbx-proxy",
+      "disposition": "manual_boundary_trace_required",
+      "prerequisite_categories": ["action_effect_inventory", "authorization_parity", "external_boundary", "rollback"]
+    },
+    {
+      "function": "mobile-chat",
+      "disposition": "manual_boundary_trace_required",
+      "prerequisite_categories": ["access_control", "data_minimization", "external_boundary", "fallback_behavior"]
+    },
+    {
+      "function": "mobile-config",
+      "disposition": "exclude_pending_replacement",
+      "prerequisite_categories": ["replacement_ownership", "access_control", "artifact_integrity", "version_policy"]
+    },
+    {
+      "function": "mobile-config-admin",
+      "disposition": "reimplement_new_lemtel_service",
+      "prerequisite_categories": ["access_control", "auditability", "validation_contract"]
+    },
+    {
+      "function": "mobile-home-stats",
+      "disposition": "reimplement_new_lemtel_service",
+      "prerequisite_categories": ["access_control", "data_minimization", "synthetic_validation", "fallback_behavior"]
+    },
+    {
+      "function": "mobile-release-publish",
+      "disposition": "reimplement_new_lemtel_service",
+      "prerequisite_categories": ["access_control", "artifact_integrity", "auditability", "rollback"]
+    },
+    {
+      "function": "mobile-settings-dnd",
+      "disposition": "exclude_pending_replacement",
+      "prerequisite_categories": ["replacement_ownership", "access_control", "external_boundary"]
+    },
+    {
+      "function": "pbx-admin-chatbot",
+      "disposition": "reimplement_new_lemtel_service",
+      "prerequisite_categories": ["access_control", "data_minimization", "tenant_boundary", "synthetic_validation"]
+    }
+  ]
+}

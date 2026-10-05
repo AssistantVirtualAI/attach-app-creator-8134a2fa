@@ -1,0 +1,40 @@
+{
+  "package_version": "lemtel_edge_function_deployment_v1",
+  "scope": "offline_edge_function_deployment_package",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "data_import_authorized": false,
+  "secrets_in_bundle": false,
+  "runtime": {
+    "function_volume_mount": "/home/deno/functions",
+    "router_path": "main/index.ts",
+    "import_map_path": "deno.jsonc",
+    "post_copy_action": "functions_service_restart_and_read_only_smoke_test"
+  },
+  "required_runtime_paths": [
+    "main/index.ts",
+    "deno.jsonc"
+  ],
+  "functions": [
+    {
+      "slug": "lemtel-mobile-config-admin",
+      "source": "infra/lemtel-self-hosted/functions/lemtel-mobile-config-admin/index.ts",
+      "destination": "lemtel-mobile-config-admin/index.ts",
+      "source_sha256": "e2b6ac17e18b264c032fbefc68691154712add92235a76bd143d5d82cac30bfb"
+    },
+    {
+      "slug": "lemtel-mobile-config-manifest",
+      "source": "infra/lemtel-self-hosted/functions/lemtel-mobile-config-manifest/index.ts",
+      "destination": "lemtel-mobile-config-manifest/index.ts",
+      "source_sha256": "eef954222b45c2c0cb195249fd26a07d38db53216db6bc951d55a8e50096a393"
+    }
+  ],
+  "deployment_prerequisites": [
+    "fresh_snapshot",
+    "edge_runtime_healthy",
+    "function_router_and_import_map_verified",
+    "approved_edge_deployment",
+    "owner_rbac_validation",
+    "read_only_smoke_test"
+  ]
+}

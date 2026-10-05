@@ -1,0 +1,11 @@
+{
+  "package_version": "lemtel_mobile_config_manifest_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "data_import_authorized": false,
+  "required_schema_package": "lemtel_mobile_config_schema_v1",
+  "capabilities": ["published_config_manifest_read"],
+  "explicitly_excluded": ["draft_read", "admin_write", "storage", "release", "pbx", "turn", "push", "external_calls"],
+  "deployment_prerequisites": ["new_auth_test_accounts", "lemtel_organization_memberships", "approved_atomic_publish_rpc", "synthetic_rbac_and_manifest_validation", "approved_edge_deployment", "approved_client_cutover"]
+}

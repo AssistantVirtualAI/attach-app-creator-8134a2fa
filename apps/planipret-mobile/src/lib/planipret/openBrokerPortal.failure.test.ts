@@ -10,7 +10,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     functions: { invoke: (...a: unknown[]) => invoke(...a) },
   },
 }));
-vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => false } }));
+vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => false }, registerPlugin: () => ({}) }));
 
 import { openBrokerPortal } from "./openBrokerPortal";
 

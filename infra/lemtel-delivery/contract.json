@@ -1,12 +1,16 @@
 {
-  "contract_version": "lemtel_lovable_github_delivery_v1",
+  "contract_version": "lemtel_lovable_github_delivery_v2",
   "scope": "offline_delivery_contract_only",
   "source": {
     "canonical_repository": "github",
-    "lovable_change_ingress": "pull_request_only",
+    "lovable_git_sync": "two_way_isolated_branch_only",
+    "lovable_active_branch": "lemtel/lovable-sync",
+    "github_branch_same_as_lovable": true,
+    "lovable_branch_base": "lemtel/integration",
+    "lovable_to_integration": "pull_request_only",
+    "lovable_configuration_authorized": false,
     "direct_lovable_to_hostinger": false,
-    "direct_lovable_to_digitalocean": false,
-    "bidirectional_sync": false
+    "direct_lovable_to_digitalocean": false
   },
   "artifact": {
     "build_once": true,

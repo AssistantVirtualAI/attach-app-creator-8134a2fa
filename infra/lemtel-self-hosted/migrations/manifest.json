@@ -1,0 +1,19 @@
+{
+  "package_version": "lemtel_mobile_config_schema_v1",
+  "scope": "offline_schema_package",
+  "apply_authorized": false,
+  "data_import_authorized": false,
+  "client_cutover_authorized": false,
+  "storage_bucket_creation_authorized": false,
+  "migrations": [
+    "0001_lemtel_identity_mobile_config_and_releases.sql"
+  ],
+  "required_follow_up": [
+    "explicit_target_schema_write_approval",
+    "new_lemtel_auth_accounts_only",
+    "storage_bucket_and_policy_design",
+    "server_function_contracts",
+    "synthetic_routing_and_rls_tests",
+    "rollback_and_restore_test"
+  ]
+}

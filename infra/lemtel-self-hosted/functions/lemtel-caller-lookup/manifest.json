@@ -1,0 +1,10 @@
+{
+  "package_version": "lemtel_private_caller_lookup_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "data_import_authorized": false,
+  "capabilities": ["authenticated_private_caller_lookup"],
+  "explicitly_excluded": ["cross_user_lookup", "crm_lookup", "maestro_lookup", "microsoft_lookup", "planipret_import", "pbx", "push", "storage", "external_calls"],
+  "deployment_prerequisites": ["approved_lemtel_directory_migration", "new_auth_test_accounts", "synthetic_rbac_validation", "approved_edge_deployment"]
+}

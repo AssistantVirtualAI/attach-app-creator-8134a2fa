@@ -1,0 +1,10 @@
+{
+  "package_version": "lemtel_private_contacts_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "data_import_authorized": false,
+  "capabilities": ["private_device_contact_upsert", "private_contact_list"],
+  "explicitly_excluded": ["shared_directory", "cross_user_lookup", "planipret_import", "pbx", "push", "storage", "external_calls"],
+  "deployment_prerequisites": ["approved_lemtel_directory_migration", "new_auth_test_accounts", "verified_in_app_contact_consent", "synthetic_rbac_validation", "approved_edge_deployment"]
+}

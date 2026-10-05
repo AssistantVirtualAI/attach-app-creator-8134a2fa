@@ -10,6 +10,7 @@ on:
       - 'scripts/lemtel-self-hosted-bootstrap-permissions*'
       - 'scripts/lemtel-self-hosted-baseline*'
       - 'scripts/lemtel-blocked-function-dispositions*'
+      - 'scripts/lemtel-self-hosted-schema-package*'
       - 'scripts/lemtel-hosting-readiness*'
       - 'scripts/inventory-lemtel-hosting*'
       - 'scripts/lemtel-dependency-closure*'
@@ -17,6 +18,7 @@ on:
       - 'schemas/lemtel-staging-admission/evidence/.gitignore'
       - 'schemas/lemtel-hostinger-empty-staging/policy.json'
       - 'schemas/lemtel-self-hosted-baseline/blocked-function-dispositions.json'
+      - 'infra/lemtel-self-hosted/migrations/**'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
       - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
@@ -29,6 +31,7 @@ on:
       - 'docs/lemtel-mobile/phase-32c-self-hosted-bootstrap-permissions.md'
       - 'docs/lemtel-mobile/phase-33a-lemtel-only-baseline.md'
       - 'docs/lemtel-mobile/phase-33b-blocked-function-dispositions.md'
+      - 'docs/lemtel-mobile/phase-34a-mobile-config-schema-package.md'
       - 'services/lemtel-control-plane/**'
       - 'infra/lemtel-control-plane/**'
       - 'apps/ava-softphone-mobile/src/**'
@@ -44,6 +47,7 @@ on:
       - 'scripts/lemtel-self-hosted-bootstrap-permissions*'
       - 'scripts/lemtel-self-hosted-baseline*'
       - 'scripts/lemtel-blocked-function-dispositions*'
+      - 'scripts/lemtel-self-hosted-schema-package*'
       - 'scripts/lemtel-hosting-readiness*'
       - 'scripts/inventory-lemtel-hosting*'
       - 'scripts/lemtel-dependency-closure*'
@@ -51,6 +55,7 @@ on:
       - 'schemas/lemtel-staging-admission/evidence/.gitignore'
       - 'schemas/lemtel-hostinger-empty-staging/policy.json'
       - 'schemas/lemtel-self-hosted-baseline/blocked-function-dispositions.json'
+      - 'infra/lemtel-self-hosted/migrations/**'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
       - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
@@ -63,6 +68,7 @@ on:
       - 'docs/lemtel-mobile/phase-32c-self-hosted-bootstrap-permissions.md'
       - 'docs/lemtel-mobile/phase-33a-lemtel-only-baseline.md'
       - 'docs/lemtel-mobile/phase-33b-blocked-function-dispositions.md'
+      - 'docs/lemtel-mobile/phase-34a-mobile-config-schema-package.md'
       - 'services/lemtel-control-plane/**'
       - 'infra/lemtel-control-plane/**'
       - 'apps/ava-softphone-mobile/src/**'
@@ -83,7 +89,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test fail-closed hosting gate, evidence, inventory and readiness probe (offline mocks)
-        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/lemtel-hosting-admission-evidence.test.mjs scripts/lemtel-hostinger-empty-staging-admission.test.mjs scripts/lemtel-self-hosted-bootstrap-permissions.test.mjs scripts/lemtel-self-hosted-baseline.test.mjs scripts/lemtel-blocked-function-dispositions.test.mjs scripts/lemtel-hosting-readiness.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
+        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/lemtel-hosting-admission-evidence.test.mjs scripts/lemtel-hostinger-empty-staging-admission.test.mjs scripts/lemtel-self-hosted-bootstrap-permissions.test.mjs scripts/lemtel-self-hosted-baseline.test.mjs scripts/lemtel-blocked-function-dispositions.test.mjs scripts/lemtel-self-hosted-schema-package.test.mjs scripts/lemtel-hosting-readiness.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
       - name: Both destinations must remain blocked by the current policy
         shell: bash
         run: |

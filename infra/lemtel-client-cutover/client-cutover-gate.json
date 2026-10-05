@@ -1,0 +1,43 @@
+{
+  "policy_version": "lemtel_client_cutover_gate_v1",
+  "scope": "offline_client_cutover_gate_only",
+  "current_state": {
+    "installed_clients_remain_on_legacy_backend": true,
+    "self_hosted_client_cutover_authorized": false,
+    "planipret_branch_eligible": false,
+    "current_lovable_project_eligible": false
+  },
+  "backend_preconditions": {
+    "hostinger_https_auth_verified": false,
+    "hostinger_storage_realtime_functions_verified": false,
+    "fresh_encrypted_backup_and_restore_verified": false,
+    "approved_lemtel_only_schema_verified": false,
+    "edge_functions_deployed_and_smoke_tested": false,
+    "private_directory_migration_and_rbac_verified": false,
+    "wss_turn_sip_test_environment_verified": false
+  },
+  "build_preconditions": {
+    "private_origin_and_publishable_key_in_build_system": false,
+    "new_auth_test_accounts_verified": false,
+    "desktop_build_authorized": false,
+    "ios_build_authorized": false,
+    "android_build_authorized": false,
+    "source_maps_private": true
+  },
+  "device_validation": {
+    "desktop_physical_test_passed": false,
+    "ios_physical_test_passed": false,
+    "android_physical_test_passed": false,
+    "incoming_call_lifecycle_passed": false,
+    "outgoing_call_media_passed": false,
+    "recording_authority_passed": false,
+    "rollback_builds_ready": false
+  },
+  "rollout": {
+    "github_release_pipeline_enabled": false,
+    "lovable_lemtel_project_connected": false,
+    "staged_rollout_authorized": false,
+    "store_submission_authorized": false,
+    "production_rollout_authorized": false
+  }
+}

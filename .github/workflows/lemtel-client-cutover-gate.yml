@@ -1,0 +1,40 @@
+name: Lemtel clients — cutover gate
+
+on:
+  push:
+    branches:
+      - lemtel/integration
+    paths:
+      - '.github/workflows/lemtel-client-cutover-gate.yml'
+      - 'infra/lemtel-client-cutover/client-cutover-gate.json'
+      - 'scripts/lemtel-client-cutover-gate*'
+      - 'docs/lemtel-mobile/phase-40a-client-cutover-gate.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-client-cutover-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  enforce-inactive-client-cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require client cutover to remain blocked
+        shell: bash
+        run: |
+          set +e
+          report="$(node scripts/lemtel-client-cutover-gate.mjs)"
+          result=$?
+          set -e
+          test "$result" -eq 78
+          printf '%s' "$report" | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x=JSON.parse(s); if (x.status !== "client_cutover_blocked" || x.authorization || x.desktop_build_authorized || x.ios_build_authorized || x.android_build_authorized || x.client_configuration_write_authorized || x.store_submission_authorized || x.production_rollout_authorized) process.exit(1) })'
+      - name: Test fail-closed client cutover validator
+        run: node --test scripts/lemtel-client-cutover-gate.test.mjs

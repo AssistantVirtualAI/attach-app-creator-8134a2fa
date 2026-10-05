@@ -154,7 +154,7 @@ export default function MContacts() {
   const [sortBy, setSortBy] = useState<"relevance" | "name" | "team" | "department">("relevance");
   const [clientActivity, setClientActivity] = useState<"" | "active" | "recent" | "dormant">("");
   const [clientAdded, setClientAdded] = useState<"" | "7" | "30" | "90" | "365">("");
-  const [clientSort, setClientSort] = useState<"name" | "newest" | "oldest">("name");
+  const [clientSort, setClientSort] = useState<"name" | "activity" | "newest" | "oldest">("name");
   const [dialingContactKey, setDialingContactKey] = useState<string | null>(null);
   const loadedTabsRef = useRef<Set<Tab>>(new Set<Tab>([
     "favorites",
@@ -344,7 +344,8 @@ export default function MContacts() {
         out = out.filter((c: any) => { const t0 = ts(c.created_at); return t0 > 0 && now - t0 <= lim; });
       }
       const nm = (c: any) => (c.name || c.display_name || `${c.first_name ?? ""} ${c.last_name ?? ""}`).trim().toLowerCase();
-      out = [...out].sort((a, b) => clientSort === "newest" ? ts(b.created_at) - ts(a.created_at) || nm(a).localeCompare(nm(b))
+      out = [...out].sort((a, b) => clientSort === "activity" ? actAt(b) - actAt(a) || nm(a).localeCompare(nm(b), "fr")
+        : clientSort === "newest" ? ts(b.created_at) - ts(a.created_at) || nm(a).localeCompare(nm(b))
         : clientSort === "oldest" ? (ts(a.created_at) || Infinity) - (ts(b.created_at) || Infinity) || nm(a).localeCompare(nm(b))
         : nm(a).localeCompare(nm(b), "fr"));
     }
@@ -625,7 +626,8 @@ export default function MContacts() {
                 <option value="365">{en ? "Last 12 months" : "12 derniers mois"}</option>
               </select>
               <select aria-label={en ? "Sort" : "Trier"} value={clientSort} onChange={(e) => setClientSort(e.target.value as any)} className="text-xs px-2 py-1.5 rounded-full outline-none shrink-0" style={sel(false)}>
-                <option value="name">{en ? "Sort: Name" : "Trier : Nom"}</option>
+                <option value="name">{en ? "Sort: Name (A–Z)" : "Trier : Nom (A–Z)"}</option>
+                <option value="activity">{en ? "Sort: Recent activity" : "Trier : Activité récente"}</option>
                 <option value="newest">{en ? "Sort: Newest" : "Trier : Plus récents"}</option>
                 <option value="oldest">{en ? "Sort: Oldest" : "Trier : Plus anciens"}</option>
               </select>

@@ -1,0 +1,10 @@
+{
+  "package_version": "lemtel_wss_diagnostics_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "data_import_authorized": false,
+  "capabilities": ["authenticated_minimized_wss_fallback_telemetry"],
+  "explicitly_excluded": ["raw_wss_url_logging", "sip_credential_logging", "response_body_logging", "arbitrary_diagnostic_payloads", "planipret_import", "pbx", "push", "storage", "external_calls"],
+  "deployment_prerequisites": ["approved_lemtel_directory_migration", "new_auth_test_accounts", "synthetic_rbac_validation", "retention_policy_review", "approved_edge_deployment"]
+}

@@ -1,0 +1,23 @@
+{
+  "contract_version": "lemtel_private_directory_and_wss_source_v1",
+  "scope": "offline_schema_and_function_source_only",
+  "migration": {
+    "path": "infra/lemtel-self-hosted/migrations/0002_lemtel_private_directory_and_wss_diagnostics.sql",
+    "apply_authorized": false,
+    "planipret_import_authorized": false,
+    "pbx_change_authorized": false
+  },
+  "functions": ["lemtel-contacts", "lemtel-caller-lookup", "lemtel-wss-diagnostics"],
+  "deployment": {
+    "edge_deployment_authorized": false,
+    "client_cutover_authorized": false,
+    "secrets_configured": false,
+    "runtime_write_authorized": false
+  },
+  "privacy": {
+    "contact_visibility": "owner_private_only",
+    "raw_wss_urls_accepted": false,
+    "sip_credentials_accepted": false,
+    "request_body_logging": false
+  }
+}

@@ -1,6 +1,8 @@
 -- Lemtel self-hosted schema package — OFFLINE ONLY; do not apply without a separate target-write approval.
 -- Creates empty Lemtel-owned structures only. It neither imports shared data nor creates Auth users, buckets, objects or functions.
 
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS public.lemtel_organizations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   slug text NOT NULL UNIQUE,
@@ -192,3 +194,5 @@ COMMENT ON TABLE public.lemtel_mobile_release_artifacts IS
   'Lemtel-owned release metadata. Artifact bucket and object lifecycle require a separate approved design.';
 COMMENT ON TABLE public.lemtel_mobile_admin_audit IS
   'Append-only Lemtel administrative audit metadata; payloads must remain minimized and non-secret.';
+
+COMMIT;

@@ -33,7 +33,8 @@ export function validateSchemaPackage(manifest, sql) {
   ) && /CREATE POLICY lemtel_mobile_config_select_published/u.test(sql) &&
     /CREATE POLICY lemtel_mobile_release_select_active/u.test(sql) &&
     /CREATE POLICY lemtel_mobile_admin_audit_select_admin/u.test(sql) &&
-    /REVOKE ALL ON public\.lemtel_mobile_config_revisions FROM anon, authenticated/u.test(sql);
+    /REVOKE ALL ON public\.lemtel_mobile_config_revisions FROM anon, authenticated/u.test(sql) &&
+    /\nBEGIN;\n/u.test(sql) && /\nCOMMIT;\s*$/u.test(sql);
 }
 
 export function reviewSchemaPackage(manifest, sql) {

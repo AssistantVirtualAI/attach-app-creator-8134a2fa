@@ -12,6 +12,7 @@ const manifest = () => ({
   required_follow_up: ['explicit_target_schema_write_approval', 'new_lemtel_auth_accounts_only', 'storage_bucket_and_policy_design', 'server_function_contracts', 'synthetic_routing_and_rls_tests'],
 });
 const sql = () => `
+BEGIN;
 CREATE TABLE IF NOT EXISTS public.lemtel_organizations (id uuid);
 CREATE TABLE IF NOT EXISTS public.lemtel_organization_memberships (id uuid);
 CREATE TABLE IF NOT EXISTS public.lemtel_mobile_config_revisions (id uuid);
@@ -26,6 +27,7 @@ REVOKE ALL ON public.lemtel_mobile_config_revisions FROM anon, authenticated;
 CREATE POLICY lemtel_mobile_config_select_published ON public.lemtel_mobile_config_revisions FOR SELECT USING (true);
 CREATE POLICY lemtel_mobile_release_select_active ON public.lemtel_mobile_release_artifacts FOR SELECT USING (true);
 CREATE POLICY lemtel_mobile_admin_audit_select_admin ON public.lemtel_mobile_admin_audit FOR SELECT USING (true);
+COMMIT;
 `;
 
 test('valid package is offline-ready but never authorizes a target schema write or client cutover', () => {
@@ -44,6 +46,7 @@ test('permission lifts, shared markers, data statements and missing RLS fail clo
   assert.equal(validateSchemaPackage(manifest(), `${sql()}\nINSERT INTO public.lemtel_organizations DEFAULT VALUES;`), false);
   assert.equal(validateSchemaPackage(manifest(), `${sql()}\n-- planipret`), false);
   assert.equal(validateSchemaPackage(manifest(), sql().replace('ALTER TABLE public.lemtel_mobile_admin_audit ENABLE ROW LEVEL SECURITY;\n', '')), false);
+  assert.equal(validateSchemaPackage(manifest(), sql().replace('BEGIN;\n', '')), false);
   assert.deepEqual(reviewSchemaPackage(lifted, sql()), {
     status: 'schema_package_invalid', authorization: false, reasons: ['SCHEMA_PACKAGE_INVALID', 'POLICY_REVIEW_REQUIRED'],
   });

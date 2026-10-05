@@ -6,6 +6,8 @@ Ce paquet prépare, **dans le dépôt seulement**, le premier schéma vide déte
 
 Le paquet ne crée ni compte, ni organisation, ni bucket, ni objet Storage, ni fonction serveur. Il ne contient aucun `INSERT`, import de données, clé, endpoint ou secret.
 
+Le fichier SQL est encapsulé dans `BEGIN` / `COMMIT` : lors d’une future application approuvée, une erreur doit annuler le paquet entier plutôt que laisser un schéma partiellement créé.
+
 ## Structures préparées
 
 - organisations et appartenances Lemtel, référencées vers de **nouveaux** comptes Auth du projet auto-hébergé ;

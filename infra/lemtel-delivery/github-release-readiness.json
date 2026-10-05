@@ -1,0 +1,47 @@
+{
+  "policy_version": "lemtel_github_release_readiness_v1",
+  "scope": "offline_github_release_preparation_only",
+  "source": {
+    "accepted_branch": "lemtel/integration",
+    "rejected_branches": ["Planipret"],
+    "pull_request_required": true,
+    "dedicated_lovable_project_required": true,
+    "current_lovable_project_eligible": false
+  },
+  "artifact": {
+    "build_once": true,
+    "immutable_identity": ["git_sha", "artifact_sha256"],
+    "sbom_format": "cyclonedx",
+    "provenance_format": "slsa",
+    "source_maps_private": true,
+    "standby_rebuild": false
+  },
+  "environments": [
+    {
+      "name": "lemtel-hostinger-primary",
+      "required_secret_names": ["LEMTEL_HOSTINGER_DEPLOY_KEY", "LEMTEL_HOSTINGER_KNOWN_HOSTS"],
+      "configured": false,
+      "protection_rules_verified": false,
+      "deployment_authorized": false,
+      "runtime_write_authorized": false,
+      "healthcheck_required": true
+    },
+    {
+      "name": "lemtel-digitalocean-standby",
+      "required_secret_names": ["LEMTEL_DIGITALOCEAN_DEPLOY_KEY", "LEMTEL_DIGITALOCEAN_KNOWN_HOSTS"],
+      "configured": false,
+      "protection_rules_verified": false,
+      "deployment_authorized": false,
+      "runtime_write_authorized": false,
+      "healthcheck_required": true
+    }
+  ],
+  "pipeline": {
+    "workflow_enabled": false,
+    "artifact_generation_authorized": false,
+    "primary_validation_required": true,
+    "standby_artifact_sync_authorized": false,
+    "standby_validation_required": true,
+    "external_write_authorized": false
+  }
+}

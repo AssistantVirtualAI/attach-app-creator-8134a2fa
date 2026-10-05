@@ -1,0 +1,40 @@
+name: Lemtel delivery — GitHub release readiness gate
+
+on:
+  push:
+    branches:
+      - lemtel/integration
+    paths:
+      - '.github/workflows/lemtel-github-release-readiness.yml'
+      - 'infra/lemtel-delivery/github-release-readiness.json'
+      - 'scripts/lemtel-github-release-readiness*'
+      - 'docs/lemtel-mobile/phase-38b-github-release-readiness.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-github-release-readiness-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  enforce-inactive-release-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require GitHub release preparation to remain inactive
+        shell: bash
+        run: |
+          set +e
+          report="$(node scripts/lemtel-github-release-readiness.mjs)"
+          result=$?
+          set -e
+          test "$result" -eq 78
+          printf '%s' "$report" | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x=JSON.parse(s); if (x.status !== "github_release_readiness_blocked" || x.authorization || x.artifact_generation_authorized || x.github_environment_configuration_authorized || x.hostinger_deployment_authorized || x.digitalocean_artifact_sync_authorized || x.digitalocean_runtime_write_authorized) process.exit(1) })'
+      - name: Test fail-closed release readiness validator
+        run: node --test scripts/lemtel-github-release-readiness.test.mjs

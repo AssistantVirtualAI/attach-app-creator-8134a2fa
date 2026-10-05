@@ -39,6 +39,7 @@ export default function PortalHandoff() {
         const { data } = await supabase.auth.getSession();
         if (data.session?.user) {
           try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch { /* ignore */ }
+          try { localStorage.setItem("pp_admin_mobile_notice", "dismissed"); } catch { /* ignore */ }
           window.location.replace(to);
           return;
         }

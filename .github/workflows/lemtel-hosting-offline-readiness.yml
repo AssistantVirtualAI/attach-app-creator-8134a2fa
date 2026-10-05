@@ -15,6 +15,7 @@ on:
       - 'scripts/lemtel-self-hosted-mobile-config-manifest*'
       - 'scripts/lemtel-self-hosted-atomic-draft-rpc*'
       - 'scripts/lemtel-self-hosted-atomic-config-publish-rpc*'
+      - 'scripts/lemtel-lovable-delivery-contract*'
       - 'scripts/lemtel-hosting-readiness*'
       - 'scripts/inventory-lemtel-hosting*'
       - 'scripts/lemtel-dependency-closure*'
@@ -25,6 +26,7 @@ on:
       - 'infra/lemtel-self-hosted/migrations/**'
       - 'infra/lemtel-self-hosted/functions/**'
       - 'infra/lemtel-self-hosted/rpc/**'
+      - 'infra/lemtel-delivery/**'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
       - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
@@ -43,6 +45,7 @@ on:
       - 'docs/lemtel-mobile/phase-35a-atomic-mobile-config-publish.md'
       - 'docs/lemtel-mobile/phase-35b-mobile-config-admin-transitions.md'
       - 'docs/lemtel-mobile/phase-35c-published-mobile-config-manifest.md'
+      - 'docs/lemtel-mobile/phase-36a-lovable-github-delivery-contract.md'
       - 'services/lemtel-control-plane/**'
       - 'infra/lemtel-control-plane/**'
       - 'apps/ava-softphone-mobile/src/**'
@@ -63,6 +66,7 @@ on:
       - 'scripts/lemtel-self-hosted-mobile-config-manifest*'
       - 'scripts/lemtel-self-hosted-atomic-draft-rpc*'
       - 'scripts/lemtel-self-hosted-atomic-config-publish-rpc*'
+      - 'scripts/lemtel-lovable-delivery-contract*'
       - 'scripts/lemtel-hosting-readiness*'
       - 'scripts/inventory-lemtel-hosting*'
       - 'scripts/lemtel-dependency-closure*'
@@ -73,6 +77,7 @@ on:
       - 'infra/lemtel-self-hosted/migrations/**'
       - 'infra/lemtel-self-hosted/functions/**'
       - 'infra/lemtel-self-hosted/rpc/**'
+      - 'infra/lemtel-delivery/**'
       - 'docs/lemtel-mobile/phase-31b-hosting-admission-inventory.md'
       - 'docs/lemtel-mobile/phase-31c-backend-dependency-boundary.md'
       - 'docs/lemtel-mobile/phase-31e-hosting-readiness.md'
@@ -91,6 +96,7 @@ on:
       - 'docs/lemtel-mobile/phase-35a-atomic-mobile-config-publish.md'
       - 'docs/lemtel-mobile/phase-35b-mobile-config-admin-transitions.md'
       - 'docs/lemtel-mobile/phase-35c-published-mobile-config-manifest.md'
+      - 'docs/lemtel-mobile/phase-36a-lovable-github-delivery-contract.md'
       - 'services/lemtel-control-plane/**'
       - 'infra/lemtel-control-plane/**'
       - 'apps/ava-softphone-mobile/src/**'
@@ -111,7 +117,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test fail-closed hosting gate, evidence, inventory and readiness probe (offline mocks)
-        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/lemtel-hosting-admission-evidence.test.mjs scripts/lemtel-hostinger-empty-staging-admission.test.mjs scripts/lemtel-self-hosted-bootstrap-permissions.test.mjs scripts/lemtel-self-hosted-baseline.test.mjs scripts/lemtel-blocked-function-dispositions.test.mjs scripts/lemtel-self-hosted-schema-package.test.mjs scripts/lemtel-self-hosted-mobile-config-admin.test.mjs scripts/lemtel-self-hosted-mobile-config-manifest.test.mjs scripts/lemtel-self-hosted-atomic-draft-rpc.test.mjs scripts/lemtel-self-hosted-atomic-config-publish-rpc.test.mjs scripts/lemtel-hosting-readiness.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
+        run: node --test scripts/lemtel-hosting-preflight.test.mjs scripts/lemtel-hosting-admission-evidence.test.mjs scripts/lemtel-hostinger-empty-staging-admission.test.mjs scripts/lemtel-self-hosted-bootstrap-permissions.test.mjs scripts/lemtel-self-hosted-baseline.test.mjs scripts/lemtel-blocked-function-dispositions.test.mjs scripts/lemtel-self-hosted-schema-package.test.mjs scripts/lemtel-self-hosted-mobile-config-admin.test.mjs scripts/lemtel-self-hosted-mobile-config-manifest.test.mjs scripts/lemtel-self-hosted-atomic-draft-rpc.test.mjs scripts/lemtel-self-hosted-atomic-config-publish-rpc.test.mjs scripts/lemtel-lovable-delivery-contract.test.mjs scripts/lemtel-hosting-readiness.test.mjs scripts/inventory-lemtel-hosting.test.mjs scripts/lemtel-dependency-closure.test.mjs
       - name: Both destinations must remain blocked by the current policy
         shell: bash
         run: |

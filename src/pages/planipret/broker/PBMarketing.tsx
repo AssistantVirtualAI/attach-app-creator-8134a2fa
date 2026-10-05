@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Mail, Megaphone, MessageSquare, Pencil, RefreshCw, Search, Send, Sparkles } from "lucide-react";
+import { CalendarClock, Check, Loader2, Mail, Megaphone, MessageSquare, Pencil, RefreshCw, Search, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
@@ -30,6 +30,11 @@ export default function PBMarketing() {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [audience, setAudience] = useState<"all" | "pick">("pick");
+  const [when, setWhen] = useState<"now" | "later">("now");
+  const [schedAt, setSchedAt] = useState("");
+  const schedTs = schedAt ? new Date(schedAt).getTime() : NaN;
+  const schedValid = when === "now" || (Number.isFinite(schedTs) && schedTs > Date.now() + 60_000);
 
   const channels = [useSms && "sms", useEmail && "email"].filter(Boolean) as string[];
 
@@ -69,7 +74,7 @@ export default function PBMarketing() {
     return (clients ?? []).filter((c) => !q || c.name.toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q) || (c.phone ?? "").includes(q));
   }, [clients, search]);
 
-  const chosen = (clients ?? []).filter((c) => sel.has(c.id));
+  const chosen = audience === "all" ? (clients ?? []) : (clients ?? []).filter((c) => sel.has(c.id));
   const nSms = useSms ? chosen.filter((c) => phoneOk(c.phone)).length : 0;
   const nEmail = useEmail ? chosen.filter((c) => emailOk(c.email)).length : 0;
   const allSel = filtered.length > 0 && filtered.every((c) => sel.has(c.id));
@@ -80,17 +85,19 @@ export default function PBMarketing() {
     try {
       const { data, error } = await supabase.functions.invoke("pp-marketing-send", {
         body: {
-          confirmed: true, channels, prompt, subject: draft.subject, email_body_html: draft.email_body_html, sms_text: draft.sms_text,
+          confirmed: true, channels, scheduled_at: when === "later" ? new Date(schedAt).toISOString() : undefined, prompt, subject: draft.subject, email_body_html: draft.email_body_html, sms_text: draft.sms_text,
           targets: chosen.map((c) => ({ client_id: c.id, name: c.name, phone: c.phone, email: c.email })),
         },
       });
       const d = data as any;
       if (d?.error === "outlook_not_connected") throw new Error(L("Connectez Outlook dans Microsoft 365 avant d'envoyer des courriels.", "Connect Outlook in Microsoft 365 before sending emails."));
       if (d?.error === "duplicate_send") throw new Error(L("Cette campagne vient déjà d'être envoyée.", "This campaign was just sent."));
+      if (d?.error === "invalid_schedule") throw new Error(L("Choisissez une date et une heure futures.", "Pick a future date and time."));
       if (error || !d?.ok) throw new Error(L("Envoi impossible", "Send failed"));
-      toast.success(L(`Envoyé : ${d.sent_email} courriel(s), ${d.sent_sms} texto(s)`, `Sent: ${d.sent_email} email(s), ${d.sent_sms} text(s)`),
+      if (d.scheduled) toast.success(L(`Campagne planifiée pour le ${new Date(d.scheduled_at).toLocaleString("fr-CA")}`, `Campaign scheduled for ${new Date(d.scheduled_at).toLocaleString("en-CA")}`));
+      else toast.success(L(`Envoyé : ${d.sent_email} courriel(s), ${d.sent_sms} texto(s)`, `Sent: ${d.sent_email} email(s), ${d.sent_sms} text(s)`),
         { description: d.failed ? L(`${d.failed} échec(s) — voir l'historique`, `${d.failed} failure(s) — see history`) : undefined });
-      setConfirmOpen(false); setStep(1); setDraft(null); setPrompt(""); setSel(new Set()); setReloadKey((k) => k + 1); setTab("history");
+      setConfirmOpen(false); setStep(1); setDraft(null); setPrompt(""); setSel(new Set()); setWhen("now"); setSchedAt(""); setReloadKey((k) => k + 1); setTab("history");
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   };
 
@@ -173,6 +180,11 @@ export default function PBMarketing() {
 
           {step === 3 && (
             <div className="pp-marketing-panel p-4 space-y-3">
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={L("Destinataires", "Recipients")}>
+                <button role="radio" aria-checked={audience === "all"} className={audience === "all" ? primary : ghost} onClick={() => setAudience("all")}>{L("Tous mes clients", "All my clients")}{clients ? ` (${clients.length})` : ""}</button>
+                <button role="radio" aria-checked={audience === "pick"} className={audience === "pick" ? primary : ghost} onClick={() => setAudience("pick")}>{L("Choisir des clients", "Pick clients")}</button>
+              </div>
+              {audience === "pick" && (<>
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
@@ -197,10 +209,28 @@ export default function PBMarketing() {
                     {!filtered.length && <p className="p-4 text-sm text-muted-foreground">{L("Aucun client.", "No clients.")}</p>}
                   </div>
                 )}
-              <div className="text-sm">{sel.size} {L("client(s) sélectionné(s)", "client(s) selected")} · {nSms} {L("texto(s)", "text(s)")} · {nEmail} {L("courriel(s)", "email(s)")}</div>
+              </>)}
+              {audience === "all" && clients === null && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />{L("Chargement de vos clients Maestro…", "Loading your Maestro clients…")}</div>}
+              {audience === "all" && clientsErr && !clients?.length && <p className="text-sm text-destructive">{clientsErr}</p>}
+              <div className="space-y-2 border-t border-border pt-3">
+                <div className="text-sm font-semibold">{L("Quand envoyer ?", "When to send?")}</div>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={L("Moment de l'envoi", "Send time")}>
+                  <button role="radio" aria-checked={when === "now"} className={when === "now" ? primary : ghost} onClick={() => setWhen("now")}><Send className="w-4 h-4" />{L("Maintenant", "Right away")}</button>
+                  <button role="radio" aria-checked={when === "later"} className={when === "later" ? primary : ghost} onClick={() => setWhen("later")}><CalendarClock className="w-4 h-4" />{L("Planifier", "Schedule")}</button>
+                </div>
+                {when === "later" && (
+                  <div className="space-y-1">
+                    <input type="datetime-local" aria-label={L("Date et heure d'envoi", "Send date and time")} value={schedAt} onChange={(e) => setSchedAt(e.target.value)}
+                      min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000 + 120000).toISOString().slice(0, 16)}
+                      className="pp-marketing-field rounded-lg border p-2 text-sm" />
+                    <p className="text-xs text-muted-foreground">{schedAt && !schedValid ? L("Choisissez une date et une heure futures.", "Pick a future date and time.") : L("Envoi automatique à l'heure choisie (à quelques minutes près).", "Sent automatically at the chosen time (within a few minutes).")}</p>
+                  </div>
+                )}
+              </div>
+              <div className="text-sm">{audience === "all" ? chosen.length : sel.size} {L("client(s) sélectionné(s)", "client(s) selected")} · {nSms} {L("texto(s)", "text(s)")} · {nEmail} {L("courriel(s)", "email(s)")}</div>
               <div className="flex gap-2">
                 <button className={ghost} onClick={() => setStep(2)}>{L("Retour", "Back")}</button>
-                <button className={primary} disabled={nSms + nEmail === 0} onClick={() => setConfirmOpen(true)}><Send className="w-4 h-4" />{L("Envoyer", "Send")}</button>
+                <button className={primary} disabled={nSms + nEmail === 0 || !schedValid} onClick={() => setConfirmOpen(true)}>{when === "later" ? <CalendarClock className="w-4 h-4" /> : <Send className="w-4 h-4" />}{when === "later" ? L("Planifier", "Schedule") : L("Envoyer", "Send")}</button>
               </div>
             </div>
           )}
@@ -210,7 +240,8 @@ export default function PBMarketing() {
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4" onClick={() => !busy && setConfirmOpen(false)}>
           <div className="pp-marketing-panel w-full max-w-md p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold">{L("Confirmer l'envoi réel", "Confirm real send")}</h3>
+            <h3 className="text-lg font-bold">{when === "later" ? L("Confirmer la planification", "Confirm schedule") : L("Confirmer l'envoi réel", "Confirm real send")}</h3>
+            {when === "later" && schedAt && <p className="text-sm">{L("Envoi prévu le", "Scheduled for")} {new Date(schedAt).toLocaleString(lang === "en" ? "en-CA" : "fr-CA")}</p>}
             <ul className="text-sm space-y-1">
               {useSms && <li>• {nSms} {L("texto(s) depuis votre numéro Planiprêt", "text(s) from your Planiprêt number")}</li>}
               {useEmail && <li>• {nEmail} {L("courriel(s) depuis votre boîte Outlook", "email(s) from your Outlook mailbox")}</li>}
@@ -218,7 +249,7 @@ export default function PBMarketing() {
             <p className="text-xs text-muted-foreground">{L("Les clients sans cellulaire ou courriel valide sont ignorés. Cette action est irréversible.", "Clients without a valid mobile or email are skipped. This cannot be undone.")}</p>
             <div className="flex gap-2 justify-end">
               <button className={ghost} disabled={busy} onClick={() => setConfirmOpen(false)}>{L("Annuler", "Cancel")}</button>
-              <button className={primary} disabled={busy} onClick={() => void send()}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}{L("Envoyer maintenant", "Send now")}</button>
+              <button className={primary} disabled={busy} onClick={() => void send()}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}{when === "later" ? L("Planifier l'envoi", "Schedule send") : L("Envoyer maintenant", "Send now")}</button>
             </div>
           </div>
         </div>

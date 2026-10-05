@@ -11567,6 +11567,7 @@ export type Database = {
           id: string
           opened_count: number
           prompt: string | null
+          scheduled_at: string | null
           sent_email: number
           sent_sms: number
           sms_text: string | null
@@ -11587,6 +11588,7 @@ export type Database = {
           id?: string
           opened_count?: number
           prompt?: string | null
+          scheduled_at?: string | null
           sent_email?: number
           sent_sms?: number
           sms_text?: string | null
@@ -11607,6 +11609,7 @@ export type Database = {
           id?: string
           opened_count?: number
           prompt?: string | null
+          scheduled_at?: string | null
           sent_email?: number
           sent_sms?: number
           sms_text?: string | null

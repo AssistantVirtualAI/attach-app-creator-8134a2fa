@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight, Info, Mail, MessageSquare, RefreshCw } from 
 type Campaign = {
   id: string; broker_user_id: string; broker_name: string | null; channels: string[]; subject: string | null;
   sms_text: string | null; status: string; total_email: number; total_sms: number; sent_email: number; sent_sms: number;
-  failed_count: number; opened_count: number; clicked_count: number; created_at: string;
+  failed_count: number; opened_count: number; clicked_count: number; created_at: string; scheduled_at?: string | null;
 };
 type Recipient = {
   id: string; client_name: string | null; phone: string | null; email: string | null; channel: string;
@@ -54,6 +54,11 @@ export default function MarketingHistory({ lang, adminView = false, reloadKey = 
   const tot = shown.reduce((a, r) => ({
     c: a.c + 1, se: a.se + r.sent_email, ss: a.ss + r.sent_sms, f: a.f + r.failed_count, o: a.o + r.opened_count, k: a.k + r.clicked_count,
   }), { c: 0, se: 0, ss: 0, f: 0, o: 0, k: 0 });
+
+  const cancel = async (id: string) => {
+    const { data } = await supabase.functions.invoke("pp-marketing-send", { body: { action: "cancel", campaign_id: id } });
+    if ((data as any)?.ok) void load();
+  };
 
   const statusLabel = (r: Recipient) => {
     if (r.status === "failed") return [ERR[r.error ?? ""]?.[lang === "en" ? 1 : 0] ?? L("Échec", "Failed"), "text-destructive"];
@@ -105,7 +110,7 @@ export default function MarketingHistory({ lang, adminView = false, reloadKey = 
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold truncate">{c.subject || c.sms_text?.slice(0, 60) || L("Campagne", "Campaign")}</div>
                   <div className="text-xs text-muted-foreground">
-                    {new Date(c.created_at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA")}{adminView && c.broker_name ? ` · ${c.broker_name}` : ""}
+                    {c.status === "scheduled" && c.scheduled_at ? `${L("Planifiée pour le", "Scheduled for")} ${new Date(c.scheduled_at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA")}` : c.status === "cancelled" ? L("Annulée", "Cancelled") : new Date(c.created_at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA")}{adminView && c.broker_name ? ` · ${c.broker_name}` : ""}
                   </div>
                 </div>
                 <div className="flex gap-3 text-xs">
@@ -114,6 +119,9 @@ export default function MarketingHistory({ lang, adminView = false, reloadKey = 
                   {c.failed_count > 0 && <span className="text-destructive">{c.failed_count} {L("échecs", "failed")}</span>}
                 </div>
               </button>
+              {c.status === "scheduled" && !adminView && (
+                <div className="px-3 pb-3"><button onClick={() => void cancel(c.id)} className="rounded-lg border border-border px-3 py-1 text-xs text-destructive">{L("Annuler l'envoi planifié", "Cancel scheduled send")}</button></div>
+              )}
               {open === c.id && (
                 <div className="border-t border-border p-3 overflow-x-auto">
                   <table className="w-full text-sm">

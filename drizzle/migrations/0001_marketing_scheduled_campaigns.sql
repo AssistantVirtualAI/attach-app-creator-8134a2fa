@@ -1,0 +1,2 @@
+ALTER TABLE public.planipret_marketing_campaigns ADD COLUMN IF NOT EXISTS scheduled_at timestamptz;
+CREATE INDEX IF NOT EXISTS planipret_marketing_campaigns_due_idx ON public.planipret_marketing_campaigns (scheduled_at) WHERE status = 'scheduled';

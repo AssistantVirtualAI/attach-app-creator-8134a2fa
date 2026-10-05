@@ -14,6 +14,8 @@ Une fois les prérequis approuvés et le paquet déployé séparément, la fonct
 - modifier un brouillon existant, toujours lié à la même organisation et au même canal;
 - lister au plus 50 brouillons de sa propre organisation.
 
+La phase 35B prolonge ce même contrat source par la demande de publication ou de retrait. Ces transitions restent elles aussi non déployées et ne sont transmises qu’aux RPC atomiques séparées préparées en 34D et 35A.
+
 Les entrées sont strictes : UUID, canal fermé, révision positive, corps exact sans attribut additionnel, versions bornées et objets JSON limités. Les clés sensibles ou liées à l’infrastructure sont refusées dans les objets de configuration. Les erreurs ne renvoient jamais la requête brute.
 
 ## Frontières de sécurité
@@ -22,13 +24,14 @@ Les entrées sont strictes : UUID, canal fermé, révision positive, corps exact
 - l’appartenance est cherchée côté serveur dans `lemtel_organization_memberships`, avec organisation, utilisateur, statut `active` et rôle `owner`/`admin`;
 - les écritures ne sont pas directes : la fonction attend la future RPC `lemtel_mobile_config_draft_write`, qui devra créer ou modifier le brouillon **et** son audit minimal dans la même transaction, ou ne rien écrire;
 - cette RPC future ne recevra que l’opération, l’acteur, l’organisation, le canal, la révision et les champs validés; son audit ne devra jamais conserver les objets `flags`, `messages` ou `settings`;
+- les transitions publication/retrait ne sont pas directes : elles passent par la RPC `lemtel_mobile_config_publish`, qui sérialise l’organisation, retire l’ancienne révision du canal si nécessaire et inscrit l’audit dans la même transaction;
 - les réponses sont `no-store`; aucun CORS permissif n’est ajouté avant la conception du portail Lemtel.
 
 ## Explicitement exclu
 
-Cette phase n’implémente ni publication/retrait atomique, ni manifeste client, ni Storage, ni upload, ni registre de releases, ni Auth utilisateur, ni push, ni PBX/TURN/SIP, ni appel externe. Elle ne déploie aucune fonction et n’ajoute aucune clé ou variable privée aux applications. Elle ne peut pas écrire de brouillon avant qu’un paquet SQL séparé et approuvé crée la RPC atomique.
+Cette phase n’implémente ni manifeste client, ni Storage, ni upload, ni registre de releases, ni Auth utilisateur, ni push, ni PBX/TURN/SIP, ni appel externe. Elle ne déploie aucune fonction et n’ajoute aucune clé ou variable privée aux applications. Elle ne peut pas écrire ou changer l’état d’une configuration avant que les deux paquets SQL séparés et approuvés créent les RPC atomiques.
 
-La publication/retrait demande une opération transactionnelle serveur distincte afin de respecter les contraintes d’unicité de configuration publiée. Le manifeste client reste exclu jusqu’à la conception d’un remplacement autonome de `mobile-config`.
+Le manifeste client reste exclu jusqu’à la conception d’un remplacement autonome de `mobile-config`.
 
 ## Vérification hors ligne
 

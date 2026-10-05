@@ -6,7 +6,7 @@ const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/;
 const CHANNELS = ["staging", "production"] as const;
-const ACTIONS = ["create_draft", "update_draft", "list_drafts"] as const;
+const ACTIONS = ["create_draft", "update_draft", "list_drafts", "publish", "retire"] as const;
 const SENSITIVE_KEY_RE = /(?:pass(?:word)?|secret|token|credential|authorization|api[_-]?key|private|sip|turn|wss|endpoint|host|url)/i;
 const MAX_JSON_BYTES = 16 * 1024;
 const MAX_JSON_DEPTH = 5;
@@ -31,7 +31,8 @@ type DraftFields = {
 export type RequestBody =
   | ({ action: "create_draft"; organizationId: string; channel: Channel; revision: number } & DraftFields)
   | ({ action: "update_draft"; organizationId: string; channel: Channel; configId: string } & DraftFields)
-  | { action: "list_drafts"; organizationId: string; channel: Channel };
+  | { action: "list_drafts"; organizationId: string; channel: Channel }
+  | { action: "publish" | "retire"; organizationId: string; channel: Channel; configId: string };
 
 const failure = (error: string, status: number): Failure => ({ error, status });
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -68,6 +69,7 @@ function validDraftFields(value: Record<string, unknown>): value is Record<keyof
 const fieldsFor = (action: Action): readonly string[] => {
   const common = ["action", "organizationId", "channel"];
   if (action === "list_drafts") return common;
+  if (action === "publish" || action === "retire") return [...common, "configId"];
   const draft = ["flags", "messages", "settings", "minVersion", "recommendedVersion", "maintenanceMode", "maintenanceMessage"];
   return action === "create_draft" ? [...common, "revision", ...draft] : [...common, "configId", ...draft];
 };
@@ -82,6 +84,10 @@ export function validateBody(raw: unknown): RequestBody | Failure {
   if (typeof raw.channel !== "string" || !(CHANNELS as readonly string[]).includes(raw.channel)) return failure("invalid_channel", 400);
   const base = { action, organizationId: raw.organizationId.toLowerCase(), channel: raw.channel as Channel };
   if (action === "list_drafts") return base;
+  if (action === "publish" || action === "retire") {
+    if (typeof raw.configId !== "string" || !UUID_RE.test(raw.configId)) return failure("invalid_config_id", 400);
+    return { ...base, action, configId: raw.configId.toLowerCase() };
+  }
   if (!validDraftFields(raw)) return failure("invalid_draft", 400);
   const draft: DraftFields = {
     flags: raw.flags as JsonRecord,
@@ -129,6 +135,17 @@ function rpcRow(data: unknown): Record<string, unknown> | null {
   return typeof data === "object" && data !== null ? data as Record<string, unknown> : null;
 }
 
+function toTransitionResponse(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    channel: row.channel,
+    revision: row.revision,
+    status: row.status,
+    publishedAt: row.published_at,
+    retiredAt: row.retired_at,
+  };
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   if (req.method !== "POST") return response({ error: "method_not_allowed" }, 405);
@@ -172,26 +189,40 @@ export async function handler(req: Request): Promise<Response> {
     return response({ drafts: (data ?? []).map((row) => toDraftResponse(row as Record<string, unknown>)) });
   }
 
-  const rpcArguments = {
+  if (request.action === "create_draft" || request.action === "update_draft") {
+    const rpcArguments = {
+      p_operation: request.action,
+      p_actor_id: userId,
+      p_organization_id: request.organizationId,
+      p_channel: request.channel,
+      p_config_id: request.action === "update_draft" ? request.configId : null,
+      p_revision: request.action === "create_draft" ? request.revision : null,
+      p_flags: request.flags,
+      p_messages: request.messages,
+      p_settings: request.settings,
+      p_min_version: request.minVersion,
+      p_recommended_version: request.recommendedVersion,
+      p_maintenance_mode: request.maintenanceMode,
+      p_maintenance_message: request.maintenanceMessage,
+    };
+    // This RPC is separately approved and must write the draft and its audit record together or write neither.
+    const { data, error } = await admin.rpc("lemtel_mobile_config_draft_write", rpcArguments);
+    const row = rpcRow(data);
+    if (error || !row) return response({ error: request.action === "create_draft" ? "draft_not_created" : "draft_not_updated" }, 409);
+    return response({ draft: toDraftResponse(row) }, request.action === "create_draft" ? 201 : 200);
+  }
+
+  const transitionArguments = {
     p_operation: request.action,
     p_actor_id: userId,
     p_organization_id: request.organizationId,
     p_channel: request.channel,
-    p_config_id: request.action === "update_draft" ? request.configId : null,
-    p_revision: request.action === "create_draft" ? request.revision : null,
-    p_flags: request.flags,
-    p_messages: request.messages,
-    p_settings: request.settings,
-    p_min_version: request.minVersion,
-    p_recommended_version: request.recommendedVersion,
-    p_maintenance_mode: request.maintenanceMode,
-    p_maintenance_message: request.maintenanceMessage,
+    p_config_id: request.configId,
   };
-  // This RPC is deliberately not part of the current schema package. A future, separately approved
-  // transaction must write the draft and its minimal audit record together or write neither.
-  const { data, error } = await admin.rpc("lemtel_mobile_config_draft_write", rpcArguments);
+  // Publication or retirement is delegated to the separately approved, organization-serialized RPC.
+  const { data, error } = await admin.rpc("lemtel_mobile_config_publish", transitionArguments);
   const row = rpcRow(data);
-  if (error || !row) return response({ error: request.action === "create_draft" ? "draft_not_created" : "draft_not_updated" }, 409);
-  return response({ draft: toDraftResponse(row) }, request.action === "create_draft" ? 201 : 200);
+  if (error || !row) return response({ error: request.action === "publish" ? "config_not_published" : "config_not_retired" }, 409);
+  return response({ transition: toTransitionResponse(row) });
 }
 Deno.serve(handler);

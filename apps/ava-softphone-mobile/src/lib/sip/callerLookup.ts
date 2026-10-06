@@ -6,6 +6,7 @@ import { supabase } from '../mobileSupabase';
 import { normalizePhone, formatDisplay } from '../phoneNormalize';
 import { txStatic } from '../i18n';
 import { BACKEND_URL, LEGACY_BACKEND_URL } from '../backendOrigin';
+import { invokeLemtelPrivateDirectory } from '../lemtelPrivateDirectory';
 
 export interface CallerLookup {
   found: boolean;
@@ -24,6 +25,17 @@ export interface CallerLookup {
 const cache = new Map<string, { at: number; v: CallerLookup }>();
 const TTL = 5 * 60 * 1000;
 
+function isLemtelLookup(value: unknown): value is CallerLookup {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.found === 'boolean' &&
+    (candidate.source === 'device' || candidate.source === null) &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.display_number === 'string' &&
+    typeof candidate.raw_number === 'string' &&
+    typeof candidate.phone_normalized === 'string';
+}
+
 export async function lookupCaller(rawNumber: string): Promise<CallerLookup> {
   const normalized = normalizePhone(rawNumber);
   const fallback: CallerLookup = {
@@ -34,12 +46,19 @@ export async function lookupCaller(rawNumber: string): Promise<CallerLookup> {
     raw_number: rawNumber,
     phone_normalized: normalized,
   };
-  // Never send a caller's number to a Planiprêt-specific function on a new
-  // Lemtel backend. Existing installations retain the historical behavior.
-  if (!normalized || BACKEND_URL !== LEGACY_BACKEND_URL) return fallback;
+  if (!normalized) return fallback;
 
   const hit = cache.get(normalized);
   if (hit && Date.now() - hit.at < TTL) return hit.v;
+
+  // Existing installations retain their historical product endpoint. A future
+  // Lemtel build can use only the separately flagged private directory adapter.
+  if (BACKEND_URL !== LEGACY_BACKEND_URL) {
+    const data = await invokeLemtelPrivateDirectory<CallerLookup>('lemtel-caller-lookup', { phone: normalized });
+    if (!isLemtelLookup(data)) return fallback;
+    cache.set(normalized, { at: Date.now(), v: data });
+    return data;
+  }
 
   try {
     const { data, error } = await supabase.functions.invoke('pp-caller-lookup', {

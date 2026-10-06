@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { buildWssFallbackList, type SIPConfig } from '../lib/sip/jssipProvider';
 import { supabase } from '../lib/mobileSupabase';
 import { BACKEND_URL, LEGACY_BACKEND_URL } from '../lib/backendOrigin';
+import { reportLemtelWssFallback } from '../lib/lemtelPrivateDirectory';
 
 type Result = {
   url: string;
@@ -63,15 +64,30 @@ async function logFallback(primary: Result, fallback: Result, all: Result[]) {
       at: new Date().toISOString(),
       primary_reason: primary.reason,
     });
-    // No Planiprêt diagnostic endpoint is available on a new Lemtel issuer.
-    if (BACKEND_URL !== LEGACY_BACKEND_URL) return;
-    await supabase.functions.invoke('pp-wss-fallback-log', {
-      body: {
-        primary_url: primary.url,
-        fallback_url: fallback.url,
-        primary_reason: primary.reason ?? null,
-        results: all.map((r) => ({ url: r.url, state: r.state, ms: r.ms, at: r.at, reason: r.reason })),
-      },
+    if (BACKEND_URL === LEGACY_BACKEND_URL) {
+      await supabase.functions.invoke('pp-wss-fallback-log', {
+        body: {
+          primary_url: primary.url,
+          fallback_url: fallback.url,
+          primary_reason: primary.reason ?? null,
+          results: all.map((r) => ({ url: r.url, state: r.state, ms: r.ms, at: r.at, reason: r.reason })),
+        },
+      });
+      return;
+    }
+
+    // A Lemtel build can opt in through a separate build flag. The adapter
+    // never receives URLs or free-form diagnostics: only ordinal IDs/outcomes.
+    const primaryIndex = all.indexOf(primary);
+    const fallbackIndex = all.indexOf(fallback);
+    if (primaryIndex < 0 || fallbackIndex < 0) return;
+    await reportLemtelWssFallback({
+      primaryIndex,
+      fallbackIndex,
+      primaryReason: primary.reason,
+      primaryLatencyMs: primary.ms,
+      fallbackState: fallback.state === 'ok' ? 'ok' : 'fail',
+      fallbackLatencyMs: fallback.ms,
     });
   } catch (e) {
     // eslint-disable-next-line no-console

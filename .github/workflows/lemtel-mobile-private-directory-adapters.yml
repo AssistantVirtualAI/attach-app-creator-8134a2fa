@@ -6,10 +6,15 @@ on:
       - '.github/workflows/lemtel-mobile-private-directory-adapters.yml'
       - 'apps/ava-softphone-mobile/src/lib/lemtelPrivateDirectory*'
       - 'apps/ava-softphone-mobile/src/lib/lemtelPrivateContactsConsent*'
+      - 'apps/ava-softphone-mobile/src/lib/contactScope.ts'
+      - 'apps/ava-softphone-mobile/src/components/LemtelPrivateContactsConsentSheet.tsx'
+      - 'apps/ava-softphone-mobile/src/screens/ContactsScreen.tsx'
+      - 'apps/ava-softphone-mobile/src/screens/MoreScreen.tsx'
       - 'apps/ava-softphone-mobile/src/lib/sip/callerLookup*'
       - 'apps/ava-softphone-mobile/src/components/WssDiagnostics*'
       - 'docs/lemtel-mobile/phase-41a-mobile-private-directory-adapters.md'
       - 'docs/lemtel-mobile/phase-41b-private-contact-lifecycle.md'
+      - 'docs/lemtel-mobile/phase-42a-private-contacts-ui.md'
   push:
     branches:
       - lemtel/integration
@@ -17,10 +22,15 @@ on:
       - '.github/workflows/lemtel-mobile-private-directory-adapters.yml'
       - 'apps/ava-softphone-mobile/src/lib/lemtelPrivateDirectory*'
       - 'apps/ava-softphone-mobile/src/lib/lemtelPrivateContactsConsent*'
+      - 'apps/ava-softphone-mobile/src/lib/contactScope.ts'
+      - 'apps/ava-softphone-mobile/src/components/LemtelPrivateContactsConsentSheet.tsx'
+      - 'apps/ava-softphone-mobile/src/screens/ContactsScreen.tsx'
+      - 'apps/ava-softphone-mobile/src/screens/MoreScreen.tsx'
       - 'apps/ava-softphone-mobile/src/lib/sip/callerLookup*'
       - 'apps/ava-softphone-mobile/src/components/WssDiagnostics*'
       - 'docs/lemtel-mobile/phase-41a-mobile-private-directory-adapters.md'
       - 'docs/lemtel-mobile/phase-41b-private-contact-lifecycle.md'
+      - 'docs/lemtel-mobile/phase-42a-private-contacts-ui.md'
   workflow_dispatch:
 
 permissions:
@@ -53,5 +63,6 @@ jobs:
           src/lib/sip/callerLookup.privateDirectory.test.ts
           src/components/WssDiagnostics.backendBoundary.test.tsx
           src/lib/contacts.backendBoundary.test.ts
+          src/screens/ContactsScreen.backendBoundary.test.tsx
       - name: Typecheck without building or signing a client
         run: npx tsc --noEmit

@@ -6,7 +6,7 @@ import { deleteLemtelDeviceContacts, isLemtelPrivateDirectoryEnabled } from './l
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 const VERSION = 'lemtel-private-contacts-v1';
-const PREFIX = `lemtel.private.contacts.consent.v1${BACKEND_STORAGE_SUFFIX}:`;
+const consentPrefix = () => `lemtel.private.contacts.consent.v1${BACKEND_STORAGE_SUFFIX}:`;
 
 export type LemtelPrivateContactsConsent = {
   given: boolean;
@@ -21,7 +21,7 @@ function validUserId(userId: unknown): userId is string {
 }
 
 export function lemtelPrivateContactsConsentKey(userId: string): string | null {
-  return isLemtelPrivateDirectoryEnabled() && validUserId(userId) ? `${PREFIX}${userId.toLowerCase()}` : null;
+  return isLemtelPrivateDirectoryEnabled() && validUserId(userId) ? `${consentPrefix()}${userId.toLowerCase()}` : null;
 }
 
 export function isValidLemtelPrivateContactsConsent(value: unknown, userId: string): value is LemtelPrivateContactsConsent {

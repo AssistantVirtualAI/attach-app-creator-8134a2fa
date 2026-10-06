@@ -2,7 +2,8 @@ import React, { useState, Suspense, lazy } from 'react';
 import type { ImpactStyle } from '@capacitor/haptics';
 import { colors, font } from '../lib/theme';
 import { deleteServerContacts, revokeConsent } from '../lib/contactsConsent';
-import { LEGACY_CONTACTS_ENABLED } from '../lib/contactScope';
+import { deleteLemtelDeviceContactsAndRevoke } from '../lib/lemtelPrivateContactsConsent';
+import { LEGACY_CONTACTS_ENABLED, LEMTEL_PRIVATE_CONTACTS_UI_ENABLED } from '../lib/contactScope';
 import type { Creds } from '../lib/creds';
 import { Card, SectionTitle, SettingsRow } from '../components/ui/Primitives';
 import { LemtelMark, AvaBadge } from '../components/Brand';
@@ -111,6 +112,25 @@ export default function MoreScreen({
             await revokeConsent();
             window.alert(res.ok
               ? tx('✅ Vos contacts ont été supprimés de nos serveurs.', '✅ Your contacts have been deleted from our servers.')
+              : tx('Erreur : ', 'Error: ') + (res.error || 'unknown')
+            );
+          }}
+        />
+        )}
+        {LEMTEL_PRIVATE_CONTACTS_UI_ENABLED && creds.userId && (
+        <SettingsRow
+          label={tx('Supprimer mes contacts privés Lemtel', 'Delete my Lemtel private contacts')}
+          icon="🧹"
+          value={tx('Retire vos contacts appareil et votre consentement', 'Removes device contacts and your consent')}
+          onPress={async () => {
+            const ok = window.confirm(tx(
+              'Ceci supprimera uniquement les contacts appareil liés à votre compte Lemtel et retirera votre consentement. Continuer ?',
+              'This deletes only device contacts linked to your Lemtel account and removes consent. Continue?'
+            ));
+            if (!ok) return;
+            const res = await deleteLemtelDeviceContactsAndRevoke(creds.userId);
+            window.alert(res.ok
+              ? tx(`✅ ${res.deleted ?? 0} contacts privés supprimés.`, `✅ ${res.deleted ?? 0} private contacts deleted.`)
               : tx('Erreur : ', 'Error: ') + (res.error || 'unknown')
             );
           }}

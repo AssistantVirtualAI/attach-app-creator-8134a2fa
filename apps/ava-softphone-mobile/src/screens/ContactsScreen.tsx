@@ -7,11 +7,13 @@ import { authedRealtime, restGet, restPost } from '../lib/mobileSupabase';
 import { loadCachedContacts, syncDeviceContacts } from '../lib/contacts';
 import { hasConsent, loadConsent } from '../lib/contactsConsent';
 import ContactsConsentSheet from '../components/ContactsConsentSheet';
+import LemtelPrivateContactsConsentSheet from '../components/LemtelPrivateContactsConsentSheet';
 import ContactsSyncCard from '../components/ContactsSyncCard';
 import NumberPickerSheet, { NumberOption } from '../components/NumberPickerSheet';
 import { dialNumber } from '../lib/dialNumber';
 import { useT } from '../lib/i18n';
-import { LEGACY_CONTACTS_ENABLED } from '../lib/contactScope';
+import { LEGACY_CONTACTS_ENABLED, LEMTEL_PRIVATE_CONTACTS_UI_ENABLED } from '../lib/contactScope';
+import { loadLemtelPrivateContactsConsent } from '../lib/lemtelPrivateContactsConsent';
 
 
 type Kind = 'domain' | 'manual' | 'mobile';
@@ -33,6 +35,7 @@ export default function ContactsScreen({ sp }: { sp: any }) {
   const [error, setError] = useState<string | null>(null);
   const [picker, setPicker] = useState<{ title: string; options: NumberOption[] } | null>(null);
   const [consentOpen, setConsentOpen] = useState(false);
+  const [lemtelConsentOpen, setLemtelConsentOpen] = useState(false);
   useEffect(() => { if (LEGACY_CONTACTS_ENABLED) loadConsent().catch(() => {}); }, []);
 
 
@@ -115,6 +118,11 @@ export default function ContactsScreen({ sp }: { sp: any }) {
         else setConsentOpen(true);
       })();
     }
+    if (LEMTEL_PRIVATE_CONTACTS_UI_ENABLED && mobile.userId) {
+      loadLemtelPrivateContactsConsent(mobile.userId).then((record) => {
+        if (!record?.given && !cancelled) setLemtelConsentOpen(true);
+      }).catch(() => {});
+    }
 
     loadContacts().then(() => !cancelled && setError(null)).catch((e) => {
       if (!cancelled) { setContacts([]); setError(e?.message || 'Échec du chargement des contacts'); }
@@ -155,6 +163,12 @@ export default function ContactsScreen({ sp }: { sp: any }) {
         <div style={{ marginBottom: 12, fontSize: font.xs, color: colors.mutedSilver }}>
           {fr ? 'Le carnet du téléphone n’est pas accessible sur ce serveur Lemtel. Les extensions et contacts saisis manuellement restent disponibles.'
             : 'The phone address book is not available on this Lemtel server. Extensions and manually added contacts remain available.'}
+        </div>
+      )}
+      {LEMTEL_PRIVATE_CONTACTS_UI_ENABLED && (
+        <div style={{ marginBottom: 12, fontSize: font.xs, color: colors.mutedSilver }}>
+          {fr ? 'L’autorisation privée Lemtel est séparée par compte. La synchronisation reste inactive jusqu’à une activation de build approuvée.'
+            : 'Lemtel private permission is separated by account. Sync remains inactive until an approved build activation.'}
         </div>
       )}
       <div style={{ position: 'relative', marginBottom: 12 }}>
@@ -213,6 +227,11 @@ export default function ContactsScreen({ sp }: { sp: any }) {
           setConsentOpen(false);
           if (result === 'allowed') syncDeviceContacts().then(() => loadContacts()).catch(() => {});
         }}
+      />
+      <LemtelPrivateContactsConsentSheet
+        open={LEMTEL_PRIVATE_CONTACTS_UI_ENABLED && lemtelConsentOpen}
+        userId={mobile.userId}
+        onClose={() => setLemtelConsentOpen(false)}
       />
 
       <div style={{ height: 80 }} />

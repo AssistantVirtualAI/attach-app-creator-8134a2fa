@@ -1291,7 +1291,7 @@ function MaestroSyncSection({ call, onUpdated }: { call: RecordingCall; onUpdate
     try {
       const { data, error } = await supabase.functions.invoke("maestro-sync-call", { body: { call_id: call.id, force: true, explicit_user_action: true } });
       if (error) throw error;
-      if ((data as any)?.success === false) throw new Error((data as any)?.error || "Sync Maestro partielle");
+      if ((data as any)?.success !== true) throw new Error((data as any)?.message || (data as any)?.error || "Sync Maestro partielle");
       onUpdated({ ...call, maestro_synced: true });
       toast.success("Synchronisé avec Maestro", {
         description: "CDR + enregistrement + transcription + résumé AI envoyés",

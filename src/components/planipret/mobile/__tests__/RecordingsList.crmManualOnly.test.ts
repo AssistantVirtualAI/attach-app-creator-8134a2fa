@@ -19,12 +19,11 @@ describe("RecordingsList — CRM sync is manual only", () => {
       const before = src.slice(Math.max(0, idx - 200), idx);
       expect(before).toMatch(/const sync = async \(\) =>/);
       expect(src).not.toMatch(/force:\s*false/);
-      expect(src).not.toMatch(/useEffect\([^]*?maestro-sync-call[^]*?\},\s*\[/.source.length ? /__never__/ : /x/);
     });
     it(`${rel}: success state only on success:true`, () => {
       const idx = src.indexOf('invoke("maestro-sync-call"');
       const block = src.slice(idx, idx + 500);
-      expect(block).toMatch(/success === false\) throw/);
+      expect(block).toMatch(/success !== true\) throw/);
       expect(block.indexOf("throw")).toBeLessThan(block.indexOf("maestro_synced: true"));
     });
   }

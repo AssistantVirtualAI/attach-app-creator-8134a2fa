@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { RefreshCw, X, Download } from "lucide-react";
+import { ArrowLeft, RefreshCw, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { getAiCorrectedTranscript, getAiTranscriptSegments, getDisplayTranscript } from "@/lib/planipretTranscript";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { downloadRecording } from "@/lib/planipret/downloadRecording";
@@ -489,9 +490,16 @@ export default function RecordingDetailDrawer({ call, onClose, onUpdated, showBr
           <div className="h-full w-full max-w-md overflow-y-auto p-5"
             style={{ background: "var(--pp-bg-surface)", borderLeft: "1px solid var(--pp-bg-border-2)" }}
             onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-4 flex items-center justify-between border-b border-border bg-background px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
               <h3 style={{ fontWeight: 600, color: "var(--pp-text-primary)" }}>{t.detailTitle}</h3>
-              <button onClick={() => { setRecordingError(null); setTranscriptionError(null); setTranscriptionUnavailable(false); onClose(); }}><X className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} /></button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => { setRecordingError(null); setTranscriptionError(null); setTranscriptionUnavailable(false); onClose(); }}
+              >
+                <ArrowLeft className="h-4 w-4" /> {lang === "en" ? "Back" : "Retour"}
+              </Button>
             </div>
             <div className="space-y-3 text-sm" style={{ color: "var(--pp-text-secondary)" }}>
               {showBroker && <div>{t.broker}: <span style={{ color: "var(--pp-text-primary)" }}>{brokerName(detail)}</span></div>}

@@ -1,5 +1,5 @@
 // POST /functions/v1/maestro-sync-call
-// Body: { call_id: uuid, force?: boolean }
+// Body: { call_id: uuid, force?: boolean, explicit_user_action: true }
 //
 // Single idempotent orchestrator that pushes EVERYTHING we know about a call
 // into Maestro, per broker:
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
     console.log(`[maestro-sync-call][${rid}] ${msg}${extra ? " " + JSON.stringify(extra) : ""}`);
 
   try {
-    const { call_id, force } = await req.json().catch(() => ({}));
+    const { call_id, force, explicit_user_action } = await req.json().catch(() => ({}));
     if (!call_id) return json({ success: false, error: "call_id_required" }, 400);
     log("start", { call_id, force: !!force });
 
@@ -207,6 +207,9 @@ Deno.serve(async (req) => {
     // with the service-role token and retain the same consent requirement.
     const access = await authorizeCallAccess(req, admin, call as any);
     if (!access.ok) return json({ success: false, error: access.error, request_id: rid }, access.status);
+    if (access.serviceRole || explicit_user_action !== true) {
+      return json({ success: false, error: "explicit_crm_action_required", request_id: rid }, 409);
+    }
     const consent = requireApprovedCallConsent(call as any);
     if (!consent.ok) return json({ success: false, skipped: consent.error, request_id: rid }, consent.status);
 

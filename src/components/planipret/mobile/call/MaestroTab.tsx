@@ -161,7 +161,7 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
     setPushing(true);
     try {
       const { data, error } = await supabase.functions.invoke("maestro-sync-call", {
-        body: { call_id: call.id, force: true },
+        body: { call_id: call.id, force: true, explicit_user_action: true },
       });
 
       if (error || (data as any)?.success === false) {

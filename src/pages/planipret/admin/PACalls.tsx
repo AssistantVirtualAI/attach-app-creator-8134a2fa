@@ -328,7 +328,7 @@ function MaestroSyncPanel({ call, lang, onDone }: { call: any; lang: string; onD
   const s = maestroState(call);
   const retry = async () => {
     setBusy(true);
-    const { data, error } = await supabase.functions.invoke("maestro-sync-call", { body: { call_id: call.id, force: true } });
+    const { data, error } = await supabase.functions.invoke("maestro-sync-call", { body: { call_id: call.id, force: true, explicit_user_action: true } });
     setBusy(false);
     if (error || (data as any)?.success === false) toast.error(en ? "Maestro sync failed" : "Échec de la synchro Maestro");
     else { toast.success(en ? "Sent to Maestro" : "Renvoyé vers Maestro"); onDone(); }

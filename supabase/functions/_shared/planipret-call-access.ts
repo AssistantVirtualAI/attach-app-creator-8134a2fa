@@ -47,20 +47,17 @@ export function requireApprovedCallConsent(call: {
   deleted_at?: string | null;
 }): { ok: true } | { ok: false; status: number; error: string } {
   if (call?.deleted_at) return { ok: false, status: 410, error: "call_deleted" };
-  if (String(call?.save_consent ?? "pending") !== "approved") {
+  if (!["approved", "declined"].includes(String(call?.save_consent ?? "pending"))) {
     return { ok: false, status: 409, error: "call_consent_required" };
   }
   return { ok: true };
 }
 
-/** Consultation (écoute, transcription, résumé, coaching) : autorisée sauf refus explicite ou suppression. */
+/** Consultation AVA : autorisée pour tout appel conservé, même non envoyé au CRM. */
 export function allowCallViewing(call: {
   save_consent?: string | null;
   deleted_at?: string | null;
 }): { ok: true } | { ok: false; status: number; error: string } {
   if (call?.deleted_at) return { ok: false, status: 410, error: "call_deleted" };
-  if (String(call?.save_consent ?? "pending") === "declined") {
-    return { ok: false, status: 409, error: "call_consent_declined" };
-  }
   return { ok: true };
 }

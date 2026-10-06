@@ -17,6 +17,7 @@ import HighReadabilityToggle from "@/components/planipret/broker/HighReadability
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import { usePlanipretFavicon } from "@/hooks/usePlanipretFavicon";
+import PortalReturnButton from "@/components/planipret/PortalReturnButton";
 
 export type BrokerCtx = { userId: string; authUserId: string; profile: any; softphone?: ReturnType<typeof useMplanipretSoftphone> };
 
@@ -270,6 +271,7 @@ export default function PlanipretBrokerLayout() {
 
       {/* Écran d'appel actif : entrant (sonnerie WebRTC) et sortant. */}
       <PpActiveCallScreen softphone={softphone} />
+      <PortalReturnButton />
     </div>
     </PortalDomainGate>
   );

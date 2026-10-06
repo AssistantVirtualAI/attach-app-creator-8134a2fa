@@ -104,7 +104,6 @@ Deno.serve(async (req) => {
     analysis_locked_at: new Date().toISOString(),
     analysis_locked_by: lockId,
   }).eq("id", call_id)
-    .or("save_consent.is.null,save_consent.neq.declined")
     .is("deleted_at", null)
     .or(`analysis_in_progress.eq.false,analysis_in_progress.is.null,analysis_locked_at.is.null,analysis_locked_at.lt.${staleBefore}`)
     .select("id")
@@ -452,18 +451,6 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
         },
       });
     } catch (_) { /* best-effort */ }
-
-    // ── H2: approval is the only hand-off point to Maestro ───────────────
-    if (String(row.save_consent ?? "pending") === "approved" && !row.deleted_at) {
-      try {
-        fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
-          body: JSON.stringify({ call_id }),
-        }).catch(() => {});
-      } catch (_) { /* best-effort */ }
-    }
-
 
     return json({
       success: true, call_id,

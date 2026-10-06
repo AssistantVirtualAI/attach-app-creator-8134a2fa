@@ -1,6 +1,5 @@
 import { tr } from "@/lib/i18n/tr";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createClientFollowUpTask } from "@/lib/planipret/tasks";
@@ -171,9 +170,7 @@ export default function RecordingsList({
     [calls]
   );
   const autoPipelineDoneRef = useRef<Set<string>>(new Set());
-  const autoCrmSyncDoneRef = useRef<Set<string>>(new Set());
   const audioPreloadDoneRef = useRef<Set<string>>(new Set());
-  const maestroUnavailableRef = useRef(false);
   const audioBlobCacheRef = useRef<Map<string, string>>(new Map());
   const [audioStatus, setAudioStatus] = useState<Record<string, AudioStatus>>({});
   const [uploadLedger, setUploadLedger] = useState<Record<string, string>>({});
@@ -222,7 +219,6 @@ export default function RecordingsList({
   // transcriptions. Deux travailleurs évitent de surcharger le réseau mobile.
   useEffect(() => {
     const eligible = withRec.filter((c) =>
-      c.save_consent !== "declined" &&
       hasResolvableAudio(c) &&
       !isVoicemailCall(c)
     );
@@ -369,53 +365,6 @@ export default function RecordingsList({
           }
         }
 
-        // 4) CRM Maestro : sync automatique et idempotent (CDR + recording + transcript + AI).
-        // Circuit breaker : si Maestro est injoignable/mal configuré, on arrête la boucle
-        // pour la session au lieu de faire tourner les badges « En cours… » indéfiniment.
-        if (!maestroUnavailableRef.current && !call.maestro_synced && !autoCrmSyncDoneRef.current.has(call.id)) {
-          autoCrmSyncDoneRef.current.add(call.id);
-          setLedger(call.id, "uploading");
-          // Retry automatique avec backoff exponentiel (3s → 9s → 27s → 81s),
-          // sauf erreur permanente (endpoints Maestro absents / non configuré).
-          retryWithBackoff(async () => {
-            const { data, error } = await supabase.functions.invoke("maestro-sync-call", {
-              body: { call_id: call.id, force: false },
-            });
-            if (error) throw error;
-            const d = (data as any) ?? {};
-            if (d?.success === false) {
-              const err = new Error(d?.error ?? "sync_failed");
-              if (isPermanentMaestroError(d)) (err as any).permanent = true;
-              throw err;
-            }
-            return data;
-          }, {
-            attempts: 4,
-            baseDelayMs: 3000,
-            signal: controller.signal,
-            shouldRetry: (e: any) => !e?.permanent,
-            onRetry: ({ attempt, delayMs }) =>
-              console.warn(`[RecordingsList] Maestro sync retry ${attempt} dans ${delayMs}ms`, who),
-          })
-            .then(() => {
-              if (cancelled) return;
-              setLedger(call.id, "uploaded");
-              onUpdated({ ...call, maestro_synced: true });
-            })
-            .catch((e: any) => {
-              autoCrmSyncDoneRef.current.delete(call.id);
-              if (e?.permanent) {
-                maestroUnavailableRef.current = true;
-                console.warn("[RecordingsList] Maestro indisponible — sync auto désactivée", e?.message);
-              }
-              if (cancelled) return;
-              setLedger(call.id, "failed");
-              console.warn("[RecordingsList] auto Maestro sync failed", who, e?.message);
-            });
-        } else if (maestroUnavailableRef.current && !call.maestro_synced) {
-          setLedger(call.id, "failed");
-        }
-
         await sleep(400);
       }
 
@@ -501,33 +450,6 @@ export default function RecordingsList({
     );
   }
 
-  const retrySync = async (call: RecordingCall) => {
-    setLedger(call.id, "uploading");
-    autoCrmSyncDoneRef.current.add(call.id);
-    try {
-      await retryWithBackoff(async () => {
-        const { data, error } = await supabase.functions.invoke("maestro-sync-call", {
-          body: { call_id: call.id, force: true },
-        });
-        if (error) throw error;
-        if ((data as any)?.success === false) throw new Error((data as any)?.error ?? "sync_failed");
-        return data;
-      }, { attempts: 3, baseDelayMs: 2000, maxDelayMs: 20_000 });
-      setLedger(call.id, "uploaded");
-      onUpdated({ ...call, maestro_synced: true });
-      toast.success("Synchronisation relancée avec succès");
-    } catch (e: any) {
-      autoCrmSyncDoneRef.current.delete(call.id);
-      setLedger(call.id, "failed");
-      toast.error("Échec de la synchronisation", { description: e?.message });
-    }
-  };
-
-  const retryAll = async (call: RecordingCall) => {
-    if ((audioStatus[call.id] ?? "idle") === "error") await retryAudio(call);
-    await retrySync(call);
-  };
-
   const retryAudio = async (call: RecordingCall) => {
     setStatus(call.id, "uploading");
     try {
@@ -560,7 +482,7 @@ export default function RecordingsList({
           ledgerStatus={uploadLedger[c.id] ?? null}
           cachedAudioUrl={audioBlobCacheRef.current.get(c.id) ?? null}
           cacheKey={recordingCacheKey(c.id)}
-          onRetryAudio={() => retryAll(c)}
+          onRetryAudio={() => retryAudio(c)}
         />
       ))}
     </ul>
@@ -1367,7 +1289,7 @@ function MaestroSyncSection({ call, onUpdated }: { call: RecordingCall; onUpdate
   const sync = async () => {
     setBusy("sync");
     try {
-      const { data, error } = await supabase.functions.invoke("maestro-sync-call", { body: { call_id: call.id, force: true } });
+      const { data, error } = await supabase.functions.invoke("maestro-sync-call", { body: { call_id: call.id, force: true, explicit_user_action: true } });
       if (error) throw error;
       if ((data as any)?.success === false) throw new Error((data as any)?.error || "Sync Maestro partielle");
       onUpdated({ ...call, maestro_synced: true });
@@ -1440,8 +1362,3 @@ function MaestroSyncSection({ call, onUpdated }: { call: RecordingCall; onUpdate
   );
 }
 
-/** Erreurs Maestro non-récupérables : inutile de relancer en boucle. */
-function isPermanentMaestroError(d: any): boolean {
-  const txt = `${d?.error ?? ""} ${d?.detail ?? ""} ${JSON.stringify(d?.steps ?? {})}`.toLowerCase();
-  return /maestro_not_configured|not_configured|unauthorized|forbidden|404|call_not_found|endpoint|maestro_call_id_missing/.test(txt);
-}

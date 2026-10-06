@@ -253,7 +253,12 @@ Deno.serve(async (req) => {
         error: r.data?.error ?? null,
         detail: r.data?.detail ?? null,
         permanent: r.data?.permanent ?? false,
+        skipped: r.data?.skipped ?? null,
       };
+      if (r.data?.skipped === "internal_broker_inbound") {
+        const msg = "Appel interne entre courtiers : déjà consigné dans Maestro par le courtier appelant.";
+        return json({ success: false, error: msg, code: "internal_broker_call", message: msg, steps, request_id: rid }, 200);
+      }
       // reload so we pick up maestro_call_id / maestro_client_id
       const { data: fresh } = await admin
         .from("planipret_phone_calls")

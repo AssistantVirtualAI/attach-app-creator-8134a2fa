@@ -443,8 +443,8 @@ export default function SoftphonePane({
           >{syncingPhone ? '…' : '↻'}</button>
           <button
             onClick={() => setShowAvaChat((v) => !v)}
-            title="AVA AI Assistant"
-            aria-label="AVA AI"
+            title="Lemtel Intelligence"
+            aria-label="Lemtel Intelligence"
             style={{
               background: showAvaChat ? `linear-gradient(135deg, ${c.ai}, #23d6ff)` : 'rgba(122,76,255,0.15)',
               border: '1px solid rgba(122,76,255,0.30)',

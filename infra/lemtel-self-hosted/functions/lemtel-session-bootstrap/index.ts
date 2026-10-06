@@ -19,16 +19,28 @@ export async function handler(req: Request): Promise<Response> {
   if (userError || !user?.id || !user.email) return respond({ error: "unauthorized" }, 401);
   if (user.app_metadata?.lemtel_onboarding_required === true) return respond({ error: "first_password_change_required" }, 409);
   if (user.app_metadata?.lemtel_email_only_signin !== true) return respond({ error: "lemtel_email_only_account_required" }, 403);
+  // Do not rely on an embedded PostgREST relationship here. Fresh self-hosted
+  // schemas can briefly have a stale relationship cache immediately after a
+  // migration even though both Lemtel-only tables and the membership are valid.
   const { data: memberships, error: membershipError } = await admin
     .from("lemtel_organization_memberships")
-    .select("organization_id,role,lemtel_organizations!inner(display_name,slug,status)")
+    .select("organization_id,role")
     .eq("user_id", user.id)
-    .eq("status", "active")
-    .eq("lemtel_organizations.status", "active");
+    .eq("status", "active");
   if (membershipError || !memberships?.length) return respond({ error: "lemtel_membership_required" }, 403);
+  const organizationIds = memberships.map((membership: Record<string, unknown>) => String(membership.organization_id));
+  const { data: organizations, error: organizationError } = await admin
+    .from("lemtel_organizations")
+    .select("id,display_name,slug,status")
+    .in("id", organizationIds)
+    .eq("status", "active");
+  if (organizationError || !organizations?.length) return respond({ error: "lemtel_active_organization_required" }, 403);
+  const organizationById = new Map(organizations.map((organization: Record<string, unknown>) => [String(organization.id), organization]));
+  const activeMemberships = memberships.filter((membership: Record<string, unknown>) => organizationById.has(String(membership.organization_id)));
+  if (!activeMemberships.length) return respond({ error: "lemtel_active_organization_required" }, 403);
   return respond({
     user: { id: user.id, email: user.email, displayName: String(user.user_metadata?.full_name || user.email), locale: user.user_metadata?.locale === "en" ? "en" : "fr" },
-    organizations: memberships.map((membership: Record<string, unknown>) => ({ organizationId: membership.organization_id, role: membership.role, organization: membership.lemtel_organizations })),
+    organizations: activeMemberships.map((membership: Record<string, unknown>) => ({ organizationId: membership.organization_id, role: membership.role, organization: organizationById.get(String(membership.organization_id)) })),
     telephony: { status: "not_provisioned" },
   });
 }

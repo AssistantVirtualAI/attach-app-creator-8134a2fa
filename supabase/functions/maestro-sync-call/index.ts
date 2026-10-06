@@ -202,16 +202,42 @@ Deno.serve(async (req) => {
     }
     log("call_loaded", { user_id: call.user_id, maestro_synced: call.maestro_synced, maestro_call_id: call.maestro_call_id });
 
-    // ── Autorisation et consentement du courtier ───────────
-    // A broker may only process a call they own. Internal workers authenticate
-    // with the service-role token and retain the same consent requirement.
+    // ── Autorisation : envoi CRM uniquement sur clic du courtier ───────────
+    // Le bouton « Synchroniser » (nouvelle app : explicit_user_action, app
+    // installée : force:true) vaut autorisation CRM. Les envois automatiques
+    // (service-role, ancienne synchro auto force:false) sont ignorés en 200.
     const access = await authorizeCallAccess(req, admin, call as any);
-    if (!access.ok) return json({ success: false, error: access.error, request_id: rid }, access.status);
-    if (access.serviceRole || explicit_user_action !== true) {
-      return json({ success: false, error: "explicit_crm_action_required", request_id: rid }, 409);
+    if (!access.ok) {
+      const message = access.status === 401 ? "Session expirée — reconnectez-vous." : "Cet appel ne vous appartient pas.";
+      return json({ success: false, error: access.error, message, request_id: rid }, 200);
+    }
+    const manualClick = !access.serviceRole && (explicit_user_action === true || force === true);
+    if (!manualClick) {
+      log("skipped_manual_only", { service_role: access.serviceRole });
+      return json({ success: false, skipped: "manual_only", message: "Envoi CRM uniquement via le bouton Synchroniser.", request_id: rid }, 200);
+    }
+    if ((call as any).deleted_at) {
+      return json({ success: false, error: "call_deleted", message: "Cet appel a été supprimé.", request_id: rid }, 200);
+    }
+    if ((call as any).save_consent !== "approved") {
+      const now = new Date().toISOString();
+      const meta = { ...(((call as any).metadata ?? {}) as Record<string, unknown>), crm_manual_push_at: now, crm_manual_push_by: access.userId };
+      const { error: upErr } = await admin.from("planipret_phone_calls").update({
+        save_consent: "approved",
+        save_consent_at: now,
+        save_consent_by: access.userId,
+        save_consent_channel: "crm_button",
+        metadata: meta,
+      }).eq("id", call_id).is("deleted_at", null);
+      if (upErr) {
+        log("consent_update_error", { message: upErr.message });
+        return json({ success: false, error: "consent_update_failed", message: "Impossible d’enregistrer l’autorisation CRM.", request_id: rid }, 200);
+      }
+      call = { ...(call as any), save_consent: "approved", metadata: meta };
+      log("crm_manual_authorized", { user_id: access.userId });
     }
     const consent = requireApprovedCallConsent(call as any);
-    if (!consent.ok) return json({ success: false, skipped: consent.error, request_id: rid }, consent.status);
+    if (!consent.ok) return json({ success: false, error: consent.error, message: "Envoi CRM non autorisé pour cet appel.", request_id: rid }, 200);
 
 
 

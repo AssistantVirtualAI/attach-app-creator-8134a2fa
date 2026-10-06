@@ -133,11 +133,13 @@ app.on('open-url', (event, url) => {
 function createWindow() {
   mainWindow = new BrowserWindow({
     title: APP_NAME,
-    width: 440,
-    height: 760,
-    minWidth: 320,
-    minHeight: 600,
-    maxWidth: 1200,
+    // The Desktop product opens as a workspace, not as a stretched mobile form.
+    // Compact layouts remain available when the user deliberately narrows it.
+    width: 1180,
+    height: 780,
+    minWidth: 840,
+    minHeight: 620,
+    maxWidth: 1440,
     resizable: true,
     frame: false,
     transparent: false,

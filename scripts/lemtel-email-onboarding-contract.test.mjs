@@ -87,8 +87,23 @@ test('session bootstrap exposes no telephony secrets before provisioning', () =>
   const source = read('infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts');
   const executable = source.replace(/^\s*\/\/.*$/gm, '');
   assert.match(source, /first_password_change_required/);
+  assert.match(source, /organizationById/);
+  assert.match(source, /from\("lemtel_organizations"\)/);
+  assert.doesNotMatch(executable, /lemtel_organizations!inner/);
   assert.match(source, /telephony: \{ status: "not_provisioned" \}/);
   assert.doesNotMatch(executable, /sip_password|wss_url|\bturn\b|fusionpbx/i);
+});
+
+test('Desktop refreshes onboarding metadata and opens as a Desktop workspace', () => {
+  const wizard = read('apps/ava-softphone-desktop/src/components/SetupWizard.tsx');
+  const main = read('apps/ava-softphone-desktop/electron/main.ts');
+  const index = read('apps/ava-softphone-desktop/index.html');
+  assert.match(wizard, /supabase\.auth\.refreshSession\(\)/);
+  assert.match(wizard, /lemtel-auth-workspace/);
+  assert.match(main, /width: 1180/);
+  assert.match(main, /minWidth: 840/);
+  assert.match(index, /Lemtel · Secure Communications Workspace/);
+  assert.doesNotMatch(index, /Powered by AVA/);
 });
 
 test('onboarding CI typechecks npm dependencies without a checked-in node_modules tree', () => {

@@ -18,7 +18,7 @@ const STATIC: Item[] = [
   { id: 'v-calls', title: 'Calls', subtitle: 'Call history & recordings', kind: 'view', view: 'calls' },
   { id: 'v-messages', title: 'Messages', subtitle: 'SMS / MMS inbox', kind: 'view', view: 'messages' },
   { id: 'v-voicemail', title: 'Voicemail', subtitle: 'New & saved', kind: 'view', view: 'voicemail' },
-  { id: 'v-ai', title: 'AVA AI', subtitle: 'Intelligence workspace', kind: 'view', view: 'ai' },
+  { id: 'v-ai', title: 'Lemtel Intelligence', subtitle: 'Intelligence workspace', kind: 'view', view: 'ai' },
   { id: 'v-contacts', title: 'Contacts', subtitle: 'Directory', kind: 'view', view: 'contacts' },
   { id: 'v-admin', title: 'Admin', subtitle: 'Extensions, devices, IVR', kind: 'view', view: 'admin' },
   { id: 'c-marie', title: 'Marie Tremblay', subtitle: '+1 514 555 0182 · Contact', kind: 'contact' },

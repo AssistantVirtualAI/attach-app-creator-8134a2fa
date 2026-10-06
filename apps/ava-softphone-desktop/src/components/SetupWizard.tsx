@@ -130,18 +130,35 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
     try {
       const { data, error: completionError } = await supabase.functions.invoke('lemtel-complete-first-password', { body: { newPassword } });
       if (completionError || (data as any)?.ok !== true) throw new Error((data as any)?.error || completionError?.message || 'Password update failed');
-      await finalize(pending);
+      // Auth metadata changes are server-authoritative. Refresh before the
+      // bootstrap request so the client carries the post-onboarding session.
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshed.session) throw new Error('Password updated, but the secure session could not be refreshed. Please sign in again.');
+      await finalize({
+        ...pending,
+        accessToken: refreshed.session.access_token,
+        refreshToken: refreshed.session.refresh_token,
+      });
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Password update failed');
     } finally { setLoading(false); }
   };
 
   return (
-    <main style={{ minHeight: '100%', background: 'linear-gradient(145deg, #071125 0%, #0a1630 48%, #0b2440 100%)', display: 'flex', flexDirection: 'column', color: colors.text, position: 'relative', overflow: 'hidden' }}>
+    <main className="lemtel-auth-experience" style={{ minHeight: '100%', background: 'linear-gradient(145deg, #061020 0%, #091a36 52%, #0a3150 100%)', display: 'flex', flexDirection: 'column', color: colors.text, position: 'relative', overflow: 'hidden' }}>
+      <style>{`
+        .lemtel-auth-workspace { grid-template-columns: minmax(350px, 1.15fr) minmax(380px, 0.85fr); }
+        .lemtel-auth-card { max-width: 470px; }
+        @media (max-width: 930px) {
+          .lemtel-auth-workspace { grid-template-columns: 1fr; max-width: 560px !important; padding: 32px 28px 20px !important; }
+          .lemtel-auth-brand { display: none; }
+          .lemtel-auth-card { justify-self: stretch !important; max-width: none !important; }
+        }
+      `}</style>
       <AmbientVisuals />
-      <section style={{ flex: 1, width: '100%', maxWidth: 1040, margin: '0 auto', padding: '36px 28px 24px', position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(360px, 0.85fr)', alignItems: 'center', gap: 52 }}>
+      <section className="lemtel-auth-workspace" style={{ flex: 1, width: '100%', maxWidth: 1180, margin: '0 auto', padding: '44px 48px 30px', position: 'relative', zIndex: 1, display: 'grid', alignItems: 'center', gap: 68 }}>
         <BrandPanel />
-        <section style={{ width: '100%', maxWidth: 450, justifySelf: 'end', background: 'linear-gradient(160deg, rgba(22,38,68,0.96), rgba(10,20,44,0.9))', border: '1px solid rgba(157,213,255,0.26)', borderRadius: 30, padding: 34, boxShadow: '0 28px 80px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.08)', backdropFilter: 'blur(18px)' }}>
+        <section className="lemtel-auth-card" style={{ width: '100%', justifySelf: 'end', background: 'linear-gradient(165deg, rgba(21,42,75,0.98), rgba(7,17,39,0.96))', border: '1px solid rgba(126,210,255,0.30)', borderRadius: 26, padding: '38px 40px', boxShadow: '0 34px 100px rgba(0,0,0,0.43), inset 0 1px 0 rgba(255,255,255,0.10)', backdropFilter: 'blur(18px)' }}>
           {screen === 'login' && <LoginPanel email={email} password={password} loading={loading} error={error} onEmail={setEmail} onPassword={setPassword} onSubmit={handleEmailConnect} onForgot={goToForgot} />}
           {screen === 'forgot' && <RecoveryPanel email={recoveryEmail} sent={recoverySent} loading={loading} error={error} onEmail={setRecoveryEmail} onRequest={requestTemporaryPassword} onBack={goToLogin} />}
           {screen === 'first-password' && <FirstPasswordPanel newPassword={newPassword} confirmPassword={confirmPassword} valid={validFirstPassword} loading={loading} error={error} onNewPassword={setNewPassword} onConfirmPassword={setConfirmPassword} onSubmit={completeFirstPassword} />}
@@ -164,17 +181,17 @@ function AmbientVisuals() {
 
 function BrandPanel() {
   const { colors } = theme;
-  return <section style={{ maxWidth: 500, padding: '18px 4px' }}>
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 11px', borderRadius: 999, border: '1px solid rgba(11,181,214,0.36)', background: 'rgba(11,181,214,0.1)', color: '#a9ecff', fontSize: 11, fontWeight: 800, letterSpacing: 1.1, textTransform: 'uppercase' }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: colors.green, boxShadow: '0 0 12px rgba(34,197,94,0.8)' }} /> Secure Lemtel access
+  return <section className="lemtel-auth-brand" style={{ maxWidth: 560, padding: '18px 4px' }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 999, border: '1px solid rgba(34,211,238,0.38)', background: 'rgba(34,211,238,0.10)', color: '#b8f2ff', fontSize: 11, fontWeight: 800, letterSpacing: 1.05, textTransform: 'uppercase' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.green, boxShadow: '0 0 14px rgba(34,197,94,0.9)' }} /> Lemtel secure workspace
     </div>
-    <div style={{ marginTop: 24 }}><LemtelLogo size="lg" glow shape="square" /></div>
-    <h1 style={{ margin: '22px 0 10px', color: colors.textIce, fontSize: 42, lineHeight: 1.06, letterSpacing: -1.6 }}>The intelligent<br /><span style={{ background: 'linear-gradient(100deg, #ffe06a, #44d8f7)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Lemtel workspace.</span></h1>
-    <p style={{ margin: 0, maxWidth: 430, color: 'rgba(232,238,251,0.74)', fontSize: 16, lineHeight: 1.65 }}>One secure identity for your calling experience. Your account, settings and future smart telephony tools are protected behind a single Lemtel sign-in.</p>
+    <div style={{ marginTop: 26 }}><LemtelLogo size="lg" glow shape="square" /></div>
+    <h1 style={{ margin: '24px 0 12px', color: colors.textIce, fontSize: 46, lineHeight: 1.04, letterSpacing: -1.9 }}>Communication,<br /><span style={{ background: 'linear-gradient(100deg, #7ee7ff, #f6d15a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>beautifully connected.</span></h1>
+    <p style={{ margin: 0, maxWidth: 500, color: 'rgba(232,238,251,0.76)', fontSize: 16, lineHeight: 1.68 }}>A focused, secure workspace for calls, contacts and team presence. One Lemtel identity keeps the experience simple while account settings stay protected in the background.</p>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 30 }}>
-      <ValuePill title="Protected" detail="Email identity" />
-      <ValuePill title="Intelligent" detail="Smart workspace" />
-      <ValuePill title="Ready" detail="Secure calling" />
+      <ValuePill title="One identity" detail="Email access" />
+      <ValuePill title="Connected" detail="Team workspace" />
+      <ValuePill title="Private" detail="Protected calling" />
     </div>
     <div style={{ marginTop: 26 }}><BrandTagline size="sm" /></div>
   </section>;

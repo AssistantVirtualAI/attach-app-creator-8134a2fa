@@ -14,7 +14,7 @@ interface Step {
 function buildSteps(opts: { isAdmin: boolean; isSuperAdmin: boolean }): Step[] {
   const base: Step[] = [
     {
-      title: '👋 Welcome to AVA Desktop',
+      title: '👋 Welcome to Lemtel Desktop',
       body:
         'This is your unified desktop cockpit. Everything you can do in the web portal is here: dial, calls, recordings, messages, voicemail and AI.',
     },
@@ -31,9 +31,9 @@ function buildSteps(opts: { isAdmin: boolean; isSuperAdmin: boolean }): Step[] {
       selector: 'nav button[aria-label="Recordings"]',
     },
     {
-      title: '🤖 AVA AI',
+      title: 'Lemtel Intelligence',
       body:
-        'Press Cmd/Ctrl+J to toggle the AI panel. Ask AVA to summarize a call, draft a follow-up SMS, or look up a customer.',
+        'Press Cmd/Ctrl+J to toggle the intelligence panel. Ask Lemtel Intelligence to summarize a call, draft a follow-up SMS, or look up a customer.',
     },
   ];
 

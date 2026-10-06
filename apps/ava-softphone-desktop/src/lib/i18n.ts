@@ -15,7 +15,7 @@ const en = {
   'nav.messages': 'SMS',
   'nav.voicemail': 'Voicemail',
   'nav.recordings': 'Recordings',
-  'nav.ai': 'AVA AI',
+  'nav.ai': 'Lemtel Intelligence',
   'nav.contacts': 'Contacts',
   'nav.admin': 'Admin',
   'nav.settings': 'Settings',
@@ -80,7 +80,7 @@ const en = {
   'orgchat.noMatches': 'No matches',
 
   // Admin AI
-  'aiadmin.title': 'AVA AI · Telecom Admin',
+  'aiadmin.title': 'Lemtel Intelligence · Telecom Admin',
   'aiadmin.subtitle': 'Ask AVA to manage business hours, holidays, IVRs, users, DIDs, queues. Every change requires explicit confirmation.',
   'aiadmin.placeholder': 'Tell AVA what to change…',
   'aiadmin.propose': 'Propose',
@@ -215,7 +215,7 @@ const fr: Record<keyof typeof en, string> = {
   'nav.messages': 'SMS',
   'nav.voicemail': 'Messagerie',
   'nav.recordings': 'Enregistrements',
-  'nav.ai': 'AVA IA',
+  'nav.ai': 'Intelligence Lemtel',
   'nav.contacts': 'Contacts',
   'nav.admin': 'Admin',
   'nav.settings': 'Paramètres',
@@ -273,7 +273,7 @@ const fr: Record<keyof typeof en, string> = {
   'orgchat.sayHi': 'Aucun message — dites bonjour 👋',
   'orgchat.noMatches': 'Aucun résultat',
 
-  'aiadmin.title': 'AVA IA · Admin télécom',
+  'aiadmin.title': 'Intelligence Lemtel · Admin télécom',
   'aiadmin.subtitle': 'Demandez à AVA de gérer horaires, congés, SVI, utilisateurs, numéros, files. Chaque changement requiert une confirmation explicite.',
   'aiadmin.placeholder': 'Dites à AVA ce qu’il faut changer…',
   'aiadmin.propose': 'Proposer',

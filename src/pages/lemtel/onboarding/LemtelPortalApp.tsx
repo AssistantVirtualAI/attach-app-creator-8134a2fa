@@ -34,7 +34,7 @@ export default function LemtelPortalApp() {
       <>
         <LemtelSignIn t={t} lang={lang} setLang={setLang} onSignedIn={() => setAuthed(true)} />
         {!LEMTEL_BACKEND_CONFIGURED && (
-          <button onClick={() => setPreview(true)} className="fixed bottom-4 left-4 z-40 lt-btn lt-btn-ghost lemtel-portal-scope">{lang === "fr" ? "Voir le portail en lecture seule" : "View read-only portal"}</button>
+          <button onClick={() => setPreview(true)} className="fixed bottom-4 left-4 z-40 lt-btn lt-btn-gold">{lang === "fr" ? "Voir le portail en lecture seule" : "View read-only portal"}</button>
         )}
       </>
     );

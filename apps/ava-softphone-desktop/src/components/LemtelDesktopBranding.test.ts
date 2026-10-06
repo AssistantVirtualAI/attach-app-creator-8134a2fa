@@ -7,7 +7,8 @@ const source = (relative: string) => fs.readFileSync(path.resolve(__dirname, rel
 describe('Lemtel Desktop product branding', () => {
   it('keeps the email-only sign-in surface Lemtel-branded', () => {
     const wizard = source('./SetupWizard.tsx');
-    expect(wizard).toContain('Lemtel Telecom · Secure business communications');
+    expect(wizard).toContain('Lemtel Telecom · Private, intelligent communications');
+    expect(wizard).toContain('Forgot password?');
     expect(wizard).not.toContain('AVA Statistic · assistantvirtualai.com');
     expect(wizard).not.toContain('Powered by AVA');
   });

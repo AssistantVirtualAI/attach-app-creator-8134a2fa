@@ -1,0 +1,30 @@
+{
+  "function": "lemtel-password-reset-request",
+  "scope": "lemtel_only_temporary_password_recovery",
+  "allowed_methods": ["POST", "OPTIONS"],
+  "authentication": "anonymous_request_generic_response",
+  "capabilities": [
+    "generic_non_enumerating_email_request",
+    "server_generated_temporary_password",
+    "localized_resend_delivery",
+    "mandatory_first_password_change",
+    "per_user_server_side_throttle",
+    "non_secret_delivery_audit"
+  ],
+  "forbidden": [
+    "temporary_password_logs",
+    "temporary_password_database_storage",
+    "account_enumeration_response",
+    "planipret_auth_or_data",
+    "fusionpbx_mutation",
+    "sip_or_domain_login"
+  ],
+  "required_environment": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "RESEND_API_KEY", "LEMTEL_WELCOME_FROM"],
+  "deployment_prerequisites": [
+    "approved_lemtel_password_recovery_migration",
+    "fresh_verified_backup",
+    "resend_sender_verified",
+    "generic_response_smoke_test",
+    "synthetic_account_only_email_delivery_test"
+  ]
+}

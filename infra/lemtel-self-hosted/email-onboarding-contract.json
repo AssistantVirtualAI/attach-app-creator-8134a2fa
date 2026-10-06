@@ -12,6 +12,8 @@
     "login_identifier": "email",
     "temporary_password": "generated_server_side_and_delivered_once_by_localized_transactional_email",
     "permanent_password": "required_on_first_authenticated_app_session",
+    "forgot_password": "generic_non_enumerating_request_rotates_to_a_server_generated_temporary_password_then_requires_a_personal_password",
+    "password_recovery_throttle": "server_authoritative_per_eligible_user",
     "no_extension_or_sip_domain_login": true,
     "plaintext_password_persistence": "forbidden"
   },
@@ -25,6 +27,7 @@
   "clients": {
     "mobile": "email_password_then_mandatory_first_password_change",
     "desktop": "email_password_then_mandatory_first_password_change",
+    "password_recovery": "email_request_then_temporary_password_then_mandatory_first_password_change",
     "telephony_configuration": "server_authoritative_after_login_and_out_of_scope_until_fusionpbx_test_data_is_provisioned"
   },
   "delivery": {
@@ -32,5 +35,5 @@
     "email_sender": "approved_transactional_provider_only",
     "audit": "non_secret_delivery_metadata_only"
   },
-  "forbidden": ["Planipret_data_or_auth", "FusionPBX_mutation", "SIP_password_in_email_or_client_login", "temporary_password_logs", "temporary_password_database_storage", "Lovable_current_project_change", "automatic_production_delivery"]
+  "forbidden": ["Planipret_data_or_auth", "FusionPBX_mutation", "SIP_password_in_email_or_client_login", "temporary_password_logs", "temporary_password_database_storage", "password_recovery_account_enumeration", "Lovable_current_project_change", "automatic_production_delivery"]
 }

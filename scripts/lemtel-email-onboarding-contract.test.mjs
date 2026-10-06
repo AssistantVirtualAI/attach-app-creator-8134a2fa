@@ -50,6 +50,39 @@ test('first-password completion uses authenticated auth state and strong passwor
   assert.doesNotMatch(source, /functions\.invoke\(['"]pbx|console\.log/i);
 });
 
+test('temporary-password recovery is Lemtel-only, generic and server-throttled', () => {
+  const contract = json('infra/lemtel-self-hosted/email-onboarding-contract.json');
+  const sql = read('infra/lemtel-self-hosted/migrations/0004_lemtel_temporary_password_recovery.sql');
+  const source = read('infra/lemtel-self-hosted/functions/lemtel-password-reset-request/index.ts');
+  const manifest = json('infra/lemtel-self-hosted/functions/lemtel-password-reset-request/manifest.json');
+  assert.match(contract.identity.forgot_password, /generic_non_enumerating/);
+  assert.match(contract.forbidden.join(' '), /password_recovery_account_enumeration/);
+  assert.match(sql, /lemtel_password_reset_throttles/);
+  assert.match(sql, /lemtel_claim_password_reset/);
+  assert.match(sql, /lemtel_find_password_reset_recipient/);
+  assert.doesNotMatch(sql, /planipret/i);
+  assert.doesNotMatch(sql, /temporary_password\s+(text|varchar|jsonb)/i);
+  assert.match(source, /status: "request_accepted"/);
+  assert.match(source, /lemtel_claim_password_reset/);
+  assert.match(source, /lemtel_onboarding_required: true/);
+  assert.match(source, /RESEND_API_KEY/);
+  assert.doesNotMatch(source, /console\.log|console\.error|pbx_|fusionpbx/i);
+  assert.equal(manifest.authentication, 'anonymous_request_generic_response');
+  assert.match(manifest.forbidden.join(' '), /temporary_password_database_storage/);
+});
+
+test('Desktop and mobile use the Lemtel recovery endpoint instead of a reset-link flow', () => {
+  const desktop = read('apps/ava-softphone-desktop/src/components/SetupWizard.tsx');
+  const mobile = read('apps/ava-softphone-mobile/src/screens/AuthScreen.tsx');
+  assert.match(desktop, /lemtel-password-reset-request/);
+  assert.match(desktop, /Email me a temporary password/);
+  assert.match(desktop, /Forgot password\?/);
+  assert.doesNotMatch(desktop, /label="Extension"|label="SIP domain"|Portal URL|Powered by AVA|AVA Statistic/);
+  assert.match(mobile, /lemtel-password-reset-request/);
+  assert.match(mobile, /mot de passe temporaire/);
+  assert.doesNotMatch(mobile, /\/auth\/v1\/recover/);
+});
+
 test('session bootstrap exposes no telephony secrets before provisioning', () => {
   const source = read('infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts');
   const executable = source.replace(/^\s*\/\/.*$/gm, '');

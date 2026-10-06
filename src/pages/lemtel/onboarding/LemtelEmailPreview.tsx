@@ -8,7 +8,7 @@ export function LemtelEmailPreview({ lang, name, email, org, links, support }: {
   lang: Lang; name: string; email: string; org: string; links: DownloadLinks; support?: string;
 }) {
   const t = LEMTEL_DICT[lang];
-  const e = t.email;
+  const e = t.mail;
   return (
     <article aria-label={t.previewEmail} className="lt-card overflow-hidden text-sm">
       <header className="lt-chrome px-6 py-5 flex items-center gap-3">

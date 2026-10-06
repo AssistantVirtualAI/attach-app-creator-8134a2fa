@@ -77,7 +77,7 @@ const fr = {
     readonly: "La création de comptes n'est pas activée sur ce portail.",
     generic: "Une erreur est survenue. Réessayez.",
   } as Record<LemtelErrorKey, string>,
-  email: {
+  mail: {
     subject: "Bienvenue chez Lemtel", hello: (n: string) => `Bonjour ${n},`,
     intro: (o: string) => `Votre espace Lemtel pour ${o} est prêt.`, username: "Nom d'utilisateur", tempPwd: "Mot de passe temporaire",
     tempPlaceholder: "(fourni par le serveur au moment de l'envoi)", stepsTitle: "Première connexion",
@@ -160,7 +160,7 @@ const en: typeof fr = {
     readonly: "Account creation is not enabled on this portal.",
     generic: "Something went wrong. Please try again.",
   },
-  email: {
+  mail: {
     subject: "Welcome to Lemtel", hello: (n: string) => `Hello ${n},`,
     intro: (o: string) => `Your Lemtel workspace for ${o} is ready.`, username: "Username", tempPwd: "Temporary password",
     tempPlaceholder: "(provided by the server at send time)", stepsTitle: "First sign-in",

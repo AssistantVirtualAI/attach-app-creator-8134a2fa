@@ -966,7 +966,6 @@ export default function PAUsers() {
         <div className="rounded-lg px-4 py-2 flex items-center justify-between" style={{ background: `${ACCENT}10`, border: `1px solid ${ACCENT}33` }}>
           <span style={{ fontSize: 13, color: "var(--pp-text-primary)" }}>{t.selectedBrokers(selected.size)}</span>
           <div className="flex gap-2">
-            <button onClick={() => bulkToggle("mobile_app_enabled", true)} className="px-3 py-1.5 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>{t.enableApp}</button>
             <button onClick={() => bulkToggle("voice_agent_enabled", true)} className="px-3 py-1.5 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>{t.enableAgent}</button>
             <button onClick={bulkDelete} className="px-3 py-1.5 rounded-lg text-xs text-white" style={{ background: DANGER }}>{t.deleteBtn}</button>
           </div>
@@ -989,7 +988,6 @@ export default function PAUsers() {
                 <th className="p-3">{t.colEmail}</th>
                 <th className="p-3">{t.colExt}</th>
                 <th className="p-3">{t.colDid}</th>
-                <th className="p-3">{t.colApp}</th>
                 <th className="p-3">{t.colAgent}</th>
                 <th className="p-3">{t.colDnd}</th>
                 <th className="p-3">{t.colCallsMonth}</th>
@@ -1003,7 +1001,7 @@ export default function PAUsers() {
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
                     <td className="p-3"><div className="w-4 h-4 animate-pulse rounded" style={{ background: "var(--pp-bg-elevated)" }} /></td>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <td key={j} className="p-3"><div className="h-3 w-3/4 animate-pulse rounded" style={{ background: "var(--pp-bg-elevated)" }} /></td>
                     ))}
                     <td className="p-3"><div className="h-6 w-10 rounded-full animate-pulse" style={{ background: "var(--pp-bg-elevated)" }} /></td>
@@ -1044,7 +1042,6 @@ export default function PAUsers() {
                       );
                     })()}
                   </td>
-                  <td className="p-3"><Toggle on={!!u.mobile_app_enabled} loading={!!(u.user_id && savingId === u.user_id)} onChange={() => toggleField(u, "mobile_app_enabled")} /></td>
                   <td className="p-3"><Toggle on={!!u.voice_agent_enabled} loading={!!(u.user_id && savingId === u.user_id)} onChange={() => toggleField(u, "voice_agent_enabled")} /></td>
                   <td className="p-3">
                     {u.dnd_enabled ? (
@@ -1123,12 +1120,6 @@ export default function PAUsers() {
                          )}
                          {!u.ns_only && <DropdownMenuSeparator />}
 
-                        {!u.ns_only && (
-                          <DropdownMenuItem onClick={() => toggleField(u, "mobile_app_enabled")}>
-                            <Smartphone className="w-3.5 h-3.5 mr-2" />
-                            {u.mobile_app_enabled ? t.disableMobileApp : t.enableMobileApp}
-                          </DropdownMenuItem>
-                        )}
                         {!u.ns_only && (
                           <DropdownMenuItem onClick={() => toggleField(u, "voice_agent_enabled")}>
                             <Bot className="w-3.5 h-3.5 mr-2" />
@@ -1334,7 +1325,7 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
   const [extension, setExtension] = useState(user?.extension ?? "");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
-  const [appEnabled, setAppEnabled] = useState(user?.mobile_app_enabled ?? true);
+  const appEnabled = true;
   const [agentEnabled, setAgentEnabled] = useState(user?.voice_agent_enabled ?? false);
   const [agentId, setAgentId] = useState(user?.elevenlabs_agent_id ?? "");
   const [agentSecOpen, setAgentSecOpen] = useState(false);
@@ -1345,9 +1336,15 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
     () => allNumbers.filter((n) => n.extension && user?.extension && n.extension === user.extension),
     [allNumbers, user?.extension],
   );
+  const [freeDids, setFreeDids] = useState<{ raw: string; pretty: string }[] | null>(null);
+  useEffect(() => {
+    supabase.functions.invoke("pp-admin-phonenumbers", { body: { action: "list_free" } })
+      .then(({ data }) => setFreeDids(((data as any)?.numbers ?? []).map((n: any) => ({ raw: n.e164, pretty: n.pretty }))))
+      .catch(() => setFreeDids([]));
+  }, []);
   const availableNumbers = useMemo(
-    () => allNumbers.filter((n) => !n.extension),
-    [allNumbers],
+    () => freeDids ?? allNumbers.filter((n) => !n.extension),
+    [freeDids, allNumbers],
   );
   const [phoneNumber, setPhoneNumber] = useState<string>(currentNumbers[0]?.raw ?? "");
   const originalNumber = currentNumbers[0]?.raw ?? "";
@@ -1372,7 +1369,7 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
   };
 
   const submit = async () => {
-    if (!firstName || !lastName || !email || !extension || (!isEdit && !password)) {
+    if (!firstName || !lastName || !email || !extension || (!isEdit && (!password || !phoneNumber))) {
       toast.error(t.requiredFields); return;
     }
     if (/@lemtel\.com$/i.test(email.trim())) {
@@ -1397,12 +1394,11 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
       onSaved();
     } else {
       const { data, error } = await supabase.functions.invoke("pp-admin-user", {
-        body: { action: "create", payload: { email, password, full_name, ns_extension: extension, mobile_app_enabled: appEnabled, voice_agent_enabled: agentEnabled, elevenlabs_agent_id: agentId || null } },
+        body: { action: "create", payload: { email, password, full_name, ns_extension: extension, did_e164: phoneNumber, voice_agent_enabled: agentEnabled, elevenlabs_agent_id: agentId || null } },
       });
       if (error || !(data as any)?.success) { setBusy(false); toast.error((data as any)?.error ?? t.creationError); return; }
-      const p = await applyPhoneNumber(extension);
       setBusy(false);
-      if (!p.ok) { toast.error(t.createdBrokerDidError(p.error)); onSaved((data as any).user_id); return; }
+      if (!(data as any).did_assigned) { toast.error(t.createdBrokerDidError((data as any).did_diagnostic ?? "DID")); onSaved((data as any).user_id); return; }
       toast.success(t.brokerCreated(full_name));
       onSaved((data as any).user_id);
     }
@@ -1520,7 +1516,6 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
 
           <Section title={t.appAccess}>
             <div className="space-y-2">
-              <ToggleRow label={t.enableMobileAppLabel} desc={t.enableMobileAppDesc} on={appEnabled} onChange={setAppEnabled} />
               <ToggleRow label={t.enableAvaLabel} desc={t.enableAvaDesc} on={agentEnabled} onChange={setAgentEnabled} />
             </div>
           </Section>

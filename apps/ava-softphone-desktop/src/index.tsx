@@ -53,7 +53,7 @@ function reportBootFailure(error: unknown) {
   // Keep technical details in the local diagnostics only; users see a recovery screen.
   console.error('[lemtel-renderer] startup failed:', message);
   try {
-    (window as any).electronAPI?.logRendererCrash?.({
+    window.electronAPI?.logRendererCrash?.({
       scope: 'startup-bootstrap',
       message,
       stack: value?.stack,

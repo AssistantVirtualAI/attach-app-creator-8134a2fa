@@ -7,6 +7,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-credentials', creds),
   clearCredentials: () => ipcRenderer.invoke('clear-credentials'),
 
+  // Startup diagnostics are local-only and contain no credential payload.
+  logRendererCrash: (payload: { scope: string; message: string; stack?: string }) =>
+    ipcRenderer.invoke('log-renderer-crash', payload),
+
   // Notifications
   showNotification: (title: string, body: string, opts?: { tag?: string; urgent?: boolean }) =>
     ipcRenderer.invoke('show-notification', { title, body, tag: opts?.tag, urgent: opts?.urgent }),

@@ -35,8 +35,8 @@ async function resolveTarget(admin: any, action: string, reqBody: any, endpoint?
   const messageId = reqBody?.message_id ?? reqBody?.messageId ?? null;
 
   if (/(sms|message|texto)/.test(a) && messageId) return { fn: "maestro-sync-message", body: { message_id: messageId, force: true } };
-  if (/recording/.test(a) && callId) return { fn: "maestro-sync-call", body: { call_id: callId, force: true } };
-  if (callId) return { fn: "maestro-sync-call", body: { call_id: callId, force: true } };
+  // Appels : envoi CRM uniquement par clic du courtier; jamais rejoué automatiquement.
+  if (callId) return { fn: "__manual_crm_only__", body: { call_id: callId } };
   if (messageId) return { fn: "maestro-sync-message", body: { message_id: messageId, force: true } };
   return null;
 }
@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
     if (row.user_id && row.user_id !== u.user.id && !isAdmin.data) return j({ error: "forbidden" }, 403);
 
     const target = await resolveTarget(admin, String(row.action ?? ""), row.request_body ?? {}, row.maestro_endpoint);
+    if (target?.fn === "__manual_crm_only__") return j({ success: false, skipped: "manual_only", message: "Envoi CRM uniquement via le bouton Synchroniser du courtier." }, 200);
     if (!target) return j({ success: false, error: "not_retryable", action: row.action, status: row.response_status, last_response: row.response_body }, 200);
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/${target.fn}`, {

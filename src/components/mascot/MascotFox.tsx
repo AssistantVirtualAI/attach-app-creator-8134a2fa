@@ -6,7 +6,7 @@ import foxImg from "/mascot/lemtel-fox.png?url";
 
 function FoxPlane({ talking, listening }: { talking: boolean; listening: boolean }) {
   const tex = useTexture(foxImg);
-  const ref = useRef<THREE.Mesh>(null);
+  const ref = useRef<THREE.Mesh>(null!);
   const t0 = useRef(Math.random() * Math.PI * 2);
 
   useFrame((state) => {

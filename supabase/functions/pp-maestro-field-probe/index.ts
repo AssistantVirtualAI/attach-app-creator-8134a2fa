@@ -1,18 +1,13 @@
 // Temp diagnostic: probe which fields Maestro accepts on PUT /calls/{id}
 import { adminClient, corsHeaders, getMaestroConfig, json, maestroFetch, telecomAuth } from "../_shared/maestro.ts";
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const { call_id, fields, sync, backfill, visibility_backfill } = await req.json().catch(() => ({} as any));
   const admin = adminClient();
-  const runSync = async (id: string) => {
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-sync-call`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-      body: JSON.stringify({ call_id: id, force: true }),
-    });
-    return { id, status: r.status, body: await r.json().catch(() => null) };
-  };
+  // Diagnostic lecture seule : aucune écriture CRM automatique d'appel.
+  const runSync = async (id: string) => ({ id, status: 200, body: { success: false, skipped: "manual_only", message: "Envoi CRM uniquement via le bouton Synchroniser du courtier." } as any });
   if (visibility_backfill) {
     const limit = Math.min(Number(visibility_backfill) || 5, 10);
     const { data: rows } = await admin
@@ -66,12 +61,7 @@ Deno.serve(async (req) => {
     return json({ processed: out.length, results: out });
   }
   if (sync) {
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-sync-call`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-      body: JSON.stringify({ call_id, force: true }),
-    });
-    return json({ sync: await r.json().catch(() => null) });
+    return json({ sync: { success: false, skipped: "manual_only", message: "Envoi CRM uniquement via le bouton Synchroniser du courtier." } });
   }
   const { data: call } = await admin
     .from("planipret_phone_calls")

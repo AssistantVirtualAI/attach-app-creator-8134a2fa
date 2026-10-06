@@ -28,6 +28,7 @@ import { usePlanipretFavicon } from "@/hooks/usePlanipretFavicon";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
+import PortalReturnButton from "@/components/planipret/PortalReturnButton";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
 type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroBrokers" | "maestroClients" | "marketing" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls" | "brokerTelephony" | "brokerMonthly";
@@ -648,6 +649,7 @@ export default function PlanipretAdminLayout() {
       </div>
 
       <PpActiveCallScreen softphone={softphone} />
+      <PortalReturnButton />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <SessionTimeoutModal />
     </div>

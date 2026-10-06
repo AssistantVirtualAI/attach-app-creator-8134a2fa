@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
     if (callErr) log("call_read_error", { message: callErr.message, code: (callErr as any).code });
     if (!call) {
       log("call_not_found", { call_id });
-      return json({ success: false, error: "call_not_found", request_id: rid, db_error: callErr?.message ?? null }, 404);
+      return json({ success: false, error: "call_not_found", message: "Appel introuvable.", request_id: rid, db_error: callErr?.message ?? null }, 200);
     }
     log("call_loaded", { user_id: call.user_id, maestro_synced: call.maestro_synced, maestro_call_id: call.maestro_call_id });
 

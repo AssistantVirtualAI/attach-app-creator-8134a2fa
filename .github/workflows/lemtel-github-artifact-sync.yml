@@ -91,8 +91,15 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519
           cat lemtel-artifact.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemteldeploy@$HOST" "receive $SHA256"
-      - name: Confirm current primary health without applying artifact
-        run: curl --fail --silent --show-error --max-time 15 https://lemtel.avastatistic.ca/auth/v1/health >/dev/null
+      - name: Confirm current primary gateway health without applying artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Auth is deliberately protected at this staging gateway. A 401 proves
+          # TLS, Caddy/Kong routing and the Auth route are live without exposing
+          # a credential to CI; 200 remains valid for a future public health route.
+          code=$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' https://lemtel.avastatistic.ca/auth/v1/health)
+          case "$code" in 200|401) ;; *) echo "unexpected primary health status: $code" >&2; exit 1;; esac
 
   digitalocean-artifact:
     needs: [package, hostinger-artifact]

@@ -1,5 +1,5 @@
 // POST /functions/v1/maestro-sync-call
-// Body: { call_id: uuid, force?: boolean }
+// Body: { call_id: uuid, force?: boolean, explicit_user_action: true }
 //
 // Single idempotent orchestrator that pushes EVERYTHING we know about a call
 // into Maestro, per broker:

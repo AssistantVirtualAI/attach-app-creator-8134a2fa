@@ -35,6 +35,9 @@ Deno.serve(async (req) => {
   );
 
   const body = await req.json().catch(() => ({} as any));
+  return json({ success: true, disabled: "manual_crm_only", processed: 0 });
+
+  /* Legacy automatic worker retained below for rollback only; unreachable. */
   const limit = Math.min(50, Math.max(1, Number(body?.limit ?? 15)));
   const dryRun = body?.dry_run === true;
   const doSweep = body?.sweep !== false;

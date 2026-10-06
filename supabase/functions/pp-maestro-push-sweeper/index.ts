@@ -35,6 +35,9 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({} as any));
+  return json({ success: true, disabled: "manual_crm_only", candidates: 0, processed: 0, pushed: 0 });
+
+  /* Legacy automatic worker retained below for rollback only; unreachable. */
   const limit = Math.min(Math.max(Number(body?.limit) || 20, 1), 100);
   const maxAgeHours = Number(body?.max_age_hours ?? 24 * 14);
   const force = body?.force === true;

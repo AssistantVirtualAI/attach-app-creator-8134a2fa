@@ -374,6 +374,9 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({}) as any);
   const action = body?.action ?? "status";
+  if (action === "enqueue" || action === "process" || action === "resume") {
+    return json({ success: false, error: "explicit_crm_action_required" }, 409);
+  }
 
   switch (action) {
     case "enqueue":

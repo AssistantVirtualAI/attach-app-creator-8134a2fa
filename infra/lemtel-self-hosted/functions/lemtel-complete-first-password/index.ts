@@ -27,13 +27,17 @@ export async function handler(req: Request): Promise<Response> {
   const user = userData?.user;
   if (userError || !user?.id) return fail("unauthorized", 401);
   if (user.app_metadata?.lemtel_onboarding_required !== true || user.app_metadata?.lemtel_email_only_signin !== true) return fail("first_password_change_not_required", 409);
+  const { data: activeMembership } = await admin.from("lemtel_organization_memberships")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  if (!activeMembership?.organization_id) return fail("lemtel_membership_required", 403);
   const nextAppMetadata = { ...(user.app_metadata ?? {}), lemtel_onboarding_required: false, lemtel_email_only_signin: true, lemtel_first_password_changed_at: new Date().toISOString() };
   const { error: updateError } = await admin.auth.admin.updateUserById(user.id, { password: body.newPassword, app_metadata: nextAppMetadata });
   if (updateError) return fail("password_update_failed", 503);
-  const { data: membership } = await admin.from("lemtel_organization_memberships").select("organization_id").eq("user_id", user.id).eq("status", "active").limit(1).maybeSingle();
-  if (membership?.organization_id) {
-    await admin.from("lemtel_onboarding_audit").insert({ organization_id: membership.organization_id, actor_id: user.id, subject_user_id: user.id, action: "first_password_changed", metadata: {} });
-  }
+  await admin.from("lemtel_onboarding_audit").insert({ organization_id: activeMembership.organization_id, actor_id: user.id, subject_user_id: user.id, action: "first_password_changed", metadata: {} });
   return respond({ ok: true, password_change_required: false });
 }
 

@@ -16,7 +16,13 @@ type OrganizationInput = { displayName: string; slug: string; defaultLocale: Loc
 type RequestBody =
   | { action: "create_organization"; organization: OrganizationInput; owner: UserInput; users: UserInput[] }
   | { action: "provision_users"; organizationId: string; users: UserInput[] }
-  | { action: "resend_welcome"; organizationId: string; recipientUserId: string; locale: Locale };
+  | { action: "resend_welcome"; organizationId: string; recipientUserId: string; locale: Locale }
+  | { action: "revoke_invitation"; organizationId: string; recipientUserId: string }
+  | { action: "list_organizations" }
+  | { action: "get_config" }
+  | { action: "list_people"; organizationId: string }
+  | { action: "list_invitations"; organizationId: string }
+  | { action: "list_activity"; organizationId: string };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -25,6 +31,10 @@ const plainObject = (value: unknown): value is Record<string, unknown> => typeof
 
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]) {
   return Object.keys(value).length === expected.length && expected.every((key) => key in value);
+}
+
+function organizationId(value: unknown): string | Failure {
+  return typeof value === "string" && UUID_RE.test(value) ? value.toLowerCase() : fail("invalid_organization_id", 400);
 }
 
 function locale(value: unknown): Locale | Failure {
@@ -59,6 +69,14 @@ function userList(value: unknown, allowOwner: boolean): UserInput[] | Failure {
 
 export function validateBody(raw: unknown): RequestBody | Failure {
   if (!plainObject(raw) || typeof raw.action !== "string") return fail("invalid_body", 400);
+  if (raw.action === "list_organizations" || raw.action === "get_config") {
+    return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
+  }
+  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity") {
+    if (!exactKeys(raw, ["action", "organizationId"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    return isFailure(parsedOrganizationId) ? parsedOrganizationId : { action: raw.action, organizationId: parsedOrganizationId } as RequestBody;
+  }
   if (raw.action === "create_organization") {
     if (!exactKeys(raw, ["action", "organization", "owner", "users"]) || !plainObject(raw.organization)) return fail("invalid_body", 400);
     const org = raw.organization;
@@ -76,16 +94,30 @@ export function validateBody(raw: unknown): RequestBody | Failure {
     return { action: "create_organization", organization: { displayName, slug, defaultLocale }, owner, users };
   }
   if (raw.action === "provision_users") {
-    if (!exactKeys(raw, ["action", "organizationId", "users"]) || typeof raw.organizationId !== "string" || !UUID_RE.test(raw.organizationId)) return fail("invalid_body", 400);
+    if (!exactKeys(raw, ["action", "organizationId", "users"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
     const users = userList(raw.users, false);
     if (isFailure(users) || users.length === 0) return isFailure(users) ? users : fail("users_required", 400);
-    return { action: "provision_users", organizationId: raw.organizationId.toLowerCase(), users };
+    return { action: "provision_users", organizationId: parsedOrganizationId, users };
   }
   if (raw.action === "resend_welcome") {
-    if (!exactKeys(raw, ["action", "organizationId", "recipientUserId", "locale"]) || typeof raw.organizationId !== "string" || typeof raw.recipientUserId !== "string" || !UUID_RE.test(raw.organizationId) || !UUID_RE.test(raw.recipientUserId)) return fail("invalid_body", 400);
+    if (!exactKeys(raw, ["action", "organizationId", "recipientUserId", "locale"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedRecipientUserId = organizationId(raw.recipientUserId);
     const selectedLocale = locale(raw.locale);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedRecipientUserId)) return parsedRecipientUserId;
     if (isFailure(selectedLocale)) return selectedLocale;
-    return { action: "resend_welcome", organizationId: raw.organizationId.toLowerCase(), recipientUserId: raw.recipientUserId.toLowerCase(), locale: selectedLocale };
+    return { action: "resend_welcome", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId, locale: selectedLocale };
+  }
+  if (raw.action === "revoke_invitation") {
+    if (!exactKeys(raw, ["action", "organizationId", "recipientUserId"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedRecipientUserId = organizationId(raw.recipientUserId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedRecipientUserId)) return parsedRecipientUserId;
+    return { action: "revoke_invitation", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId };
   }
   return fail("invalid_action", 400);
 }
@@ -223,6 +255,118 @@ async function provisionMany(admin: any, organizationId: string, actor: string, 
   return results;
 }
 
+async function portalAccess(admin: any, userId: string): Promise<boolean> {
+  if (await platformAdmin(admin, userId)) return true;
+  const { data } = await admin.from("lemtel_organization_memberships").select("user_id").eq("user_id", userId).eq("status", "active").limit(1);
+  return Boolean(data?.length);
+}
+
+async function portalOrganizationAdmin(admin: any, userId: string, organizationId: string): Promise<boolean> {
+  return (await platformAdmin(admin, userId)) || (await organizationAdmin(admin, userId, organizationId));
+}
+
+async function usersById(admin: any, ids: string[]): Promise<Map<string, any>> {
+  const needed = new Set(ids);
+  const users = new Map<string, any>();
+  for (let page = 1; page <= 100 && needed.size; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) break;
+    const batch = data?.users ?? [];
+    for (const user of batch) {
+      if (needed.has(user.id)) {
+        users.set(user.id, user);
+        needed.delete(user.id);
+      }
+    }
+    if (batch.length < 1000) break;
+  }
+  return users;
+}
+
+function userName(user: any): string {
+  const fullName = String(user?.user_metadata?.full_name ?? "").trim();
+  return fullName || String(user?.email ?? "").split("@")[0] || "Lemtel user";
+}
+
+function userLocale(user: any): Locale {
+  return user?.user_metadata?.locale === "en" ? "en" : "fr";
+}
+
+async function listOrganizations(admin: any, actor: string) {
+  const platform = await platformAdmin(admin, actor);
+  const { data: activeMemberships, error: membershipError } = await admin
+    .from("lemtel_organization_memberships")
+    .select("organization_id,user_id")
+    .eq("status", "active");
+  if (membershipError) return fail("organization_lookup_failed", 503);
+  const rows = activeMemberships ?? [];
+  const organizationIds = [...new Set((platform ? rows : rows.filter((row: any) => row.user_id === actor)).map((row: any) => String(row.organization_id)))];
+  if (!organizationIds.length) return { organizations: [] };
+  const { data: organizations, error } = await admin
+    .from("lemtel_organizations")
+    .select("id,display_name,slug,default_locale")
+    .in("id", organizationIds)
+    .eq("status", "active")
+    .order("display_name");
+  if (error) return fail("organization_lookup_failed", 503);
+  const directory = await usersById(admin, rows.filter((row: any) => organizationIds.includes(String(row.organization_id))).map((row: any) => String(row.user_id)));
+  return {
+    organizations: (organizations ?? []).map((organization: any) => {
+      const members = rows.filter((row: any) => row.organization_id === organization.id);
+      return {
+        id: organization.id,
+        displayName: organization.display_name,
+        slug: organization.slug,
+        defaultLocale: organization.default_locale === "en" ? "en" : "fr",
+        memberCount: members.length,
+        pendingInvitations: members.filter((row: any) => directory.get(String(row.user_id))?.app_metadata?.lemtel_onboarding_required === true).length,
+      };
+    }),
+  };
+}
+
+async function listPeople(admin: any, organizationId: string) {
+  const { data: memberships, error } = await admin.from("lemtel_organization_memberships").select("user_id,role,status").eq("organization_id", organizationId).order("created_at");
+  if (error) return fail("people_lookup_failed", 503);
+  const directory = await usersById(admin, (memberships ?? []).map((row: any) => String(row.user_id)));
+  return {
+    people: (memberships ?? []).flatMap((membership: any) => {
+      const user = directory.get(String(membership.user_id));
+      return user?.email ? [{ userId: user.id, fullName: userName(user), email: user.email, role: membership.role, status: membership.status, locale: userLocale(user) }] : [];
+    }),
+  };
+}
+
+async function listInvitations(admin: any, organizationId: string) {
+  const { data: memberships, error } = await admin.from("lemtel_organization_memberships").select("user_id,role,status").eq("organization_id", organizationId).order("created_at", { ascending: false });
+  if (error) return fail("invitation_lookup_failed", 503);
+  const { data: deliveries } = await admin.from("lemtel_onboarding_delivery_attempts").select("recipient_user_id,state,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false });
+  const latestDelivery = new Map<string, any>();
+  for (const delivery of deliveries ?? []) if (!latestDelivery.has(String(delivery.recipient_user_id))) latestDelivery.set(String(delivery.recipient_user_id), delivery);
+  const directory = await usersById(admin, (memberships ?? []).map((row: any) => String(row.user_id)));
+  return {
+    invitations: (memberships ?? []).flatMap((membership: any) => {
+      const user = directory.get(String(membership.user_id));
+      if (!user?.email) return [];
+      const delivery = latestDelivery.get(String(user.id));
+      const pending = user.app_metadata?.lemtel_onboarding_required === true;
+      const status = membership.status !== "active" ? "revoked" : !pending ? "active" : delivery?.state === "sent" ? "temp_pending" : "delivery_needs_attention";
+      return [{ userId: user.id, fullName: userName(user), email: user.email, role: membership.role, locale: userLocale(user), status, ...(delivery?.sent_at ? { sentAt: delivery.sent_at } : {}) }];
+    }),
+  };
+}
+
+async function listActivity(admin: any, organizationId: string) {
+  const { data, error } = await admin.from("lemtel_onboarding_audit").select("id,created_at,action").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100);
+  return error ? fail("activity_lookup_failed", 503) : { events: (data ?? []).map((row: any) => ({ id: row.id, at: row.created_at, action: row.action })) };
+}
+
+function portalConfig() {
+  const value = (name: string) => Deno.env.get(name)?.trim() || undefined;
+  const supportContact = value("LEMTEL_SUPPORT_CONTACT");
+  return { downloads: { desktop: value("LEMTEL_DOWNLOAD_DESKTOP_URL"), ios: value("LEMTEL_DOWNLOAD_IOS_URL"), android: value("LEMTEL_DOWNLOAD_ANDROID_URL") }, ...(supportContact ? { supportContact } : {}) };
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   if (req.method !== "POST") return respond({ error: "method_not_allowed" }, 405);
@@ -236,6 +380,25 @@ export async function handler(req: Request): Promise<Response> {
   const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
   const actor = await actorId(admin, req);
   if (isFailure(actor)) return respond({ error: actor.error }, actor.status);
+
+  if (request.action === "list_organizations") {
+    if (!(await portalAccess(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await listOrganizations(admin, actor);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+  if (request.action === "get_config") {
+    if (!(await portalAccess(admin, actor))) return respond({ error: "forbidden" }, 403);
+    return respond(portalConfig());
+  }
+  if (request.action === "list_people" || request.action === "list_invitations" || request.action === "list_activity") {
+    if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const result = request.action === "list_people"
+      ? await listPeople(admin, request.organizationId)
+      : request.action === "list_invitations"
+        ? await listInvitations(admin, request.organizationId)
+        : await listActivity(admin, request.organizationId);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
 
   if (request.action === "create_organization") {
     if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
@@ -257,6 +420,7 @@ export async function handler(req: Request): Promise<Response> {
     return respond({ ok: true, users: results, email_delivery_required: true }, 201);
   }
 
+  if (request.action === "resend_welcome") {
   if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
   const { data: membership } = await admin.from("lemtel_organization_memberships").select("role").eq("organization_id", request.organizationId).eq("user_id", request.recipientUserId).eq("status", "active").maybeSingle();
   const { data: userResult } = await admin.auth.admin.getUserById(request.recipientUserId);
@@ -269,6 +433,31 @@ export async function handler(req: Request): Promise<Response> {
   const recipient: UserInput = { email, displayName: String(authUser?.user_metadata?.full_name || email), role: membership.role as Role, locale: request.locale };
   const delivery = await deliverWelcome(admin, request.organizationId, actor, request.recipientUserId, recipient, temporaryPassword, "welcome_resend");
   return respond({ ok: true, delivered: delivery.delivered, ...(delivery.delivered ? {} : { error: delivery.reason }), email_delivery_required: true });
+  }
+
+  if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+  const { data: membership, error: membershipError } = await admin.from("lemtel_organization_memberships")
+    .select("role,status")
+    .eq("organization_id", request.organizationId)
+    .eq("user_id", request.recipientUserId)
+    .maybeSingle();
+  if (membershipError || !membership) return respond({ error: "recipient_not_found" }, 404);
+  if (membership.status !== "active") return respond({ ok: true, already_revoked: true });
+  if (membership.role === "owner") {
+    const { data: owners } = await admin.from("lemtel_organization_memberships")
+      .select("user_id")
+      .eq("organization_id", request.organizationId)
+      .eq("role", "owner")
+      .eq("status", "active");
+    if ((owners ?? []).length <= 1) return respond({ error: "last_owner_required" }, 400);
+  }
+  const { error: suspendError } = await admin.from("lemtel_organization_memberships")
+    .update({ status: "suspended", suspended_at: new Date().toISOString() })
+    .eq("organization_id", request.organizationId)
+    .eq("user_id", request.recipientUserId);
+  if (suspendError) return respond({ error: "access_revoke_failed" }, 503);
+  await audit(admin, request.organizationId, actor, "user_access_suspended", request.recipientUserId, {});
+  return respond({ ok: true });
 }
 
-Deno.serve(handler);
+if (import.meta.main) Deno.serve(handler);

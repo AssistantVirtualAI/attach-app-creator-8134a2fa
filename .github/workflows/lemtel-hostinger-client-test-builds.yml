@@ -1,0 +1,181 @@
+name: Lemtel Hostinger — private test builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for this non-distributed staging build'
+        required: true
+        default: 'Hostinger staging validation'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-hostinger-client-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android-and-desktop:
+    environment: lemtel-hostinger-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
+      VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            apps/ava-softphone-mobile/package-lock.json
+            apps/ava-softphone-desktop/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Enforce approved Lemtel Hostinger configuration
+        run: node scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Build Lemtel web mobile bundle
+        working-directory: apps/ava-softphone-mobile
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
+      - name: Compile unsigned Android debug APK
+        working-directory: apps/ava-softphone-mobile
+        run: |
+          npx cap sync android
+          ./gradlew :app:assembleDebug --no-daemon
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Build Desktop renderer and main process
+        working-directory: apps/ava-softphone-desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-hostinger-linux-build-inputs-${{ github.run_id }}
+          path: |
+            apps/ava-softphone-mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/ava-softphone-mobile/dist
+            apps/ava-softphone-desktop/dist
+            apps/ava-softphone-desktop/electron-compiled
+          if-no-files-found: error
+          retention-days: 3
+
+  ios-unsigned:
+    environment: lemtel-hostinger-staging
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
+      VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
+      - name: Enforce approved Lemtel Hostinger configuration
+        run: node scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Build and compile iOS device app without signing
+        working-directory: apps/ava-softphone-mobile
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npx cap sync ios
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/hostinger-test CODE_SIGNING_ALLOWED=NO build
+          test -d build/hostinger-test/Build/Products/Debug-iphoneos/App.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-hostinger-ios-unsigned-${{ github.run_id }}
+          path: apps/ava-softphone-mobile/build/hostinger-test/Build/Products/Debug-iphoneos/App.app
+          if-no-files-found: error
+          retention-days: 3
+
+  bundle-and-sync:
+    needs: [android-and-desktop, ios-unsigned]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      sha256: ${{ steps.bundle.outputs.sha256 }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lemtel-hostinger-*
+          merge-multiple: false
+          path: private-builds
+      - id: bundle
+        name: Create one non-distributed test bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C private-builds -czf lemtel-hostinger-test-builds.tgz .
+          sha256sum lemtel-hostinger-test-builds.tgz | tee lemtel-hostinger-test-builds.sha256
+          echo "sha256=$(cut -d' ' -f1 lemtel-hostinger-test-builds.sha256)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-hostinger-private-test-builds-${{ github.run_id }}
+          path: |
+            lemtel-hostinger-test-builds.tgz
+            lemtel-hostinger-test-builds.sha256
+          if-no-files-found: error
+          retention-days: 3
+
+  hostinger-staging-drop:
+    needs: bundle-and-sync
+    environment: lemtel-hostinger-primary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lemtel-hostinger-private-test-builds-${{ github.run_id }}
+      - name: Deposit private test bundle without applying it
+        env:
+          HOST: ${{ secrets.LEMTEL_HOSTINGER_HOST }}
+          KEY: ${{ secrets.LEMTEL_HOSTINGER_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LEMTEL_HOSTINGER_KNOWN_HOSTS }}
+          SHA256: ${{ needs.bundle-and-sync.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum lemtel-hostinger-test-builds.tgz | awk '{print $1}')" = "$SHA256"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+          cat lemtel-hostinger-test-builds.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemteldeploy@$HOST" "receive $SHA256"
+
+  digitalocean-standby-drop:
+    needs: [bundle-and-sync, hostinger-staging-drop]
+    environment: lemtel-digitalocean-standby
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lemtel-hostinger-private-test-builds-${{ github.run_id }}
+      - name: Deposit same private test bundle without applying it
+        env:
+          HOST: ${{ secrets.LEMTEL_DIGITALOCEAN_HOST }}
+          KEY: ${{ secrets.LEMTEL_DIGITALOCEAN_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LEMTEL_DIGITALOCEAN_KNOWN_HOSTS }}
+          SHA256: ${{ needs.bundle-and-sync.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum lemtel-hostinger-test-builds.tgz | awk '{print $1}')" = "$SHA256"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+          cat lemtel-hostinger-test-builds.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemtelstandbydeploy@$HOST" "receive $SHA256"
+      - name: Declare distribution boundary
+        run: echo 'No iOS signing, Android release signing, Desktop packaging, public store upload, public hosting or user distribution was performed.'

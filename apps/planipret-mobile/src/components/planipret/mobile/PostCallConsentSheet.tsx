@@ -162,7 +162,7 @@ export default function PostCallConsentSheet() {
   useEffect(() => {
     if (!call || spokenFor.current === call.id) return;
     spokenFor.current = call.id;
-    speak("Désirez-vous enregistrer cet appel ou le supprimer ?");
+    speak("Désirez-vous conserver cet appel dans AVA ?");
   }, [call]);
 
   const close = useCallback((resolved = false) => {
@@ -196,14 +196,13 @@ export default function PostCallConsentSheet() {
         try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
         const started = (data as any)?.ok === true && (data as any)?.processing !== "retryable";
         if (started) {
-          toast.success("Consentement enregistré. Synchronisation avec Maestro en cours.");
+          toast.success("Appel conservé dans AVA.");
         } else {
-          toast.message("Consentement enregistré. La synchronisation sera relancée automatiquement.");
+          toast.message("Appel conservé dans AVA. Vous pourrez l’envoyer au CRM plus tard.");
         }
         setStep("followup");
       } else {
-        const m = (data as any)?.maestro;
-        toast.success(m?.ok ? "Appel supprimé partout, y compris Maestro." : `Supprimé localement. Maestro : ${m?.detail ?? "échec"}`);
+        toast.success("Appel conservé dans AVA, sans envoi au CRM.");
         close(true);
       }
     } catch (e: any) {
@@ -263,7 +262,7 @@ export default function PostCallConsentSheet() {
               Que voulez-vous faire avec cet appel ?
             </div>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
-              Enregistrer conserve l'appel et l'envoie dans Maestro. Supprimer efface l'enregistrement, la transcription et le sommaire.
+              L’audio, la transcription et le coaching restent dans AVA. L’envoi au CRM se fait uniquement avec le bouton CRM.
             </div>
             <div style={{ display: "grid", gap: 10 }}>
               <Button
@@ -271,10 +270,10 @@ export default function PostCallConsentSheet() {
                 className="h-12 w-full gap-2"
                 onClick={() => consent("approve")}
               >
-                <Save size={18} /> Enregistrer l'appel
+                <Save size={18} /> Conserver dans AVA
               </Button>
               <Button disabled={busy} variant="destructive" className="h-12 w-full gap-2" onClick={() => consent("delete")}>
-                <Trash2 size={18} /> Supprimer l'appel
+                <Trash2 size={18} /> Garder sans envoyer au CRM
               </Button>
               {failed && (
                 <Button disabled={busy} variant="ghost" className="h-10 w-full" onClick={() => { setFailed(false); close(false); }}>

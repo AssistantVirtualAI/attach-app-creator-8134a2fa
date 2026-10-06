@@ -324,7 +324,6 @@ export default function MCalls() {
         let localQuery: any = supabase
           .from("planipret_phone_calls")
           .select("*")
-          .or("save_consent.is.null,save_consent.eq.pending,save_consent.eq.approved")
           .is("deleted_at", null)
           .not("to_number", "ilike", "%vmail%")
           .not("to_number", "ilike", "%voicemail%")

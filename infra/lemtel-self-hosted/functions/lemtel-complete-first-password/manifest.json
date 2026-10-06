@@ -1,0 +1,10 @@
+{
+  "package_version": "lemtel_first_password_completion_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "capabilities": ["enforce_first_password_change", "update_own_auth_password", "clear_lemtel_onboarding_flag"],
+  "explicitly_excluded": ["planipret_import", "fusionpbx", "sip_credentials", "password_logging", "password_storage", "email_delivery"],
+  "runtime_requirements": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
+  "deployment_prerequisites": ["approved_lemtel_onboarding_migration", "synthetic_temporary_password_account", "first_password_change_rbac_test", "approved_edge_deployment"]
+}

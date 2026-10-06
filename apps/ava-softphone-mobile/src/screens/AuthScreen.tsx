@@ -1,13 +1,18 @@
 import { BACKEND_URL, BACKEND_ANON_KEY, getResetRedirect } from '../lib/backendOrigin';
 import React, { useEffect, useState } from 'react';
 import type { Creds } from '../lib/creds';
-import SipConfigScreen from './SipConfigScreen';
 import { txStatic as tx } from '../lib/i18n';
 
-type Mode = 'extension' | 'email';
-type Screen = 'login' | 'sip' | 'forgot';
+type Screen = 'login' | 'forgot' | 'first-password';
 type ForgotStep = 'form' | 'confirm' | 'sent';
 type Accent = 'gold-cyan' | 'cyan-gold';
+type PendingFirstPassword = {
+  accessToken: string;
+  refreshToken?: string;
+  userId: string;
+  email: string;
+  organizationId?: string;
+};
 
 const ACCENT_KEY = 'lemtel-auth-accent';
 const loadAccent = (): Accent => {
@@ -53,9 +58,7 @@ class AuthError extends Error {
 const mapAuthError = (raw: string): string => {
   const m = (raw || '').toLowerCase();
   if (m.includes('invalid_credentials') || m.includes('invalid login')) return tx('Adresse e-mail ou mot de passe incorrect.', 'Incorrect email or password.');
-  if (m.includes('extension_not_found')) return tx('Extension introuvable.', 'Extension not found.');
-  if (m.includes('app_access_disabled') || m.includes('mobile_access_disabled')) return tx("L'accès mobile n'a pas été activé pour cette extension. Contactez votre administrateur.", 'Mobile access has not been enabled for this extension. Contact your administrator.');
-  if (m.includes('ambiguous_extension')) return tx('Plusieurs extensions correspondent — veuillez saisir le domaine SIP.', 'Multiple extensions match — please enter the SIP domain.');
+  if (m.includes('first_password_change_required')) return tx('Choisissez votre mot de passe personnel pour continuer.', 'Choose your personal password to continue.');
   if (m.includes('rate') && m.includes('limit')) return tx('Trop de tentatives. Veuillez patienter avant de réessayer.', 'Too many attempts. Please wait before trying again.');
   if (m.includes('network') || m.includes('failed to fetch') || m.includes('load failed')) return tx('Erreur réseau — vérifiez votre connexion.', 'Network error — check your connection.');
   if (m.includes('session') || m.includes('jwt')) return tx('Votre session a expiré. Veuillez vous reconnecter.', 'Your session has expired. Please sign in again.');
@@ -64,12 +67,9 @@ const mapAuthError = (raw: string): string => {
 
 export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: Creds) => void }) {
   const [screen, setScreen] = useState<Screen>('login');
-  const [mode, setMode] = useState<Mode>('extension');
-  const [extension, setExtension] = useState('');
-  const [sipDomain, setSipDomain] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [portalUrl, setPortalUrl] = useState('https://avastatistic.ca');
+  const [pendingFirstPassword, setPendingFirstPassword] = useState<PendingFirstPassword | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failure, setFailure] = useState<AuthFailure | null>(null);
@@ -82,26 +82,34 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
     document.documentElement.style.setProperty('--auth-accent', accentGradient(accent));
   }, [accent]);
 
-  if (screen === 'sip') {
-    return <SipConfigScreen onSaved={onAuthenticated} onCancel={() => setScreen('login')} />;
-  }
   if (screen === 'forgot') {
     return <ForgotPasswordScreen initialEmail={email} accent={accent} onBack={() => setScreen('login')} />;
   }
-
-  const base = portalUrl.replace(/\/$/, '');
+  if (screen === 'first-password' && pendingFirstPassword) {
+    return <FirstPasswordChangeScreen
+      accent={accent}
+      pending={pendingFirstPassword}
+      onCompleted={() => {
+        onAuthenticated({
+          portalUrl: BACKEND_URL,
+          backendOrigin: BACKEND_URL,
+          email: pendingFirstPassword.email,
+          extension: '',
+          userId: pendingFirstPassword.userId,
+          accessToken: pendingFirstPassword.accessToken,
+          refreshToken: pendingFirstPassword.refreshToken,
+          organizationId: pendingFirstPassword.organizationId,
+        });
+      }}
+    />;
+  }
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
-    if (mode === 'email') {
-      if (!email.trim()) errs.email = 'Email is required.';
-      else if (!isEmail(email)) errs.email = 'Enter a valid email address.';
-      if (!password) errs.password = 'Password is required.';
-      else if (password.length < 6) errs.password = 'Password must be at least 6 characters.';
-    } else {
-      if (!extension.trim()) errs.extension = 'Extension is required.';
-      if (!password) errs.password = 'SIP password is required.';
-    }
+    if (!email.trim()) errs.email = 'Email is required.';
+    else if (!isEmail(email)) errs.email = 'Enter a valid email address.';
+    if (!password) errs.password = 'Password is required.';
+    else if (password.length < 6) errs.password = 'Password must be at least 6 characters.';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -129,80 +137,39 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
     if (!data?.access_token) {
       throw new AuthError({ step: 'token', code: 'no_token', message: 'Auth succeeded but no access_token returned' });
     }
-    // Resolve organizationId via user_roles so downstream screens (recordings,
-    // CDR realtime, debug) don't fall over with "No organizationId in stored credentials".
+    // Resolve only the active Lemtel membership. No extension, PBX domain or
+    // shared-product role is accepted during sign-in.
     let organizationId: string | undefined;
     try {
       const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${data.user.id}&select=organization_id&limit=1`,
+        `${SUPABASE_URL}/rest/v1/lemtel_organization_memberships?user_id=eq.${data.user.id}&status=eq.active&select=organization_id&limit=1`,
         { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${data.access_token}` } },
       );
       const rows = await r.json().catch(() => []);
       organizationId = rows?.[0]?.organization_id || undefined;
-    } catch { /* non-fatal — ensureStoredOrganizationId will retry later */ }
+    } catch { /* non-fatal — the server bootstrap will retry later */ }
 
-    onAuthenticated({
-      portalUrl,
-      email: data?.user?.email || email.trim(),
-      extension: '',
-      userId: data?.user?.id,
-      accessToken: data?.access_token,
-      refreshToken: data?.refresh_token,
-      organizationId,
-    });
-  };
-
-
-  const submitExtension = async () => {
-    let res: Response;
-    try {
-      res = await fetch(`${SUPABASE_URL}/functions/v1/extension-signin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_ANON,
-          Authorization: `Bearer ${SUPABASE_ANON}`,
-        },
-        body: JSON.stringify({
-          extension: extension.trim(),
-          password,
-          sip_domain: sipDomain.trim() || undefined,
-          platform: 'mobile',
-        }),
-      });
-    } catch (e: any) {
-      throw new AuthError({ step: 'network', code: 'fetch_failed', message: 'Cannot reach extension-signin edge function', detail: e?.message || String(e) });
-    }
-    const data = await res.json().catch(() => ({} as any));
-    if (!res.ok) {
-      throw new AuthError({
-        step: 'edge-function',
-        code: data?.error || `http_${res.status}`,
-        message: data?.detail || data?.hint || 'extension-signin returned an error',
-        detail: JSON.stringify(data).slice(0, 300),
-      });
-    }
-    if (!data?.access_token) {
-      throw new AuthError({ step: 'token', code: 'no_token', message: 'Edge function returned no access_token', detail: JSON.stringify(data).slice(0, 300) });
-    }
-    onAuthenticated({
-      portalUrl,
-      email: data.email,
-      extension: data.extension,
-      displayName: data.display_name,
-      sipDomain: data.sip_domain,
-      wssUrl: data.wss_url,
-      sipPassword: data.sip_password || data.password || password,
+    const pending: PendingFirstPassword = {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
-      userId: data.user_id,
-      organizationId: data.organization_id,
-      organizationName: data.organization_name,
-      fusionpbxDomainUuid: data.fusionpbx_domain_uuid,
-      domainUuid: data.fusionpbx_domain_uuid,
-      role: data.role,
-      dataScope: data.data_scope,
-      permissions: data.permissions,
+      userId: data.user.id,
+      email: data?.user?.email || email.trim(),
+      organizationId,
+    };
+    if (data?.user?.app_metadata?.lemtel_onboarding_required === true) {
+      setPendingFirstPassword(pending);
+      setScreen('first-password');
+      return;
+    }
+    onAuthenticated({
+      portalUrl: BACKEND_URL,
+      backendOrigin: BACKEND_URL,
+      email: pending.email,
+      extension: '',
+      userId: pending.userId,
+      accessToken: pending.accessToken,
+      refreshToken: pending.refreshToken,
+      organizationId: pending.organizationId,
     });
   };
 
@@ -212,8 +179,7 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
     if (!validate()) { setFailure({ step: 'validation', code: 'invalid_input', message: tx('Veuillez corriger les champs en évidence.', 'Please correct the highlighted fields.') }); return; }
     setBusy(true);
     try {
-      if (mode === 'email') await submitEmail();
-      else await submitExtension();
+      await submitEmail();
     } catch (e: any) {
       if (e instanceof AuthError) {
         setFailure({ step: e.step, code: e.code, message: e.message, detail: e.detail });
@@ -229,7 +195,7 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
     }
   };
 
-  const canSubmit = mode === 'email' ? !!email && !!password : !!extension && !!password;
+  const canSubmit = !!email && !!password;
 
   return (
     <div style={wrap}>
@@ -241,22 +207,8 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
 
         <div style={cardStyle}>
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <ModeToggle mode={mode} accent={accent} onChange={(m) => { setMode(m); setError(null); setFieldErrors({}); }} />
-
-
-            <Field label={tx('URL du portail', 'Portal URL')} value={portalUrl} onChange={setPortalUrl} type="url" />
-            {mode === 'email' ? (
-              <>
-                <Field label={tx('Adresse e-mail', 'Email address')} value={email} onChange={(v) => { setEmail(v); setFieldErrors((f) => ({ ...f, email: '' })); }} type="email" placeholder={tx('vous@entreprise.com', 'you@company.com')} autoFocus error={fieldErrors.email} />
-                <Field label={tx('Mot de passe', 'Password')} value={password} onChange={(v) => { setPassword(v); setFieldErrors((f) => ({ ...f, password: '' })); }} type="password" placeholder="••••••••" error={fieldErrors.password} />
-              </>
-            ) : (
-              <>
-                <Field label={tx('Extension', 'Extension')} value={extension} onChange={(v) => { setExtension(v); setFieldErrors((f) => ({ ...f, extension: '' })); }} placeholder={tx('ex. 1001', 'e.g. 1001')} autoFocus error={fieldErrors.extension} />
-                <Field label={tx('Domaine SIP', 'SIP domain')} value={sipDomain} onChange={setSipDomain} placeholder="sip.example.com" />
-                <Field label={tx('Mot de passe SIP', 'SIP password')} value={password} onChange={(v) => { setPassword(v); setFieldErrors((f) => ({ ...f, password: '' })); }} type="password" placeholder="••••••••" error={fieldErrors.password} />
-              </>
-            )}
+            <Field label={tx('Adresse e-mail', 'Email address')} value={email} onChange={(v) => { setEmail(v); setFieldErrors((f) => ({ ...f, email: '' })); }} type="email" placeholder={tx('vous@entreprise.com', 'you@company.com')} autoFocus error={fieldErrors.email} />
+            <Field label={tx('Mot de passe', 'Password')} value={password} onChange={(v) => { setPassword(v); setFieldErrors((f) => ({ ...f, password: '' })); }} type="password" placeholder="••••••••" error={fieldErrors.password} />
 
             {error && <ErrorBanner failure={failure}>{error}</ErrorBanner>}
 
@@ -270,33 +222,72 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
               {busy ? tx('Connexion…', 'Signing in…') : tx('Se connecter', 'Sign in')}
             </button>
 
-            {mode === 'email' && (
-              <button
-                type="button"
-                onClick={() => setScreen('forgot')}
-                style={ghostLink}
-              >
-                {tx('Mot de passe oublié ?', 'Forgot password?')}
-              </button>
-            )}
-
             <button
               type="button"
-              onClick={() => setScreen('sip')}
-              style={ghostBtn}
+              onClick={() => setScreen('forgot')}
+              style={ghostLink}
             >
-              {tx('Configuration SIP manuelle', 'Manual SIP configuration')}
+              {tx('Mot de passe oublié ?', 'Forgot password?')}
             </button>
 
             <div style={{ fontSize: 10.5, color: C.textDim, lineHeight: 1.5, textAlign: 'center', marginTop: 2 }}>
-              {mode === 'extension'
-                ? tx("Utilisez le même mot de passe SIP défini sur votre extension dans le portail (ou dans FusionPBX). Si vous n'en avez pas, demandez à votre administrateur de le configurer.", 'Use the same SIP password set on your extension in the portal (or in FusionPBX). If you don\u2019t have one, ask your administrator to configure it.')
-                : tx("Connectez-vous avec l'adresse e-mail et le mot de passe associés à votre compte du portail Lemtel.", 'Sign in with the email address and password tied to your Lemtel portal account.')}
+              {tx("Connectez-vous seulement avec l’adresse e-mail et le mot de passe Lemtel reçus. Vos paramètres de téléphonie sont chargés de façon sécurisée après connexion.", 'Sign in only with the Lemtel email address and password you received. Your telephony settings load securely after sign-in.')}
             </div>
           </form>
         </div>
       </div>
 
+      <Footer />
+    </div>
+  );
+}
+
+/* ====== Mandatory first-password screen ====== */
+function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: Accent; pending: PendingFirstPassword; onCompleted: () => void }) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const valid = newPassword.length >= 12 && /[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword) && /\d/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword) && newPassword === confirmPassword;
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!valid || busy) return;
+    setBusy(true); setError(null);
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/lemtel-complete-first-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON, Authorization: `Bearer ${pending.accessToken}` },
+        body: JSON.stringify({ newPassword }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || body?.ok !== true) throw new Error(body?.error || 'password_change_failed');
+      onCompleted();
+    } catch (cause: any) {
+      setError(mapAuthError(cause?.message));
+    } finally { setBusy(false); }
+  };
+  return (
+    <div style={wrap}>
+      <AccentSwitch accent={accent} readOnly />
+      <GoldGlow />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 20px', position: 'relative', zIndex: 1 }}>
+        <Brand />
+        <div style={cardStyle}>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <h2 style={headingStyle}>{tx('Choisissez votre mot de passe', 'Choose your password')}</h2>
+              <p style={subheadingStyle}>{tx('Votre mot de passe temporaire a été vérifié. Créez maintenant un mot de passe personnel pour votre compte Lemtel.', 'Your temporary password was verified. Create a personal password for your Lemtel account now.')}</p>
+            </div>
+            <Field label={tx('Nouveau mot de passe', 'New password')} type="password" value={newPassword} onChange={setNewPassword} placeholder="••••••••••••" autoFocus />
+            <Field label={tx('Confirmer le mot de passe', 'Confirm password')} type="password" value={confirmPassword} onChange={setConfirmPassword} placeholder="••••••••••••" />
+            <div style={{ color: C.textDim, fontSize: 11, lineHeight: 1.45 }}>{tx('Au moins 12 caractères avec une majuscule, une minuscule, un chiffre et un symbole.', 'At least 12 characters with uppercase, lowercase, number, and symbol.')}</div>
+            {error && <ErrorBanner>{error}</ErrorBanner>}
+            <button type="submit" disabled={!valid || busy} className="lemtel-btn-primary" style={{ height: 50, borderRadius: 14, fontSize: 14, cursor: busy ? 'wait' : 'pointer' }}>
+              {busy ? tx('Mise à jour…', 'Updating…') : tx('Continuer vers Lemtel', 'Continue to Lemtel')}
+            </button>
+          </form>
+        </div>
+      </div>
       <Footer />
     </div>
   );
@@ -541,33 +532,6 @@ function Footer() {
       position: 'relative', zIndex: 1,
     }}>
       {tx('Conçu par', 'Crafted by')} <span style={{ color: C.gold, fontWeight: 600 }}>AVA Statistic · assistantvirtualai.com</span>
-    </div>
-  );
-}
-
-function ModeToggle({ mode, accent, onChange }: { mode: Mode; accent: Accent; onChange: (m: Mode) => void }) {
-  return (
-    <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}` }}>
-      {(['extension', 'email'] as Mode[]).map((m) => {
-        const active = mode === m;
-        return (
-          <button
-            key={m}
-            type="button"
-            onClick={() => onChange(m)}
-            style={{
-              flex: 1, padding: '9px 10px', borderRadius: 9, cursor: 'pointer',
-              fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase',
-              border: 'none',
-              background: active ? accentGradient(accent) : 'transparent',
-              color: active ? '#0b1530' : C.textSub,
-              transition: 'background .15s ease, color .15s ease',
-            }}
-          >
-            {m === 'extension' ? 'Extension' : 'Email'}
-          </button>
-        );
-      })}
     </div>
   );
 }

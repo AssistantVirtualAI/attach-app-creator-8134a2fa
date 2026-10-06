@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { LEMTEL_ORG } from '@/hooks/usePbxData';
+import LemtelHostedOnboardingPanel from '@/components/lemtel/LemtelHostedOnboardingPanel';
 
 const BASE_DOMAIN = 'lemtel.tel';
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -37,6 +38,13 @@ type Ext = {
 };
 
 export default function LemtelCustomers() {
+  // The current Lovable project remains untouched because this route is enabled
+  // only in a separately configured Lemtel Hostinger portal build.
+  if (import.meta.env.VITE_LEMTEL_HOSTED_ONBOARDING === 'approved') return <LemtelHostedOnboardingPanel />;
+  return <LemtelLegacyCustomers />;
+}
+
+function LemtelLegacyCustomers() {
   const qc = useQueryClient();
   const impersonation = useImpersonation();
   const [search, setSearch] = useState('');

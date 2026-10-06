@@ -10,6 +10,7 @@ export function validateHostingerLemtelConfig(env) {
   if (env.VITE_SUPABASE_URL !== HOSTINGER_ORIGIN) return fail('ORIGIN_MUST_BE_EXACT_HOSTINGER_LEMTEL');
   if (env.VITE_SUPABASE_URL === LEGACY_ORIGIN || /planipret/i.test(String(env.VITE_SUPABASE_URL))) return fail('PLANIPRET_ORIGIN_DENIED');
   if (env.VITE_LEMTEL_PRIVATE_DIRECTORY !== 'approved') return fail('PRIVATE_DIRECTORY_FLAG_REQUIRED');
+  if (env.VITE_LEMTEL_EMAIL_ONLY_SIGNIN !== 'approved') return fail('EMAIL_ONLY_SIGNIN_FLAG_REQUIRED');
   if (env.VITE_LEMTEL_AUTH_REDIRECT_URL !== `${HOSTINGER_ORIGIN}/reset-password`) return fail('RESET_REDIRECT_MUST_BE_HOSTINGER');
   const key = env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (typeof key !== 'string' || !key.trim() || key.includes('__INJECT_')) return fail('HOSTINGER_PUBLISHABLE_KEY_REQUIRED');

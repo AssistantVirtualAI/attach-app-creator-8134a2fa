@@ -1,0 +1,10 @@
+{
+  "package_version": "lemtel_email_onboarding_admin_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "capabilities": ["create_lemtel_organization", "provision_email_only_users", "localized_welcome_email", "temporary_password_rotation"],
+  "explicitly_excluded": ["planipret_import", "fusionpbx", "sip_password_management", "wss", "turn", "push", "public_download", "plaintext_password_storage"],
+  "runtime_requirements": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "RESEND_API_KEY", "LEMTEL_WELCOME_FROM", "LEMTEL_DOWNLOAD_IOS_URL", "LEMTEL_DOWNLOAD_ANDROID_URL", "LEMTEL_DOWNLOAD_DESKTOP_URL"],
+  "deployment_prerequisites": ["approved_lemtel_onboarding_migration", "explicit_platform_admin_bootstrap", "verified_transactional_email_sender", "approved_download_links", "synthetic_auth_rbac_and_email_smoke_test", "approved_edge_deployment"]
+}

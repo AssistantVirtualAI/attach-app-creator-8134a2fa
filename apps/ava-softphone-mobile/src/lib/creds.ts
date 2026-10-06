@@ -195,9 +195,8 @@ export function useStoredCreds() {
 }
 
 /**
- * Best-effort resolver for the user's organizationId. Falls back to user_roles
- * via the Supabase REST API when stored credentials are missing the field
- * (e.g. legacy sessions or email-only sign-in before this fix).
+ * Best-effort resolver for the user's active Lemtel organization. It reads
+ * only the Lemtel-owned membership relation, never a shared-product role.
  * Persists the resolved value back into Store so subsequent calls are instant.
  */
 const SUPABASE_URL_DEF = BACKEND_URL;
@@ -206,7 +205,7 @@ const SUPABASE_ANON_DEF = BACKEND_ANON_KEY;
 export async function fetchOrganizationIdForUser(accessToken: string, userId: string): Promise<string | null> {
   if (!accessToken || !userId) return null;
   try {
-    const url = `${SUPABASE_URL_DEF}/rest/v1/user_roles?user_id=eq.${userId}&select=organization_id&limit=1`;
+    const url = `${SUPABASE_URL_DEF}/rest/v1/lemtel_organization_memberships?user_id=eq.${userId}&status=eq.active&select=organization_id&limit=1`;
     const res = await fetch(url, {
       headers: { apikey: SUPABASE_ANON_DEF, Authorization: `Bearer ${accessToken}` },
     });

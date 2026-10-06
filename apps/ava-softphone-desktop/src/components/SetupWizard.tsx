@@ -17,278 +17,133 @@ type Creds = {
   userId?: string;
   accessToken?: string;
   refreshToken?: string;
+  organizationId?: string;
 };
 
-type Mode = 'email' | 'extension';
+type PendingSession = { userId: string; email: string; accessToken?: string; refreshToken?: string };
 
+const passwordIsStrong = (value: string) => value.length >= 12 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
+
+/**
+ * The only credential entrypoint for a Lemtel build is email + password.
+ * Extension, SIP domain and telephony parameters are server-authoritative and
+ * intentionally unavailable at sign-in.
+ */
 export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds) => void }) {
   const { colors } = theme;
-  const [portalUrl, setPortalUrl] = useState('https://avastatistic.ca');
-  const [mode, setMode] = useState<Mode>('extension');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [extension, setExtension] = useState('');
-  const [sipDomain, setSipDomain] = useState('lemtel.lemtel.tel');
+  const [pending, setPending] = useState<PendingSession | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const finalize = async (
-    authUserId: string,
-    accessToken: string | undefined,
-    refreshToken: string | undefined,
-    fallbackEmail: string,
-    softphone: { extension?: string; display_name?: string; sip_domain?: string; wss_url?: string; organization_id?: string } | null,
-  ) => {
+  const finalize = async (session: PendingSession) => {
+    const { data: bootstrap, error: bootstrapError } = await supabase.functions.invoke('lemtel-session-bootstrap');
+    const first = (bootstrap as any)?.organizations?.[0];
+    if (bootstrapError || (bootstrap as any)?.error || !first?.organizationId) {
+      await supabase.auth.signOut({ scope: 'local' });
+      throw new Error((bootstrap as any)?.error || bootstrapError?.message || 'Lemtel account bootstrap failed');
+    }
     const credentials: Creds = {
-      portalUrl: (portalUrl || 'https://avastatistic.ca').replace(/\/+$/, ''),
+      portalUrl: BACKEND_URL,
       backendOrigin: BACKEND_URL,
-      email: fallbackEmail,
-      extension: String(softphone?.extension ?? extension ?? 'N/A'),
-      displayName: softphone?.display_name || fallbackEmail.split('@')[0],
-      sipDomain: softphone?.sip_domain || sipDomain || 'lemtel.lemtel.tel',
-      wssUrl: softphone?.wss_url || 'wss://node.lemtelcloud.net:7443',
-      userId: authUserId,
-      accessToken,
-      refreshToken,
+      email: session.email,
+      extension: '',
+      displayName: (bootstrap as any)?.user?.displayName || session.email.split('@')[0],
+      userId: session.userId,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      organizationId: first.organizationId,
     };
-    if (accessToken) setAuthToken(accessToken);
+    if (session.accessToken) setAuthToken(session.accessToken);
     await window.electronAPI?.saveCredentials?.(credentials);
     onComplete(credentials);
   };
 
   const handleEmailConnect = async () => {
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
-      const { data: authData, error: authError } =
-        await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (authError || !authData.user) {
-        setError(authError?.message ?? 'Login failed');
-        setLoading(false);
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (authError || !authData.user || !authData.session) throw new Error(authError?.message || 'Login failed');
+      const session: PendingSession = {
+        userId: authData.user.id,
+        email: authData.user.email || email.trim(),
+        accessToken: authData.session.access_token,
+        refreshToken: authData.session.refresh_token,
+      };
+      if (authData.user.app_metadata?.lemtel_onboarding_required === true) {
+        setPending(session);
         return;
       }
-      // Mobile parity: the SIP password is the account password.
-      try { localStorage.setItem('lemtel.sip_password', password); } catch { /* noop */ }
-      const { data: allowed, error: gateErr } = await supabase
-        .rpc('my_platform_access_allowed', { _platform: 'desktop' });
-      if (gateErr || allowed !== true) {
-        await supabase.auth.signOut();
-        setError('App access has not been granted by Lemtel. Please contact your provider.');
-        setLoading(false);
-        return;
-      }
-      const { data: softphoneUser } = await supabase
-        .from('pbx_softphone_users')
-        .select('extension,display_name,sip_domain,wss_url,organization_id,status')
-        .eq('portal_user_id', authData.user.id)
-        .maybeSingle();
-      await finalize(
-        authData.user.id,
-        authData.session?.access_token,
-        authData.session?.refresh_token,
-        authData.user.email || email,
-        softphoneUser,
-      );
-    } catch (err: any) {
-      setError(`Connection error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+      await finalize(session);
+    } catch (cause: any) {
+      setError(cause?.message || 'Connection error');
+    } finally { setLoading(false); }
   };
 
-  const handleExtensionConnect = async () => {
-    setLoading(true);
-    setError('');
+  const completeFirstPassword = async () => {
+    if (!pending || !passwordIsStrong(newPassword) || newPassword !== confirmPassword) return;
+    setLoading(true); setError('');
     try {
-      const { data, error: fnErr } = await supabase.functions.invoke('extension-signin', {
-        body: {
-          extension: extension.trim(),
-          password,
-          sip_domain: sipDomain.trim() || undefined,
-          platform: 'desktop',
-        },
-      });
-      const errMsg = (data as any)?.error || fnErr?.message;
-      if (errMsg || !(data as any)?.access_token) {
-        const friendly =
-          errMsg === 'invalid_credentials' ? 'Wrong extension or password.' :
-          errMsg === 'extension_not_found' ? 'Extension not found.' :
-          errMsg === 'app_access_disabled' || errMsg === 'desktop_access_disabled'
-            ? 'Desktop access has not been enabled for this extension. Contact Lemtel.' :
-          errMsg === 'ambiguous_extension' ? 'Multiple extensions match — please enter the SIP domain.' :
-          (errMsg || 'Sign in failed');
-        setError(friendly);
-        setLoading(false);
-        return;
-      }
-      const d = data as any;
-      // Hydrate the local Supabase client so subsequent app code sees the session.
-      await supabase.auth.setSession({ access_token: d.access_token, refresh_token: d.refresh_token });
-      await finalize(d.user_id, d.access_token, d.refresh_token, d.email || `ext-${d.extension}@${d.sip_domain || 'lemtel.tel'}`, d);
-    } catch (err: any) {
-      setError(`Connection error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+      const { data, error: completionError } = await supabase.functions.invoke('lemtel-complete-first-password', { body: { newPassword } });
+      if (completionError || (data as any)?.ok !== true) throw new Error((data as any)?.error || completionError?.message || 'Password update failed');
+      await finalize(pending);
+    } catch (cause: any) {
+      setError(cause?.message || 'Password update failed');
+    } finally { setLoading(false); }
   };
 
-  const handleConnect = () => (mode === 'email' ? handleEmailConnect() : handleExtensionConnect());
-  const canSubmit = mode === 'email'
-    ? !!email && !!password
-    : !!extension && !!password;
+  const firstPasswordScreen = Boolean(pending);
+  const valid = !!email && !!password;
+  const validFirstPassword = passwordIsStrong(newPassword) && newPassword === confirmPassword;
 
   return (
-    <div style={{
-      minHeight: '100%',
-      background: colors.bg,
-      display: 'flex', flexDirection: 'column', color: colors.text,
-      position: 'relative', overflow: 'hidden',
-    }}>
-      {/* Single soft gold radial behind the wordmark */}
-      <div style={{
-        position: 'absolute',
-        top: '14%', left: '50%', transform: 'translateX(-50%)',
-        width: 520, height: 520, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(255,215,0,0.18) 0%, rgba(255,215,0,0.04) 40%, transparent 70%)',
-        filter: 'blur(40px)',
-        animation: 'authGlow 6s ease-in-out infinite',
-        pointerEvents: 'none',
-      }} />
-
-      <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: '40px 24px', position: 'relative', zIndex: 1,
-      }}>
-        {/* Brand wordmark — square Lemtel mark */}
+    <div style={{ minHeight: '100%', background: colors.bg, display: 'flex', flexDirection: 'column', color: colors.text, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: '14%', left: '50%', transform: 'translateX(-50%)', width: 520, height: 520, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,215,0,0.18) 0%, rgba(255,215,0,0.04) 40%, transparent 70%)', filter: 'blur(40px)', animation: 'authGlow 6s ease-in-out infinite', pointerEvents: 'none' }} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', position: 'relative', zIndex: 1 }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <LemtelLogo size="lg" glow shape="square" />
           <div style={{ marginTop: 14, fontSize: 22, fontWeight: 800, color: colors.textIce, letterSpacing: 0.2 }}>Lemtel</div>
           <BrandTagline size="sm" />
         </div>
-
-        {/* Card */}
-        <div style={{
-          width: '100%', maxWidth: 420,
-          background: colors.bgCard,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 24,
-          padding: 32,
-          boxShadow: '0 25px 60px rgba(0,0,0,0.55)',
-          animation: 'fadeIn .4s ease-out',
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Mode toggle */}
-            <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: `1px solid ${colors.border}` }}>
-              {(['extension', 'email'] as Mode[]).map((m) => {
-                const active = mode === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => { setMode(m); setError(''); }}
-                    style={{
-                      flex: 1, padding: '9px 10px', borderRadius: 9, cursor: 'pointer',
-                      fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase',
-                      border: 'none',
-                      background: active ? `linear-gradient(135deg, ${colors.gold}, ${colors.avaCyan})` : 'transparent',
-                      color: active ? '#0b1530' : colors.textSub,
-                    }}
-                  >
-                    {m === 'extension' ? 'Extension' : 'Email'}
-                  </button>
-                );
-              })}
-            </div>
-
-            <Field label="Portal URL" value={portalUrl} onChange={setPortalUrl} type="url" />
-            {mode === 'email' ? (
-              <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="you@company.com" autoFocus />
-            ) : (
-              <>
-                <Field label="Extension" value={extension} onChange={setExtension} placeholder="e.g. 1001" autoFocus />
-                <Field label="SIP Domain" value={sipDomain} onChange={setSipDomain} placeholder="lemtel.lemtel.tel" />
-              </>
-            )}
-            <Field label={mode === 'email' ? 'Password' : 'SIP Password'} value={password} onChange={setPassword} type="password" placeholder="••••••••" onEnter={handleConnect} />
-
-            {error && (
-              <div style={{
-                fontSize: 12, color: colors.red,
-                padding: '10px 14px', borderRadius: 10,
-                background: 'rgba(239,68,68,0.08)',
-                border: '1px solid rgba(239,68,68,0.2)',
-              }}>
-                {error}
+        <div style={{ width: '100%', maxWidth: 420, background: colors.bgCard, border: `1px solid ${colors.border}`, borderRadius: 24, padding: 32, boxShadow: '0 25px 60px rgba(0,0,0,0.55)', animation: 'fadeIn .4s ease-out' }}>
+          {firstPasswordScreen ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 21, color: colors.textIce }}>Choose your password</h2>
+                <p style={{ color: colors.textSub, fontSize: 13, lineHeight: 1.55 }}>Your temporary password is verified. Create a personal password to continue to Lemtel.</p>
               </div>
-            )}
-
-            <button
-              className="lemtel-btn-primary"
-              onClick={handleConnect}
-              disabled={loading || !canSubmit}
-              style={{
-                marginTop: 8, height: 50, borderRadius: 14,
-                fontSize: 14, cursor: 'pointer',
-              }}
-            >
-              {loading ? 'Connecting…' : 'Sign in'}
-            </button>
-
-            <div style={{ fontSize: 10.5, color: colors.textDim, lineHeight: 1.5, textAlign: 'center', marginTop: 2 }}>
-              {mode === 'extension'
-                ? 'Use the same SIP password defined on your extension in the portal (or in FusionPBX). If you don\u2019t have one, ask your administrator to set it on your extension.'
-                : 'Sign in with the email and password tied to your Lemtel portal account.'}
+              <Field label="New password" value={newPassword} onChange={setNewPassword} type="password" placeholder="••••••••••••" autoFocus />
+              <Field label="Confirm password" value={confirmPassword} onChange={setConfirmPassword} type="password" placeholder="••••••••••••" onEnter={completeFirstPassword} />
+              <div style={{ color: colors.textDim, fontSize: 11, lineHeight: 1.45 }}>At least 12 characters with uppercase, lowercase, number, and symbol.</div>
+              {error && <ErrorBox message={error} />}
+              <button className="lemtel-btn-primary" onClick={completeFirstPassword} disabled={loading || !validFirstPassword} style={{ marginTop: 8, height: 50, borderRadius: 14, fontSize: 14, cursor: 'pointer' }}>{loading ? 'Updating…' : 'Continue to Lemtel'}</button>
             </div>
-          </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 21, color: colors.textIce }}>Sign in to Lemtel</h2>
+                <p style={{ color: colors.textSub, fontSize: 13, lineHeight: 1.55 }}>Use the email address and password from your Lemtel welcome email. Telephony settings are loaded securely after sign-in.</p>
+              </div>
+              <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="you@company.com" autoFocus />
+              <Field label="Password" value={password} onChange={setPassword} type="password" placeholder="••••••••" onEnter={handleEmailConnect} />
+              {error && <ErrorBox message={error} />}
+              <button className="lemtel-btn-primary" onClick={handleEmailConnect} disabled={loading || !valid} style={{ marginTop: 8, height: 50, borderRadius: 14, fontSize: 14, cursor: 'pointer' }}>{loading ? 'Connecting…' : 'Sign in'}</button>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Footer */}
-      <div style={{
-        padding: '18px 16px 22px', textAlign: 'center',
-        fontSize: 11, color: colors.textDim, letterSpacing: 0.4,
-        position: 'relative', zIndex: 1,
-      }}>
-        Built by{' '}
-        <a
-          href="https://assistantvirtualai.com"
-          onClick={(e) => {
-            e.preventDefault();
-            window.electronAPI?.openExternal?.('https://assistantvirtualai.com');
-          }}
-          style={{ color: colors.gold, textDecoration: 'none', cursor: 'pointer', fontWeight: 600 }}
-        >
-          AVA Statistic · assistantvirtualai.com
-        </a>
-      </div>
+      <div style={{ padding: '18px 16px 22px', textAlign: 'center', fontSize: 11, color: colors.textDim, letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>Built by <span style={{ color: colors.gold, fontWeight: 600 }}>AVA Statistic · assistantvirtualai.com</span></div>
     </div>
   );
 }
 
-function Field({
-  label, value, onChange, type = 'text', placeholder, autoFocus, onEnter,
-}: {
-  label: string; value: string; onChange: (v: string) => void;
-  type?: string; placeholder?: string; autoFocus?: boolean; onEnter?: () => void;
-}) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <span style={{
-        fontSize: 10, color: theme.colors.textSub,
-        textTransform: 'uppercase', letterSpacing: 1.6, fontWeight: 700,
-      }}>{label}</span>
-      <input
-        className="lemtel-input"
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        autoCapitalize="none"
-        autoCorrect="off"
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && onEnter) onEnter(); }}
-      />
-    </label>
-  );
+function ErrorBox({ message }: { message: string }) {
+  return <div style={{ fontSize: 12, color: theme.colors.red, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>{message}</div>;
+}
+
+function Field({ label, value, onChange, type = 'text', placeholder, autoFocus, onEnter }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; autoFocus?: boolean; onEnter?: () => void }) {
+  return <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}><span style={{ fontSize: 10, color: theme.colors.textSub, textTransform: 'uppercase', letterSpacing: 1.6, fontWeight: 700 }}>{label}</span><input className="lemtel-input" type={type} value={value} placeholder={placeholder} autoFocus={autoFocus} autoCapitalize="none" autoCorrect="off" onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && onEnter) onEnter(); }} /></label>;
 }

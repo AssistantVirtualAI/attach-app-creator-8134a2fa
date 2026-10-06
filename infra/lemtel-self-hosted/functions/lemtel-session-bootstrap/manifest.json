@@ -1,0 +1,10 @@
+{
+  "package_version": "lemtel_session_bootstrap_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "client_cutover_authorized": false,
+  "capabilities": ["email_only_session_identity", "lemtel_membership_resolution", "telephony_not_provisioned_state"],
+  "explicitly_excluded": ["planipret_import", "fusionpbx", "sip_credentials", "wss", "turn", "push", "external_calls"],
+  "runtime_requirements": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
+  "deployment_prerequisites": ["approved_lemtel_onboarding_migration", "synthetic_member_rbac_test", "approved_edge_deployment"]
+}

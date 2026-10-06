@@ -1,0 +1,36 @@
+{
+  "contract_version": "lemtel_email_only_onboarding_v1",
+  "scope": "offline_schema_function_and_client_source_only",
+  "deployment": {
+    "migration_apply_authorized": false,
+    "edge_deployment_authorized": false,
+    "email_delivery_authorized": false,
+    "client_cutover_authorized": false,
+    "external_email_provider_configured": false
+  },
+  "identity": {
+    "login_identifier": "email",
+    "temporary_password": "generated_server_side_and_delivered_once_by_localized_transactional_email",
+    "permanent_password": "required_on_first_authenticated_app_session",
+    "no_extension_or_sip_domain_login": true,
+    "plaintext_password_persistence": "forbidden"
+  },
+  "portal": {
+    "organization_creator": "explicit_lemtel_platform_administrator",
+    "organization_owner": "receives_welcome_email",
+    "member_provisioning": ["single", "bulk"],
+    "locale_selection": ["fr", "en"],
+    "legacy_portal_flow_enabled": false
+  },
+  "clients": {
+    "mobile": "email_password_then_mandatory_first_password_change",
+    "desktop": "email_password_then_mandatory_first_password_change",
+    "telephony_configuration": "server_authoritative_after_login_and_out_of_scope_until_fusionpbx_test_data_is_provisioned"
+  },
+  "delivery": {
+    "required_links": ["ios", "android", "desktop"],
+    "email_sender": "approved_transactional_provider_only",
+    "audit": "non_secret_delivery_metadata_only"
+  },
+  "forbidden": ["Planipret_data_or_auth", "FusionPBX_mutation", "SIP_password_in_email_or_client_login", "temporary_password_logs", "temporary_password_database_storage", "Lovable_current_project_change", "automatic_production_delivery"]
+}

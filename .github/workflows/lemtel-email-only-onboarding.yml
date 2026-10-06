@@ -1,0 +1,86 @@
+name: Lemtel — email-only onboarding
+
+on:
+  pull_request:
+    paths:
+      - 'infra/lemtel-self-hosted/migrations/0003_lemtel_email_onboarding.sql'
+      - 'infra/lemtel-self-hosted/email-onboarding-contract.json'
+      - 'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/**'
+      - 'infra/lemtel-self-hosted/functions/lemtel-complete-first-password/**'
+      - 'infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/**'
+      - 'apps/ava-softphone-mobile/src/screens/AuthScreen.tsx'
+      - 'apps/ava-softphone-mobile/src/lib/creds.ts'
+      - 'apps/ava-softphone-desktop/src/components/SetupWizard.tsx'
+      - 'src/components/lemtel/LemtelHostedOnboardingPanel.tsx'
+      - 'src/pages/lemtel/LemtelCustomers.tsx'
+      - 'infra/lemtel-client-config/hostinger-staging.env.template'
+      - 'scripts/lemtel-email-onboarding-contract.test.mjs'
+      - 'scripts/lemtel-email-only-client-login.test.mjs'
+      - 'scripts/lemtel-hostinger-client-config-filter.*'
+      - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
+      - '.github/workflows/lemtel-email-only-onboarding.yml'
+      - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
+  push:
+    branches: [lemtel/integration]
+    paths:
+      - 'infra/lemtel-self-hosted/migrations/0003_lemtel_email_onboarding.sql'
+      - 'infra/lemtel-self-hosted/email-onboarding-contract.json'
+      - 'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/**'
+      - 'infra/lemtel-self-hosted/functions/lemtel-complete-first-password/**'
+      - 'infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/**'
+      - 'apps/ava-softphone-mobile/src/screens/AuthScreen.tsx'
+      - 'apps/ava-softphone-mobile/src/lib/creds.ts'
+      - 'apps/ava-softphone-desktop/src/components/SetupWizard.tsx'
+      - 'src/components/lemtel/LemtelHostedOnboardingPanel.tsx'
+      - 'src/pages/lemtel/LemtelCustomers.tsx'
+      - 'infra/lemtel-client-config/hostinger-staging.env.template'
+      - 'scripts/lemtel-email-onboarding-contract.test.mjs'
+      - 'scripts/lemtel-email-only-client-login.test.mjs'
+      - 'scripts/lemtel-hostinger-client-config-filter.*'
+      - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
+      - '.github/workflows/lemtel-email-only-onboarding.yml'
+      - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-and-edge-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate disabled onboarding contract and client boundary
+        run: |
+          node --test \
+            scripts/lemtel-email-onboarding-contract.test.mjs \
+            scripts/lemtel-email-only-client-login.test.mjs \
+            scripts/lemtel-hostinger-client-config-filter.test.mjs \
+            scripts/lemtel-hostinger-client-test-builds.test.mjs
+      - name: Typecheck Lemtel onboarding Edge Functions
+        run: |
+          deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts
+          deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-complete-first-password/index.ts
+          deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts
+      - name: Enforce no deployment in this workflow
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('.github/workflows/lemtel-email-only-onboarding.yml', 'utf8');
+          const forbidden = [
+            new RegExp('docker\\s+compose\\s+up', 'i'),
+            new RegExp('s' + 'sh\\s+', 'i'),
+            new RegExp('r' + 'sync', 'i'),
+            new RegExp('s' + 'cp', 'i'),
+            new RegExp('curl\\s+.*api\\.resend\\.com', 'i'),
+            new RegExp('u' + 'fw\\s+allow', 'i'),
+            new RegExp('fusion' + 'pbx', 'i'),
+          ];
+          if (forbidden.some((pattern) => pattern.test(source))) process.exit(1);
+          NODE

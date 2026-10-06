@@ -13660,6 +13660,63 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_user_removals: {
+        Row: {
+          batch_label: string
+          callerid_number: string | null
+          created_at: string
+          email: string | null
+          error: string | null
+          executed_at: string | null
+          executed_by: string | null
+          extension: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          ns_found: boolean | null
+          ns_result: Json | null
+          portal_result: Json | null
+          profile_found: boolean | null
+          status: string
+        }
+        Insert: {
+          batch_label: string
+          callerid_number?: string | null
+          created_at?: string
+          email?: string | null
+          error?: string | null
+          executed_at?: string | null
+          executed_by?: string | null
+          extension?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          ns_found?: boolean | null
+          ns_result?: Json | null
+          portal_result?: Json | null
+          profile_found?: boolean | null
+          status?: string
+        }
+        Update: {
+          batch_label?: string
+          callerid_number?: string | null
+          created_at?: string
+          email?: string | null
+          error?: string | null
+          executed_at?: string | null
+          executed_by?: string | null
+          extension?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          ns_found?: boolean | null
+          ns_result?: Json | null
+          portal_result?: Json | null
+          profile_found?: boolean | null
+          status?: string
+        }
+        Relationships: []
+      }
       planipret_voicemails: {
         Row: {
           audio_url: string | null
@@ -18099,6 +18156,10 @@ export type Database = {
           overdue_tasks: number
           user_id: string
         }[]
+      }
+      planipret_signin_eligible: {
+        Args: { _user_id: string }
+        Returns: boolean
       }
       pp_audit_realtime_check: { Args: never; Returns: Json }
       pp_claim_call: {

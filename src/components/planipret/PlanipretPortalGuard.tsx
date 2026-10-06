@@ -10,6 +10,7 @@ const DENY_MESSAGES: Record<string, string> = {
   "not-microsoft": "Ce portail accepte uniquement les connexions Microsoft 365 Planiprêt.",
   domain: "Ce compte Microsoft n'est pas un compte @planipret. Utilisez votre compte professionnel Planiprêt.",
   "wrong-portal": "Votre compte n'a pas accès à ce portail.",
+  "no-did": "Accès réservé aux comptes ayant une extension et un numéro (DID) actifs.",
 };
 
 /**

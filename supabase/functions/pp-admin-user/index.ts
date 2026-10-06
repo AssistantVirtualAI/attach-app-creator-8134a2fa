@@ -673,6 +673,52 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Planned removal batch (rows prepared in planipret_user_removals).
+    // payload: { ids: string[] } — processes up to 25 pending rows per call.
+    if (action === "removal_execute") {
+      const ids: string[] = Array.isArray(payload?.ids) ? payload.ids.slice(0, 25).map(String) : [];
+      if (ids.length === 0) return jsonResponse({ success: false, error: "ids requis" }, 400);
+      const { data: rows } = await admin.from("planipret_user_removals")
+        .select("*").in("id", ids).in("status", ["pending", "failed"]);
+      const out: any[] = [];
+      for (const r of rows ?? []) {
+        const domain = NS_DEFAULT_DOMAIN;
+        let status = "done"; let error: string | null = null;
+        let nsResult: any = null; let portalResult: any = null;
+        try {
+          const email = String(r.email ?? "").toLowerCase();
+          const ext = String(r.extension ?? "");
+          let q = admin.from("planipret_profiles").select("id, user_id, role, email, extension, ns_extension");
+          q = email ? q.or(`email.ilike.${email},extension.eq.${ext},ns_extension.eq.${ext}`) : q.or(`extension.eq.${ext},ns_extension.eq.${ext}`);
+          const { data: profs } = await q;
+          if ((profs ?? []).some((p: any) => String(p.role).includes("admin"))) throw new Error("admin_protected");
+          if (ext) {
+            const chk = await nsFetch(`/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}`);
+            nsResult = chk.ok ? await deleteNsUserFull(domain, ext) : { ok: true, not_found: chk.status === 404, status: chk.status };
+            if (!nsResult.ok) { status = "failed"; error = `ns_${nsResult.user_status ?? nsResult.status}`; }
+          }
+          let authDeleted = 0; let profilesDeleted = 0;
+          for (const p of profs ?? []) {
+            if (p.user_id) { const { error: e } = await admin.auth.admin.deleteUser(p.user_id); if (!e) authDeleted++; }
+            const { error: e2 } = await admin.from("planipret_profiles").delete().eq("id", p.id);
+            if (!e2) profilesDeleted++;
+          }
+          portalResult = { profiles_found: profs?.length ?? 0, profilesDeleted, authDeleted };
+        } catch (e) { status = "failed"; error = String((e as Error)?.message ?? e); }
+        await admin.from("planipret_user_removals").update({
+          status, error, ns_result: nsResult, portal_result: portalResult,
+          profile_found: (portalResult?.profiles_found ?? 0) > 0, ns_found: nsResult ? !nsResult.not_found : null,
+          executed_by: profile.user_id, executed_at: new Date().toISOString(),
+        }).eq("id", r.id);
+        out.push({ id: r.id, status, error });
+      }
+      await logAudit(admin, req, {
+        admin_id: profile.id, action: "USER_REMOVAL_BATCH",
+        metadata: { count: out.length, failed: out.filter((o) => o.status === "failed").length },
+      });
+      return jsonResponse({ success: true, results: out });
+    }
+
     // Find NS subscribers that no longer exist in the portal (orphans left
     // behind by portal-only deletions), and optionally delete them.
     if (action === "purge_ns_orphans") {

@@ -144,6 +144,10 @@ Deno.serve(async (req) => {
     if (profile.status && ["inactive", "disabled", "banned", "suspended"].includes(String(profile.status).toLowerCase())) {
       return json({ success: false, error: "account_inactive" }, 403);
     }
+    {
+      const { data: eligible } = await admin.rpc("planipret_signin_eligible", { _user_id: profile.user_id });
+      if (eligible !== true) return json({ success: false, error: "no_did_extension", message: "Accès réservé aux comptes ayant une extension et un numéro (DID) actifs." }, 403);
+    }
 
     const { data: authUser, error: authUserError } = await admin.auth.admin.getUserById(profile.user_id);
     if (authUserError || !authUser?.user?.email) return json({ success: false, error: "auth_user_missing" }, 403);

@@ -7,6 +7,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
 const APPROVAL_VALUE = 'approved';
 
 export type LemtelPrivateDirectoryFunction =
+  | 'lemtel-contacts'
   | 'lemtel-caller-lookup'
   | 'lemtel-wss-diagnostics';
 
@@ -55,6 +56,15 @@ export async function invokeLemtelPrivateDirectory<T>(
   } catch {
     return null;
   }
+}
+
+/** Removes only the authenticated owner's `device` contacts in its stored organization. */
+export async function deleteLemtelDeviceContacts(): Promise<number | null> {
+  const result = await invokeLemtelPrivateDirectory<{ deleted?: unknown; source?: unknown }>('lemtel-contacts', {
+    action: 'delete_device',
+  });
+  return result?.source === 'device' && typeof result.deleted === 'number' &&
+    Number.isSafeInteger(result.deleted) && result.deleted >= 0 ? result.deleted : null;
 }
 
 export type WssFailureCode = 'timeout' | 'rejected' | 'closed' | 'tls' | 'unknown';

@@ -9,13 +9,14 @@ const EXTERNAL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,255}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_CONTACTS = 200;
 const MAX_LIST_LIMIT = 100;
-const ACTIONS = ["upsert_device", "list"] as const;
+const ACTIONS = ["upsert_device", "list", "delete_device"] as const;
 type Action = typeof ACTIONS[number];
 type Failure = { error: string; status: number };
 type ContactInput = { externalId: string; fullName: string; phoneE164: string; phoneLabel: string | null; email: string | null };
 type RequestBody =
   | { action: "upsert_device"; organizationId: string; contacts: ContactInput[] }
-  | { action: "list"; organizationId: string; limit: number };
+  | { action: "list"; organizationId: string; limit: number }
+  | { action: "delete_device"; organizationId: string };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -50,6 +51,10 @@ export function validateBody(raw: unknown): RequestBody | Failure {
   if (raw.action === "list") {
     if (!exactKeys(raw, ["action", "organizationId", "limit"]) || typeof raw.limit !== "number" || !Number.isSafeInteger(raw.limit) || raw.limit < 1 || raw.limit > MAX_LIST_LIMIT) return fail("invalid_body", 400);
     return { action: "list", organizationId: raw.organizationId.toLowerCase(), limit: raw.limit };
+  }
+  if (raw.action === "delete_device") {
+    if (!exactKeys(raw, ["action", "organizationId"])) return fail("invalid_body", 400);
+    return { action: "delete_device", organizationId: raw.organizationId.toLowerCase() };
   }
   if (!exactKeys(raw, ["action", "organizationId", "contacts"]) || !Array.isArray(raw.contacts) || raw.contacts.length > MAX_CONTACTS) return fail("invalid_body", 400);
   const contacts: ContactInput[] = [];
@@ -125,6 +130,19 @@ export async function handler(req: Request): Promise<Response> {
       .limit(request.limit);
     if (error) return respond({ error: "contacts_unavailable" }, 503);
     return respond({ contacts: (data ?? []).map((row) => toContact(row as Record<string, unknown>)) });
+  }
+
+  // One scoped DELETE removes only this authenticated owner's device rows in
+  // the selected organization. It accepts no user id, contact id or source.
+  if (request.action === "delete_device") {
+    const { count, error } = await admin
+      .from("lemtel_contacts")
+      .delete({ count: "exact" })
+      .eq("organization_id", request.organizationId)
+      .eq("owner_user_id", userId)
+      .eq("source", "device");
+    if (error) return respond({ error: "contacts_not_deleted" }, 503);
+    return respond({ deleted: count ?? 0, source: "device" });
   }
 
   if (request.contacts.length === 0) return respond({ accepted: 0, source: "device" }, 201);

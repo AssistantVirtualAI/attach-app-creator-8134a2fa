@@ -5,18 +5,22 @@ on:
     paths:
       - '.github/workflows/lemtel-mobile-private-directory-adapters.yml'
       - 'apps/ava-softphone-mobile/src/lib/lemtelPrivateDirectory*'
+      - 'apps/ava-softphone-mobile/src/lib/lemtelPrivateContactsConsent*'
       - 'apps/ava-softphone-mobile/src/lib/sip/callerLookup*'
       - 'apps/ava-softphone-mobile/src/components/WssDiagnostics*'
       - 'docs/lemtel-mobile/phase-41a-mobile-private-directory-adapters.md'
+      - 'docs/lemtel-mobile/phase-41b-private-contact-lifecycle.md'
   push:
     branches:
       - lemtel/integration
     paths:
       - '.github/workflows/lemtel-mobile-private-directory-adapters.yml'
       - 'apps/ava-softphone-mobile/src/lib/lemtelPrivateDirectory*'
+      - 'apps/ava-softphone-mobile/src/lib/lemtelPrivateContactsConsent*'
       - 'apps/ava-softphone-mobile/src/lib/sip/callerLookup*'
       - 'apps/ava-softphone-mobile/src/components/WssDiagnostics*'
       - 'docs/lemtel-mobile/phase-41a-mobile-private-directory-adapters.md'
+      - 'docs/lemtel-mobile/phase-41b-private-contact-lifecycle.md'
   workflow_dispatch:
 
 permissions:
@@ -41,10 +45,11 @@ jobs:
           cache: npm
           cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - name: Test legacy isolation, caller lookup and minimized WSS telemetry
+      - name: Test legacy isolation, private contacts, caller lookup and minimized WSS telemetry
         run: >-
           npx vitest run
           src/lib/lemtelPrivateDirectory.test.ts
+          src/lib/lemtelPrivateContactsConsent.test.ts
           src/lib/sip/callerLookup.privateDirectory.test.ts
           src/components/WssDiagnostics.backendBoundary.test.tsx
           src/lib/contacts.backendBoundary.test.ts

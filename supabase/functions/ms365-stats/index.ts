@@ -40,6 +40,9 @@ function ymd(iso: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// Graph renvoie l'heure UTC sans « Z » : on l'ajoute pour un affichage correct (heure de Montréal).
+const utcIso = (t: any) => { const v = String(t?.dateTime ?? ""); if (!v) return null; return /Z|[+-]\d\d:?\d\d$/.test(v) || (t?.timeZone && t.timeZone !== "UTC") ? v : v + "Z"; };
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -113,7 +116,7 @@ Deno.serve(async (req) => {
 
     const topSenders = Object.entries(senders).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
     const upcomingMeetings = upcoming.map((e: any) => ({
-      subject: e.subject, start: e.start?.dateTime, end: e.end?.dateTime,
+      subject: e.subject, start: utcIso(e.start), end: utcIso(e.end),
       attendees: (e.attendees ?? []).length, is_online: !!e.isOnlineMeeting,
       join_url: e.onlineMeeting?.joinUrl ?? null,
     }));

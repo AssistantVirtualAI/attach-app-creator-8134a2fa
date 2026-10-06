@@ -7,20 +7,27 @@ export function fmtDuration(seconds?: number | null): string {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
+/** Fuseau horaire de Planiprêt (heure de Montréal). */
+export const PP_TIME_ZONE = "America/Toronto";
+
+/** Horodatage sans fuseau (ex. Microsoft Graph) = UTC. */
+const asDate = (value: string) =>
+  new Date(/T\d{2}:\d{2}/.test(value) && !/(Z|[+-]\d{2}:?\d{2})$/.test(value) ? value + "Z" : value);
+
 export function fmtDateTime(value?: string | null, lang: "fr" | "en" = "fr"): string {
   if (!value) return "—";
-  const d = new Date(value);
+  const d = asDate(value);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString(lang === "en" ? "en-CA" : "fr-CA", {
-    day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit",
+    day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: PP_TIME_ZONE,
   });
 }
 
 export function fmtDate(value?: string | null, lang: "fr" | "en" = "fr"): string {
   if (!value) return "—";
-  const d = new Date(value);
+  const d = asDate(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "short", timeZone: PP_TIME_ZONE });
 }
 
 /** The other party on a call, whichever side the broker was on. */

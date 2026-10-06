@@ -65,9 +65,9 @@ jobs:
             scripts/lemtel-hostinger-client-test-builds.test.mjs
       - name: Typecheck Lemtel onboarding Edge Functions
         run: |
-          deno check infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts
-          deno check infra/lemtel-self-hosted/functions/lemtel-complete-first-password/index.ts
-          deno check infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts
+          deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts
+          deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-complete-first-password/index.ts
+          deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts
       - name: Enforce no deployment in this workflow
         run: |
           ! grep -Eiq 'docker compose up|ssh |rsync|scp|curl .*api\.resend\.com|ufw allow|fusionpbx' .github/workflows/lemtel-email-only-onboarding.yml

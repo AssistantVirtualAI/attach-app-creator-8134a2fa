@@ -57,3 +57,8 @@ test('session bootstrap exposes no telephony secrets before provisioning', () =>
   assert.match(source, /telephony: \{ status: "not_provisioned" \}/);
   assert.doesNotMatch(executable, /sip_password|wss_url|\bturn\b|fusionpbx/i);
 });
+
+test('onboarding CI typechecks npm dependencies without a checked-in node_modules tree', () => {
+  const workflow = read('.github/workflows/lemtel-email-only-onboarding.yml');
+  assert.match(workflow, /deno check --node-modules-dir=auto/);
+});

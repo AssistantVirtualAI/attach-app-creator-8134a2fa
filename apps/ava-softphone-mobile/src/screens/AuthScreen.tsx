@@ -1,4 +1,4 @@
-import { BACKEND_URL, BACKEND_ANON_KEY, getResetRedirect } from '../lib/backendOrigin';
+import { BACKEND_URL, BACKEND_ANON_KEY } from '../lib/backendOrigin';
 import React, { useEffect, useState } from 'react';
 import type { Creds } from '../lib/creds';
 import { txStatic as tx } from '../lib/i18n';
@@ -294,7 +294,9 @@ function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: A
 }
 
 /* ====== Forgot password screen ====== */
-const RESEND_COOLDOWN_SECONDS = 30;
+// The server independently enforces the authoritative recovery throttle. The
+// local timer only prevents accidental repeated taps while a delivery is pending.
+const RESEND_COOLDOWN_SECONDS = 900;
 
 function ForgotPasswordScreen({ initialEmail, accent, onBack }: { initialEmail: string; accent: Accent; onBack: () => void }) {
   const [step, setStep] = useState<ForgotStep>('form');
@@ -324,22 +326,20 @@ function ForgotPasswordScreen({ initialEmail, accent, onBack }: { initialEmail: 
     if (busy || cooldown > 0) return; // multi-click guard
     setBusy(true); setError(null); setResentInfo(null);
     try {
-      const redirectTo = getResetRedirect();
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/lemtel-password-reset-request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           apikey: SUPABASE_ANON,
-          Authorization: `Bearer ${SUPABASE_ANON}`,
         },
-        body: JSON.stringify({ email: email.trim(), redirect_to: redirectTo }),
+        body: JSON.stringify({ email: email.trim() }),
       });
       if (!res.ok) {
         let detail: any = null; try { detail = await res.json(); } catch {}
         throw new Error(detail?.msg || detail?.error || `HTTP ${res.status}`);
       }
       setCooldown(RESEND_COOLDOWN_SECONDS);
-      if (opts?.resend) setResentInfo(tx('E-mail de réinitialisation renvoyé.', 'Reset email resent.'));
+      if (opts?.resend) setResentInfo(tx('E-mail de mot de passe temporaire renvoyé.', 'Temporary-password email resent.'));
       setStep('sent');
     } catch (e: any) {
       setError(mapAuthError(e?.message));
@@ -358,7 +358,7 @@ function ForgotPasswordScreen({ initialEmail, accent, onBack }: { initialEmail: 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <h2 style={headingStyle}>{tx('Réinitialiser le mot de passe', 'Reset password')}</h2>
-                <p style={subheadingStyle}>{tx("Saisissez l'adresse e-mail de votre compte et nous vous enverrons un lien de réinitialisation.", 'Enter your account email and we will send you a reset link.')}</p>
+                <p style={subheadingStyle}>{tx("Saisissez l'adresse e-mail de votre compte. Nous vous enverrons un mot de passe temporaire pour vous reconnecter, puis vous devrez créer votre mot de passe personnel.", 'Enter your account email. We will send a temporary password so you can sign in, then you will create your personal password.')}</p>
               </div>
               <Field
                 label={tx('Adresse e-mail', 'Email address')}
@@ -386,8 +386,8 @@ function ForgotPasswordScreen({ initialEmail, accent, onBack }: { initialEmail: 
           {step === 'confirm' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <h2 style={headingStyle}>{tx('Envoyer le lien de réinitialisation ?', 'Send the reset link?')}</h2>
-                <p style={subheadingStyle}>{tx('Nous enverrons un lien unique de réinitialisation à :', 'We\u2019ll send a one-time reset link to:')}</p>
+                <h2 style={headingStyle}>{tx('Envoyer un mot de passe temporaire ?', 'Send a temporary password?')}</h2>
+                <p style={subheadingStyle}>{tx('Nous enverrons un mot de passe temporaire à :', 'We\u2019ll send a temporary password to:')}</p>
                 <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, color: C.textIce, fontWeight: 600, fontSize: 14, wordBreak: 'break-all' }}>{email}</div>
               </div>
               {error && <ErrorBanner>{error}</ErrorBanner>}
@@ -399,7 +399,7 @@ function ForgotPasswordScreen({ initialEmail, accent, onBack }: { initialEmail: 
                 style={{ height: 50, borderRadius: 14, fontSize: 14, cursor: busy ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
               >
                 {busy && <Spinner />}
-                {busy ? tx('Envoi…', 'Sending…') : tx('Envoyer le lien', 'Send link')}
+                {busy ? tx('Envoi…', 'Sending…') : tx('Envoyer le mot de passe', 'Send temporary password')}
               </button>
               <button type="button" onClick={() => setStep('form')} style={ghostBtn} disabled={busy}>{tx('Annuler', 'Cancel')}</button>
             </div>
@@ -415,7 +415,7 @@ function ForgotPasswordScreen({ initialEmail, accent, onBack }: { initialEmail: 
               }}>✓</div>
               <h2 style={{ ...headingStyle, textAlign: 'center' }}>{tx('Vérifiez votre boîte de réception', 'Check your inbox')}</h2>
               <p style={{ ...subheadingStyle, textAlign: 'center' }}>
-                {tx('Si un compte existe pour', 'If an account exists for')} <strong style={{ color: C.textIce }}>{email}</strong>{tx(', vous recevrez un lien de réinitialisation sous peu. Ouvrez-le sur cet appareil ou sur un navigateur de bureau pour définir un nouveau mot de passe.', ', you will receive a reset link shortly. Open it on this device or on a desktop browser to set a new password.')}
+                {tx('Si un compte Lemtel actif existe pour', 'If an active Lemtel account exists for')} <strong style={{ color: C.textIce }}>{email}</strong>{tx(', vous recevrez sous peu un mot de passe temporaire. Utilisez-le seulement dans l’application Lemtel, puis choisissez immédiatement votre mot de passe personnel.', ', you will receive a temporary password shortly. Use it only in the Lemtel app, then choose your personal password immediately.')}
               </p>
               {resentInfo && (
                 <div style={{
@@ -446,8 +446,8 @@ function ForgotPasswordScreen({ initialEmail, accent, onBack }: { initialEmail: 
                 {busy
                   ? tx('Envoi…', 'Sending…')
                   : cooldown > 0
-                    ? tx(`Renvoyer dans ${cooldown}s`, `Resend in ${cooldown}s`)
-                    : tx("Renvoyer l'e-mail", 'Resend email')}
+                    ? tx(`Renvoyer dans ${Math.ceil(cooldown / 60)} min`, `Resend in ${Math.ceil(cooldown / 60)} min`)
+                    : tx("Renvoyer le mot de passe temporaire", 'Resend temporary password')}
               </button>
               <button type="button" onClick={onBack} className="lemtel-btn-primary" style={{ height: 50, borderRadius: 14, fontSize: 14, cursor: 'pointer' }}>
                 {tx('Retour à la connexion', 'Back to sign in')}

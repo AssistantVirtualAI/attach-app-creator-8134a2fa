@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - 'infra/lemtel-self-hosted/migrations/0003_lemtel_email_onboarding.sql'
+      - 'infra/lemtel-self-hosted/migrations/0004_lemtel_temporary_password_recovery.sql'
       - 'infra/lemtel-self-hosted/email-onboarding-contract.json'
       - 'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-complete-first-password/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/**'
+      - 'infra/lemtel-self-hosted/functions/lemtel-password-reset-request/**'
       - 'apps/ava-softphone-mobile/src/screens/AuthScreen.tsx'
       - 'apps/ava-softphone-mobile/src/lib/creds.ts'
       - 'apps/ava-softphone-desktop/src/components/SetupWizard.tsx'
@@ -24,10 +26,12 @@ on:
     branches: [lemtel/integration]
     paths:
       - 'infra/lemtel-self-hosted/migrations/0003_lemtel_email_onboarding.sql'
+      - 'infra/lemtel-self-hosted/migrations/0004_lemtel_temporary_password_recovery.sql'
       - 'infra/lemtel-self-hosted/email-onboarding-contract.json'
       - 'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-complete-first-password/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/**'
+      - 'infra/lemtel-self-hosted/functions/lemtel-password-reset-request/**'
       - 'apps/ava-softphone-mobile/src/screens/AuthScreen.tsx'
       - 'apps/ava-softphone-mobile/src/lib/creds.ts'
       - 'apps/ava-softphone-desktop/src/components/SetupWizard.tsx'
@@ -68,6 +72,7 @@ jobs:
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-complete-first-password/index.ts
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts
+          deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-password-reset-request/index.ts
       - name: Enforce no deployment in this workflow
         run: |
           node --input-type=module <<'NODE'

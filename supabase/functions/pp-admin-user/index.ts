@@ -297,7 +297,7 @@ async function autoAssignDid(admin: any, extension: string, fullName?: string, c
           updated_at: new Date().toISOString(),
         })
         .eq("domain", NS_DEFAULT_DOMAIN)
-        .eq("phone_number_digits", r.phone_number);
+        .eq("phone_number_e164", e164);
     }
     await admin.from("planipret_did_routing_snapshots").insert({
       domain: NS_DEFAULT_DOMAIN,

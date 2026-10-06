@@ -1,7 +1,6 @@
 // Lemtel-only private-directory adapter. It remains inert unless a future
 // self-hosted build explicitly enables it; this file never changes the backend origin.
 import { BACKEND_URL, LEGACY_BACKEND_URL } from './backendOrigin';
-import { getCredentials } from './creds';
 import { supabase } from './mobileSupabase';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
@@ -30,6 +29,8 @@ export function isLemtelPrivateDirectoryEnabled(): boolean {
 
 export async function getLemtelPrivateDirectoryOrganizationId(): Promise<string | null> {
   if (!isLemtelPrivateDirectoryEnabled()) return null;
+  // Keep all credentials storage out of legacy and unapproved build paths.
+  const { getCredentials } = await import('./creds');
   const credentials = await getCredentials();
   const organizationId = credentials?.organizationId;
   return typeof organizationId === 'string' && UUID_RE.test(organizationId) ? organizationId.toLowerCase() : null;

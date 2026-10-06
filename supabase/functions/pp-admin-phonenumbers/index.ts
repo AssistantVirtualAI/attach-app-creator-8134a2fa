@@ -467,6 +467,75 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, domain, imported: deduped.length, removed });
     }
 
+    // Free DIDs inventory for the "create user" picker.
+    if (action === "list_free") {
+      const { data, error } = await supaAdmin().from("planipret_did_assignments")
+        .select("phone_number_e164, phone_number_digits")
+        .eq("domain", domain).eq("status", "available").is("extension", null)
+        .order("phone_number_digits");
+      if (error) return jsonResponse({ success: false, error: error.message }, 200);
+      return jsonResponse({ success: true, numbers: (data ?? []).map((r: any) => ({ e164: r.phone_number_e164, pretty: pretty(r.phone_number_e164) })) });
+    }
+
+    // Release DIDs bound to non-existent extensions, keep `keep` free numbers
+    // (514/438 first) and remove every other free number from the PBX.
+    // payload: { keep?: number (default 50), dry_run?: boolean }
+    if (action === "release_and_prune") {
+      const keepN = Math.max(0, Math.min(500, Number(payload?.keep ?? 50)));
+      const dryRun = payload?.dry_run !== false;
+      const r = await nsFetchFirstOk([`/domains/${encodeURIComponent(domain)}/phonenumbers?limit=1000`]);
+      if (!r.ok) return jsonResponse({ success: false, error: `NS-API list failed (${r.status})` }, 200);
+      const raw = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
+      const numbers = (raw ?? []).map(normalizeNumber).filter((n: any) => n.raw);
+      const u = await nsFetch(`/domains/${encodeURIComponent(domain)}/users?limit=5000`);
+      if (!u.ok) return jsonResponse({ success: false, error: `NS users list failed (${u.status})` }, 200);
+      const users = Array.isArray(u.data) ? u.data : (u.data?.data ?? []);
+      const liveExt = new Set<string>(users.map((x: any) => String(x?.user ?? x?.extension ?? x?.["user-id"] ?? "")).filter(Boolean));
+      if (liveExt.size < 5) return jsonResponse({ success: false, error: "NS users list looks empty — aborted" }, 200);
+      const db = supaAdmin();
+      const { data: assigns } = await db.from("planipret_did_assignments").select("phone_number_digits, extension").eq("domain", domain);
+      const localExt = new Map<string, string>();
+      for (const a of (assigns ?? []) as any[]) if (a.extension) localExt.set(String(a.phone_number_digits), String(a.extension));
+
+      const free: { digits: string; prev: string | null }[] = [];
+      let inUse = 0;
+      for (const n of numbers) {
+        const d0 = String(n.raw).replace(/\D/g, "");
+        const d = d0.length === 10 ? `1${d0}` : d0;
+        const ext = n.extension ?? localExt.get(d) ?? null;
+        if (ext && liveExt.has(String(ext))) { inUse++; continue; }
+        free.push({ digits: d, prev: ext });
+      }
+      const pref = (d: string) => /^1(514|438)/.test(d) ? 0 : 1;
+      free.sort((a, b) => pref(a.digits) - pref(b.digits) || a.digits.localeCompare(b.digits));
+      const keep = free.slice(0, keepN);
+      const drop = free.slice(keepN);
+      if (dryRun) {
+        return jsonResponse({ success: true, dry_run: true, total: numbers.length, in_use: inUse, free: free.length, keep: keep.map((k) => k.digits), drop_count: drop.length, drop: drop.map((k) => k.digits) });
+      }
+      const now = new Date().toISOString();
+      const audit: any[] = [];
+      let released = 0, deleted = 0; const failed: any[] = [];
+      for (const k of keep) {
+        if (k.prev) {
+          const put = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${k.digits}`, { method: "PUT", body: JSON.stringify({ "dial-rule-application": "to-voicemail", "dial-rule-parameter": "", "dial-rule-translation-destination-user": "", enabled: "yes" }) });
+          if (!put.ok) { failed.push({ n: k.digits, op: "release", status: put.status }); }
+          released++;
+          audit.push({ domain, phone_number: k.digits, phone_number_e164: `+${k.digits}`, previous_extension: k.prev, reason: "released_keep_backup", dry_run: false, success: put.ok, write_status: put.status, triggered_by: (auth as any).profile?.user_id ?? null, source: "admin_release" });
+        }
+        await db.from("planipret_did_assignments").upsert({ phone_number_e164: `+${k.digits}`, phone_number_digits: k.digits, extension: null, callerid_name: null, display_name: null, status: "available", domain, source: "release_backup", updated_at: now }, { onConflict: "phone_number_e164" });
+      }
+      for (const k of drop) {
+        const del = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${k.digits}`, { method: "DELETE" });
+        const ok = del.ok || del.status === 404;
+        if (ok) { deleted++; await db.from("planipret_did_assignments").delete().eq("phone_number_digits", k.digits); }
+        else failed.push({ n: k.digits, op: "delete", status: del.status });
+        audit.push({ domain, phone_number: k.digits, phone_number_e164: `+${k.digits}`, previous_extension: k.prev, reason: "pruned_from_pbx", dry_run: false, success: ok, write_status: del.status, triggered_by: (auth as any).profile?.user_id ?? null, source: "admin_prune" });
+      }
+      for (let i = 0; i < audit.length; i += 200) await db.from("planipret_did_release_audit").insert(audit.slice(i, i + 200));
+      return jsonResponse({ success: true, kept: keep.length, released, deleted, failed });
+    }
+
     if (action === "unassign") {
       const { phone_number } = payload ?? {};
       if (!phone_number) return jsonResponse({ success: false, error: "phone_number requis" }, 400);

@@ -273,17 +273,16 @@ async function ensureMobileDevice(
  * sans `dial-rule-translation-destination-user`, le PBX répond
  * « the number can't be completed as dialled ».
  */
-async function autoAssignDid(admin: any, extension: string, fullName?: string) {
+async function autoAssignDid(admin: any, extension: string, fullName?: string, chosenE164?: string) {
   try {
-    const { data: free } = await admin
+    let q = admin
       .from("planipret_did_assignments")
       .select("phone_number_e164")
       .eq("domain", NS_DEFAULT_DOMAIN)
       .eq("status", "available")
-      .is("extension", null)
-      .order("phone_number_digits")
-      .limit(1)
-      .maybeSingle();
+      .is("extension", null);
+    if (chosenE164) q = q.eq("phone_number_e164", chosenE164);
+    const { data: free } = await q.order("phone_number_digits").limit(1).maybeSingle();
     const e164 = String(free?.phone_number_e164 ?? "");
     if (!e164) {
       return { assigned: false, reason: "no_available_did", diagnostic: "Aucun numéro disponible dans l'inventaire DID." };
@@ -298,7 +297,7 @@ async function autoAssignDid(admin: any, extension: string, fullName?: string) {
           updated_at: new Date().toISOString(),
         })
         .eq("domain", NS_DEFAULT_DOMAIN)
-        .eq("phone_number_digits", r.phone_number);
+        .eq("phone_number_e164", e164);
     }
     await admin.from("planipret_did_routing_snapshots").insert({
       domain: NS_DEFAULT_DOMAIN,
@@ -329,15 +328,18 @@ Deno.serve(async (req) => {
     const { action, payload } = body ?? {};
 
     if (action === "create") {
-      const { email, password, full_name, ns_extension, mobile_app_enabled, voice_agent_enabled, elevenlabs_agent_id } = payload ?? {};
-      if (!email || !password || !full_name || !ns_extension) {
-        return jsonResponse({ success: false, error: "Champs requis manquants" }, 400);
+      const { email, password, full_name, ns_extension, voice_agent_enabled, elevenlabs_agent_id, did_e164 } = payload ?? {};
+      if (!email || !password || !full_name || !ns_extension || !did_e164) {
+        return jsonResponse({ success: false, error: "Champs requis manquants (numéro de téléphone inclus)" }, 400);
       }
       if (/@lemtel\.com$/i.test(String(email).trim())) {
         return jsonResponse({ success: false, error: "Les emails @lemtel.com appartiennent à Lemtel et ne peuvent pas être ajoutés à Planiprêt." }, 422);
       }
       const { data: existing } = await admin.from("planipret_profiles").select("id").eq("extension", ns_extension).maybeSingle();
       if (existing) return jsonResponse({ success: false, error: "Extension déjà utilisée" }, 400);
+      const { data: didFree } = await admin.from("planipret_did_assignments").select("phone_number_e164")
+        .eq("phone_number_e164", String(did_e164)).eq("status", "available").is("extension", null).maybeSingle();
+      if (!didFree) return jsonResponse({ success: false, error: "Ce numéro n'est plus libre" }, 400);
 
       // 1) Provision the NetSapiens user (extension) so it exists in the
       //    phone system BEFORE we wire up the Supabase profile. That way,
@@ -368,7 +370,7 @@ Deno.serve(async (req) => {
         ns_linked: true,
         ns_linked_at: new Date().toISOString(),
         role: "broker",
-        mobile_app_enabled: mobile_app_enabled ?? true,
+        mobile_app_enabled: true,
         voice_agent_enabled: voice_agent_enabled ?? false,
         elevenlabs_agent_id: elevenlabs_agent_id || null,
       }).select("id").maybeSingle();
@@ -389,8 +391,8 @@ Deno.serve(async (req) => {
 
       // 5) DID : jamais écrit automatiquement (contrainte NetSapiens — le
       //    numéro public est assigné manuellement dans le portail NetSapiens).
-      void autoAssignDid;
-      const did: any = { assigned: false, diagnostic: "DID à assigner manuellement dans NetSapiens." };
+      // 5) DID choisi par l'admin : écriture ciblée + relecture; donne l'accès app + portail.
+      const did: any = await autoAssignDid(admin, String(ns_extension), full_name, String(did_e164));
 
       await logAudit(admin, req, {
         admin_id: profile.id, action: "USER_CREATE",
@@ -483,7 +485,7 @@ Deno.serve(async (req) => {
         ns_domain: NS_DEFAULT_DOMAIN,
         ns_linked: true,
         role: "broker",
-        mobile_app_enabled: updates?.mobile_app_enabled ?? false,
+        mobile_app_enabled: true,
         voice_agent_enabled: updates?.voice_agent_enabled ?? false,
       };
 

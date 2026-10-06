@@ -120,6 +120,18 @@ function presenceMeta(raw: string | undefined | null, t: (k: string) => string):
   return { color: "#64748b", label: t("contacts.presence.unknown") || "Unavailable" };
 }
 
+// Device address book is slow to read natively; keep it in memory for 5 minutes.
+let deviceContactsCache: { at: number; rows: any[] } | null = null;
+let deviceContactsInflight: Promise<any[]> | null = null;
+async function loadDeviceContactsCached(force: boolean): Promise<any[]> {
+  if (!force && deviceContactsCache && Date.now() - deviceContactsCache.at < 5 * 60_000) return deviceContactsCache.rows;
+  if (deviceContactsInflight) return deviceContactsInflight;
+  deviceContactsInflight = listDeviceContacts()
+    .then((rows) => { deviceContactsCache = { at: Date.now(), rows }; return rows; })
+    .finally(() => { deviceContactsInflight = null; });
+  return deviceContactsInflight;
+}
+
 export default function MContacts() {
   const { t, lang } = useMplanipretLang();
   /** t() renvoie la clé si la traduction manque — ce helper garantit un libellé lisible. */
@@ -194,7 +206,7 @@ export default function MContacts() {
       : which === "clients"
       ? peekPpContacts("maestro_clients")
       : peekPpContacts("list");
-    const runBackground = opts.background || (!opts.force && !!cachedHint);
+    const runBackground = opts.background || (!!cachedHint && cachedHint.length > 0);
     if (!runBackground) setLoadingTab(which);
     setLoadError(null);
     try {
@@ -226,7 +238,7 @@ export default function MContacts() {
       } else {
         const [backend, device] = await Promise.allSettled([
           getPpContacts("list", { limit: opts.limit ?? 500, force: opts.force }),
-          listDeviceContacts(),
+          loadDeviceContactsCached(!!opts.force),
         ]);
         const nativeContacts = device.status === "fulfilled" ? device.value : [];
         let backendError: string | null = null;
@@ -282,13 +294,16 @@ export default function MContacts() {
   // native prompt from an explicit tap. If denied, keep a clear recovery path.
   useEffect(() => {
     let cancelled = false;
+    let prev: PermStatus | null = null;
     const refresh = () => void getContactsPermissionStatus().then((status) => {
       if (cancelled) return;
       setContactsPerm(status);
-      if (status === "granted") {
+      // Reload only when access was just granted (not on every return to the app).
+      if (status === "granted" && prev !== null && prev !== "granted") {
         loadedTabsRef.current.delete("personal");
-        void load("personal", { force: true });
+        void load("personal", { force: true, background: true });
       }
+      prev = status;
     });
     refresh();
     const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
@@ -433,7 +448,7 @@ export default function MContacts() {
   }, [visibleCount, list.length]);
 
   const visibleList = useMemo(() => list.slice(0, visibleCount), [list, visibleCount]);
-  const loading = loadingTab === tab;
+  const loading = loadingTab === tab && list.length === 0;
 
   const startContactCall = useCallback(async (contact: any, key: string) => {
     if (dialingContactKey) return;

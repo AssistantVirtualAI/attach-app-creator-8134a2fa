@@ -130,6 +130,12 @@ export async function authBroker(req: Request): Promise<AuthBrokerResult> {
   if (!profile || profile.organization_id !== AVA_ORG_ID) {
     return { error: jsonResponse({ success: false, error: "Profil introuvable", code: 404 }, 404) };
   }
+  if (authMode !== "service_role") {
+    const { data: eligible } = await admin.rpc("planipret_signin_eligible", { _user_id: userId });
+    if (eligible !== true) {
+      return { error: jsonResponse({ success: false, error: "no_did_extension", message: "Accès réservé aux comptes ayant une extension et un numéro (DID) actifs.", code: 403 }, 403) };
+    }
+  }
   profile.extension = profile.extension || profile.ns_extension;
   return { admin, userId, profile, authMode };
 }

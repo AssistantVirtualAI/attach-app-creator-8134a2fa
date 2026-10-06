@@ -881,6 +881,10 @@ export default function PAUsers() {
         title={t.brokers}
         subtitle={t.brokerCount(rows.length)}
         actions={        <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/planipret/admin/user-removals")} className="px-3 py-2 rounded-lg text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+            Retraits planifiés
+          </button>
+
 
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--pp-text-muted)" }} />

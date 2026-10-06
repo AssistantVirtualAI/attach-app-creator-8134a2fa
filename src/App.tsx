@@ -83,6 +83,7 @@ const LucPlatform = lazyWithRetry(() => import("./pages/lemtel-uc/LucAdminPages"
 const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin/PlanipretAdminLayout"));
 const PAOverview = lazyWithRetry(() => import("./pages/planipret/admin/PAOverview"));
 const PAUsers = lazyWithRetry(() => import("./pages/planipret/admin/PAUsers"));
+const PAUserRemovals = lazyWithRetry(() => import("./pages/planipret/admin/PAUserRemovals"));
 const PACommissions = lazyWithRetry(() => import("./pages/planipret/admin/PACommissions"));
 const PACommissionsMonthly = lazyWithRetry(() => import("./pages/planipret/admin/PACommissionsMonthly"));
 const PAAvaConfirmations = lazyWithRetry(() => import("./pages/planipret/admin/PAAvaConfirmations"));
@@ -730,6 +731,7 @@ const App = () => (
                   <Route index element={<Suspense fallback={<AdminPageSkeleton />}><PAOverview /></Suspense>} />
                   <Route path="overview" element={<Suspense fallback={<AdminPageSkeleton />}><PAOverview /></Suspense>} />
                   <Route path="users" element={<Suspense fallback={<AdminPageSkeleton />}><PAUsers /></Suspense>} />
+                  <Route path="user-removals" element={<Suspense fallback={<AdminPageSkeleton />}><PAUserRemovals /></Suspense>} />
                   <Route path="calls" element={<Suspense fallback={<AdminPageSkeleton />}><PACalls /></Suspense>} />
                   <Route path="messages" element={<Suspense fallback={<AdminPageSkeleton />}><PAMessages /></Suspense>} />
                   <Route path="voicemails" element={<Navigate to="/planipret/admin/recordings" replace />} />

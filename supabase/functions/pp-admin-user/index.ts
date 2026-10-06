@@ -370,7 +370,7 @@ Deno.serve(async (req) => {
         ns_linked: true,
         ns_linked_at: new Date().toISOString(),
         role: "broker",
-        mobile_app_enabled: mobile_app_enabled ?? true,
+        mobile_app_enabled: true,
         voice_agent_enabled: voice_agent_enabled ?? false,
         elevenlabs_agent_id: elevenlabs_agent_id || null,
       }).select("id").maybeSingle();
@@ -391,8 +391,8 @@ Deno.serve(async (req) => {
 
       // 5) DID : jamais écrit automatiquement (contrainte NetSapiens — le
       //    numéro public est assigné manuellement dans le portail NetSapiens).
-      void autoAssignDid;
-      const did: any = { assigned: false, diagnostic: "DID à assigner manuellement dans NetSapiens." };
+      // 5) DID choisi par l'admin : écriture ciblée + relecture; donne l'accès app + portail.
+      const did: any = await autoAssignDid(admin, String(ns_extension), full_name, String(did_e164));
 
       await logAudit(admin, req, {
         admin_id: profile.id, action: "USER_CREATE",
@@ -485,7 +485,7 @@ Deno.serve(async (req) => {
         ns_domain: NS_DEFAULT_DOMAIN,
         ns_linked: true,
         role: "broker",
-        mobile_app_enabled: updates?.mobile_app_enabled ?? false,
+        mobile_app_enabled: true,
         voice_agent_enabled: updates?.voice_agent_enabled ?? false,
       };
 

@@ -1,18 +1,15 @@
 // pp-call-consent — décision du courtier en fin d'appel.
 //
-// Rien (audio, transcription, résumé IA, coaching) ne part vers Maestro
-// tant que le courtier n'a pas dit oui. Il peut aussi supprimer un appel :
-// dans ce cas l'audio, la transcription et l'analyse sont effacés chez nous
-// ET retirés de Maestro.
+// Audio, transcription, résumé IA et coaching restent dans AVA. Le choix du
+// courtier contrôle uniquement l'envoi manuel vers Maestro.
 //
 // Body: { call_id, action: "approve" | "decline" | "delete" | "status",
 //         channel?: "voice" | "screen", reason?: string }
-// `decline` is retained for old clients and executes the same full cleanup as
-// `delete`; it never leaves a locally accessible recording behind.
+// `decline` et `delete` des anciennes apps signifient désormais « garder dans
+// AVA » et ne détruisent jamais les médias.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders, guardPlanipret } from "../_shared/planipret-guard.ts";
-import { getMaestroConfig, maestroFetchScoped, telecomAuth } from "../_shared/maestro.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -33,44 +30,6 @@ async function ownsCall(admin: any, authUserId: string, callUserId: string | nul
     .or(`id.eq.${callUserId},user_id.eq.${callUserId}`)
     .limit(5);
   return (data ?? []).some((p: any) => p.user_id === authUserId || p.id === authUserId);
-}
-
-/** Retire l'appel (audio + notes + analyse) de Maestro. Best-effort, journalisé. */
-async function purgeFromMaestro(admin: any, call: any): Promise<{ ok: boolean; detail: string }> {
-  if (!call.maestro_call_id) return { ok: true, detail: "not_in_maestro" };
-  try {
-    const cfg = await getMaestroConfig(admin);
-    const auth = await telecomAuth(admin, call.user_id);
-    if (!auth?.token) return { ok: false, detail: "no_maestro_token" };
-    const id = encodeURIComponent(String(call.maestro_call_id));
-
-    const del = await maestroFetchScoped(cfg, {
-      method: "DELETE",
-      path: `/api/v1/calls/${id}`,
-      token: auth.token,
-      brokerId: auth.brokerId,
-    });
-    if (del.ok) return { ok: true, detail: "deleted" };
-
-    // Maestro n'expose pas toujours la suppression : on vide alors le contenu.
-    const wipe = await maestroFetchScoped(cfg, {
-      method: "PUT",
-      path: `/api/v1/calls/${id}`,
-      token: auth.token,
-      brokerId: auth.brokerId,
-      body: {
-        notes: "Enregistrement et sommaire supprimés par le courtier.",
-        recording_url: "",
-        transcript: "",
-        summary: "",
-      },
-    });
-    return wipe.ok
-      ? { ok: true, detail: "content_cleared" }
-      : { ok: false, detail: `delete_${del.status}_put_${wipe.status}` };
-  } catch (e) {
-    return { ok: false, detail: String((e as Error)?.message ?? e).slice(0, 200) };
-  }
 }
 
 /** Start the approved post-call pipeline and report whether the hand-off reached it.
@@ -111,11 +70,8 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }
   const callId = String(body?.call_id ?? "");
-  // The product offers exactly two outcomes for an answered call: Save or
-  // Delete. Preserve `decline` as an API alias, but make it execute the same
-  // destructive cleanup as Delete rather than leaving local media behind.
   const requestedAction = String(body?.action ?? "status");
-  const action = requestedAction === "decline" ? "delete" : requestedAction;
+  const action = requestedAction === "decline" || requestedAction === "delete" ? "keep" : requestedAction;
   const channel = body?.channel === "voice" ? "voice" : "screen";
   // Heure exacte de fin d'appel telle que mesurée par le téléphone.
   const endedAtRaw = String(body?.ended_at ?? "");
@@ -161,8 +117,7 @@ Deno.serve(async (req) => {
     if (approveError) return json({ error: "consent_update_failed" }, 500);
     if (!approved) return json({ ok: true, save_consent: "approved", already_approved: true });
 
-    // Lance la chaîne complète : transcription → IA → Maestro. Report the
-    // hand-off result so the mobile client can safely retry an interrupted one.
+    // Lance la chaîne AVA. L'envoi Maestro exige ensuite un clic CRM explicite.
     const pipeline = await startApprovedPipeline(callId);
     return json({
       ok: pipeline.started,
@@ -172,56 +127,18 @@ Deno.serve(async (req) => {
     }, pipeline.started ? 200 : 202);
   }
 
-  if (action === "delete") {
+  if (action === "keep") {
     const now = new Date().toISOString();
-    // Tombstone first: any in-flight processor sees the deletion before it can
-    // create or send further derived data.
-    await admin.from("planipret_phone_calls").update({
+    const { error: keepError } = await admin.from("planipret_phone_calls").update({
       save_consent: "declined",
-      deleted_at: now,
-      deleted_by: user.id,
-      delete_reason: String(body?.reason ?? "").slice(0, 500) || null,
+      ...endedPatch,
+      save_consent_at: now,
+      save_consent_by: user.id,
+      save_consent_channel: channel,
     }).eq("id", callId);
-
-    // The cached recording is the only audio object stored by this pipeline.
-    // Remove it before clearing the path from the call row.
-    let localAudio = { ok: true, detail: "not_cached" };
-    if (call.recording_storage_path) {
-      const { error } = await admin.storage.from("call-recordings").remove([String(call.recording_storage_path)]);
-      localAudio = error ? { ok: false, detail: `storage_remove_failed:${error.message}` } : { ok: true, detail: "deleted" };
-    }
-
-    // Delete local derived records as well as the primary-row fields. These
-    // records can contain a copy of the summary or coaching generated before
-    // the broker chose Delete.
-    const cleanup = await Promise.allSettled([
-      admin.from("planipret_ai_insights").delete().eq("call_id", callId),
-      admin.from("planipret_pipeline_logs").delete().eq("call_id", callId),
-      admin.from("planipret_recording_uploads").delete().eq("call_id", callId),
-    ]);
-    const localDerived = cleanup.every((result) => result.status === "fulfilled" && !(result.value as any)?.error);
-
-    const purge = await purgeFromMaestro(admin, call);
-    await admin.from("planipret_phone_calls").update({
-      recording_url: null,
-      ns_recording_url: null,
-      recording_storage_path: null,
-      transcript: null,
-      transcript_raw: null,
-      transcript_segments: null,
-      ai_summary: null,
-      ai_summary_short: null,
-      ai_coaching: null,
-      ai_analysis_json: null,
-      ai_key_points: null,
-      ai_action_items: null,
-      ai_client_insights: null,
-      metadata: { consent_deleted_at: now },
-      maestro_purged_at: purge.ok ? now : null,
-      maestro_purge_error: purge.ok ? null : purge.detail,
-    }).eq("id", callId);
-
-    return json({ ok: true, deleted: true, local_audio: localAudio, local_derived: localDerived, maestro: purge });
+    if (keepError) return json({ error: "consent_update_failed" }, 500);
+    const pipeline = await startApprovedPipeline(callId);
+    return json({ ok: true, kept_in_ava: true, save_consent: "declined", processing: pipeline.started ? pipeline.stage : "retryable" }, pipeline.started ? 200 : 202);
   }
 
   return json({ error: "unknown_action" }, 400);

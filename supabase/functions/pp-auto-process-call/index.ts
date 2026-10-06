@@ -43,8 +43,7 @@ Deno.serve(async (req) => {
   const access = await authorizeCallAccess(req, admin, row);
   if (!access.ok) return json({ error: access.error }, access.status);
 
-  // Audio, transcription and AI remain local while the broker decides. A
-  // refusal/deletion stops the pipeline; Maestro remains gated separately.
+  // Audio, transcription and AI remain in AVA regardless of the CRM choice.
   const consent = allowCallViewing(row);
   if (!consent.ok) return json({ ok: true, skipped: consent.error });
 
@@ -52,17 +51,7 @@ Deno.serve(async (req) => {
   // Idempotency short-circuits — cheap and avoids any downstream cost.
   const hasCompleteAnalysis = !!row.analyzed_at && !!row.ai_summary && !!row.ai_coaching && row.coaching_score != null;
   if (hasCompleteAnalysis) {
-    // Analysis already done. Only an approved call may schedule its Maestro
-    // delivery; a pending one stays local until the post-call decision.
-    const approved = String(row.save_consent ?? "pending") === "approved" && !row.deleted_at;
-    if (approved) {
-      fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
-        body: JSON.stringify({ call_id: callId }),
-      }).catch(() => {});
-    }
-    return json({ ok: true, skipped: "already_analyzed", maestro_sync: approved ? "queued" : "deferred_pending_approval" });
+    return json({ ok: true, skipped: "already_analyzed", maestro_sync: "manual_only" });
   }
   if (row.analysis_in_progress) {
     const lockedAt = new Date(row.analysis_locked_at || 0).getTime();
@@ -86,20 +75,6 @@ Deno.serve(async (req) => {
 
   const authHeader = `Bearer ${SERVICE_ROLE}`;
 
-  // Fire-and-forget: push everything we know about this call into Maestro.
-  // This hand-off is deliberately unavailable until an explicit approval.
-  const syncMaestro = () => {
-    if (String(row.save_consent ?? "pending") !== "approved" || row.deleted_at) return;
-    try {
-      fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: authHeader },
-        body: JSON.stringify({ call_id: callId }),
-      }).catch(() => {});
-    } catch { /* best-effort */ }
-  };
-
-
   // Step 1 — ensure transcript exists. pp-admin-transcribe backs off if the
   // recording isn't fetchable yet (returns { pending: true }) — trigger will
   // fire again on the next recording_url / transcript update.
@@ -119,7 +94,7 @@ Deno.serve(async (req) => {
       }
       // pp-admin-transcribe already re-invokes pp-coach-call when it produced
       // the transcript itself, so nothing more to do here.
-      if (j?.ok && !row.analyzed_at) { syncMaestro(); return json({ ok: true, stage: "transcribed" }); }
+      if (j?.ok && !row.analyzed_at) return json({ ok: true, stage: "transcribed", maestro_sync: "manual_only" });
     } catch (e: any) {
       return json({ ok: false, stage: "transcribe", error: e?.message }, 500);
     }
@@ -135,8 +110,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ call_id: callId }),
       });
       const j = await r.json().catch(() => ({}));
-      syncMaestro();
-      return json({ ok: true, stage: "analyze", result: j });
+      return json({ ok: true, stage: "analyze", result: j, maestro_sync: "manual_only" });
 
     } catch (e: any) {
       return json({ ok: false, stage: "analyze", error: e?.message }, 500);

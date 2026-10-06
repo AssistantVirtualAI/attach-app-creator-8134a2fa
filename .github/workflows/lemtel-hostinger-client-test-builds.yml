@@ -1,6 +1,10 @@
 name: Lemtel Hostinger — private test builds
 
 on:
+  push:
+    branches: [lemtel/integration]
+    paths:
+      - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
   workflow_dispatch:
     inputs:
       reason:

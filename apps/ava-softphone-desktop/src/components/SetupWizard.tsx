@@ -129,7 +129,14 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
     setLoading(true); setError('');
     try {
       const { data, error: completionError } = await supabase.functions.invoke('lemtel-complete-first-password', { body: { newPassword } });
-      if (completionError || (data as any)?.ok !== true) throw new Error((data as any)?.error || completionError?.message || 'Password update failed');
+      // A prior click can finish the server-side password update before the UI
+      // receives its response. A 409 in that exact state is recoverable: sign
+      // in with the chosen password below rather than showing an Edge error.
+      const completionStatus = Number((completionError as any)?.context?.status ?? 0);
+      const alreadyCompleted = (data as any)?.error === 'first_password_change_not_required' || completionStatus === 409;
+      if (!alreadyCompleted && (completionError || (data as any)?.ok !== true)) {
+        throw new Error((data as any)?.error || completionError?.message || 'Password update failed');
+      }
       // Updating a password through the server can revoke the temporary refresh
       // token. Sign in once with the just-selected password to obtain a fresh,
       // post-onboarding session instead of trying to refresh a revoked token.

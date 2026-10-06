@@ -46,9 +46,9 @@ test('migration creates empty Lemtel-only private tables with direct access revo
   for (const forbidden of ['planipret', 'fusionpbx', 'maestro', 'microsoft', 'storage\\s*\\.']) assert.doesNotMatch(sql.toLowerCase(), new RegExp(forbidden));
 });
 
-test('contacts function enforces explicit device input, active organization membership and owner-private reads', () => {
+test('contacts function enforces explicit device input, active organization membership and owner-private reads/deletion', () => {
   const source = read(contactsPath);
-  assert.match(source, /const ACTIONS = \["upsert_device", "list"\] as const;/);
+  assert.match(source, /const ACTIONS = \["upsert_device", "list", "delete_device"\] as const;/);
   assert.match(source, /const MAX_CONTACTS = 200;/);
   assert(source.includes('const E164_RE = /^\\+[1-9][0-9]{7,14}$/;'));
   assert.match(source, /admin\.auth\.getUser\(token\)/);
@@ -57,6 +57,10 @@ test('contacts function enforces explicit device input, active organization memb
   assert.match(source, /\.eq\("user_id", userId\)/);
   assert.match(source, /\.eq\("owner_user_id", userId\)/);
   assert.match(source, /onConflict: "organization_id,owner_user_id,source,external_id,phone_e164"/);
+  assert.match(source, /request\.action === "delete_device"/);
+  assert.match(source, /\.delete\(\{ count: "exact" \}\)/);
+  assert.match(source, /\.eq\("source", "device"\)/);
+  assert.match(source, /return respond\(\{ deleted: count \?\? 0, source: "device" \}\)/);
   assert.match(source, /"Cache-Control": "no-store"/);
   for (const forbidden of ['planipret', 'pp-', 'fusionpbx', 'fetch(', 'console.', 'storage.', 'functions.invoke']) assert(!source.toLowerCase().includes(forbidden), forbidden);
 });

@@ -47,7 +47,7 @@ export function requireApprovedCallConsent(call: {
   deleted_at?: string | null;
 }): { ok: true } | { ok: false; status: number; error: string } {
   if (call?.deleted_at) return { ok: false, status: 410, error: "call_deleted" };
-  if (!["approved", "declined"].includes(String(call?.save_consent ?? "pending"))) {
+  if (String(call?.save_consent ?? "pending") !== "approved") {
     return { ok: false, status: 409, error: "call_consent_required" };
   }
   return { ok: true };

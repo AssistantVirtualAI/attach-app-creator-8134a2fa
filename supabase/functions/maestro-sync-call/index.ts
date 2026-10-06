@@ -25,6 +25,7 @@ import {
   updateCallPipeline,
 } from "../_shared/maestro.ts";
 import { callCorrelationId, ensureMaestroCall } from "../_shared/maestro-guard.ts";
+import { decideCrmSync, internalBrokerStop } from "../_shared/crm-sync-authorization.ts";
 import { recordingPermalink } from "../_shared/recording-link.ts";
 import { authorizeCallAccess, requireApprovedCallConsent } from "../_shared/planipret-call-access.ts";
 
@@ -207,19 +208,17 @@ Deno.serve(async (req) => {
     // installée : force:true) vaut autorisation CRM. Les envois automatiques
     // (service-role, ancienne synchro auto force:false) sont ignorés en 200.
     const access = await authorizeCallAccess(req, admin, call as any);
-    if (!access.ok) {
-      const message = access.status === 401 ? "Session expirée — reconnectez-vous." : "Cet appel ne vous appartient pas.";
-      return json({ success: false, error: message, code: access.error, message, request_id: rid }, 200);
+    const decision = decideCrmSync({ access, explicit_user_action, force, call: call as any });
+    if (!decision.allow) {
+      if (decision.skipped) log("skipped_manual_only", { service_role: (access as any).serviceRole ?? false });
+      return json({
+        success: false,
+        ...(decision.skipped ? { skipped: decision.code } : { error: decision.message, code: decision.code }),
+        message: decision.message,
+        request_id: rid,
+      }, 200);
     }
-    const manualClick = !access.serviceRole && (explicit_user_action === true || force === true);
-    if (!manualClick) {
-      log("skipped_manual_only", { service_role: access.serviceRole });
-      return json({ success: false, skipped: "manual_only", message: "Envoi CRM uniquement via le bouton Synchroniser.", request_id: rid }, 200);
-    }
-    if ((call as any).deleted_at) {
-      return json({ success: false, error: "Cet appel a été supprimé.", code: "call_deleted", message: "Cet appel a été supprimé.", request_id: rid }, 200);
-    }
-    if ((call as any).save_consent !== "approved") {
+    if (decision.authorizeConsent && access.ok) {
       const now = new Date().toISOString();
       const meta = { ...(((call as any).metadata ?? {}) as Record<string, unknown>), crm_manual_push_at: now, crm_manual_push_by: access.userId };
       const { error: upErr } = await admin.from("planipret_phone_calls").update({
@@ -255,9 +254,9 @@ Deno.serve(async (req) => {
         permanent: r.data?.permanent ?? false,
         skipped: r.data?.skipped ?? null,
       };
-      if (r.data?.skipped === "internal_broker_inbound") {
-        const msg = "Appel interne entre courtiers : déjà consigné dans Maestro par le courtier appelant.";
-        return json({ success: false, error: msg, code: "internal_broker_call", message: msg, steps, request_id: rid }, 200);
+      const internalStop = internalBrokerStop(r.data?.skipped);
+      if (internalStop) {
+        return json({ success: false, error: internalStop.message, code: internalStop.code, message: internalStop.message, steps, request_id: rid }, 200);
       }
       // reload so we pick up maestro_call_id / maestro_client_id
       const { data: fresh } = await admin

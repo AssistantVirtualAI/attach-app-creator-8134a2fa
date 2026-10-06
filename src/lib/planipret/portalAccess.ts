@@ -88,6 +88,13 @@ export async function resolvePortalAccess(): Promise<PortalAccess> {
     return { state: "denied", reason: "domain" };
   }
 
+  if (!isSuper) {
+    try {
+      const { data: eligible, error } = await supabase.rpc("planipret_signin_eligible", { _user_id: user.id });
+      if (!error && eligible === false) return { state: "denied", reason: "no-did" };
+    } catch { /* ignore */ }
+  }
+
   let isAdmin = isSuper;
   if (!isAdmin) {
     try {

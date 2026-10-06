@@ -932,6 +932,18 @@ export default function PlanipretMobile() {
       setLoading(false);
       return;
     }
+    // Seuls les comptes avec extension + DID actif peuvent utiliser l'app.
+    try {
+      const { data: eligible, error: eligErr } = await supabase.rpc("planipret_signin_eligible", { _user_id: user.id });
+      if (!eligErr && eligible === false) {
+        await supabase.auth.signOut();
+        toast.error("Accès réservé aux comptes ayant une extension et un numéro actifs.");
+        setProfile(null);
+        setAccessError("unauthenticated");
+        setLoading(false);
+        return;
+      }
+    } catch { /* réseau : la vérification serveur reste en place */ }
     // Capture Microsoft 365 tokens once after Azure SSO redirect.
     try {
       const captured = sessionStorage.getItem("pp_ms_captured");

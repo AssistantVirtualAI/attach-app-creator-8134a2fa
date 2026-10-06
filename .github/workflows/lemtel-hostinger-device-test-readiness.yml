@@ -1,0 +1,171 @@
+name: Lemtel Hostinger — device test readiness
+
+on:
+  push:
+    branches: [lemtel/integration]
+    paths:
+      - '.github/workflows/lemtel-hostinger-device-test-readiness.yml'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for this private device-test readiness build'
+        required: true
+        default: 'Hostinger device-test readiness'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-device-test-readiness-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android-emulator-debug:
+    environment: lemtel-hostinger-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: apps/ava-softphone-mobile
+    env:
+      VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
+      VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Enforce device-test contract and Hostinger profile
+        run: |
+          node ../../scripts/lemtel-device-test-readiness.mjs
+          node ../../scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Install locked mobile dependencies and build Hostinger web bundle
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
+      - name: Compile private Android debug APK
+        run: |
+          npx cap sync android
+          (cd android && ./gradlew :app:assembleDebug --no-daemon)
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Enable KVM for Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and launch private debug APK in emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          working-directory: apps/ava-softphone-mobile
+          disable-animations: true
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell monkey -p com.lemtel.softphone -c android.intent.category.LAUNCHER 1
+            sleep 15
+            if adb logcat -d | grep -q 'FATAL EXCEPTION'; then echo 'Native Android crash detected'; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-hostinger-android-device-test-${{ github.run_id }}
+          path: apps/ava-softphone-mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 3
+
+  ios-compile-only:
+    environment: lemtel-hostinger-staging
+    runs-on: macos-14
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/ava-softphone-mobile
+    env:
+      VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
+      VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
+      - name: Enforce device-test contract and Hostinger profile
+        run: |
+          node ../../scripts/lemtel-device-test-readiness.mjs
+          node ../../scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Compile unsigned iOS device build
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npx cap sync ios
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/device-test CODE_SIGNING_ALLOWED=NO build
+          test -d build/device-test/Build/Products/Debug-iphoneos/App.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-hostinger-ios-compile-only-${{ github.run_id }}
+          path: apps/ava-softphone-mobile/build/device-test/Build/Products/Debug-iphoneos/App.app
+          if-no-files-found: error
+          retention-days: 3
+
+  desktop-macos-private-package:
+    environment: lemtel-hostinger-staging
+    runs-on: macos-14
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/ava-softphone-desktop
+    env:
+      VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
+      VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
+      - name: Enforce device-test contract and Hostinger profile
+        run: |
+          node ../../scripts/lemtel-device-test-readiness.mjs
+          node ../../scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Build and package private unsigned macOS test build
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npx electron-builder --mac --x64 --arm64 --publish never
+          test -n "$(find dist-electron -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' \) -size +0c -print -quit)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-hostinger-macos-private-test-${{ github.run_id }}
+          path: |
+            apps/ava-softphone-desktop/dist-electron/*.dmg
+            apps/ava-softphone-desktop/dist-electron/*.zip
+          if-no-files-found: error
+          retention-days: 3
+
+  device-test-boundary:
+    needs: [android-emulator-debug, ios-compile-only, desktop-macos-private-package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm remaining physical-device gates
+        run: |
+          echo 'Android physical installation requires an owner test device.'
+          echo 'iOS physical installation remains blocked pending Apple signing/provisioning or TestFlight.'
+          echo 'macOS test package is unsigned and private; no auto-update or public distribution exists.'
+          echo 'SIP/WSS/TURN values and test extensions remain required before real call tests.'

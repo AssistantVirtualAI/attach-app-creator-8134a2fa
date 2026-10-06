@@ -1,31 +1,7 @@
 # Roadmap
 
-- [x] Synchro complète des tâches (sweeper force) + historique vérifié
-- [x] OTA 1.4.12 téléversée, enregistrée, activée en production
-- [x] Historique synchro tâches + délai 45 min par courtier
-- [x] Affichage mobile : cible, assignation, statut, bouton « Traiter », historique
-- [x] Nettoyer le HTML des anciennes tâches déjà en cache sur mobile
-- [x] Vérifier les rapports Commissions de Sandra sans erreur HTTP
-- [x] Vérifier la synchro automatique des commissions par courtier
-- [x] Déployer les deux fonctions Edge demandées et confirmer l’OTA 1.4.12
-- [ ] Vérifier une transcription réelle après appel consenti de Sandra (bloqué : appel physique requis)
-- [x] Conserver les tâches et leurs détails lors d'une panne temporaire Maestro
-- [x] Ajouter la vue Maestro mobile unifiée : appels, tâches et commissions
-- [ ] Valider avec la session Maestro personnelle de Sandra : connexion, création de tâche et appel réel (bloqué : authentification/appareil requis)
-- [x] Éliminer les rafraîchissements concurrents et les écrans vides dans Messages, Tâches et Accueil
-- [x] Synchroniser dans l’app autonome les noms des postes internes et l’ouverture plein écran du portail
-- [x] Publier le nouveau lecteur de courriels lisible sur le portail et l’app mobile
-- [x] Corriger le paquet mobile qui désactivait accidentellement son propre mécanisme de mise à jour
-- [ ] Soumettre le build natif corrigé aux boutiques (requis pour débloquer les appareils sur 1.4.22–1.4.24)
-- [x] Précharger tous les enregistrements mobiles et conserver leurs liens dans le cache résilient
-- [x] Corriger le routage des appels internes vers les postes mobiles suffixés M/W/X
-- [x] Ne plus traiter un appel local non synchronisé comme un enregistrement définitivement indisponible
-- [ ] Valider la sonnerie réelle du poste 1037 après enregistrement de son jeton d’appel iPhone (bloqué : nouvelle build native/appareil requis)
-
-- [ ] Vérifier et corriger l’affichage des noms/numéros des appels internes et contacts sur l’accueil
-- [ ] Vérifier et corriger le rendu visuel des courriels dans le portail et l’app mobile
-- [ ] Vérifier et corriger la création de tâche depuis une fiche contact
-- [ ] Vérifier et corriger la lecture et le cache persistant des enregistrements
-- [ ] Produire un rapport de corrections et de tests
-- [x] Fermer réellement les tâches dans Maestro avec relecture obligatoire
-- [x] Afficher une décision obligatoire Enregistrer/Supprimer après chaque appel répondu, avec reprise après redémarrage
+- [ ] Preserve every phone-system recording in AVA regardless of CRM choice
+- [ ] Make CRM delivery explicit and remove automatic delivery
+- [ ] Improve recording availability states and restore eligible hidden records
+- [ ] Add a reliable return-to-app action in the mobile-opened portal
+- [ ] Add regression tests and verify the central flows

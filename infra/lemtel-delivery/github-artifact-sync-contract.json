@@ -1,0 +1,34 @@
+{
+  "contract_version": "lemtel_github_artifact_sync_v1",
+  "scope": "artifact_sync_only",
+  "source_branch": "lemtel/integration",
+  "lovable_source_configured": false,
+  "artifact": {
+    "build_once": true,
+    "sha256_required": true,
+    "same_sha256_on_hostinger_and_digitalocean": true,
+    "retention_days": 30
+  },
+  "hostinger": {
+    "restricted_receiver": true,
+    "runtime_apply": false,
+    "public_healthcheck_only": true
+  },
+  "digitalocean": {
+    "restricted_receiver": true,
+    "runtime_apply": false,
+    "containers_started": false,
+    "ports_opened": false,
+    "dns_changed": false
+  },
+  "forbidden": [
+    "Planipret_source_branch",
+    "Lovable_current_project_source",
+    "runtime_deployment",
+    "standby_start",
+    "database_exposure",
+    "dns_failover",
+    "FusionPBX_mutation",
+    "client_distribution"
+  ]
+}

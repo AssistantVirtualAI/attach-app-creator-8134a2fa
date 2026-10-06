@@ -1,0 +1,127 @@
+name: Lemtel delivery — immutable artifact sync
+
+on:
+  push:
+    branches: [lemtel/integration]
+    paths:
+      - 'apps/ava-softphone-mobile/**'
+      - 'apps/ava-softphone-desktop/**'
+      - 'infra/lemtel-self-hosted/**'
+      - 'infra/lemtel-client-config/**'
+      - 'infra/lemtel-delivery/**'
+      - 'scripts/lemtel-*.mjs'
+      - '.github/workflows/lemtel-github-artifact-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-artifact-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha256: ${{ steps.package.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify Lemtel delivery safeguards
+        run: >-
+          node --test
+          scripts/lemtel-two-vps-delivery-gate.test.mjs
+          scripts/lemtel-github-release-readiness.test.mjs
+          scripts/lemtel-hostinger-client-config-filter.test.mjs
+      - id: package
+        name: Build one immutable Lemtel source artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz --prefix="lemtel-${GITHUB_SHA}/" "$GITHUB_SHA" \
+            apps/ava-softphone-mobile \
+            apps/ava-softphone-desktop \
+            infra/lemtel-self-hosted \
+            infra/lemtel-client-config \
+            infra/lemtel-delivery \
+            scripts \
+            .github/workflows \
+            > lemtel-artifact.tgz
+          sha256sum lemtel-artifact.tgz | tee lemtel-artifact.sha256
+          sha256=$(cut -d' ' -f1 lemtel-artifact.sha256)
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-source-${{ github.sha }}
+          path: |
+            lemtel-artifact.tgz
+            lemtel-artifact.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  hostinger-artifact:
+    needs: package
+    environment: lemtel-hostinger-primary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lemtel-source-${{ github.sha }}
+      - name: Verify immutable artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(sha256sum lemtel-artifact.tgz | awk '{print $1}')
+          test "$actual" = "${{ needs.package.outputs.sha256 }}"
+      - name: Deposit verified artifact on Hostinger
+        env:
+          HOST: ${{ secrets.LEMTEL_HOSTINGER_HOST }}
+          KEY: ${{ secrets.LEMTEL_HOSTINGER_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LEMTEL_HOSTINGER_KNOWN_HOSTS }}
+          SHA256: ${{ needs.package.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+          cat lemtel-artifact.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemteldeploy@$HOST" "receive $SHA256"
+      - name: Confirm current primary health without applying artifact
+        run: curl --fail --silent --show-error --max-time 15 https://lemtel.avastatistic.ca/auth/v1/health >/dev/null
+
+  digitalocean-artifact:
+    needs: [package, hostinger-artifact]
+    environment: lemtel-digitalocean-standby
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lemtel-source-${{ github.sha }}
+      - name: Verify exact primary artifact checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(sha256sum lemtel-artifact.tgz | awk '{print $1}')
+          test "$actual" = "${{ needs.package.outputs.sha256 }}"
+      - name: Deposit same artifact on DigitalOcean cold standby
+        env:
+          HOST: ${{ secrets.LEMTEL_DIGITALOCEAN_HOST }}
+          KEY: ${{ secrets.LEMTEL_DIGITALOCEAN_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LEMTEL_DIGITALOCEAN_KNOWN_HOSTS }}
+          SHA256: ${{ needs.package.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+          cat lemtel-artifact.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemtelstandbydeploy@$HOST" "receive $SHA256"
+      - name: Assert no standby runtime action
+        run: echo 'Artifact synchronized only; no container, port, DNS or failover action is performed.'

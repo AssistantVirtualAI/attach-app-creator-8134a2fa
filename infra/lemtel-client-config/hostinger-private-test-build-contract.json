@@ -1,0 +1,13 @@
+{
+  "contract_version": "lemtel_hostinger_private_test_builds_v1",
+  "profile": "hostinger-staging",
+  "clients": ["desktop", "android_debug", "ios_unsigned"],
+  "private_artifact_retention_days": 3,
+  "distribution": false,
+  "release_signing": false,
+  "app_store_upload": false,
+  "runtime_apply": false,
+  "digitalocean_cold_standby_start": false,
+  "required_filter": "lemtel-hostinger-client-config-filter.mjs",
+  "forbidden": ["Planipret", "Lovable_current_project", "FusionPBX_mutation", "DNS_change", "public_download", "production_release"]
+}

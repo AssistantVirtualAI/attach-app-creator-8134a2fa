@@ -6,7 +6,6 @@ import LanguageSwitcher from '../ui/LanguageSwitcher';
 import { useSyncStatus, formatAge } from '../../hooks/useSyncStatus';
 import { useTenant } from '../../hooks/useTenant';
 import { supabase } from '../../lib/supabaseClient';
-import avaStatisticLogo from '../../assets/ava-statistic-logo.png';
 
 function useOrgChatUnread(currentView: string) {
   const [total, setTotal] = useState(0);
@@ -290,28 +289,22 @@ export default function LeftRail({ view, onChange, onOpenSettings, onOpenSearch,
         {t('nav.settings')}
       </button>
 
-      {/* AVA footer chip */}
+      {/* Lemtel product footer */}
       <div style={{
         marginTop: 10, padding: '10px 12px',
         borderRadius: 12,
-        background: 'linear-gradient(135deg, rgba(122,76,255,0.18), rgba(35,214,255,0.08))',
-        border: `1px solid ${c.borderAI}`,
+        background: 'linear-gradient(135deg, rgba(0,35,230,0.13), rgba(255,215,0,0.10))',
+        border: `1px solid ${c.borderGold}`,
         display: 'flex', alignItems: 'center', gap: 10,
         WebkitAppRegion: 'no-drag' as any,
       }}>
-        <img
-          src={avaStatisticLogo}
-          alt="AVA Statistic"
-          width={28}
-          height={28}
-          style={{ borderRadius: 8, flexShrink: 0, objectFit: 'contain', boxShadow: `0 4px 14px -6px ${c.avaViolet}` }}
-        />
+        <LemtelLogo size="sm" glow={false} />
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: c.avaCyan, letterSpacing: 1.2, textTransform: 'uppercase' }}>
-            Powered by
+          <span style={{ fontSize: 10, fontWeight: 700, color: c.gold, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+            Lemtel
           </span>
           <span style={{ fontSize: 12, fontWeight: 800, color: c.textIce, letterSpacing: 0.3 }}>
-            AVA Statistic · AVA AI
+            Secure communications
           </span>
         </div>
         <LanguageSwitcher />

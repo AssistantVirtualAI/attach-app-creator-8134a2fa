@@ -1,36 +1,34 @@
 import React from 'react';
 import { theme } from '../lib/theme';
-import avaStatisticsLogo from '../assets/ava-statistic-logo.png';
 
 type Size = 'sm' | 'md' | 'lg';
 
 interface Props {
   size?: Size;
   align?: 'center' | 'left';
+  /**
+   * Kept for compatible call sites. The Lemtel client is intentionally
+   * product-branded: this renders a Lemtel service label, never a vendor mark.
+   */
   showPoweredBy?: boolean;
   style?: React.CSSProperties;
 }
 
 /**
- * Unified brand tagline used under the Lemtel L logo:
- *   "Lemtel Communications — your AI companion"  [AI badge]
- *   "Powered by AVA AI"
- *
- * Uses clamp() so it scales gracefully on every screen size,
- * and tunes colors for dark mode + high-contrast mode.
+ * Lemtel product signature used below the canonical L mark.
+ * It deliberately has no third-party logo or external product attribution.
  */
 export default function BrandTagline({
   size = 'md',
   align = 'center',
-  showPoweredBy = true,
+  showPoweredBy = false,
   style,
 }: Props) {
   const { colors } = theme;
-
   const scale = size === 'lg' ? 1 : size === 'md' ? 0.82 : 0.68;
-  const taglineFs = `clamp(${11 * scale}px, ${1.1 * scale}vw + 8px, ${15 * scale}px)`;
-  const poweredFs = `clamp(${9 * scale}px, ${0.7 * scale}vw + 6px, ${11 * scale}px)`;
-  const gap = size === 'lg' ? 14 : size === 'md' ? 10 : 6;
+  const titleFs = `clamp(${11 * scale}px, ${1.1 * scale}vw + 8px, ${15 * scale}px)`;
+  const detailFs = `clamp(${9 * scale}px, ${0.7 * scale}vw + 6px, ${11 * scale}px)`;
+  const gap = size === 'lg' ? 12 : size === 'md' ? 9 : 5;
 
   return (
     <div
@@ -39,7 +37,7 @@ export default function BrandTagline({
         display: 'flex',
         flexDirection: 'column',
         alignItems: align === 'center' ? 'center' : 'flex-start',
-        gap: size === 'lg' ? 6 : 4,
+        gap: size === 'lg' ? 5 : 3,
         textAlign: align,
         minWidth: 0,
         maxWidth: '100%',
@@ -53,54 +51,35 @@ export default function BrandTagline({
           gap: 8,
           flexWrap: 'wrap',
           justifyContent: align === 'center' ? 'center' : 'flex-start',
-          fontSize: taglineFs,
-          fontWeight: 600,
+          fontSize: titleFs,
+          fontWeight: 700,
           color: colors.text,
-          letterSpacing: 0.2,
+          letterSpacing: 0.25,
           lineHeight: 1.25,
           minWidth: 0,
           maxWidth: '100%',
         }}
       >
-        <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-          Lemtel Communications
-          <span style={{ color: colors.gold, margin: '0 6px', opacity: 0.85 }}>—</span>
-          <span style={{ color: colors.textSub, fontWeight: 500 }}>
-            your AI companion
-          </span>
-        </span>
-        <span className="lemtel-ai-badge" aria-label="AI powered">
-          <span className="lemtel-ai-badge__dot" aria-hidden />
-          AI
-        </span>
-      </div>
-
-      {showPoweredBy && (
-        <div
+        <span>Lemtel Communications</span>
+        <span
+          aria-label="Secure Lemtel service"
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: poweredFs,
-            fontWeight: 700,
-            letterSpacing: size === 'lg' ? 3 : 2,
-            color: colors.textDim,
-            textTransform: 'uppercase',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            minWidth: 22, height: 18, padding: '0 6px', borderRadius: 999,
+            background: colors.primarySoft, border: `1px solid ${colors.borderGold}`,
+            color: colors.gold, fontSize: '0.72em', letterSpacing: 0.8, fontWeight: 800,
           }}
         >
-          Powered by
-          <img
-            src={avaStatisticsLogo}
-            alt="AVA Statistics"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-            style={{
-              height: size === 'lg' ? 26 : size === 'md' ? 22 : 18,
-              width: 'auto',
-              display: 'inline-block',
-              verticalAlign: 'middle',
-            }}
-          />
-        </div>
+          L
+        </span>
+      </div>
+      <span style={{ color: colors.textSub, fontSize: detailFs, fontWeight: 500, lineHeight: 1.35 }}>
+        Business communications, simplified
+      </span>
+      {showPoweredBy && (
+        <span style={{ color: colors.textDim, fontSize: detailFs, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+          Lemtel Cloud
+        </span>
       )}
     </div>
   );

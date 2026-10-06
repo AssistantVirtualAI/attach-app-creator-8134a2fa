@@ -23,7 +23,6 @@ import OutputDevicePicker from './OutputDevicePicker';
 import { watchA11y } from '../lib/a11yAudit';
 import pkg from '../../package.json';
 import SkeletonRows from './ui/SkeletonRows';
-import avaLogo from '../assets/ava-statistic-logo.png';
 
 const APP_VERSION: string =
   (typeof window !== 'undefined' && (window as any).electronAPI?.getVersion?.()) ||
@@ -870,15 +869,8 @@ export default function SoftphonePane({
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: compact ? 10 : 11, color: c.textSub, letterSpacing: 0.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {ultraCompact ? '' : 'Lemtel Communications · '}v{APP_VERSION} {ultraCompact ? '' : '· Powered by '}
-          <a
-            onClick={(e) => { e.preventDefault(); window.electronAPI?.openExternal?.('https://assistantvirtualai.com'); }}
-            href="#"
-            style={{ color: c.gold, textDecoration: 'none', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            <img src={avaLogo} alt="AVA Statistic" style={{ height: compact ? 18 : 22, width: 'auto', objectFit: 'contain' }} />
-            {ultraCompact ? 'AVA Statistic' : 'AVA Statistic · assistantvirtualai.com'}
-          </a>
+          <span style={{ color: c.gold, fontWeight: 800 }}>L</span>
+          {ultraCompact ? 'Lemtel' : `Lemtel Communications · v${APP_VERSION}`}
         </div>
       </div>
 

@@ -70,7 +70,7 @@ export default function PBRecordings() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [userId, page, period, direction, status, search]);
+  }, [userId, page, period, direction, status, search, PAGE_SIZE]);
 
   return (
     <PAPage>

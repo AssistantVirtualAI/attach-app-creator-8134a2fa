@@ -260,7 +260,11 @@ function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: A
         body: JSON.stringify({ newPassword }),
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok || body?.ok !== true) throw new Error(body?.error || 'password_change_failed');
+      // A previous tap can complete the server-side update before the client
+      // receives a response. Recover the specific post-completion state rather
+      // than showing a generic Edge Function error.
+      const alreadyCompleted = response.status === 409 && body?.error === 'first_password_change_not_required';
+      if (!alreadyCompleted && (!response.ok || body?.ok !== true)) throw new Error(body?.error || 'password_change_failed');
       // The server-side password update can revoke a temporary refresh token.
       // Obtain a fresh post-onboarding session using the password just chosen.
       const renewal = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {

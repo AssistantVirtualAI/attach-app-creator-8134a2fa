@@ -22,6 +22,8 @@ test('desktop sign-in is email-only and fetches only Lemtel session bootstrap', 
   assert.match(source, /lemtel-session-bootstrap/);
   assert.match(source, /lemtel_onboarding_required/);
   assert.match(source, /signInWithPassword\(\{[\s\S]*email: pending\.email,[\s\S]*password: newPassword/);
+  assert.match(source, /completionStatus === 409/);
+  assert.match(source, /alreadyCompleted/);
   assert.doesNotMatch(source, /auth\.refreshSession\(\)/);
   assert.doesNotMatch(source, /extension-signin/);
   assert.doesNotMatch(source, /pbx_softphone_users/);
@@ -32,6 +34,8 @@ test('mobile exchanges the temporary-password session for a new session', () => 
   const source = read('apps/ava-softphone-mobile/src/screens/AuthScreen.tsx');
   assert.match(source, /auth\/v1\/token\?grant_type=password/);
   assert.match(source, /email: pending\.email, password: newPassword/);
+  assert.match(source, /response\.status === 409/);
+  assert.match(source, /alreadyCompleted/);
   assert.match(source, /onCompleted\(\{ accessToken: renewed\.access_token, refreshToken: renewed\.refresh_token \}\)/);
 });
 

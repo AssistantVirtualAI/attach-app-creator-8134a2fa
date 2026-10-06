@@ -123,40 +123,8 @@ Deno.serve(async (req) => {
   // ── 5. Écriture réelle sur le dernier appel ───────────────────────────
   let writeCallId: string | null = null;
   if (writeTest) {
-    const { data: lastCall } = await admin
-      .from("planipret_phone_calls")
-      .select("id, created_at, maestro_call_id, duration_seconds")
-      .eq("user_id", prof.user_id ?? targetId)
-      .gte("duration_seconds", 1)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (!lastCall) {
-      push({ key: "write", label: "Écriture d'un appel dans Maestro", ok: false, detail: "aucun appel récent à publier" });
-    } else {
-      writeCallId = lastCall.id;
-      try {
-        const r = await fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
-          body: JSON.stringify({ call_id: lastCall.id, force: true }),
-        });
-        const d: any = await r.json().catch(() => ({}));
-        push({
-          key: "write",
-          label: "Écriture d'un appel dans Maestro",
-          ok: d?.success === true,
-          status: r.status,
-          detail: d?.success
-            ? `appel publié sous le courtier (fiche Maestro ${d?.maestro_call_id ?? "—"})`
-            : `échec: ${d?.error ?? `HTTP ${r.status}`}`,
-          data: d?.steps ?? null,
-        });
-      } catch (e: any) {
-        push({ key: "write", label: "Écriture d'un appel dans Maestro", ok: false, detail: e?.message });
-      }
-    }
+    // Diagnostic lecture seule : l'envoi CRM d'un appel exige le clic du courtier.
+    push({ key: "write", label: "Écriture d'un appel dans Maestro", ok: true, detail: "ignoré : envoi CRM uniquement via le bouton Synchroniser (manual_only)" });
   }
 
   // ── 6. Comptages réels ────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 // Temp diagnostic: probe which fields Maestro accepts on PUT /calls/{id}
 import { adminClient, corsHeaders, getMaestroConfig, json, maestroFetch, telecomAuth } from "../_shared/maestro.ts";
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

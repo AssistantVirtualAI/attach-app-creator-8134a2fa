@@ -17,12 +17,14 @@ Deno.serve(async (req) => {
   const auth = await getBrokerAuth(admin, call.user_id);
   const res = await maestroFetch(cfg, {
     method: "GET",
-    path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(call.maestro_call_id))}`,
+    path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls?per_page=50`,
     token: auth.token,
   });
-  const d: any = (res.data as any)?.data ?? res.data;
+  const list: any[] = Array.isArray((res.data as any)?.data) ? (res.data as any).data : Array.isArray(res.data) ? res.data as any : [];
+  const d: any = list.find((x) => String(x?.id) === String(call.maestro_call_id));
+  const count = list.length;
   return json({
-    ok: res.ok, status: res.status,
+    ok: res.ok, status: res.status, count, found: !!d,
     id: d?.id, status_field: d?.status, duration: d?.duration_seconds,
     transcript_len: typeof d?.transcript === "string" ? d.transcript.length : 0,
     ai_summary_len: typeof d?.ai_summary === "string" ? d.ai_summary.length : 0,

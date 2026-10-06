@@ -58,19 +58,8 @@ Deno.serve(async (req) => {
   }).slice(0, limit);
 
   const results: any[] = [];
-  for (const row of pending) {
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
-        body: JSON.stringify({ call_id: row.id, force }),
-      });
-      const data = await res.json().catch(() => ({}));
-      results.push({ call_id: row.id, success: !!data?.success, steps: data?.steps ?? null });
-    } catch (e: any) {
-      results.push({ call_id: row.id, success: false, error: e?.message });
-    }
-  }
+  // Envoi CRM des appels : uniquement par clic du courtier (bouton Synchroniser).
+  for (const row of pending) results.push({ call_id: row.id, success: false, skipped: "manual_only" });
 
   // ── SMS backfill ────────────────────────────────────────────
   let msgQ = admin

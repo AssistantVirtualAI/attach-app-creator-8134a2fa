@@ -170,10 +170,8 @@ Deno.serve(async (req) => {
       .limit(limit);
     const pending = (calls ?? []).filter((c: any) => force || !c.maestro_call_id || !c.maestro_synced);
     const callResults: any[] = [];
-    for (const c of pending) {
-      const r = await invoke("maestro-sync-call", { call_id: (c as any).id, force: true });
-      callResults.push({ id: (c as any).id, success: r.success, status: r.status, error: (r.data as any)?.error ?? null });
-    }
+    // Envoi CRM des appels : uniquement par clic du courtier (bouton Synchroniser).
+    for (const c of pending) callResults.push({ id: (c as any).id, success: false, skipped: "manual_only", error: null });
 
     // ── 4. Media poll (recordings + transcriptions) ───────────────────
     const media = await invoke("maestro-media-poll", { limit: 25, max_age_hours: days * 24 });

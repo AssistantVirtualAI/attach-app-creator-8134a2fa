@@ -574,7 +574,7 @@ export default function SettingsPage({
           />
           <SettingsRow
             icon="ⓘ" label={WHITELABEL.appName}
-            value={`Version ${APP_VERSION} · Powered by AVA AI`}
+            value={`Version ${APP_VERSION} · Lemtel Desktop`}
             noBorder
           />
         </Card>
@@ -600,7 +600,7 @@ export default function SettingsPage({
 
         {/* Footer */}
         <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: c.textDim, letterSpacing: 0.4 }}>
-          {WHITELABEL.appName} · Powered by AVA AI · v{APP_VERSION}
+          {WHITELABEL.appName} · Secure communications · v{APP_VERSION}
         </div>
 
       </div>

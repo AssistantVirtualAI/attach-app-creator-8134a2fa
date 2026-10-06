@@ -28,7 +28,7 @@ export interface ThemeTokens {
 }
 
 /* ============================================================
-   AVA Statistic — Logo-aligned palette
+   Lemtel — product-aligned palette
    Deep brand blue #0023e6 → bright #4d6dff → aurora cyan #21d4fd
    Signal gold #d4a73a for premium accents
    4 modes: daylight (brightest) · light · dark · midnight (darkest)
@@ -377,4 +377,3 @@ export const theme = {
   },
   radius: { sm: 8, md: 12, lg: 18, xl: 22, pill: 999 },
 } as const;
-

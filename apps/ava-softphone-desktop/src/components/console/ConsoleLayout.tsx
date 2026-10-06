@@ -221,7 +221,7 @@ export default function ConsoleLayout({
               pointerEvents: 'none',
             }} />
             <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.15 }}>
-              <span style={{ fontSize: 12, color: c.textIce, fontWeight: 700, letterSpacing: 0.2, fontFamily: "'Space Grotesk', sans-serif" }}>AVA Statistic</span>
+              <span style={{ fontSize: 12, color: c.textIce, fontWeight: 700, letterSpacing: 0.2, fontFamily: "'Space Grotesk', sans-serif" }}>Lemtel</span>
               <span style={{ fontSize: 10, color: c.mutedSilver, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}>
                 Ext {creds.extension}{orgName ? ` · ${orgName}` : ''}{domainLabel ? ` · ${domainLabel}` : ''}
               </span>

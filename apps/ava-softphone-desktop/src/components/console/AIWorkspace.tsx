@@ -13,9 +13,9 @@ type Module = 'intelligence' | 'transcripts' | 'greetings' | 'queues' | 'agents'
 const MODULES: { id: Module; label: string; desc: string; accent: string }[] = [
   { id: 'intelligence', label: 'Call Intelligence', desc: 'Summaries, sentiment, topics, action items, risks, opportunities.', accent: c.ai },
   { id: 'transcripts',  label: 'Transcript Search', desc: 'Search across calls and messages by intent, topic, or keyword.', accent: '#23D6FF' },
-  { id: 'greetings',    label: 'Greeting Studio', desc: 'Generate IVR / voicemail / queue greetings through AVA + ElevenLabs.', accent: '#FFE600' },
+  { id: 'greetings',    label: 'Greeting Studio', desc: 'Generate IVR / voicemail / queue greetings through Lemtel voice services.', accent: '#FFE600' },
   { id: 'queues',       label: 'Queue Optimizer', desc: 'Recommendations for strategy, overflow, staffing, hold messaging.', accent: '#28E6A5' },
-  { id: 'agents',       label: 'Voice Agent Manager', desc: 'Assign AVA voice agents to numbers, IVRs, queues, after-hours.', accent: '#FF4D67' },
+  { id: 'agents',       label: 'Voice Agent Manager', desc: 'Assign Lemtel voice agents to numbers, IVRs, queues, after-hours.', accent: '#FF4D67' },
   { id: 'coaching',     label: 'Coaching Insights', desc: 'Missed opportunities, escalations, objections, quality issues.', accent: '#FFCC33' },
 ];
 
@@ -24,7 +24,7 @@ export default function AIWorkspace() {
   return (
     <div style={{ padding: '28px 32px', maxWidth: 1100, margin: '0 auto', animation: 'fadeIn .3s ease-out' }}>
       <PageHeader
-        eyebrow="Powered by AVA AI"
+        eyebrow="Lemtel Intelligence"
         title="AI Workspace"
         subtitle="Intelligence, automation, and voice-agent control for your communications."
         accent={c.avaViolet}

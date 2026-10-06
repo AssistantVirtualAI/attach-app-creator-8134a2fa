@@ -108,7 +108,7 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
           <div style={{ marginTop: 14, fontSize: 22, fontWeight: 800, color: colors.textIce, letterSpacing: 0.2 }}>Lemtel</div>
           <BrandTagline size="sm" />
         </div>
-        <div style={{ width: '100%', maxWidth: 420, background: colors.bgCard, border: `1px solid ${colors.border}`, borderRadius: 24, padding: 32, boxShadow: '0 25px 60px rgba(0,0,0,0.55)', animation: 'fadeIn .4s ease-out' }}>
+        <div style={{ width: '100%', maxWidth: 440, background: colors.bgCard, border: `1px solid ${colors.borderStrong}`, borderRadius: 28, padding: 34, boxShadow: '0 26px 64px rgba(10,20,52,0.22)', animation: 'fadeIn .4s ease-out' }}>
           {firstPasswordScreen ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
@@ -135,7 +135,9 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
           )}
         </div>
       </div>
-      <div style={{ padding: '18px 16px 22px', textAlign: 'center', fontSize: 11, color: colors.textDim, letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>Built by <span style={{ color: colors.gold, fontWeight: 600 }}>AVA Statistic · assistantvirtualai.com</span></div>
+      <div style={{ padding: '18px 16px 22px', textAlign: 'center', fontSize: 11, color: colors.textDim, letterSpacing: 0.45, position: 'relative', zIndex: 1 }}>
+        <span style={{ color: colors.gold, fontWeight: 700 }}>L</span> Lemtel Telecom · Secure business communications
+      </div>
     </div>
   );
 }

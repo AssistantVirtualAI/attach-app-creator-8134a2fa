@@ -1,0 +1,49 @@
+{
+  "contract_version": "lemtel_sip_turn_bootstrap_v1",
+  "scope": "offline_contract_only",
+  "deployment_authorized": false,
+  "client_activation_authorized": false,
+  "fusionpbx_change_authorized": false,
+  "secrets_in_contract": false,
+  "issuers": [
+    {
+      "slug": "lemtel-softphone-bootstrap",
+      "status": "blocked_pending_pbx_test_configuration",
+      "auth": "authenticated_active_lemtel_member",
+      "server_imposed_scope": ["organization_id", "authenticated_user_id", "assigned_extension"],
+      "permitted_response_fields": ["extension", "display_name", "sip_domain", "wss_urls", "organization_id", "role", "data_scope"],
+      "forbidden_response_fields": ["sip_password", "turn_shared_secret", "pbx_admin_credentials", "service_role_key"]
+    },
+    {
+      "slug": "lemtel-turn-credentials",
+      "status": "blocked_pending_turn_configuration_and_device_tests",
+      "auth": "authenticated_active_lemtel_member",
+      "server_imposed_scope": ["organization_id", "authenticated_user_id", "short_lived_relay_credential"],
+      "permitted_response_fields": ["urls", "username", "credential", "ttl_seconds"],
+      "forbidden_response_fields": ["turn_shared_secret", "static_password", "pbx_admin_credentials"]
+    },
+    {
+      "slug": "lemtel-mobile-register-push",
+      "status": "blocked_pending_ios_android_push_configuration",
+      "auth": "authenticated_active_lemtel_member",
+      "server_imposed_scope": ["organization_id", "authenticated_user_id", "device_installation"],
+      "permitted_response_fields": ["registered", "installation_id"],
+      "forbidden_response_fields": ["apns_key", "fcm_service_account", "push_provider_secret"]
+    }
+  ],
+  "required_external_evidence_before_implementation": [
+    "Kenny_or_Phil_provide_test_extension_assignment_and_sip_wss_endpoint",
+    "TURN_provider_hostname_ports_auth_mode_and_short_lived_credential_policy",
+    "approved_test_call_matrix_for_inbound_outbound_media_and_failure_cases",
+    "iOS_PushKit_CallKit_and_Android_FCM_lifecycle_test_plan",
+    "backup_and_restore_evidence_for_any_new_Lemtel_owned_configuration"
+  ],
+  "forbidden_actions": [
+    "copy_or_import_Planipret_credentials_or_configuration",
+    "embed_or_commit_SIP_TURN_PBX_or_push_secrets",
+    "modify_FusionPBX",
+    "enable_client_build_flags",
+    "change_desktop_iOS_or_Android_backend_origin",
+    "deploy_or_expose_new_runtime_endpoints"
+  ]
+}

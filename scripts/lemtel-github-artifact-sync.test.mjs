@@ -19,5 +19,6 @@ test('artifact synchronization remains Lemtel-only and runtime-free', () => {
 
 test('workflow uses restricted secrets without storing addresses or runtime commands', () => {
   for (const required of ['LEMTEL_HOSTINGER_DEPLOY_KEY', 'LEMTEL_HOSTINGER_HOST', 'LEMTEL_HOSTINGER_KNOWN_HOSTS', 'LEMTEL_DIGITALOCEAN_DEPLOY_KEY', 'LEMTEL_DIGITALOCEAN_HOST', 'LEMTEL_DIGITALOCEAN_KNOWN_HOSTS', 'sha256sum', 'lemteldeploy@', 'lemtelstandbydeploy@']) assert.match(workflow, new RegExp(required));
+  assert.match(workflow, /case "\$code" in 200\|401\)/);
   for (const forbidden of ['docker compose up', 'docker start', 'ufw allow', 'Planipret', 'lemtel/lovable-sync']) assert.doesNotMatch(workflow, new RegExp(forbidden, 'i'));
 });

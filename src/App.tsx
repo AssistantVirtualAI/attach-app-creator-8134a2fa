@@ -70,6 +70,7 @@ const MStyleDiagnosticsWeb = lazyWithRetry(() => import("./pages/MStyleDiagnosti
 const I18nDiagnostics = lazyWithRetry(() => import("./pages/I18nDiagnostics"));
 const TaskTargetsDiagnostics = lazyWithRetry(() => import("./pages/planipret/TaskTargetsDiagnostics"));
 const SoftphoneSetup = lazyWithRetry(() => import("./pages/lemtel/SoftphoneSetup"));
+const LemtelPortalApp = lazyWithRetry(() => import("./pages/lemtel/onboarding/LemtelPortalApp"));
 const LucApp = lazyWithRetry(() => import("./pages/lemtel-uc/LucApp"));
 const LucDashboard = lazyWithRetry(() => import("./pages/lemtel-uc/LucUserPages").then((m) => ({ default: m.LucDashboard })));
 const LucCalls = lazyWithRetry(() => import("./pages/lemtel-uc/LucUserPages").then((m) => ({ default: m.LucCalls })));
@@ -649,6 +650,7 @@ const App = () => (
                 <Route path="/lemtel/setup/:token" element={<SoftphoneSetup />} />
                 <Route path="/lemtel/redeem/:token" element={<SoftphoneSetup />} />
                 {/* Lemtel UC — isolated product area (luc_* data only) */}
+                <Route path="/lemtel-portal/*" element={<Suspense fallback={null}><LemtelPortalApp /></Suspense>} />
                 <Route path="/lemtel-uc" element={<Suspense fallback={null}><LucApp /></Suspense>}>
                   <Route index element={<LucDashboard />} />
                   <Route path="calls" element={<LucCalls />} />

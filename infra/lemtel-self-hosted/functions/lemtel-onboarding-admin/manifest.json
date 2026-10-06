@@ -1,10 +1,11 @@
 {
-  "package_version": "lemtel_email_onboarding_admin_v1",
+  "package_version": "lemtel_email_onboarding_portal_admin_v2",
   "scope": "offline_function_source_only",
   "deployment_authorized": false,
   "client_cutover_authorized": false,
-  "capabilities": ["create_lemtel_organization", "provision_email_only_users", "localized_welcome_email", "temporary_password_rotation"],
-  "explicitly_excluded": ["planipret_import", "fusionpbx", "sip_password_management", "wss", "turn", "push", "public_download", "plaintext_password_storage"],
+  "capabilities": ["create_lemtel_organization", "provision_email_only_users", "localized_welcome_email", "temporary_password_rotation", "authenticated_portal_organization_read", "authenticated_portal_people_read", "authenticated_portal_invitation_read", "authenticated_portal_activity_read", "organization_access_suspension"],
+  "explicitly_excluded": ["planipret_import", "fusionpbx", "sip_password_management", "wss", "turn", "push", "public_download", "plaintext_password_storage", "temporary_password_response", "temporary_password_logging"],
   "runtime_requirements": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "RESEND_API_KEY", "LEMTEL_WELCOME_FROM", "LEMTEL_DOWNLOAD_IOS_URL", "LEMTEL_DOWNLOAD_ANDROID_URL", "LEMTEL_DOWNLOAD_DESKTOP_URL"],
-  "deployment_prerequisites": ["approved_lemtel_onboarding_migration", "explicit_platform_admin_bootstrap", "verified_transactional_email_sender", "approved_download_links", "synthetic_auth_rbac_and_email_smoke_test", "approved_edge_deployment"]
+  "optional_runtime_configuration": ["LEMTEL_SUPPORT_CONTACT"],
+  "deployment_prerequisites": ["approved_lemtel_onboarding_migration", "approved_lemtel_portal_admin_access_migration", "explicit_platform_admin_bootstrap", "verified_transactional_email_sender", "approved_download_links", "synthetic_auth_rbac_and_email_smoke_test", "synthetic_portal_read_and_access_suspension_rbac_test", "approved_edge_deployment"]
 }

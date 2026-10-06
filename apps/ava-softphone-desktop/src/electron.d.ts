@@ -6,6 +6,7 @@ declare global {
       getCredentials: () => Promise<any>;
       saveCredentials: (creds: object | null) => Promise<boolean>;
       clearCredentials: () => Promise<boolean>;
+      logRendererCrash: (payload: { scope: string; message: string; stack?: string }) => Promise<void>;
       showNotification: (title: string, body: string, opts?: { tag?: string; urgent?: boolean }) => Promise<void>;
       clearNotification: (tag: string) => Promise<void>;
       onNotificationClicked?: (cb: (info: { tag: string }) => void) => void;

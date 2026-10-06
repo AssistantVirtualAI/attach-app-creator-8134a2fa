@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
     if (callErr) log("call_read_error", { message: callErr.message, code: (callErr as any).code });
     if (!call) {
       log("call_not_found", { call_id });
-      return json({ success: false, error: "call_not_found", message: "Appel introuvable.", request_id: rid, db_error: callErr?.message ?? null }, 200);
+      return json({ success: false, error: "Appel introuvable.", code: "call_not_found", message: "Appel introuvable.", request_id: rid, db_error: callErr?.message ?? null }, 200);
     }
     log("call_loaded", { user_id: call.user_id, maestro_synced: call.maestro_synced, maestro_call_id: call.maestro_call_id });
 
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
     const access = await authorizeCallAccess(req, admin, call as any);
     if (!access.ok) {
       const message = access.status === 401 ? "Session expirée — reconnectez-vous." : "Cet appel ne vous appartient pas.";
-      return json({ success: false, error: access.error, message, request_id: rid }, 200);
+      return json({ success: false, error: message, code: access.error, message, request_id: rid }, 200);
     }
     const manualClick = !access.serviceRole && (explicit_user_action === true || force === true);
     if (!manualClick) {
@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
       return json({ success: false, skipped: "manual_only", message: "Envoi CRM uniquement via le bouton Synchroniser.", request_id: rid }, 200);
     }
     if ((call as any).deleted_at) {
-      return json({ success: false, error: "call_deleted", message: "Cet appel a été supprimé.", request_id: rid }, 200);
+      return json({ success: false, error: "Cet appel a été supprimé.", code: "call_deleted", message: "Cet appel a été supprimé.", request_id: rid }, 200);
     }
     if ((call as any).save_consent !== "approved") {
       const now = new Date().toISOString();
@@ -231,13 +231,13 @@ Deno.serve(async (req) => {
       }).eq("id", call_id).is("deleted_at", null);
       if (upErr) {
         log("consent_update_error", { message: upErr.message });
-        return json({ success: false, error: "consent_update_failed", message: "Impossible d’enregistrer l’autorisation CRM.", request_id: rid }, 200);
+        return json({ success: false, error: "Impossible d’enregistrer l’autorisation CRM.", code: "consent_update_failed", message: "Impossible d’enregistrer l’autorisation CRM.", request_id: rid }, 200);
       }
       call = { ...(call as any), save_consent: "approved", metadata: meta };
       log("crm_manual_authorized", { user_id: access.userId });
     }
     const consent = requireApprovedCallConsent(call as any);
-    if (!consent.ok) return json({ success: false, error: consent.error, message: "Envoi CRM non autorisé pour cet appel.", request_id: rid }, 200);
+    if (!consent.ok) return json({ success: false, error: "Envoi CRM non autorisé pour cet appel.", code: consent.error, message: "Envoi CRM non autorisé pour cet appel.", request_id: rid }, 200);
 
 
 

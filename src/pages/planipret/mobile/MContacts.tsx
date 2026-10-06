@@ -18,6 +18,7 @@ import { peekPpContacts, prefetchPpContacts } from "@/lib/ppContactsCache";
 import { callEdge, toE164 } from "@/lib/callEdge";
 import { createTask as apiCreateTask, listClientTargets } from "@/lib/planipret/tasks";
 import TaskComposerSheet, { type TaskComposerValue } from "@/components/planipret/mobile/TaskComposerSheet";
+import CreateMaestroClientSheet from "@/components/planipret/mobile/CreateMaestroClientSheet";
 import { getSmsAvailability } from "@/lib/planipret/smsAvailability";
 import { getSmsSubmission, type SmsSubmission } from "@/lib/planipret/smsSendGuard";
 
@@ -878,103 +879,20 @@ export default function MContacts() {
       )}
 
       {createOpen && (
-        <CreateContactSheet
+        <CreateMaestroClientSheet
+          target={{ phone: "" }}
           onClose={() => setCreateOpen(false)}
-          onCreated={() => { setCreateOpen(false); load("personal", { force: true }); }}
+          onCreated={() => {
+            setCreateOpen(false);
+            setTab("clients");
+            loadedTabsRef.current.delete("clients");
+            void load("clients", { force: true, background: true });
+          }}
         />
       )}
     </div>
   );
 }
-
-function CreateContactSheet({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const { t } = useMplanipretLang();
-  const [form, setForm] = useState({ first_name: "", last_name: "", phone: "", email: "", company: "" });
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    if (!form.first_name && !form.last_name && !form.phone) {
-      toast.error(t("contacts.requiredFields") || "Prénom, nom ou téléphone requis");
-      return;
-    }
-    setSaving(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-contacts", {
-        body: { action: "create", ...form },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success(t("contacts.created") || "Contact créé");
-
-      // Création via l'API officielle POST /api/main/clients. Le contact local
-      // reste créé même si Maestro n'est pas connecté.
-      if (form.first_name) {
-        try {
-          const { data: mc } = await supabase.functions.invoke("maestro-client-create", {
-            body: {
-              phone: form.phone,
-              first_name: form.first_name,
-              last_name: form.last_name,
-              email: form.email,
-              company: form.company,
-            },
-          });
-          if ((mc as any)?.success) {
-            toast.success("Client créé dans Maestro");
-          } else if ((mc as any)?.web_url) {
-            toast.info("Terminer la création dans Maestro", {
-              description: "Le formulaire s'ouvre prérempli.",
-              action: { label: "Ouvrir", onClick: () => window.open((mc as any).web_url, "_blank") },
-            });
-          }
-        } catch { /* non bloquant */ }
-      }
-      onCreated();
-
-    } catch (e: any) {
-      toast.error(t("contacts.createFailed") || "Échec création", { description: e?.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="absolute inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-4"
-        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)" }}
-        onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-lg font-bold" style={{ color: "var(--pp-text-primary)" }}>
-            {t("contacts.newContact") || "Nouveau contact"}
-          </div>
-          <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
-        </div>
-        <div className="space-y-2">
-          {([
-            ["first_name", t("contacts.firstName") || "Prénom"],
-            ["last_name", t("contacts.lastName") || "Nom"],
-            ["phone", t("contacts.phoneLabel") || "Téléphone"],
-            ["email", "Email"],
-            ["company", t("contacts.company") || "Société"],
-          ] as const).map(([k, label]) => (
-            <input key={k}
-              value={(form as any)[k]}
-              onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
-              placeholder={label}
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-              style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
-          ))}
-        </div>
-        <button onClick={save} disabled={saving}
-          className="w-full mt-4 py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50"
-          style={{ background: "var(--pp-brand-accent)" }}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (t("common.save") || "Enregistrer")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 
 function ContactDetailSheet({
   contact, onClose, onCall,

@@ -148,6 +148,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Electron's default renderer sandbox crashes on the current signed
+      // macOS staging package before React can render. The renderer remains
+      // isolated from Node and exposes only the narrow preload IPC bridge.
+      sandbox: false,
       webSecurity: false,
       backgroundThrottling: false,
     },

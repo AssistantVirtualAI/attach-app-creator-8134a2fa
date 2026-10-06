@@ -1,0 +1,41 @@
+name: Lemtel Hostinger client configuration filter
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/lemtel-hostinger-client-config-filter.yml'
+      - 'infra/lemtel-client-config/hostinger-staging.env.template'
+      - 'scripts/lemtel-hostinger-client-config-filter*'
+      - 'docs/lemtel-mobile/phase-43a-hostinger-client-config-filter.md'
+  push:
+    branches: [lemtel/integration]
+    paths:
+      - '.github/workflows/lemtel-hostinger-client-config-filter.yml'
+      - 'infra/lemtel-client-config/hostinger-staging.env.template'
+      - 'scripts/lemtel-hostinger-client-config-filter*'
+      - 'docs/lemtel-mobile/phase-43a-hostinger-client-config-filter.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-hostinger-staging-profile:
+    environment: lemtel-hostinger-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
+      VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject all non-Lemtel or non-Hostinger build profiles
+        run: node scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Run filter unit tests without printing build configuration
+        run: node --test scripts/lemtel-hostinger-client-config-filter.test.mjs

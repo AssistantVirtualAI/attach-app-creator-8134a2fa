@@ -465,22 +465,41 @@ Deno.serve(async (req) => {
         },
       });
 
-      const failure = res.ok ? null : summarizeMaestroFailure(res.status, res.data);
-      steps.ai = { ok: res.ok, status: res.status, reused: true, error: failure?.error ?? null, detail: failure?.detail ?? null, permanent: failure?.permanent ?? false };
-      await setPipelineStep(admin, call_id, "ai", res.ok ? "done" : "error", {
-        pushed: res.ok,
+      // Maestro applique parfois la mise à jour malgré une réponse d'erreur
+      // (timeout/5xx après écriture). Avant de déclarer l'échec, relire la
+      // fiche : si la transcription/résumé y sont, l'envoi a réussi.
+      let pushOk = res.ok;
+      let confirmedByReadback = false;
+      if (!pushOk && mId) {
+        const rb = await maestroFetch(cfg, {
+          method: "GET",
+          path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId ?? ""))}/calls/${encodeURIComponent(String(mId))}`,
+          token: auth.token,
+        }).catch(() => null);
+        const rbCall = (rb as any)?.data?.call ?? (rb as any)?.data?.data ?? (rb as any)?.data ?? null;
+        const hasTranscript = !prettyText || !!(rbCall && (rbCall.transcript || rbCall.call_transcript));
+        const hasSummary = !summary || !!(rbCall && (rbCall.ai_summary || rbCall.summary));
+        if (rb?.ok && rbCall && hasTranscript && hasSummary) {
+          pushOk = true;
+          confirmedByReadback = true;
+        }
+      }
+      const failure = pushOk ? null : summarizeMaestroFailure(res.status, res.data);
+      steps.ai = { ok: pushOk, status: res.status, reused: true, confirmed_by_readback: confirmedByReadback || undefined, error: failure?.error ?? null, detail: failure?.detail ?? null, permanent: failure?.permanent ?? false };
+      await setPipelineStep(admin, call_id, "ai", pushOk ? "done" : "error", {
+        pushed: pushOk,
         lead_score: call.lead_score,
         coaching_score: call.coaching_score,
       });
       await pipelineLog(admin, {
         call_id, user_id: call.user_id, step: "ai_summary_push",
-        status: res.ok ? "success" : "error",
+        status: pushOk ? "success" : "error",
         correlation_id: call_id,
         entity_type: "ai",
         entity_id: String(mId),
         endpoint: res.endpoint,
         http_status: res.status,
-        error_message: res.ok ? undefined : failure?.error,
+        error_message: pushOk ? undefined : failure?.error,
         payload: { status: res.status, broker_id: auth.brokerId, client_id: call.maestro_client_id, lead_score: call.lead_score, response: res.data ?? null },
       });
 

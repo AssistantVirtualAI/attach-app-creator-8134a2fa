@@ -521,7 +521,7 @@ Deno.serve(async (req) => {
           const put = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${k.digits}`, { method: "PUT", body: JSON.stringify({ "dial-rule-application": "to-voicemail", "dial-rule-parameter": "", "dial-rule-translation-destination-user": "", enabled: "yes" }) });
           if (!put.ok) { failed.push({ n: k.digits, op: "release", status: put.status }); }
           released++;
-          audit.push({ domain, phone_number: k.digits, phone_number_e164: `+${k.digits}`, previous_extension: k.prev, reason: "released_keep_backup", dry_run: false, success: put.ok, write_status: put.status, triggered_by: auth.user?.id ?? null, source: "admin_release" });
+          audit.push({ domain, phone_number: k.digits, phone_number_e164: `+${k.digits}`, previous_extension: k.prev, reason: "released_keep_backup", dry_run: false, success: put.ok, write_status: put.status, triggered_by: (auth as any).profile?.user_id ?? null, source: "admin_release" });
         }
         await db.from("planipret_did_assignments").upsert({ phone_number_e164: `+${k.digits}`, phone_number_digits: k.digits, extension: null, callerid_name: null, display_name: null, status: "available", domain, source: "release_backup", updated_at: now }, { onConflict: "phone_number_e164" });
       }
@@ -530,7 +530,7 @@ Deno.serve(async (req) => {
         const ok = del.ok || del.status === 404;
         if (ok) { deleted++; await db.from("planipret_did_assignments").delete().eq("phone_number_digits", k.digits); }
         else failed.push({ n: k.digits, op: "delete", status: del.status });
-        audit.push({ domain, phone_number: k.digits, phone_number_e164: `+${k.digits}`, previous_extension: k.prev, reason: "pruned_from_pbx", dry_run: false, success: ok, write_status: del.status, triggered_by: auth.user?.id ?? null, source: "admin_prune" });
+        audit.push({ domain, phone_number: k.digits, phone_number_e164: `+${k.digits}`, previous_extension: k.prev, reason: "pruned_from_pbx", dry_run: false, success: ok, write_status: del.status, triggered_by: (auth as any).profile?.user_id ?? null, source: "admin_prune" });
       }
       for (let i = 0; i < audit.length; i += 200) await db.from("planipret_did_release_audit").insert(audit.slice(i, i + 200));
       return jsonResponse({ success: true, kept: keep.length, released, deleted, failed });

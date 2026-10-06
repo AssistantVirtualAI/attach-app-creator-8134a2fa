@@ -70,4 +70,17 @@ jobs:
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts
       - name: Enforce no deployment in this workflow
         run: |
-          ! grep -Eiq 'docker compose up|ssh |rsync|scp|curl .*api\.resend\.com|ufw allow|fusionpbx' .github/workflows/lemtel-email-only-onboarding.yml
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('.github/workflows/lemtel-email-only-onboarding.yml', 'utf8');
+          const forbidden = [
+            new RegExp('docker\\s+compose\\s+up', 'i'),
+            new RegExp('s' + 'sh\\s+', 'i'),
+            new RegExp('r' + 'sync', 'i'),
+            new RegExp('s' + 'cp', 'i'),
+            new RegExp('curl\\s+.*api\\.resend\\.com', 'i'),
+            new RegExp('u' + 'fw\\s+allow', 'i'),
+            new RegExp('fusion' + 'pbx', 'i'),
+          ];
+          if (forbidden.some((pattern) => pattern.test(source))) process.exit(1);
+          NODE

@@ -4,4 +4,4 @@
 - [x] Make CRM delivery explicit and remove automatic delivery
 - [x] Improve recording availability states and restore eligible hidden records
 - [x] Add a reliable return-to-app action in the mobile-opened portal
-- [ ] Add regression tests and verify the central flows
+- [x] Add regression tests and verify the central flows

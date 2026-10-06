@@ -130,14 +130,22 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
     try {
       const { data, error: completionError } = await supabase.functions.invoke('lemtel-complete-first-password', { body: { newPassword } });
       if (completionError || (data as any)?.ok !== true) throw new Error((data as any)?.error || completionError?.message || 'Password update failed');
-      // Auth metadata changes are server-authoritative. Refresh before the
-      // bootstrap request so the client carries the post-onboarding session.
-      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError || !refreshed.session) throw new Error('Password updated, but the secure session could not be refreshed. Please sign in again.');
+      // Updating a password through the server can revoke the temporary refresh
+      // token. Sign in once with the just-selected password to obtain a fresh,
+      // post-onboarding session instead of trying to refresh a revoked token.
+      const { data: renewed, error: renewalError } = await supabase.auth.signInWithPassword({
+        email: pending.email,
+        password: newPassword,
+      });
+      if (renewalError || !renewed.user || !renewed.session) {
+        throw new Error('Password updated, but the new secure session could not be opened. Please sign in with your new password.');
+      }
       await finalize({
         ...pending,
-        accessToken: refreshed.session.access_token,
-        refreshToken: refreshed.session.refresh_token,
+        userId: renewed.user.id,
+        email: renewed.user.email || pending.email,
+        accessToken: renewed.session.access_token,
+        refreshToken: renewed.session.refresh_token,
       });
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Password update failed');

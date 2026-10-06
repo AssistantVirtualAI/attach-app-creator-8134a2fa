@@ -89,15 +89,15 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
     return <FirstPasswordChangeScreen
       accent={accent}
       pending={pendingFirstPassword}
-      onCompleted={() => {
+      onCompleted={(renewed) => {
         onAuthenticated({
           portalUrl: BACKEND_URL,
           backendOrigin: BACKEND_URL,
           email: pendingFirstPassword.email,
           extension: '',
           userId: pendingFirstPassword.userId,
-          accessToken: pendingFirstPassword.accessToken,
-          refreshToken: pendingFirstPassword.refreshToken,
+          accessToken: renewed.accessToken,
+          refreshToken: renewed.refreshToken,
           organizationId: pendingFirstPassword.organizationId,
         });
       }}
@@ -243,7 +243,7 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
 }
 
 /* ====== Mandatory first-password screen ====== */
-function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: Accent; pending: PendingFirstPassword; onCompleted: () => void }) {
+function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: Accent; pending: PendingFirstPassword; onCompleted: (session: Pick<PendingFirstPassword, 'accessToken' | 'refreshToken'>) => void }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -261,7 +261,16 @@ function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: A
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || body?.ok !== true) throw new Error(body?.error || 'password_change_failed');
-      onCompleted();
+      // The server-side password update can revoke a temporary refresh token.
+      // Obtain a fresh post-onboarding session using the password just chosen.
+      const renewal = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON },
+        body: JSON.stringify({ email: pending.email, password: newPassword }),
+      });
+      const renewed = await renewal.json().catch(() => ({}));
+      if (!renewal.ok || !renewed?.access_token) throw new Error('new_session_failed');
+      onCompleted({ accessToken: renewed.access_token, refreshToken: renewed.refresh_token });
     } catch (cause: any) {
       setError(mapAuthError(cause?.message));
     } finally { setBusy(false); }

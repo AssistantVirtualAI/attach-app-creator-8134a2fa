@@ -17,7 +17,6 @@ import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
 import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
 import ppBanner from "@/assets/planipret/banner-recordings.jpg";
 
-const PAGE_SIZE = 25;
 
 export default function PBRecordings() {
   const { userId } = useOutletContext<BrokerCtx>();
@@ -36,6 +35,9 @@ export default function PBRecordings() {
   const [detail, setDetail] = useState<any | null>(null);
   const [dl, setDl] = useState<string | null>(null);
 
+
+  const psRaw = parseInt(params.get("ps") ?? "25", 10);
+  const PAGE_SIZE = [25, 50, 100].includes(psRaw) ? psRaw : 25;
 
   const patch = (next: Record<string, string | null>, resetPage = true) => {
     const p = new URLSearchParams(params);
@@ -68,7 +70,7 @@ export default function PBRecordings() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [userId, page, period, direction, status, search]);
+  }, [userId, page, period, direction, status, search, PAGE_SIZE]);
 
   return (
     <PAPage>
@@ -206,11 +208,11 @@ export default function PBRecordings() {
             </table>
           </PATableWrap>
         )}
-        {total > PAGE_SIZE && (
+        {total > 25 && (
           <div className="px-4 py-3" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
             <Pagination page={page} pageSize={PAGE_SIZE} total={total}
               unit={lang === "en" ? "recordings" : "enregistrements"}
-              onPageSizeChange={() => {}}
+              onPageSizeChange={(s: number) => patch({ ps: String(s) })}
               onPageChange={(p: number) => patch({ page: String(p) }, false)} />
           </div>
         )}

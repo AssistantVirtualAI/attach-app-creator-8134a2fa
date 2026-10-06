@@ -17,5 +17,6 @@ test('private Hostinger test build contract rejects distribution', () => {
 
 test('workflow builds only test artifacts and sends the same bundle to both receivers', () => {
   for (const expected of ['workflow_dispatch', 'assembleDebug', 'CODE_SIGNING_ALLOWED=NO', 'npm run build', 'lemteldeploy@', 'lemtelstandbydeploy@', 'lemtel-hostinger-client-config-filter.mjs', 'retention-days: 3']) assert.match(workflow, new RegExp(expected));
+  assert.match(workflow, /push:\n    branches: \[lemtel\/integration\]/);
   for (const forbidden of ['bundleRelease', 'electron-builder', 'app-store', 'docker compose up', 'ufw allow', 'Planipret']) assert.doesNotMatch(workflow, new RegExp(forbidden, 'i'));
 });

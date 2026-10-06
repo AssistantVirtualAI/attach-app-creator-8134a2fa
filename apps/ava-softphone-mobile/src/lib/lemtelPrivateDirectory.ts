@@ -1,7 +1,6 @@
 // Lemtel-only private-directory adapter. It remains inert unless a future
 // self-hosted build explicitly enables it; this file never changes the backend origin.
 import { BACKEND_URL, LEGACY_BACKEND_URL } from './backendOrigin';
-import { supabase } from './mobileSupabase';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 const APPROVAL_VALUE = 'approved';
@@ -49,6 +48,9 @@ export async function invokeLemtelPrivateDirectory<T>(
   const organizationId = await getLemtelPrivateDirectoryOrganizationId();
   if (!organizationId) return null;
   try {
+    // Do not load the Supabase client in an inert build or while merely
+    // rendering the privacy boundary; this keeps legacy tests/builds isolated.
+    const { supabase } = await import('./mobileSupabase');
     const { data, error } = await supabase.functions.invoke(functionName, {
       body: { ...payload, organizationId },
     });

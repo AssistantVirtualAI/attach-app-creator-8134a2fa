@@ -194,12 +194,12 @@ Deno.serve(async (req) => {
       .select(CALL_COLUMNS)
       .eq("id", call_id)
       .maybeSingle();
-    let call = call0;
     if (callErr) log("call_read_error", { message: callErr.message, code: (callErr as any).code });
-    if (!call) {
+    if (!call0) {
       log("call_not_found", { call_id });
       return json({ success: false, error: "Appel introuvable.", code: "call_not_found", message: "Appel introuvable.", request_id: rid, db_error: callErr?.message ?? null }, 200);
     }
+    let call: NonNullable<typeof call0> = call0;
     log("call_loaded", { user_id: call.user_id, maestro_synced: call.maestro_synced, maestro_call_id: call.maestro_call_id });
 
     // ── Autorisation : envoi CRM uniquement sur clic du courtier ───────────

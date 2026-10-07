@@ -287,7 +287,7 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     register_expires: 300,
     connection_recovery_min_interval: 10,
     connection_recovery_max_interval: 60,
-    user_agent: "AVA Softphone 1.1",
+    user_agent: "Lemtel Softphone 1.1",
   };
   if (isAndroid) {
     // Only use settings recognized by the installed JsSIP Config. Browser

@@ -368,7 +368,7 @@ export default function CallDetailScreen({ id, onBack }: { id: string; onBack: (
 
           {/* AI Summary */}
           {data.summary && (
-            <AIPanel title={fr ? 'Résumé AVA' : 'AVA Summary'} accent={colors.avaViolet}>
+            <AIPanel title={fr ? 'Résumé Lemtel AI' : 'Lemtel AI summary'} accent={colors.avaViolet}>
               <p style={{ fontSize: font.base, lineHeight: 1.55, color: colors.textIce, margin: 0 }}>{data.summary}</p>
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                 {data.qualityScore > 0 && <Chip tone="gold">{fr ? 'Qualité' : 'Quality'} {data.qualityScore}/100</Chip>}

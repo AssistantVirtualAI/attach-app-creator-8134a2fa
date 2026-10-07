@@ -782,8 +782,8 @@ function TopHeader({
       {/* Centered logo at the very top of every page */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 36 }}>
         <img
-          src="/ava-logo.png"
-          alt="AVA"
+          src="/lemtel-icon.png"
+          alt="Lemtel"
           width={32}
           height={32}
           style={{ width: 32, height: 32, borderRadius: 8, boxShadow: `0 6px 18px -8px ${colors.lemtelBlue}` }}

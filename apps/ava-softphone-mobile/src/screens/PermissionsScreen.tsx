@@ -59,8 +59,8 @@ export default function PermissionsScreen() {
       </Card>
       <p style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 10 }}>
         {fr
-          ? "Si une permission est refusée, modifiez-la dans les Réglages système → AVA Softphone."
-          : "If a permission is denied, change it in your phone's system Settings → AVA Softphone."}
+          ? "Si une permission est refusée, modifiez-la dans les Réglages système → Lemtel."
+          : "If a permission is denied, change it in your phone's system Settings → Lemtel."}
       </p>
     </div>
   );

@@ -9,7 +9,7 @@ export default function SupportScreen() {
   const diag = () => {
     const body = encodeURIComponent(
       [
-        fr ? 'Diagnostic AVA Softphone' : 'AVA Softphone diagnostic',
+        fr ? 'Diagnostic Lemtel' : 'Lemtel diagnostic',
         '------------------------',
         `${fr ? 'Version' : 'App version'}: 1.0.0`,
         `UA: ${navigator.userAgent}`,
@@ -19,7 +19,7 @@ export default function SupportScreen() {
         '',
       ].join('\n'),
     );
-    window.location.href = `mailto:support@avastatistic.ca?subject=AVA%20Softphone%20support&body=${body}`;
+    window.location.href = `mailto:support@avastatistic.ca?subject=Lemtel%20support&body=${body}`;
   };
 
   return (

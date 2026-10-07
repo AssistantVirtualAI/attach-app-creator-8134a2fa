@@ -33,8 +33,8 @@ export default function DeleteAccountScreen({ onDone }: { onDone: () => void }) 
         </div>
         <p style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.55, marginTop: 8 }}>
           {fr
-            ? "Cela supprimera votre compte AVA Softphone, vous déconnectera de tous les appareils et délier votre extension. Les enregistrements, messageries et analyses appartenant à votre organisation restent chez votre administrateur."
-            : "This will remove your AVA Softphone account, sign you out on all devices, and unlink your extension. Call recordings, voicemails and analytics owned by your organization remain with your administrator."}
+            ? "Cela supprimera votre compte Lemtel, vous déconnectera de tous les appareils et déliera votre extension. Les enregistrements, messageries et analyses appartenant à votre organisation restent chez votre administrateur."
+            : "This will remove your Lemtel account, sign you out on all devices, and unlink your extension. Call recordings, voicemails and analytics owned by your organization remain with your administrator."}
         </p>
         <ul style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.55, paddingLeft: 18, margin: '8px 0' }}>
           {(fr ? [

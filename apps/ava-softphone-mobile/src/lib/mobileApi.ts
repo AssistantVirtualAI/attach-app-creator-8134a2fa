@@ -297,7 +297,7 @@ const meMock: MeResponse = {
 
 const dashboardMock: DashboardBrief = {
   greeting: 'Good morning',
-  brief: 'You have 3 missed calls, 2 voicemails, and 4 unread messages. AVA flagged 2 follow-ups worth your attention.',
+  brief: 'You have 3 missed calls, 2 voicemails, and 4 unread messages. Lemtel AI flagged 2 follow-ups worth your attention.',
   scope: { mode: 'domain_admin', label: 'Domain admin · Lemtel Communications', organizationId: 'org-lemtel', sipDomain: 'lemtel.lemtel.tel', extension: '1042', role: 'org_admin' },
   metrics: { missedCalls: 3, answeredCalls: 12, unreadSms: 4, voicemails: 2, actionItems: 5, activeUsers: 8 },
   needsAttention: [
@@ -519,7 +519,7 @@ export const mobileApi = {
   ),
   aiRewrite: (text: string, action: 'rewrite' | 'professional' | 'shorten' | 'translate') => call<{ text: string }>(
     '/improve-prompt', { method: 'POST', body: JSON.stringify({ text, action }) },
-    { text: action === 'shorten' ? text.split(/[.!?]/)[0] + '.' : action === 'translate' ? `[FR] ${text}` : action === 'professional' ? `Bonjour,\n\n${text}\n\nCordialement.` : `${text} — refined by AVA.` },
+    { text: action === 'shorten' ? text.split(/[.!?]/)[0] + '.' : action === 'translate' ? `[FR] ${text}` : action === 'professional' ? `Bonjour,\n\n${text}\n\nCordialement.` : `${text} — refined by Lemtel AI.` },
   ),
 
 
@@ -556,7 +556,7 @@ export const mobileApi = {
     call<ChatReply>(
       '/ava-assistant',
       { method: 'POST', body: JSON.stringify({ message, history }) },
-      { answer: "I'm running in mock mode — connect to your AVA workspace to ask live questions about your PBX." },
+      { answer: "I'm running in mock mode — connect to your Lemtel workspace to ask live questions about your PBX." },
     ),
 
   // GDPR / store-compliance: delete the signed-in user's account.

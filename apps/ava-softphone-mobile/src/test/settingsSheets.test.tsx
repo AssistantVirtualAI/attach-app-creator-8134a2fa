@@ -70,7 +70,7 @@ describe('SettingsScreen — rows & sheets', () => {
     renderScreen();
     const row = await screen.findByText(/^(Ringtone|Sonnerie)$/i);
     fireEvent.click(row);
-    await waitFor(() => expect(screen.getAllByText(/AVA Default/i).length).toBeGreaterThan(1));
+    await waitFor(() => expect(screen.getAllByText(/Lemtel Default/i).length).toBeGreaterThan(1));
   });
 
   it('opens the Audio output sheet with all route choices', async () => {

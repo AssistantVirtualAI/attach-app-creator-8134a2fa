@@ -71,8 +71,8 @@ function ControlRow({ label, desc }: { label: string; desc: string }) {
 
 const EN = {
   eyebrow: 'Privacy',
-  title: 'How AVA Softphone uses your data',
-  intro: 'AVA Softphone is built around <strong>privacy-by-design</strong>. We only collect what is strictly required to deliver voice service, notify you about calls, transcribe and analyse conversations for your own workspace, and protect your account. All traffic is encrypted with TLS 1.2+ and stored in your workspace database with row-level security.',
+  title: 'How Lemtel uses your data',
+  intro: 'Lemtel is built around <strong>privacy-by-design</strong>. We only collect what is strictly required to deliver voice service, notify you about calls, transcribe and analyse conversations for your own workspace, and protect your account. All traffic is encrypted with TLS 1.2+ and stored in your workspace database with row-level security.',
   controlsTitle: '7. Your data controls',
   contact: 'We <strong>never</strong> sell your data and <strong>never</strong> share it with advertisers. Questions, exercising rights, or breach reports: <a href="mailto:privacy@avastatistic.ca" style="color:#0023e6">privacy@avastatistic.ca</a>.',
   fullPolicy: 'Full policy',
@@ -96,7 +96,7 @@ const EN = {
     ]},
     { title: '3. AI transcription & analysis', items: [
       { k: 'Collected', v: 'Transcript text, speaker turns (Agent/Caller), sentiment, summary, key topics, action items.' },
-      { k: 'Processing', v: 'Audio is sent to the AVA AI Gateway over TLS, processed transiently. Audio is NOT used to train any third-party model.' },
+      { k: 'Processing', v: 'Audio is sent to the Lemtel AI service over TLS and processed transiently. Audio is NOT used to train any third-party model.' },
       { k: 'Storage', v: 'Transcript + analysis stored in your workspace database, linked to the call record.' },
       { k: 'Purpose', v: 'Searchable history, coaching, sentiment trends, customer-experience scoring.' },
       { k: 'Retention', v: 'Same lifecycle as the parent call recording.' },
@@ -121,15 +121,15 @@ const EN = {
     { label: 'Export my data', desc: 'Download a JSON archive of your account, call history, and transcripts.' },
     { label: 'Delete my account', desc: 'Permanent removal of your account, sessions, push tokens, and personal data.' },
     { label: 'Revoke this device', desc: 'Sign out and remove the device push token from our servers.' },
-    { label: 'Disable AI analysis on my calls', desc: 'Stops AVA from transcribing or analyzing future calls tied to your extension.' },
+      { label: 'Disable AI analysis on my calls', desc: 'Stops Lemtel AI from transcribing or analyzing future calls tied to your extension.' },
     { label: 'Manage permissions', desc: 'Microphone, Notifications, Contacts, Background sync — toggle any time.' },
   ],
 };
 
 const FR = {
   eyebrow: 'Confidentialité',
-  title: "Comment AVA Softphone utilise vos données",
-  intro: "AVA Softphone est conçu selon le principe de <strong>confidentialité dès la conception</strong>. Nous ne collectons que ce qui est strictement nécessaire pour fournir le service vocal, vous notifier des appels, transcrire et analyser les conversations pour votre propre espace de travail, et protéger votre compte. Tout le trafic est chiffré en TLS 1.2+ et stocké dans la base de données de votre espace avec sécurité au niveau des lignes.",
+  title: "Comment Lemtel utilise vos données",
+  intro: "Lemtel est conçu selon le principe de <strong>confidentialité dès la conception</strong>. Nous ne collectons que ce qui est strictement nécessaire pour fournir le service vocal, vous notifier des appels, transcrire et analyser les conversations pour votre propre espace de travail, et protéger votre compte. Tout le trafic est chiffré en TLS 1.2+ et stocké dans la base de données de votre espace avec sécurité au niveau des lignes.",
   controlsTitle: '7. Vos contrôles de données',
   contact: "Nous ne vendons <strong>jamais</strong> vos données et ne les partageons <strong>jamais</strong> avec des annonceurs. Questions, exercice de vos droits ou signalement d'incident : <a href=\"mailto:privacy@avastatistic.ca\" style=\"color:#0023e6\">privacy@avastatistic.ca</a>.",
   fullPolicy: 'Politique complète',
@@ -153,7 +153,7 @@ const FR = {
     ]},
     { title: "3. Transcription et analyse IA", items: [
       { k: 'Collecté', v: "Texte de transcription, tours de parole (Agent/Appelant), sentiment, résumé, sujets clés, actions." },
-      { k: 'Traitement', v: "L'audio est envoyé à la passerelle AVA AI en TLS, traité de manière transitoire. L'audio n'est PAS utilisé pour entraîner un modèle tiers." },
+      { k: 'Traitement', v: "L'audio est envoyé au service Lemtel AI en TLS et traité de manière transitoire. L'audio n'est PAS utilisé pour entraîner un modèle tiers." },
       { k: 'Stockage', v: 'Transcription + analyse stockées dans votre espace, liées à l\'appel.' },
       { k: 'Finalité', v: 'Historique recherchable, coaching, tendances de sentiment, score client.' },
       { k: 'Conservation', v: "Même cycle de vie que l'enregistrement parent." },
@@ -178,7 +178,7 @@ const FR = {
     { label: 'Exporter mes données', desc: "Téléchargez une archive JSON de votre compte, historique d'appels et transcriptions." },
     { label: 'Supprimer mon compte', desc: 'Suppression permanente du compte, sessions, jetons push et données personnelles.' },
     { label: 'Révoquer cet appareil', desc: 'Déconnexion et retrait du jeton push de nos serveurs.' },
-    { label: "Désactiver l'analyse IA sur mes appels", desc: "Empêche AVA de transcrire ou analyser les futurs appels liés à votre extension." },
+    { label: "Désactiver l'analyse IA sur mes appels", desc: "Empêche Lemtel AI de transcrire ou analyser les futurs appels liés à votre extension." },
     { label: 'Gérer les permissions', desc: 'Microphone, notifications, contacts, sync arrière-plan — à tout moment.' },
   ],
 };

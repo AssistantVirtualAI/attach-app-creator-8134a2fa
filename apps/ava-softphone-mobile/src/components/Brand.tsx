@@ -1,12 +1,12 @@
 import React from 'react';
 import { colors, gradients } from '../lib/theme';
 
-/** AVA mark — uses the official AVA logo asset. */
+/** Official Lemtel mark shared by the mobile product surfaces. */
 export function LemtelMark({ size = 32 }: { size?: number }) {
   return (
     <img
-      src="/ava-logo.png"
-      alt="AVA"
+      src="/lemtel-icon.png"
+      alt="Lemtel"
       width={size}
       height={size}
       style={{
@@ -18,29 +18,19 @@ export function LemtelMark({ size = 32 }: { size?: number }) {
   );
 }
 
-/** AVA powered-by chip — features the AVA Statistics logo. */
-export function AvaBadge({ compact = false }: { compact?: boolean }) {
+/** A compact Lemtel product marker for dashboards and assistance surfaces. */
+export function LemtelBadge({ compact = false }: { compact?: boolean }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
       padding: compact ? '2px 8px' : '3px 10px',
       borderRadius: 999,
-      background: 'linear-gradient(110deg, rgba(122,76,255,0.16), rgba(35,214,255,0.22), rgba(122,76,255,0.16))',
+      background: 'linear-gradient(110deg, rgba(37,99,235,0.18), rgba(35,214,255,0.22), rgba(37,99,235,0.18))',
       border: `1px solid ${colors.borderAI}`,
       color: colors.avaCyan, fontSize: compact ? 9 : 9.5, fontWeight: 800,
-      letterSpacing: 1.4, textTransform: 'uppercase', whiteSpace: 'nowrap',
+      letterSpacing: 1.15, textTransform: 'uppercase', whiteSpace: 'nowrap',
     }}>
-      Powered by
-      <img
-        src="/ava-statistics-logo.png"
-        alt="AVA Statistics"
-        style={{
-          height: compact ? 14 : 16,
-          width: 'auto',
-          display: 'inline-block',
-          verticalAlign: 'middle',
-        }}
-      />
+      Lemtel secure communications
     </span>
   );
 }

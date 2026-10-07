@@ -19,7 +19,7 @@ const ROWS: Row[] = [
   { type: 'Name',              collected: true,  shared: false, optional: false, purpose: 'Caller display name',         retention: 'Account lifetime' },
   { type: 'Phone number',      collected: true,  shared: false, optional: false, purpose: 'SIP routing',                  retention: 'Account lifetime' },
   // Device & permissions
-  { type: 'Microphone audio',  collected: false, shared: false, optional: false, purpose: 'Live call only — not recorded by AVA', retention: 'Not stored' },
+  { type: 'Microphone audio',  collected: false, shared: false, optional: false, purpose: 'Live call only — not recorded by Lemtel', retention: 'Not stored' },
   { type: 'Contacts',          collected: false, shared: false, optional: true,  purpose: 'On-device dialer autocomplete',         retention: 'On device only' },
   { type: 'Device push token', collected: true,  shared: false, optional: false, purpose: 'Incoming-call & voicemail alerts',     retention: 'Until sign-out' },
   // Telephony
@@ -37,7 +37,7 @@ const PERMISSIONS = [
   { perm: 'Notifications',      why: 'Inbound call & voicemail alerts',       required: false, android: 'POST_NOTIFICATIONS',   ios: 'UNUserNotificationCenter' },
   { perm: 'Contacts',           why: 'Match caller name in dialer',           required: false, android: 'READ_CONTACTS',        ios: 'NSContactsUsageDescription' },
   { perm: 'Background refresh', why: 'Sync CDRs, queues, voicemail',          required: false, android: 'FOREGROUND_SERVICE',   ios: 'UIBackgroundModes (fetch)' },
-  { perm: 'Network',            why: 'Connect to your PBX and AVA backend',   required: true,  android: 'INTERNET',             ios: 'always' },
+  { perm: 'Network',            why: 'Connect to your PBX and Lemtel backend',   required: true,  android: 'INTERNET',             ios: 'always' },
 ];
 
 export default function DataSafetyScreen() {
@@ -49,7 +49,7 @@ export default function DataSafetyScreen() {
         <p style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.6, margin: 0 }}>
           This page mirrors the <strong>Data Safety</strong> form in Google Play and the
           <strong> Privacy Nutrition Label</strong> in App Store Connect. Data is encrypted in
-          transit (TLS 1.2+) and at rest. AVA Softphone does not sell data, does not share with
+          transit (TLS 1.2+) and at rest. Lemtel does not sell data, does not share with
           advertisers, and does not use your call content to train third-party AI.
         </p>
       </Card>
@@ -65,7 +65,7 @@ export default function DataSafetyScreen() {
         </div>
         <p style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 10, marginBottom: 0 }}>
           "Optional" = workspace admin or end-user can disable. "Shared" = sent to any party
-          outside your workspace; AVA shares <strong>none</strong> of these.
+          outside your workspace; Lemtel shares <strong>none</strong> of these.
         </p>
       </Card>
 
@@ -195,7 +195,7 @@ function RetentionControlsCard() {
         Your data — retention & controls
       </h3>
       <p style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 0, marginBottom: 12 }}>
-        Choose how long AVA keeps your data on this device, and request export or deletion at any time.
+        Choose how long Lemtel keeps your data on this device, and request export or deletion at any time.
       </p>
 
       {/* Retention sliders */}

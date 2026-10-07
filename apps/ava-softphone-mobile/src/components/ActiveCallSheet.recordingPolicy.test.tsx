@@ -105,7 +105,7 @@ describe('ActiveCallSheet — Phase 24A recording policy', () => {
   it('non-recording controls remain available', () => {
     for (const p of ['user_allowed', 'not_allowed', 'portal_managed']) {
       const { unmount } = draw(makeSp(false), p);
-      for (const l of ['Mute', 'Hold', 'Keypad', 'Transfer', 'Add', 'Park', 'AVA', 'Speaker']) expect(screen.getAllByText(l).length, `${p} ${l}`).toBeGreaterThan(0);
+      for (const l of ['Mute', 'Hold', 'Keypad', 'Transfer', 'Add', 'Park', 'Lemtel AI', 'Speaker']) expect(screen.getAllByText(l).length, `${p} ${l}`).toBeGreaterThan(0);
       unmount();
     }
   });

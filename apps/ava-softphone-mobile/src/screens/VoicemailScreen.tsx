@@ -306,7 +306,7 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
           <EmptyState
             icon={<VmIcon size={28} />}
             title={q ? 'No matching voicemails' : 'No voicemails'}
-            hint={q ? 'Try a different search term.' : 'When callers leave a message, AVA will transcribe and summarize it here.'}
+            hint={q ? 'Try a different search term.' : 'When callers leave a message, Lemtel AI will transcribe and summarize it here.'}
           />
         </div>
       </div>
@@ -383,7 +383,7 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
                 )}
 
                 <div style={{ marginTop: 10 }}>
-                  <AIPanel title="AVA summary" accent={colors.avaViolet}>
+                  <AIPanel title="Lemtel AI summary" accent={colors.avaViolet}>
                   <div style={{ fontSize: font.sm, color: colors.textIce, lineHeight: 1.5 }}>{analyses[v.id]?.summary || v.summary}</div>
                   {analyses[v.id]?.sentiment && (
                     <div style={{ marginTop: 6, fontSize: 11, color: colors.mutedSilver }}>Sentiment: <span style={{ color: colors.avaCyan }}>{analyses[v.id]!.sentiment}</span></div>

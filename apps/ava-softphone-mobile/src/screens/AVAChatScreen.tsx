@@ -47,7 +47,7 @@ export default function AVAChatScreen() {
       const reply = await mobileApi.chat(text, msgs.map((m) => ({ role: m.role, content: m.text })));
       setMsgs((m) => m.map((x) => x.id === placeholder.id ? { ...x, text: reply.answer || '…', pending: false } : x));
     } catch (e: any) {
-      setMsgs((m) => m.map((x) => x.id === placeholder.id ? { ...x, text: `${tx('Désolé', 'Sorry')} — ${e.message || tx('AVA est indisponible.', 'AVA is unavailable.')}`, pending: false } : x));
+      setMsgs((m) => m.map((x) => x.id === placeholder.id ? { ...x, text: `${tx('Désolé', 'Sorry')} — ${e.message || tx('Lemtel AI est indisponible.', 'Lemtel AI is unavailable.')}`, pending: false } : x));
     } finally {
       setBusy(false);
       setTimeout(() => taRef.current?.focus(), 50);
@@ -63,7 +63,7 @@ export default function AVAChatScreen() {
           display: 'grid', placeItems: 'center', fontSize: 18, color: '#fff', boxShadow: shadow.ai,
         }}>✦</div>
         <div>
-          <div style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce, letterSpacing: -0.3 }}>AVA</div>
+          <div style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce, letterSpacing: -0.3 }}>Lemtel AI</div>
           <div style={{ fontSize: font.xs, color: colors.mutedSilver }}>{tx('Votre assistant téléphonique IA · données PBX en direct', 'Your AI phone assistant · live PBX data')}</div>
         </div>
       </div>
@@ -73,7 +73,7 @@ export default function AVAChatScreen() {
         {msgs.length === 0 && (
           <div style={{ marginTop: 18 }}>
             <div style={{ fontSize: font.md, fontWeight: 700, color: colors.textIce, marginBottom: 8 }}>
-              {tx("Posez n'importe quelle question à AVA sur votre système téléphonique.", 'Ask AVA anything about your phone system.')}
+              {tx("Posez n'importe quelle question à Lemtel AI sur votre système téléphonique.", 'Ask Lemtel AI anything about your phone system.')}
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
               {SUGGESTIONS.map((s) => (
@@ -129,7 +129,7 @@ export default function AVAChatScreen() {
             ref={taRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={tx('Message AVA…', 'Message AVA…')}
+            placeholder={tx('Message Lemtel AI…', 'Message Lemtel AI…')}
             rows={1}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }

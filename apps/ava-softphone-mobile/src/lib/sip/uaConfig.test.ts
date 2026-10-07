@@ -79,7 +79,7 @@ describe('createSIPUA WSS configuration', () => {
     expect(o.connection_recovery_min_interval).toBe(10);
     expect(o.connection_recovery_max_interval).toBe(60);
     expect(o).not.toHaveProperty('ws_ping_pong'); // JsSIP 3.13 ignores this option
-    expect(o.user_agent).toMatch(/AVA Softphone/);
+    expect(o.user_agent).toMatch(/Lemtel Softphone/);
   });
 
   it('does not require WebRTC for the SIP/TLS transport', async () => {

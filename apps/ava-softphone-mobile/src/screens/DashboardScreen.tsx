@@ -4,7 +4,7 @@ import { Moon, Sun } from 'lucide-react';
 import { colors, font, gradients, radius } from '../lib/theme';
 import { mobileApi, DomainStats, MeResponse, StatsRange } from '../lib/mobileApi';
 import { Card, Chip, SectionTitle, Skeleton, StatusDot, AIPanel, GhostButton } from '../components/ui/Primitives';
-import { LemtelMark, AvaBadge, HeroGradient } from '../components/Brand';
+import { LemtelMark, LemtelBadge, HeroGradient } from '../components/Brand';
 import { useAutoSync } from '../hooks/useAutoSync';
 import { useTheme } from '../lib/ThemeContext';
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
@@ -50,7 +50,7 @@ function DashboardSafeFallback({ onNavigate, haptic, onRetry, onOpenProfile, err
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <LemtelMark size={42} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce }}>AVA Softphone</div>
+            <div style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce }}>Lemtel</div>
             <div style={{ fontSize: 10.5, color: colors.signalGold, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase' }}>
               {safeTranslate(t, 'tabs.home', 'Home')}
             </div>
@@ -73,7 +73,7 @@ function DashboardSafeFallback({ onNavigate, haptic, onRetry, onOpenProfile, err
           </div>
         )}
       </HeroGradient>
-      <SectionTitle eyebrow="AVA" title={tx('Actions rapides', 'Quick actions')} />
+      <SectionTitle eyebrow="Lemtel" title={tx('Actions rapides', 'Quick actions')} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <Card onPress={() => go('contacts')}><QuickTile icon="👤" label={safeTranslate(t, 'tabs.contacts', 'Contacts')} /></Card>
         <Card onPress={() => go('chats')}><QuickTile icon="💬" label={safeTranslate(t, 'tabs.chats', 'Chats')} /></Card>
@@ -141,10 +141,10 @@ function DashboardScreenInner({
           setAiSummary(summary);
           try { localStorage.setItem(AI_CACHE_KEY(sig), summary); } catch {}
         })
-        .catch((e) => setAiError(e?.message || 'AVA summary failed'))
+        .catch((e) => setAiError(e?.message || 'Lemtel AI summary failed'))
         .finally(() => setAiLoading(false));
     } catch (e: any) {
-      setAiError(e?.message || 'AVA summary failed');
+      setAiError(e?.message || 'Lemtel AI summary failed');
       setAiLoading(false);
     }
   }, [hasStats, s, range]);
@@ -169,8 +169,8 @@ function DashboardScreenInner({
           <LemtelMark size={42} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce, letterSpacing: -0.3 }}>AVA Softphone</span>
-              <AvaBadge />
+              <span style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce, letterSpacing: -0.3 }}>Lemtel</span>
+              <LemtelBadge />
             </div>
             <div style={{ fontSize: 10.5, color: colors.signalGold, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', marginTop: 2 }}>
               {t('header.callHistory')} · {RANGE_LABELS[range]}

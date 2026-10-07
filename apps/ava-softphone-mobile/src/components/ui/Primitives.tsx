@@ -209,9 +209,9 @@ export function GhostButton({
   );
 }
 
-/* ─── AVA insight panel ─────────────────────────────────────── */
+/* ─── Lemtel AI insight panel ───────────────────────────────── */
 export function AIPanel({
-  title = 'AVA Insight', children, accent = colors.avaViolet, right,
+  title = 'Lemtel AI insight', children, accent = colors.avaViolet, right,
 }: { title?: string; children: React.ReactNode; accent?: string; right?: React.ReactNode }) {
   return (
     <Card padded={false} style={{ marginBottom: 12 }}>

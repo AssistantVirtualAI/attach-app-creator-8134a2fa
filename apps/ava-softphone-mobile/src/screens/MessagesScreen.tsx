@@ -170,7 +170,7 @@ export default function MessagesScreen({ haptic }: { haptic: (s?: ImpactStyle) =
         </div>
       )}
       {threads && threads.length === 0 && (
-        <EmptyState icon="✉" title="Aucun message" hint="Les nouvelles conversations SMS apparaîtront ici. Utilisez les modèles AVA pour démarrer une discussion." />
+        <EmptyState icon="✉" title="Aucun message" hint="Les nouvelles conversations SMS apparaîtront ici. Utilisez les modèles Lemtel AI pour démarrer une discussion." />
       )}
       {filteredThreads?.map((t) => (
         <button key={t.id} onClick={() => { haptic(); setActive(t); }} style={{

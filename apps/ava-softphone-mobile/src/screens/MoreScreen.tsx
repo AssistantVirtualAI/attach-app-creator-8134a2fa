@@ -6,7 +6,7 @@ import { deleteLemtelDeviceContactsAndRevoke } from '../lib/lemtelPrivateContact
 import { LEGACY_CONTACTS_ENABLED, LEMTEL_PRIVATE_CONTACTS_UI_ENABLED } from '../lib/contactScope';
 import type { Creds } from '../lib/creds';
 import { Card, SectionTitle, SettingsRow } from '../components/ui/Primitives';
-import { LemtelMark, AvaBadge } from '../components/Brand';
+import { LemtelMark, LemtelBadge } from '../components/Brand';
 import VoicemailScreen from './VoicemailScreen';
 import MessagesScreen from './MessagesScreen';
 import ContactsScreen from './ContactsScreen';
@@ -58,10 +58,10 @@ export default function MoreScreen({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: font.md, fontWeight: 800, color: colors.textIce }}>{creds.displayName || creds.email}</span>
-              <AvaBadge compact />
+              <LemtelBadge compact />
             </div>
             <div style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 3, fontFamily: 'JetBrains Mono, monospace' }}>
-              Ext {creds.extension} · {creds.sipDomain || 'AVA'}
+              Ext {creds.extension} · {creds.sipDomain || 'Lemtel'}
             </div>
           </div>
         </div>
@@ -140,7 +140,7 @@ export default function MoreScreen({
 
 
       <div style={{ textAlign: 'center', marginTop: 18, fontSize: 10, color: colors.mutedSilver }}>
-        AVA Softphone · v1.0.0
+        Lemtel · v1.0.0
       </div>
       <div style={{ height: 80 }} />
     </div>

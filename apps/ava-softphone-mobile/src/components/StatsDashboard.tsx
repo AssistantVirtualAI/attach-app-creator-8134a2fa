@@ -26,7 +26,7 @@ const L = {
     unread: 'SMS non lus', vmNew: 'Msgrie nouv.', vmTotal: 'Msgrie tot.',
     recordings: 'Enregistrements', transcribed: 'transcrits', pending: 'en attente',
     today: "Aujourd'hui", week: 'Semaine', month: 'Mois',
-    summary: 'Résumé AVA',
+    summary: 'Résumé Lemtel AI',
   },
   en: {
     eyebrow: 'Dashboard', title: 'Overview',
@@ -34,7 +34,7 @@ const L = {
     unread: 'Unread SMS', vmNew: 'New voicemail', vmTotal: 'Total voicemail',
     recordings: 'Recordings', transcribed: 'transcribed', pending: 'pending',
     today: 'Today', week: 'Week', month: 'Month',
-    summary: 'AVA summary',
+    summary: 'Lemtel AI summary',
   },
 } as const;
 

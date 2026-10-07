@@ -25,8 +25,8 @@ export default function ContactsConsentSheet({ open, onClose }: Props) {
   const t = {
     title: tx('Accès à vos contacts', 'Access to your contacts'),
     intro: tx(
-      "Planiprêt / AVA Softphone souhaite accéder à vos contacts pour identifier vos appelants et les associer automatiquement à vos dossiers clients.",
-      'Planiprêt / AVA Softphone would like to access your contacts to identify incoming callers and automatically match them with your client files.'
+      "Lemtel souhaite accéder à vos contacts pour identifier vos appelants.",
+      'Lemtel would like to access your contacts to identify incoming callers.'
     ),
     header: tx('Ce que nous faisons avec vos contacts', 'What we do with your contacts'),
     u1: tx('Identifier les appelants entrants par nom', 'Identify incoming callers by name'),
@@ -38,8 +38,8 @@ export default function ContactsConsentSheet({ open, onClose }: Props) {
     allow: tx("Autoriser l'accès aux contacts", 'Allow access to contacts'),
     decline: tx('Ne pas autoriser', "Don't allow"),
     revoke: tx(
-      'Vous pouvez révoquer cet accès en tout temps dans Réglages → Planiprêt → Contacts, ou depuis « Plus → Supprimer mes contacts du serveur ».',
-      'You can revoke this access at any time in Settings → Planiprêt → Contacts, or from "More → Delete my contacts from server".'
+      'Vous pouvez révoquer cet accès en tout temps dans Réglages → Lemtel → Contacts, ou depuis « Plus → Supprimer mes contacts du serveur ».',
+      'You can revoke this access at any time in Settings → Lemtel → Contacts, or from "More → Delete my contacts from server".'
     ),
   };
 

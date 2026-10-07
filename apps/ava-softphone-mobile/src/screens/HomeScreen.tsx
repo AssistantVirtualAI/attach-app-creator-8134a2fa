@@ -3,7 +3,7 @@ import { ImpactStyle } from '@capacitor/haptics';
 import { colors, gradients, font, radius } from '../lib/theme';
 import { mobileApi, DashboardBrief, MeResponse } from '../lib/mobileApi';
 import { Card, Chip, StatusDot, SectionTitle, AIPanel, Skeleton, PrimaryButton, GhostButton } from '../components/ui/Primitives';
-import { LemtelMark, AvaBadge, HeroGradient } from '../components/Brand';
+import { LemtelMark, LemtelBadge, HeroGradient } from '../components/Brand';
 import type { Tab } from '../components/BottomTabs';
 import StatsDashboard from '../components/StatsDashboard';
 
@@ -28,7 +28,7 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce, letterSpacing: -0.3 }}>Lemtel</span>
-              <AvaBadge />
+              <LemtelBadge />
             </div>
             <div style={{ fontSize: 10.5, color: colors.signalGold, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', marginTop: 2 }}>
               AI Phone
@@ -55,7 +55,7 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         <QuickAction label="Appeler" icon="☎" tone="gold" onPress={() => { haptic(ImpactStyle.Medium); onNavigate('calls'); }} />
         <QuickAction label="Message" icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('messages'); }} />
-        <QuickAction label="Demander à AVA" icon="✦" tone="violet" onPress={() => { haptic(); onNavigate('ava'); }} />
+        <QuickAction label="Assistant Lemtel" icon="✦" tone="violet" onPress={() => { haptic(); onNavigate('ava'); }} />
         <QuickAction label="Accueil" icon="◉" tone="violet" onPress={() => { haptic(); onNavigate('home'); }} />
         <QuickAction label="Transfert" icon="↪" tone="gold" onPress={() => { haptic(); onNavigate('settings'); }} />
         <QuickAction label="Messagerie" icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('calls'); }} />
@@ -89,7 +89,7 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
       <ActivitySpark answered={data?.metrics?.answeredCalls ?? 0} missed={data?.metrics?.missedCalls ?? 0} />
 
       {/* Needs attention */}
-      <SectionTitle eyebrow="Priorisé par AVA" title="À traiter" />
+      <SectionTitle eyebrow="Priorisé par Lemtel AI" title="À traiter" />
       {!data && <Card><Skeleton w="80%" h={12} /><div style={{ height: 8 }} /><Skeleton w="50%" h={10} /></Card>}
       {data?.needsAttention?.map?.((n) => (
         <Card key={n.id} accent={n.accent === 'danger' ? 'gold' : (n.accent as any)} style={{ marginBottom: 10 }} onPress={() => haptic()}>
@@ -108,15 +108,15 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
       ))}
 
       {/* AI brief */}
-      <SectionTitle eyebrow="Résumé AVA" title="Ce qui a changé depuis votre dernière connexion" />
-      <AIPanel title="Résumé quotidien AVA" right={<GhostButton tone="cyan" style={{ padding: '6px 10px' }} onClick={() => onNavigate('ava')}>Ouvrir l'IA</GhostButton>}>
+      <SectionTitle eyebrow="Résumé Lemtel AI" title="Ce qui a changé depuis votre dernière connexion" />
+      <AIPanel title="Résumé quotidien Lemtel AI" right={<GhostButton tone="cyan" style={{ padding: '6px 10px' }} onClick={() => onNavigate('ava')}>Ouvrir l'IA</GhostButton>}>
         <p style={{ fontSize: font.base, lineHeight: 1.55, color: colors.textIce, margin: 0 }}>
           {data?.brief || "Génération du résumé du jour…"}
         </p>
         <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
           <Chip tone="gold">{data?.metrics?.actionItems ?? '·'} tâches</Chip>
           <Chip tone="cyan">{data?.metrics?.unreadSms ?? '·'} non lus</Chip>
-          <Chip tone="violet">Agents AVA en ligne</Chip>
+          <Chip tone="violet">Agents Lemtel AI en ligne</Chip>
         </div>
       </AIPanel>
 

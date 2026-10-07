@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { colors, font, radius, gradients } from '../lib/theme';
 import { mobileApi } from '../lib/mobileApi';
 import { Card, Chip, AIPanel, SectionTitle, PrimaryButton, GhostButton } from '../components/ui/Primitives';
-import { AvaBadge } from '../components/Brand';
+import { LemtelBadge } from '../components/Brand';
 import { useT } from '../lib/i18n';
 
 type Module = 'intelligence' | 'actions' | 'greetings' | 'queues' | 'agents';
@@ -22,8 +22,8 @@ export default function AIScreen() {
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: '14px 14px 20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.8, color: colors.avaViolet, textTransform: 'uppercase' }}>AVA AI</span>
-        <AvaBadge compact />
+        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.8, color: colors.avaViolet, textTransform: 'uppercase' }}>Lemtel AI</span>
+        <LemtelBadge compact />
       </div>
       <h1 style={{ fontSize: font.xxl, color: colors.textIce, margin: '0 0 6px', fontWeight: 800, letterSpacing: -0.3 }}>{tx('Espace IA', 'AI space')}</h1>
       <p style={{ fontSize: font.sm, color: colors.mutedSilver, margin: 0, lineHeight: 1.5 }}>
@@ -120,7 +120,7 @@ function Greetings() {
         color: colors.textIce, fontSize: font.base, resize: 'vertical', fontFamily: 'inherit', outline: 'none',
       }} />
       <PrimaryButton onClick={gen} disabled={busy} style={{ marginTop: 10, width: '100%' }}>
-        {busy ? tx('Génération…','Generating…') : tx('✨ Générer avec AVA','✨ Generate with AVA')}
+        {busy ? tx('Génération…','Generating…') : tx('✨ Générer avec Lemtel AI','✨ Generate with Lemtel AI')}
       </PrimaryButton>
       {out && (
         <div style={{ marginTop: 14, padding: 14, borderRadius: 12, background: colors.midnight2, border: `1px solid ${colors.borderAI}` }}>
@@ -141,7 +141,7 @@ function Queues() {
   const rows = [
     { q: tx('Ventes','Sales'),        wait: '42s',     sla: 88, rec: tx('Ajouter 1 agent 13:00–15:00 — abandon +12 %','Add 1 agent 1–3pm — abandonment +12%') },
     { q: tx('Support','Support'),       wait: '1m 18s',  sla: 71, rec: tx("Passer au routage 'plus longtemps inactif' — réduit l'attente d'environ 22 %", "Switch to 'longest idle' routing — reduces wait by ~22%") },
-    { q: tx('Hors heures','After hours'),   wait: '—',       sla: 0,  rec: tx('Activer un agent vocal AVA pour la capture de rappel','Enable an AVA voice agent for callback capture') },
+    { q: tx('Hors heures','After hours'),   wait: '—',       sla: 0,  rec: tx('Activer un agent vocal Lemtel AI pour la capture de rappel','Enable a Lemtel AI voice agent for callback capture') },
   ];
   return (
     <AIPanel title={tx('Recommandations de files','Queue recommendations')} accent={colors.success}>
@@ -161,7 +161,7 @@ function Queues() {
 function Agents() {
   const { tx } = useT();
   const agents = [
-    { name: tx('Réception AVA','AVA reception'),          voice: 'ElevenLabs · Rachel', assigned: ['+1 514 555 0100', tx('SVI → 0','IVR → 0')] },
+    { name: tx('Réception Lemtel','Lemtel reception'),          voice: 'ElevenLabs · Rachel', assigned: ['+1 514 555 0100', tx('SVI → 0','IVR → 0')] },
     { name: tx('Repli hors heures','After-hours fallback'),       voice: 'ElevenLabs · Adam',   assigned: [tx('Débordement de file > 60s','Queue overflow > 60s')] },
     { name: tx('Ligne espagnole','Spanish line'),         voice: 'ElevenLabs · Mateo',  assigned: ['+1 514 555 0144'] },
   ];

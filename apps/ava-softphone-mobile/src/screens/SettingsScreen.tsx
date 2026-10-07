@@ -3,7 +3,7 @@ import { colors, font, radius, gradients } from '../lib/theme';
 import type { Creds } from '../lib/creds';
 import { mobileApi, MeResponse } from '../lib/mobileApi';
 import { Card, Chip, SectionTitle, SettingsRow, StatusDot, AIPanel } from '../components/ui/Primitives';
-import { LemtelMark, AvaBadge } from '../components/Brand';
+import { LemtelMark, LemtelBadge } from '../components/Brand';
 import { checkAllPermissions, openAppSettings, type AllPermissions, type PermissionStatus } from '../lib/permissions';
 import { getAnnounceConsent, setAnnounceConsent } from '../lib/recordingConsent';
 import { useTheme } from '../lib/ThemeContext';
@@ -72,7 +72,10 @@ export default function SettingsScreen({
   const [claudeFallback, setClaudeFallback] = useState<boolean>(() => localStorage.getItem('ava.claudeFallback') !== 'off');
   const [lastTranscriber, setLastTranscriber] = useState<string>(() => localStorage.getItem('ava.lastTranscriber') || '—');
 
-  const [ringtone, setRingtone] = useState<string>(() => localStorage.getItem('ava.ringtone') || 'AVA Default');
+  const [ringtone, setRingtone] = useState<string>(() => {
+    const stored = localStorage.getItem('ava.ringtone');
+    return stored === 'AVA Default' ? 'Lemtel Default' : stored || 'Lemtel Default';
+  });
   const [audioOut, setAudioOut] = useState<AudioRoute | 'default'>(() => (localStorage.getItem('ava.audioOut') as AudioRoute) || 'default');
 
   // Audio quality / network prefs
@@ -201,7 +204,7 @@ export default function SettingsScreen({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: font.md, fontWeight: 800, color: colors.textIce }}>{me?.user.name || creds.displayName || creds.email}</span>
-              <AvaBadge compact />
+            <LemtelBadge compact />
             </div>
             <div style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 3, fontFamily: 'JetBrains Mono, monospace' }}>
               Ext {creds.extension} · {me?.client?.name ? `${me.client.name} · ` : ''}{me?.domain.sipDomain || me?.organization.name || creds.sipDomain || 'lemtel.tel'}
@@ -429,15 +432,15 @@ export default function SettingsScreen({
       {/* Support & about */}
       <SectionTitle eyebrow={t('settings.about')} title={t('settings.helpSupport')} />
       <Card padded={false}>
-        <SettingsRow label={t('settings.helpSupport')} icon="❓" onPress={() => window.open('mailto:support@lemtel.tel?subject=AVA%20Softphone%20support', '_blank')} />
-        <SettingsRow label={t('settings.about')} icon="ⓘ" value={`${t('settings.version')} 1.0.0`} onPress={() => alert('AVA Softphone v1.0.0\nPowered by Lemtel · AVA AI')} />
+        <SettingsRow label={t('settings.helpSupport')} icon="❓" onPress={() => window.open('mailto:support@lemtel.tel?subject=Lemtel%20support', '_blank')} />
+        <SettingsRow label={t('settings.about')} icon="ⓘ" value={`${t('settings.version')} 1.0.0`} onPress={() => alert('Lemtel v1.0.0\nLemtel Communications')} />
       </Card>
 
-      <AIPanel title="AVA" accent={colors.avaCyan}>
+      <AIPanel title="Lemtel AI" accent={colors.avaCyan}>
         <p style={{ fontSize: font.sm, color: colors.textIce, margin: 0, lineHeight: 1.55 }}>
           {lang === 'fr'
-            ? "Toutes les données téléphoniques sont limitées à l'organisation/domaine AVA authentifié. Les utilisateurs standard accèdent uniquement à leur extension; les admins gèrent ce que leur rôle permet."
-            : 'All telephony data is scoped by the authenticated AVA organization/domain. Standard users access only their own extension; domain admins manage what their role allows.'}
+            ? "Toutes les données téléphoniques sont limitées à l'organisation Lemtel authentifiée. Les utilisateurs standard accèdent uniquement à leur extension; les admins gèrent ce que leur rôle permet."
+            : 'All telephony data is scoped by the authenticated Lemtel organization. Standard users access only their own extension; domain admins manage what their role allows.'}
         </p>
       </AIPanel>
 
@@ -450,14 +453,14 @@ export default function SettingsScreen({
       </button>
 
       <div style={{ textAlign: 'center', marginTop: 18, fontSize: 10, color: colors.mutedSilver, letterSpacing: 0.4 }}>
-        AVA Softphone · Powered by AVA AI
+        Lemtel · Secure communications
       </div>
       <div style={{ height: 80 }} />
 
       {/* Bottom sheets — WebView-safe replacements for prompt/confirm */}
       {sheet === 'ringtone' && (
         <Sheet title={lang==='fr'?'Sonnerie':'Ringtone'} onClose={() => setSheet(null)}>
-          {['AVA Default','Classic','Pulse','Marimba','Silent'].map((r) => (
+          {['Lemtel Default','Classic','Pulse','Marimba','Silent'].map((r) => (
             <SheetItem key={r} active={ringtone===r} onPress={() => pickRingtoneChoice(r)} label={r} />
           ))}
         </Sheet>

@@ -2,6 +2,7 @@ import { BACKEND_URL, BACKEND_ANON_KEY } from '../lib/backendOrigin';
 import React, { useEffect, useState } from 'react';
 import type { Creds } from '../lib/creds';
 import { txStatic as tx } from '../lib/i18n';
+import { bootstrapLemtelMobileSession, LemtelSessionBootstrapError, type LemtelSessionBootstrap } from '../lib/lemtelSessionBootstrap';
 
 type Screen = 'login' | 'forgot' | 'first-password';
 type ForgotStep = 'form' | 'confirm' | 'sent';
@@ -37,7 +38,7 @@ const C = {
   textSub: 'rgba(232,238,251,0.62)',
   textDim: 'rgba(232,238,251,0.42)',
   gold: '#FFD700',
-  avaCyan: '#0BB5D6',
+  cyan: '#0BB5D6',
   green: '#22C55E',
   red: '#EF4444',
 };
@@ -55,10 +56,43 @@ class AuthError extends Error {
   constructor(f: AuthFailure) { super(f.message); this.step = f.step; this.code = f.code; this.detail = f.detail; }
 }
 
+type CompletedSession = Pick<PendingFirstPassword, 'accessToken' | 'refreshToken'> & { bootstrap: LemtelSessionBootstrap };
+
+async function loadAuthoritativeSession(accessToken: string, userId: string): Promise<LemtelSessionBootstrap> {
+  try {
+    return await bootstrapLemtelMobileSession(accessToken, userId);
+  } catch (cause) {
+    if (cause instanceof LemtelSessionBootstrapError) {
+      throw new AuthError({ step: 'edge-function', code: cause.code, message: cause.code, detail: `bootstrap_http_${cause.status}` });
+    }
+    throw new AuthError({ step: 'edge-function', code: 'bootstrap_failed', message: 'bootstrap_failed' });
+  }
+}
+
+function authenticatedCreds(pending: PendingFirstPassword, session: Pick<PendingFirstPassword, 'accessToken' | 'refreshToken'>, bootstrap: LemtelSessionBootstrap): Creds {
+  return {
+    portalUrl: BACKEND_URL,
+    backendOrigin: BACKEND_URL,
+    email: bootstrap.email,
+    extension: '',
+    userId: bootstrap.userId,
+    accessToken: session.accessToken,
+    refreshToken: session.refreshToken,
+    organizationId: bootstrap.organizationId,
+    organizationName: bootstrap.organizationName,
+    displayName: bootstrap.displayName,
+  };
+}
+
 const mapAuthError = (raw: string): string => {
   const m = (raw || '').toLowerCase();
   if (m.includes('invalid_credentials') || m.includes('invalid login')) return tx('Adresse e-mail ou mot de passe incorrect.', 'Incorrect email or password.');
   if (m.includes('first_password_change_required')) return tx('Choisissez votre mot de passe personnel pour continuer.', 'Choose your personal password to continue.');
+  if (m.includes('lemtel_account_not_active')) return tx('Ce compte Lemtel n’est pas encore activé. Communiquez avec votre administrateur.', 'This Lemtel account is not active yet. Contact your administrator.');
+  if (m.includes('bootstrap_invalid_response')) return tx('Les informations sécurisées du compte sont incomplètes. Réessayez dans un instant.', 'The secure account information is incomplete. Please try again shortly.');
+  if (m.includes('bootstrap_service_unavailable') || m.includes('password_update_failed') || m.includes('server_not_configured')) return tx('Le service sécurisé de mot de passe est temporairement indisponible. Réessayez dans un instant.', 'The secure password service is temporarily unavailable. Please try again shortly.');
+  if (m.includes('bootstrap_network_error')) return tx('Erreur réseau — vérifiez votre connexion puis réessayez.', 'Network error — check your connection and try again.');
+  if (m.includes('new_session_failed')) return tx('Votre mot de passe a été mis à jour. Reconnectez-vous avec votre nouveau mot de passe.', 'Your password was updated. Sign in again with your new password.');
   if (m.includes('rate') && m.includes('limit')) return tx('Trop de tentatives. Veuillez patienter avant de réessayer.', 'Too many attempts. Please wait before trying again.');
   if (m.includes('network') || m.includes('failed to fetch') || m.includes('load failed')) return tx('Erreur réseau — vérifiez votre connexion.', 'Network error — check your connection.');
   if (m.includes('session') || m.includes('jwt')) return tx('Votre session a expiré. Veuillez vous reconnecter.', 'Your session has expired. Please sign in again.');
@@ -90,16 +124,7 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
       accent={accent}
       pending={pendingFirstPassword}
       onCompleted={(renewed) => {
-        onAuthenticated({
-          portalUrl: BACKEND_URL,
-          backendOrigin: BACKEND_URL,
-          email: pendingFirstPassword.email,
-          extension: '',
-          userId: pendingFirstPassword.userId,
-          accessToken: renewed.accessToken,
-          refreshToken: renewed.refreshToken,
-          organizationId: pendingFirstPassword.organizationId,
-        });
+        onAuthenticated(authenticatedCreds(pendingFirstPassword, renewed, renewed.bootstrap));
       }}
     />;
   }
@@ -137,40 +162,19 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
     if (!data?.access_token) {
       throw new AuthError({ step: 'token', code: 'no_token', message: 'Auth succeeded but no access_token returned' });
     }
-    // Resolve only the active Lemtel membership. No extension, PBX domain or
-    // shared-product role is accepted during sign-in.
-    let organizationId: string | undefined;
-    try {
-      const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/lemtel_organization_memberships?user_id=eq.${data.user.id}&status=eq.active&select=organization_id&limit=1`,
-        { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${data.access_token}` } },
-      );
-      const rows = await r.json().catch(() => []);
-      organizationId = rows?.[0]?.organization_id || undefined;
-    } catch { /* non-fatal — the server bootstrap will retry later */ }
-
     const pending: PendingFirstPassword = {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
       userId: data.user.id,
       email: data?.user?.email || email.trim(),
-      organizationId,
     };
     if (data?.user?.app_metadata?.lemtel_onboarding_required === true) {
       setPendingFirstPassword(pending);
       setScreen('first-password');
       return;
     }
-    onAuthenticated({
-      portalUrl: BACKEND_URL,
-      backendOrigin: BACKEND_URL,
-      email: pending.email,
-      extension: '',
-      userId: pending.userId,
-      accessToken: pending.accessToken,
-      refreshToken: pending.refreshToken,
-      organizationId: pending.organizationId,
-    });
+    const bootstrap = await loadAuthoritativeSession(pending.accessToken, pending.userId);
+    onAuthenticated(authenticatedCreds(pending, pending, bootstrap));
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -243,16 +247,17 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
 }
 
 /* ====== Mandatory first-password screen ====== */
-function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: Accent; pending: PendingFirstPassword; onCompleted: (session: Pick<PendingFirstPassword, 'accessToken' | 'refreshToken'>) => void }) {
+function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: Accent; pending: PendingFirstPassword; onCompleted: (session: CompletedSession) => void }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<AuthFailure | null>(null);
   const valid = newPassword.length >= 12 && /[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword) && /\d/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword) && newPassword === confirmPassword;
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!valid || busy) return;
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setFailure(null);
     try {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/lemtel-complete-first-password`, {
         method: 'POST',
@@ -264,7 +269,13 @@ function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: A
       // receives a response. Recover the specific post-completion state rather
       // than showing a generic Edge Function error.
       const alreadyCompleted = response.status === 409 && body?.error === 'first_password_change_not_required';
-      if (!alreadyCompleted && (!response.ok || body?.ok !== true)) throw new Error(body?.error || 'password_change_failed');
+      if (!alreadyCompleted && (!response.ok || body?.ok !== true)) {
+        const code = response.status === 401 ? 'session_expired'
+          : response.status === 403 ? 'lemtel_account_not_active'
+            : response.status >= 500 ? 'bootstrap_service_unavailable'
+              : typeof body?.error === 'string' ? body.error : 'password_change_failed';
+        throw new AuthError({ step: 'edge-function', code, message: code, detail: `password_change_http_${response.status}` });
+      }
       // The server-side password update can revoke a temporary refresh token.
       // Obtain a fresh post-onboarding session using the password just chosen.
       const renewal = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -273,10 +284,15 @@ function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: A
         body: JSON.stringify({ email: pending.email, password: newPassword }),
       });
       const renewed = await renewal.json().catch(() => ({}));
-      if (!renewal.ok || !renewed?.access_token) throw new Error('new_session_failed');
-      onCompleted({ accessToken: renewed.access_token, refreshToken: renewed.refresh_token });
+      if (!renewal.ok || !renewed?.access_token) throw new AuthError({ step: 'token', code: 'new_session_failed', message: 'new_session_failed' });
+      const bootstrap = await loadAuthoritativeSession(renewed.access_token, pending.userId);
+      onCompleted({ accessToken: renewed.access_token, refreshToken: renewed.refresh_token, bootstrap });
     } catch (cause: any) {
-      setError(mapAuthError(cause?.message));
+      const nextFailure = cause instanceof AuthError
+        ? { step: cause.step, code: cause.code, message: cause.message, detail: cause.detail }
+        : { step: 'edge-function' as const, code: 'password_change_failed', message: 'password_change_failed' };
+      setFailure(nextFailure);
+      setError(mapAuthError(nextFailure.code));
     } finally { setBusy(false); }
   };
   return (
@@ -294,7 +310,7 @@ function FirstPasswordChangeScreen({ accent, pending, onCompleted }: { accent: A
             <Field label={tx('Nouveau mot de passe', 'New password')} type="password" value={newPassword} onChange={setNewPassword} placeholder="••••••••••••" autoFocus />
             <Field label={tx('Confirmer le mot de passe', 'Confirm password')} type="password" value={confirmPassword} onChange={setConfirmPassword} placeholder="••••••••••••" />
             <div style={{ color: C.textDim, fontSize: 11, lineHeight: 1.45 }}>{tx('Au moins 12 caractères avec une majuscule, une minuscule, un chiffre et un symbole.', 'At least 12 characters with uppercase, lowercase, number, and symbol.')}</div>
-            {error && <ErrorBanner>{error}</ErrorBanner>}
+            {error && <ErrorBanner failure={failure}>{error}</ErrorBanner>}
             <button type="submit" disabled={!valid || busy} className="lemtel-btn-primary" style={{ height: 50, borderRadius: 14, fontSize: 14, cursor: busy ? 'wait' : 'pointer' }}>
               {busy ? tx('Mise à jour…', 'Updating…') : tx('Continuer vers Lemtel', 'Continue to Lemtel')}
             </button>
@@ -519,7 +535,7 @@ function Brand() {
   return (
     <div style={{ textAlign: 'center', marginBottom: 24 }}>
       <div style={logoStyle} onClick={handleLogoTap}>
-        <img src="/ava-logo.png" alt="Lemtel" width={72} height={72} style={{ display: 'block', borderRadius: 16 }} />
+        <img src="/lemtel-icon.png" alt="Lemtel" width={72} height={72} style={{ display: 'block', borderRadius: 16 }} />
       </div>
       <div style={{ marginTop: 14, fontSize: 22, fontWeight: 800, color: C.textIce, letterSpacing: 0.2 }}>Lemtel</div>
       <div style={{ marginTop: 4, fontSize: 11, color: C.textSub, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: 600 }}>{tx("Téléphonie d'entreprise IA", 'AI business telephony')}</div>
@@ -544,7 +560,7 @@ function Footer() {
       fontSize: 11, color: C.textDim, letterSpacing: 0.4,
       position: 'relative', zIndex: 1,
     }}>
-      {tx('Conçu par', 'Crafted by')} <span style={{ color: C.gold, fontWeight: 600 }}>AVA Statistic · assistantvirtualai.com</span>
+      <span style={{ color: C.gold, fontWeight: 600 }}>{tx('Lemtel Communications', 'Lemtel Communications')}</span>
     </div>
   );
 }
@@ -707,7 +723,7 @@ const ghostBtn: React.CSSProperties = {
 
 const ghostLink: React.CSSProperties = {
   height: 30, border: 'none', background: 'transparent',
-  color: C.avaCyan, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+  color: C.cyan, fontSize: 12, fontWeight: 600, cursor: 'pointer',
   textDecoration: 'underline', textUnderlineOffset: 3,
 };
 

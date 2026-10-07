@@ -315,9 +315,9 @@ export default function ActiveCallSheet({
           border: `1px solid ${colors.borderAI}`,
           boxShadow: shadow.glass,
         }}>
-          <div style={{ fontSize: 10, color: colors.avaCyan, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>AVA Live Assist</div>
+          <div style={{ fontSize: 10, color: colors.avaCyan, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>Lemtel AI Live Assist</div>
           <div style={{ fontSize: 13, color: colors.textIce, lineHeight: 1.5 }}>
-            Listening… AVA will surface objections, suggest next steps and capture action items when the call ends.
+            Listening… Lemtel AI will surface objections, suggest next steps and capture action items when the call ends.
           </div>
         </div>
       )}
@@ -377,7 +377,7 @@ export default function ActiveCallSheet({
                 : tx('Enregistrement manuel non autorisé', 'Manual recording is not allowed')}
             </div>
           )}
-          <Ctrl label="AVA" icon="✦" tone="ai" active={aiOpen}
+          <Ctrl label="Lemtel AI" icon="✦" tone="ai" active={aiOpen}
             onClick={() => { haptic(); setAiOpen((v) => !v); }} />
         </div>
       )}

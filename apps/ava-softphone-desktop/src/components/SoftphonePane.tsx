@@ -12,6 +12,7 @@ import RecordingsList from './RecordingsList';
 // ProfileMenu is rendered globally in TitleBar — no longer duplicated here.
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { theme } from '../lib/theme';
+import LemtelLogo from './LemtelLogo';
 import DialerKeypad from './DialerKeypad';
 import SipRecoveryBanner from './SipRecoveryBanner';
 import { ava } from '../lib/avaApi';
@@ -55,6 +56,88 @@ const TAB_META: Record<Tab, { LucideIcon: React.ComponentType<{ size?: number | 
 };
 
 const { colors: c, glow } = theme;
+
+function WorkspaceRail({
+  activeTab,
+  onTabChange,
+  extension,
+  displayName,
+  sipStatus,
+}: {
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
+  extension: string;
+  displayName?: string;
+  sipStatus: string;
+}) {
+  const isReady = sipStatus === 'registered';
+  return (
+    <aside
+      className="lemtel-workspace-rail"
+      aria-label="Lemtel workspace navigation"
+      style={{
+        position: 'absolute', inset: 0, right: 'auto', zIndex: 5, width: 224,
+        padding: '22px 14px 16px', boxSizing: 'border-box',
+        display: 'flex', flexDirection: 'column',
+        background: 'linear-gradient(180deg, rgba(6,14,38,0.98) 0%, rgba(8,20,48,0.96) 100%)',
+        borderRight: '1px solid rgba(136,171,255,0.20)',
+        boxShadow: '16px 0 42px -34px rgba(0,0,0,0.92)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '2px 8px 22px' }}>
+        <LemtelLogo size="sm" glow />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: '#f4f7ff', fontSize: 15, fontWeight: 850, letterSpacing: -0.25 }}>Lemtel</div>
+          <div style={{ color: 'rgba(189,208,255,0.66)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.05, textTransform: 'uppercase' }}>Communications</div>
+        </div>
+      </div>
+
+      <div style={{ margin: '0 4px 16px', padding: '12px', borderRadius: 16, background: 'linear-gradient(145deg, rgba(59,103,255,0.20), rgba(19,41,94,0.28))', border: '1px solid rgba(122,162,255,0.22)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: isReady ? '#7ff3c3' : '#ffd37a', fontSize: 10.5, fontWeight: 800 }}>
+          <span className={isReady ? 'lemtel-status-orb is-ready' : 'lemtel-status-orb'} style={{ width: 7, height: 7, borderRadius: '50%', background: isReady ? '#22d39a' : '#ffb84a', boxShadow: `0 0 12px ${isReady ? '#22d39a' : '#ffb84a'}` }} />
+          {isReady ? 'Line ready' : 'Connecting line'}
+        </div>
+        <div style={{ marginTop: 8, color: '#eaf1ff', fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName || 'Lemtel member'}</div>
+        <div style={{ marginTop: 3, color: 'rgba(189,208,255,0.62)', fontSize: 10 }}>Extension {extension || '—'}</div>
+      </div>
+
+      <nav aria-label="Primary workspace" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {MAIN_TABS.map((item) => {
+          const active = activeTab === item;
+          const { LucideIcon, label } = TAB_META[item];
+          return (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onTabChange(item)}
+              aria-current={active ? 'page' : undefined}
+              className="lemtel-workspace-nav-item"
+              style={{
+                width: '100%', minHeight: 46, padding: '0 11px', borderRadius: 13,
+                display: 'flex', alignItems: 'center', gap: 11, textAlign: 'left',
+                background: active ? 'linear-gradient(100deg, rgba(55,97,255,0.50), rgba(34,212,253,0.16))' : 'transparent',
+                border: active ? '1px solid rgba(119,160,255,0.46)' : '1px solid transparent',
+                color: active ? '#f7faff' : 'rgba(211,225,255,0.76)',
+                boxShadow: active ? '0 12px 26px -18px rgba(35,96,255,0.95), inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
+                cursor: 'pointer', transition: 'background .18s ease, border-color .18s ease, transform .18s ease',
+              }}
+            >
+              <span style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', borderRadius: 9, background: active ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.045)' }}>
+                <LucideIcon size={17} strokeWidth={active ? 2.5 : 2} />
+              </span>
+              <span style={{ flex: 1, fontSize: 12, fontWeight: active ? 800 : 650 }}>{label}</span>
+              {active && <span aria-hidden style={{ width: 5, height: 5, borderRadius: '50%', background: '#7ee7ff', boxShadow: '0 0 10px #7ee7ff' }} />}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div style={{ marginTop: 'auto', padding: '15px 10px 2px', borderTop: '1px solid rgba(179,202,255,0.12)' }}>
+        <div style={{ color: 'rgba(189,208,255,0.56)', fontSize: 9.5, lineHeight: 1.45 }}>Private, intelligent communications.</div>
+      </div>
+    </aside>
+  );
+}
 
 
 export default function SoftphonePane({
@@ -161,6 +244,7 @@ export default function SoftphonePane({
 
   const compact = paneWidth < 440;
   const ultraCompact = paneWidth < 360;
+  const workspaceWide = paneWidth >= 940 && !hideTabs;
 
   // Dev-only a11y audit on every DOM mutation inside the pane.
   useEffect(() => {
@@ -387,18 +471,36 @@ export default function SoftphonePane({
 
       <audio ref={audioRef} autoPlay />
 
+      {workspaceWide && (
+        <WorkspaceRail
+          activeTab={tab}
+          onTabChange={(next) => { setTab(next); setShowAvaChat(false); }}
+          extension={creds.extension}
+          displayName={creds.displayName || creds.email}
+          sipStatus={sp.snap.status}
+        />
+      )}
+
       {/* HEADER */}
-      <div style={{
+      <div className="lemtel-workspace-header" style={{
         position: 'relative', zIndex: 1,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: ultraCompact ? 4 : compact ? 6 : 8,
-        padding: ultraCompact ? '5px 8px' : compact ? '6px 10px' : '8px 14px',
-        height: ultraCompact ? 42 : compact ? 46 : 54, boxSizing: 'border-box',
-        background: c.overlay04,
+        marginLeft: workspaceWide ? 224 : 0,
+        padding: ultraCompact ? '5px 8px' : compact ? '6px 10px' : workspaceWide ? '10px 28px' : '8px 14px',
+        height: ultraCompact ? 42 : compact ? 46 : workspaceWide ? 70 : 54, boxSizing: 'border-box',
+        background: workspaceWide ? 'linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.015))' : c.overlay04,
         backdropFilter: 'blur(18px) saturate(160%)',
         WebkitBackdropFilter: 'blur(18px) saturate(160%)',
         borderBottom: `1px solid ${c.overlay08}`,
       }}>
+
+        {workspaceWide && (
+          <div style={{ minWidth: 174 }}>
+            <div style={{ color: c.textDim, fontSize: 9.5, fontWeight: 850, letterSpacing: 1.1, textTransform: 'uppercase' }}>Lemtel workspace</div>
+            <div style={{ marginTop: 3, color: c.text, fontSize: 18, fontWeight: 850, letterSpacing: -0.45 }}>{TAB_META[tab].label}</div>
+          </div>
+        )}
 
         {/* CENTER: Extension + SIP dot + display name */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
@@ -519,7 +621,8 @@ export default function SoftphonePane({
       {/* CONTENT */}
       <div className="lemtel-scroll" style={{
         flex: 1, overflowY: 'auto', position: 'relative', zIndex: 1,
-        padding: ringing || inCall ? 0 : compact ? '12px 10px 10px' : '20px 16px 12px',
+        marginLeft: workspaceWide ? 224 : 0,
+        padding: ringing || inCall ? 0 : compact ? '12px 10px 10px' : workspaceWide ? '28px 38px 20px' : '20px 16px 12px',
         minWidth: 0,
       }}>
         {/* Incoming */}
@@ -735,7 +838,7 @@ export default function SoftphonePane({
       </div>
 
       {/* BOTTOM TABS */}
-      {!inCall && !ringing && !hideTabs && (
+      {!inCall && !ringing && !hideTabs && !workspaceWide && (
         <div style={{
           position: 'relative', zIndex: 1, flexShrink: 0,
           padding: compact ? '6px 6px 6px' : '8px 8px 8px',
@@ -862,6 +965,7 @@ export default function SoftphonePane({
       {/* Footer */}
       <div style={{
         position: 'relative', zIndex: 1, flexShrink: 0,
+        marginLeft: workspaceWide ? 224 : 0,
         padding: compact ? '8px 10px' : '12px 16px',
         textAlign: 'center',
         borderTop: `1px solid ${c.border}`,
@@ -909,6 +1013,14 @@ const Dialer = React.memo(function Dialer({
   return (
     <div style={{ animation: 'fadeIn .25s ease-out', padding: compact ? '2px 0 8px' : '4px 4px 8px', minWidth: 0 }}>
 
+      {!compact && (
+        <div className="lemtel-dialer-hero" style={{ maxWidth: 620, margin: '0 auto 22px', textAlign: 'center' }}>
+          <div style={{ color: c.primary, fontSize: 10, fontWeight: 850, letterSpacing: 1.35, textTransform: 'uppercase' }}>Direct calling</div>
+          <h2 style={{ margin: '7px 0 6px', color: c.text, fontSize: 26, letterSpacing: -0.8 }}>Start a conversation.</h2>
+          <p style={{ margin: 0, color: c.textDim, fontSize: 12.5, lineHeight: 1.55 }}>Dial a colleague, a customer, or use a saved speed dial. Your Lemtel line stays private in the background.</p>
+        </div>
+      )}
+
       {/* Bannière de statut SIP — uniquement en cas de problème */}
       {!sipOk && <div style={{
         margin: compact ? '4px auto 8px' : '6px auto 10px', maxWidth: 320, width: '100%',
@@ -924,12 +1036,13 @@ const Dialer = React.memo(function Dialer({
         margin: compact ? '4px auto 16px' : '4px auto 22px', maxWidth: 320,
         width: '100%', boxSizing: 'border-box',
         padding: compact ? '14px 12px' : '18px 20px', borderRadius: 18,
-        background: `linear-gradient(155deg, ${c.overlay06} 0%, ${c.overlay02} 100%)`,
-        border: `1px solid ${c.overlay08}`,
-        boxShadow: '0 8px 24px -16px rgba(0,35,230,0.35)',
+        background: `linear-gradient(155deg, ${c.overlay10} 0%, ${c.overlay02} 100%)`,
+        border: `1px solid ${c.borderStrong}`,
+        boxShadow: '0 18px 38px -24px rgba(0,35,230,0.48), inset 0 1px 0 rgba(255,255,255,0.14)',
         textAlign: 'center', minHeight: 64,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
       }}>
+        {!dial && <div style={{ color: c.textDim, fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, textTransform: 'uppercase' }}>Ready to call</div>}
         <div
           className="ava-display-num"
           style={{

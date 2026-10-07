@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { validateReleaseAssets } from './validate-release-assets.mjs';
 
-const version = '2.5.8';
+const version = '2.5.9';
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'desktop-release-'));
   const names = [
@@ -33,7 +33,7 @@ for (const [title, tamper, error] of [
   ['refuses a release with no arm64 macOS installer', ({ dir, names }) => unlinkSync(join(dir, names[2])), /two macOS DMGs/],
   ['refuses a tag/package version mismatch', ({ dir }) => {
     const path = join(dir, 'latest.yml');
-    writeFileSync(path, readFileSync(path, 'utf8').replace(`version: ${version}`, 'version: 2.5.9'));
+    writeFileSync(path, readFileSync(path, 'utf8').replace(`version: ${version}`, 'version: 2.5.10'));
   }, /version does not match the tag/],
 ]) {
   test(title, async () => {

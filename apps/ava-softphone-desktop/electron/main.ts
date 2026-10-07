@@ -14,21 +14,31 @@ import Store from 'electron-store';
 import path from 'path';
 import fs from 'fs';
 import { setupTray, updateTrayStatus } from './tray';
+import { resolveLemtelTestProfile } from './testProfile';
 
 // Auto-updater: download silently in background, install on quit
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
 const APP_NAME = 'Lemtel';
+
+app.setName(APP_NAME);
+
+// A packaged Electron app resolves its ordinary profile before React starts.
+// Honour an explicit test-only profile before creating electron-store so a
+// staging sign-in test cannot silently reopen a previous local session.
+const testProfile = resolveLemtelTestProfile();
+if (testProfile) app.setPath('userData', testProfile);
+
 const store = new Store();
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let updateReady = false;
 
-app.setName(APP_NAME);
-
 // ---------- Crash log persistence ----------
-const CRASH_LOG_PATH = path.join(app.getPath('userData'), 'crash.log');
+function crashLogPath() {
+  return path.join(app.getPath('userData'), 'crash.log');
+}
 function writeCrashLog(scope: string, payload: Record<string, unknown>) {
   const line = JSON.stringify({
     at: new Date().toISOString(),
@@ -36,7 +46,7 @@ function writeCrashLog(scope: string, payload: Record<string, unknown>) {
     ...payload,
   }) + '\n';
   try {
-    fs.appendFileSync(CRASH_LOG_PATH, line);
+    fs.appendFileSync(crashLogPath(), line);
   } catch (e) {
     console.error('[main] Failed to write crash log:', e);
   }
@@ -76,9 +86,10 @@ app.on('child-process-gone', (_event, details) => {
 ipcMain.handle('log-renderer-crash', (_e, payload: Record<string, unknown>) => {
   writeCrashLog('renderer', payload);
 });
-ipcMain.handle('get-crash-log-path', () => CRASH_LOG_PATH);
+ipcMain.handle('get-crash-log-path', () => crashLogPath());
 ipcMain.handle('read-crash-log', () => {
-  try { return fs.existsSync(CRASH_LOG_PATH) ? fs.readFileSync(CRASH_LOG_PATH, 'utf-8') : ''; }
+  const logPath = crashLogPath();
+  try { return fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf-8') : ''; }
   catch { return ''; }
 });
 

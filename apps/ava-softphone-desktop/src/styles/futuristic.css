@@ -798,3 +798,35 @@ html[data-ava-theme="dark"], html[data-ava-theme="midnight"] {
   --ava-overlay-12: rgba(255,255,255,0.12);
   --ava-overlay-18: rgba(255,255,255,0.18);
 }
+
+/* Desktop workspace rail — Lemtel's own focused call workspace, rather than
+   a generic mobile tab bar stretched to desktop width. */
+.lemtel-workspace-rail::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(260px 220px at 12% -4%, rgba(74, 112, 255, 0.30), transparent 72%),
+    radial-gradient(220px 220px at 95% 93%, rgba(33, 212, 253, 0.12), transparent 74%);
+}
+.lemtel-workspace-rail > * { position: relative; z-index: 1; }
+.lemtel-workspace-nav-item:hover:not([aria-current="page"]) {
+  background: rgba(138, 170, 255, 0.12) !important;
+  border-color: rgba(151, 184, 255, 0.22) !important;
+  color: #ffffff !important;
+  transform: translateX(2px);
+}
+@keyframes lemtelStatusBreath {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.72; transform: scale(1.18); }
+}
+.lemtel-status-orb.is-ready { animation: lemtelStatusBreath 1.8s ease-in-out infinite; }
+.lemtel-workspace-header { box-shadow: inset 0 -1px 0 rgba(255,255,255,0.04); }
+.lemtel-dialer-hero { animation: avaFadeUp 220ms cubic-bezier(.2,.7,.2,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lemtel-status-orb.is-ready,
+  .lemtel-dialer-hero { animation: none !important; }
+  .lemtel-workspace-nav-item:hover:not([aria-current="page"]) { transform: none; }
+}

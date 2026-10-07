@@ -18,13 +18,7 @@ import os from 'node:os';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const APP_NAME = 'Lemtel';
-
-function userDataPath() {
-  const plat = os.platform();
-  if (plat === 'darwin') return join(os.homedir(), 'Library', 'Application Support', APP_NAME);
-  if (plat === 'win32') return join(process.env.APPDATA || '', APP_NAME);
-  return join(os.homedir(), '.config', APP_NAME);
-}
+const SMOKE_PROFILE = join(os.tmpdir(), `lemtel-smoke-${process.pid}`);
 
 function findBinary() {
   const out = join(ROOT, 'electron-release');
@@ -43,7 +37,7 @@ if (!bin) {
 }
 
 console.log('[smoke] launching', bin);
-const proc = spawn(bin, ['--smoke-test=call-failure'], {
+const proc = spawn(bin, ['--smoke-test=call-failure', `--lemtel-test-profile=${SMOKE_PROFILE}`], {
   env: { ...process.env, LEMTEL_SMOKE: '1', LEMTEL_SMOKE_NUMBER: '0000000' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -72,7 +66,7 @@ const timer = setTimeout(() => {
 
 proc.on('exit', (code) => {
   clearTimeout(timer);
-  const crashLog = join(userDataPath(), 'crash.log');
+  const crashLog = join(SMOKE_PROFILE, 'crash.log');
   const hasCrashFile = existsSync(crashLog);
   const crashSize = hasCrashFile ? statSync(crashLog).size : 0;
   const tail = hasCrashFile ? readFileSync(crashLog, 'utf-8').trim().split('\n').slice(-5).join('\n') : '(no crash log)';

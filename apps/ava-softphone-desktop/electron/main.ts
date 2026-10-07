@@ -172,6 +172,24 @@ function createWindow() {
     skipTaskbar: false,
   });
 
+  const revealWindow = (trigger: string) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    console.info(`[main] window revealed via ${trigger}`);
+  };
+
+  // A renderer failure must never leave the application alive only in the
+  // menu bar. Surface the window and retain a local diagnostic instead.
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame) return;
+    writeCrashLog('did-fail-load', { errorCode, errorDescription, validatedURL });
+    revealWindow('did-fail-load');
+  });
+
+  mainWindow.webContents.once('did-finish-load', () => revealWindow('did-finish-load'));
+
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -179,7 +197,15 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
+  mainWindow.once('ready-to-show', () => revealWindow('ready-to-show'));
+
+  // On macOS a packaged renderer can occasionally miss ready-to-show after a
+  // profile or GPU recovery. Keep the app discoverable and record that state.
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isVisible()) return;
+    writeCrashLog('window-show-timeout', { url: mainWindow.webContents.getURL() });
+    revealWindow('window-show-timeout');
+  }, 5000);
 
   mainWindow.on('close', (event) => {
     if (!isQuitting) {

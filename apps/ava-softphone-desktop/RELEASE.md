@@ -1,6 +1,6 @@
 # Lemtel Desktop — validation et publication (phase 29D)
 
-**État : préparation uniquement.** Le workflow `.github/workflows/release-desktop.yml` valide les PR Desktop, mais ne construit et ne publie les installateurs qu'après la création d'un tag `vX.Y.Z` pointant sur un commit déjà fusionné dans la branche par défaut `Planipret`. Il ne publie rien lors d'une PR. Cette procédure ne modifie ni FusionPBX, ni Planiprêt, ni les applications mobiles.
+**État : préparation uniquement.** Le workflow `.github/workflows/release-desktop.yml` valide les PR Desktop, mais ne construit et ne publie les installateurs qu'après la création d'un tag `vX.Y.Z` pointant sur un commit déjà fusionné dans `lemtel/integration`. Il ne publie rien lors d'une PR. Cette procédure ne modifie ni FusionPBX, ni Planiprêt, ni les applications mobiles.
 
 ## Portes préalables
 
@@ -24,9 +24,9 @@ Une PR modifiant `apps/ava-softphone-desktop`, le contrat d'enregistrement parta
 
 ## Séquence opérateur après validation
 
-1. Faire correspondre `apps/ava-softphone-desktop/package.json` (et son lockfile si nécessaire) à la nouvelle version approuvée, puis fusionner le commit dans `Planipret` sans modifier `apps/planipret-mobile` ou les routes PBX.
+1. Faire correspondre `apps/ava-softphone-desktop/package.json` (et son lockfile si nécessaire) à la nouvelle version approuvée, puis fusionner le commit dans `lemtel/integration`, sans modifier Planiprêt ni les routes PBX.
 2. Vérifier que la suite Desktop et le contrat serveur passent dans la PR, que les secrets sont en place et que les certificats sont valides.
-3. Créer et pousser un **nouveau** tag `vX.Y.Z` sur ce commit fusionné. Le job de release vérifiera lui-même la version du paquet et l'appartenance à la branche par défaut. Ne pas réutiliser `v2.5.7`.
+3. Créer et pousser un **nouveau** tag `vX.Y.Z` sur ce commit fusionné. Le job de release vérifiera lui-même la version du paquet et l'appartenance à `lemtel/integration`. Ne pas réutiliser `v2.5.7`.
 4. Vérifier dans la release GitHub les `.exe`, `.dmg`, `.zip`, `.blockmap`, `latest.yml` et `latest-mac.yml` ainsi que les résultats des signatures/notarisation; ne jamais lancer de release incomplète ou non signée.
 5. Installer l'ancienne version sur de vrais postes Windows et macOS, laisser l'app vérifier la mise à jour, contrôler le téléchargement, le bouton de redémarrage, la nouvelle version installée, les appels et la lecture d'enregistrement du bon poste. Éprouver aussi un refus d'accès sur un autre poste et un redémarrage/rollback opérationnel. Consigner les retours des testeurs avant diffusion élargie.
 

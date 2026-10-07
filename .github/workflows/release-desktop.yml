@@ -26,9 +26,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin Planipret
+          git fetch --no-tags origin lemtel/integration
           git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD || {
-            echo 'The Desktop release must be merged into the default branch first'; exit 1;
+            echo 'The Desktop release must be merged into lemtel/integration first'; exit 1;
           }
           VERSION="$(node -p 'require("./apps/ava-softphone-desktop/package.json").version')"
           test "$GITHUB_REF_NAME" = "v$VERSION" || {

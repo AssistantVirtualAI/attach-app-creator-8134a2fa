@@ -16,13 +16,19 @@ describe('Lemtel Desktop bootstrap boundary', () => {
     expect(hook).not.toMatch(/WebSocket|setInterval|console\./);
   });
 
-  it('renders a truthful provision-pending workspace and never mounts SIP on the current contract', () => {
+  it('renders the actual read-only workspace and never mounts SIP on the current contract', () => {
     const app = rd('App.tsx');
+    const workspace = rd('components/DesktopReadOnlyWorkspace.tsx');
     expect(app).toContain("bootstrap.status === 'not_provisioned'");
-    expect(app).toContain('DesktopProvisioningWorkspace');
+    expect(app).toContain('DesktopReadOnlyWorkspace');
     expect(app).not.toContain('useLemtelDesktopClientConfig');
     expect(app).not.toContain('<SipKeepAlive');
     expect(app).not.toContain('softphone-credentials');
+    expect(workspace).toContain('data-testid="lemtel-desktop-readonly-workspace"');
+    expect(workspace).toContain('className="desktop-readonly-call" disabled');
+    expect(workspace).toContain('readOnlyWorkspaceExplanation');
+    expect(workspace).not.toContain('useSoftphone');
+    expect(workspace).not.toContain('hydrateSoftphoneCredentials');
     expect(app).not.toContain('desktopUnavailable');
     expect(rd('lib/i18n.ts')).not.toContain('Desktop access is unavailable');
     expect(rd('lib/i18n.ts')).not.toContain('L’accès Desktop est indisponible');

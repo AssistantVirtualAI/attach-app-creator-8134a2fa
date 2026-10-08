@@ -354,7 +354,7 @@ export default function OrgChatView() {
   const dmNameFor = (ch: Channel) => {
     if (!me || !isDmChannel(ch) || !ch.members) return ch.name;
     const other = ch.members.find((id) => id !== me.id);
-    return members.find((m) => m.user_id === other)?.display_name || 'Direct message';
+    return members.find((m) => m.user_id === other)?.display_name || t('orgchat.directMessage');
   };
 
   const visibleChannels = channels.filter((c) => !isDmChannel(c) && !((c.members?.length ?? 0) > 2 && c.channel_type === 'private'));
@@ -418,11 +418,11 @@ export default function OrgChatView() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(224,168,0,0.15)', border: '1px solid rgba(224,168,0,0.30)', color: c.warning, fontSize: 13 }}>💬</div>
               <div>
-                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.8, color: c.warning, textTransform: 'uppercase' }}>Team Chat</div>
-                <div style={{ fontSize: 10, color: c.textSub, marginTop: 1 }}>{channels.length} channels</div>
+                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.8, color: c.warning, textTransform: 'uppercase' }}>{t('orgchat.teamTitle')}</div>
+                <div style={{ fontSize: 10, color: c.textSub, marginTop: 1 }}>{channels.length} {t('orgchat.channels').toLowerCase()}</div>
               </div>
             </div>
-            <button onClick={() => setShowGroup(true)} title="New group" style={{
+            <button onClick={() => setShowGroup(true)} title={t('orgchat.newGroup')} aria-label={t('orgchat.newGroup')} style={{
               background: 'linear-gradient(135deg, rgba(0,35,230,0.30), rgba(122,76,255,0.30))',
               border: '1px solid rgba(0,35,230,0.45)',
               color: '#8CB4FF', fontSize: 14, width: 26, height: 26, borderRadius: 8,
@@ -441,7 +441,7 @@ export default function OrgChatView() {
           {groupChannels.length > 0 && (
             <>
               <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: c.warning, textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ flex: 1 }}>Groups</span>
+                <span style={{ flex: 1 }}>{t('orgchat.groups')}</span>
                 <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{groupChannels.length}</span>
               </div>
               {groupChannels.map((ch) => renderChannelRow(ch, ch.name, '👥'))}
@@ -452,7 +452,7 @@ export default function OrgChatView() {
           {dmChannels.length > 0 && (
             <>
               <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: c.warning, textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ flex: 1 }}>Direct</span>
+                <span style={{ flex: 1 }}>{t('orgchat.direct')}</span>
                 <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{dmChannels.length}</span>
               </div>
               {dmChannels.map((ch) => renderChannelRow(ch, dmNameFor(ch), '@'))}
@@ -461,10 +461,10 @@ export default function OrgChatView() {
 
           {/* Team members */}
           <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: c.warning, textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ flex: 1 }}>Team</span>
+            <span style={{ flex: 1 }}>{t('orgchat.team')}</span>
             <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{members.length}</span>
           </div>
-          {members.length === 0 && <div style={{ fontSize: 11, color: c.mutedSilver, padding: '4px 6px' }}>No teammates yet.</div>}
+          {members.length === 0 && <div style={{ fontSize: 11, color: c.mutedSilver, padding: '4px 6px' }}>{t('orgchat.noTeammates')}</div>}
           {members.filter((m) => m.user_id !== me?.id).map((m) => {
             const color = STATUS_COLOR[m.status] || STATUS_COLOR.offline;
             return (
@@ -511,15 +511,15 @@ export default function OrgChatView() {
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {headerLabel || <span style={{ color: c.textDim }}>Select a channel</span>}
+              {headerLabel || <span style={{ color: c.textDim }}>{t('orgchat.selectChannel')}</span>}
             </div>
             {activeChannel && (
               <div style={{ fontSize: 10, color: c.textDim, marginTop: 2 }}>
                 {isActiveDm && otherDmMember ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLOR[otherDmMember.status] || STATUS_COLOR.offline, display: 'inline-block' }} />
-                    {otherDmMember.status === 'on_call' ? 'On a call' : otherDmMember.status.charAt(0).toUpperCase() + otherDmMember.status.slice(1)}
-                    {otherDmMember.extension && <span style={{ marginLeft: 6, fontFamily: 'monospace' }}>Ext {otherDmMember.extension}</span>}
+                    {otherDmMember.status === 'on_call' ? t('contacts.onCall') : otherDmMember.status.charAt(0).toUpperCase() + otherDmMember.status.slice(1)}
+                    {otherDmMember.extension && <span style={{ marginLeft: 6, fontFamily: 'monospace' }}>{t('workspace.extension')} {otherDmMember.extension}</span>}
                   </span>
                 ) : isActiveGroup ? (
                   <span>{(activeChannel.members?.length ?? 0)} members</span>
@@ -541,11 +541,12 @@ export default function OrgChatView() {
               border: '1px solid rgba(34,211,154,0.30)',
               background: 'rgba(34,211,154,0.12)', color: c.success,
               cursor: 'pointer', fontSize: 11.5, fontWeight: 700, flexShrink: 0,
-            }}>📞 {isActiveGroup ? 'Call group' : 'Call'}</button>
+            }}>📞 {isActiveGroup ? t('orgchat.callGroup') : t('orgchat.call')}</button>
           )}
           {/* Search */}
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search…"
+            placeholder={t('orgchat.searchPlaceholder')}
+            aria-label={t('orgchat.searchPlaceholder')}
             style={{
               padding: '5px 10px', borderRadius: 8,
               border: `1px solid ${c.overlay08}`,
@@ -562,7 +563,7 @@ export default function OrgChatView() {
         }}>
           {filtered.length === 0 && (
             <div style={{ color: c.textDim, fontSize: 12, textAlign: 'center', marginTop: 48 }}>
-              {messages.length === 0 ? '👋 Say hi to your team!' : 'No messages match your search.'}
+              {messages.length === 0 ? `👋 ${t('orgchat.sayHi')}` : t('orgchat.noMatches')}
             </div>
           )}
           {filtered.map((m) => (
@@ -578,7 +579,7 @@ export default function OrgChatView() {
             <span style={{ display: 'flex', gap: 3 }}>
               {[0,1,2].map((i) => <span key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: c.textDim, display: 'inline-block', animation: `typing-dot 1.2s ease-in-out ${i * 0.2}s infinite` }} />)}
             </span>
-            <span>{typingNames.join(', ')} {typingNames.length === 1 ? 'is' : 'are'} typing…</span>
+            <span>{typingNames.join(', ')} {typingNames.length === 1 ? t('orgchat.typingSingle') : t('orgchat.typingPlural')}</span>
           </div>
         )}
 
@@ -590,7 +591,7 @@ export default function OrgChatView() {
           backdropFilter: 'blur(12px)',
           display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0,
         }}>
-          <button onClick={() => fileRef.current?.click()} disabled={!activeId} title="Attach file" style={{
+          <button onClick={() => fileRef.current?.click()} disabled={!activeId} title={t('orgchat.attach')} aria-label={t('orgchat.attach')} style={{
             width: 36, height: 36, borderRadius: 10, flexShrink: 0,
             border: `1px solid ${c.overlay10}`,
             background: c.overlay04,
@@ -604,7 +605,7 @@ export default function OrgChatView() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) { uploadFile(f); e.target.value = ''; } }} />
           <input value={input} onChange={(e) => handleTyping(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={activeId ? `Message ${headerLabel || 'channel'}…` : 'Sélectionnez un canal pour commencer'}
+            placeholder={activeId ? `${t('orgchat.messagePlaceholder')}` : t('orgchat.selectChannel')}
             disabled={!activeId}
             style={{
               flex: 1, padding: '10px 16px', borderRadius: 12,
@@ -617,7 +618,7 @@ export default function OrgChatView() {
             onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(0,35,230,0.50)'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0,35,230,0.15), inset 0 1px 3px rgba(0,0,0,0.20)'; }}
             onBlur={(e) => { e.currentTarget.style.borderColor = c.overlay10; e.currentTarget.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.20)'; }}
           />
-          <button onClick={send} disabled={!input.trim() || !activeId} title="Send (Enter)" style={{
+          <button onClick={send} disabled={!input.trim() || !activeId} title={`${t('orgchat.send')} (Enter)`} aria-label={t('orgchat.send')} style={{
             width: 36, height: 36, borderRadius: 10, flexShrink: 0,
             border: 'none', cursor: input.trim() && activeId ? 'pointer' : 'not-allowed',
             background: input.trim() && activeId
@@ -645,20 +646,21 @@ export default function OrgChatView() {
 }
 
 function NewGroupModal({ members, onClose, onCreate }: { members: Member[]; onClose: () => void; onCreate: (name: string, ids: string[]) => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 50, display: 'grid', placeItems: 'center' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: 420, maxHeight: '85vh', display: 'flex', flexDirection: 'column', background: c.bgCard, border: `1px solid ${c.border}`, borderRadius: 14, padding: 20 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: c.textIce, marginBottom: 12 }}>New group chat</div>
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name" style={{
+        <div style={{ fontSize: 16, fontWeight: 700, color: c.textIce, marginBottom: 12 }}>{t('orgchat.newGroupTitle')}</div>
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t('orgchat.groupName')} aria-label={t('orgchat.groupName')} style={{
           width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8,
           background: c.deepPanel, border: `1px solid ${c.border}`, color: c.textIce, fontSize: 13, outline: 'none', marginBottom: 12,
         }} />
-        <div style={{ fontSize: 10, fontWeight: 700, color: c.mutedSilver, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Members ({selected.size})</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: c.mutedSilver, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{t('orgchat.members')} ({selected.size})</div>
         <div style={{ flex: 1, overflowY: 'auto', border: `1px solid ${c.border}`, borderRadius: 8 }}>
-          {members.length === 0 && <div style={{ padding: 12, color: c.mutedSilver, fontSize: 12 }}>No teammates available.</div>}
+          {members.length === 0 && <div style={{ padding: 12, color: c.mutedSilver, fontSize: 12 }}>{t('orgchat.noMembers')}</div>}
           {members.map((m) => (
             <label key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: `1px solid ${c.border}`, fontSize: 12, color: c.textIce, cursor: 'pointer' }}>
               <input type="checkbox" checked={selected.has(m.user_id)} onChange={() => toggle(m.user_id)} />
@@ -668,12 +670,12 @@ function NewGroupModal({ members, onClose, onCreate }: { members: Member[]; onCl
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button onClick={onClose} style={{ padding: '8px 14px', borderRadius: 8, background: 'transparent', border: `1px solid ${c.border}`, color: c.mutedSilver, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={onClose} style={{ padding: '8px 14px', borderRadius: 8, background: 'transparent', border: `1px solid ${c.border}`, color: c.mutedSilver, fontSize: 12, cursor: 'pointer' }}>{t('common.cancel')}</button>
           <button onClick={() => onCreate(name, Array.from(selected))} disabled={!name.trim() || selected.size === 0} style={{
             padding: '8px 16px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, color: c.onAccent, cursor: 'pointer',
             background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
             opacity: !name.trim() || selected.size === 0 ? 0.5 : 1,
-          }}>Create</button>
+          }}>{t('orgchat.create')}</button>
         </div>
       </div>
     </div>
@@ -684,6 +686,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
   m: Message; meId?: string; onReact: (e: string) => void; emojiOpen: boolean; onToggleEmoji: () => void;
   getSigned: (path: string) => Promise<string>;
 }) {
+  const { t, lang } = useTranslation();
   const [urls, setUrls] = useState<Record<string, string>>({});
   useEffect(() => {
     (m.attachments ?? []).forEach(async (a: any) => {
@@ -693,7 +696,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
   }, [m.id]);
 
   if (m.message_type === 'deleted') return (
-    <div style={{ fontSize: 11, fontStyle: 'italic', color: c.textDim, marginBottom: 10, paddingLeft: 42 }}>— message deleted</div>
+    <div style={{ fontSize: 11, fontStyle: 'italic', color: c.textDim, marginBottom: 10, paddingLeft: 42 }}>— {t('orgchat.messageDeleted')}</div>
   );
 
   const isMine = m.sender_id === meId;
@@ -706,11 +709,11 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
   const diffH = Math.floor(diffMs / 3600000);
   const isToday = msgDate.toDateString() === now.toDateString();
   const timeStr = isToday
-    ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const relTime = diffMin < 1 ? 'just now'
-    : diffMin < 60 ? `${diffMin}m ago`
-    : diffH < 24 ? `${diffH}h ago`
+    ? msgDate.toLocaleTimeString(lang === 'fr' ? 'fr-CA' : 'en-CA', { hour: '2-digit', minute: '2-digit' })
+    : msgDate.toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA', { month: 'short', day: 'numeric' }) + ' ' + msgDate.toLocaleTimeString(lang === 'fr' ? 'fr-CA' : 'en-CA', { hour: '2-digit', minute: '2-digit' });
+  const relTime = diffMin < 1 ? t('orgchat.justNow')
+    : diffMin < 60 ? `${diffMin} ${t('orgchat.minutesAgo')}`
+    : diffH < 24 ? `${diffH} ${t('orgchat.hoursAgo')}`
     : timeStr;
 
   return (
@@ -736,8 +739,8 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
         {/* Sender name + time */}
         {!isMine && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginBottom: 3 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: c.text }}>{m.sender_name ?? 'User'}</span>
-            <span style={{ fontSize: 10, color: c.textDim }} title={timeStr}>{relTime}{m.edited_at ? ' · edited' : ''}</span>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: c.text }}>{m.sender_name ?? t('orgchat.user')}</span>
+            <span style={{ fontSize: 10, color: c.textDim }} title={timeStr}>{relTime}{m.edited_at ? ` · ${t('orgchat.edited')}` : ''}</span>
           </div>
         )}
 
@@ -763,7 +766,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
 
         {/* Time for own messages */}
         {isMine && (
-          <span style={{ fontSize: 9.5, color: c.textDim, marginTop: 3 }} title={timeStr}>{relTime}{m.edited_at ? ' · edited' : ''}</span>
+          <span style={{ fontSize: 9.5, color: c.textDim, marginTop: 3 }} title={timeStr}>{relTime}{m.edited_at ? ` · ${t('orgchat.edited')}` : ''}</span>
         )}
 
         {/* Attachments */}
@@ -806,7 +809,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
       </div>
 
       {/* React button on hover */}
-      <button onClick={onToggleEmoji} title="React" style={{
+      <button onClick={onToggleEmoji} title={t('orgchat.react')} aria-label={t('orgchat.react')} style={{
         background: 'transparent', border: 'none', color: c.textDim,
         cursor: 'pointer', fontSize: 13, alignSelf: 'center', opacity: 0.6,
         padding: 2,

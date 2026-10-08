@@ -3,6 +3,7 @@ import { supabase, SB_URL, SB_KEY } from '@/lib/supabaseClient';
 import { audit } from '@/lib/audit';
 import SkeletonRows from './ui/SkeletonRows';
 import { theme } from '../lib/theme';
+import { useTranslation } from '../lib/i18n';
 
 const { colors: c } = theme;
 
@@ -35,6 +36,7 @@ function fmtTime(iso: string | null) {
 }
 
 export default function SmsThreads() {
+  const { t } = useTranslation();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selected, setSelected] = useState<Thread | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -102,7 +104,7 @@ export default function SmsThreads() {
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
-      if (!token) { setErr('Not authenticated'); return; }
+      if (!token) { setErr(t('sms.notAuthenticated')); return; }
       const res = await fetch(`${SB_URL}/functions/v1/telnyx-sms`, {
         method: 'POST',
         headers: {
@@ -117,28 +119,28 @@ export default function SmsThreads() {
         }),
       });
       const j = await res.json();
-      if (!res.ok) { setErr(j.error || 'Send failed'); return; }
+      if (!res.ok) { setErr(j.error || t('sms.sendFailed')); return; }
       audit('sms.sent', selected.id, { to: selected.contact_phone, did: selected.did_number, len: draft.trim().length });
       setDraft('');
     } catch (e: any) {
-      setErr(String(e?.message || e));
+      setErr(t('sms.sendFailed'));
     } finally {
       setSending(false);
     }
   };
 
-  if (loading) return <SkeletonRows rows={5} avatar label="Loading SMS" />;
+  if (loading) return <SkeletonRows rows={5} avatar label={t('sms.loading')} />;
 
   if (selected) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-          <button onClick={() => setSelected(null)} style={backBtn}>← Back</button>
+          <button onClick={() => setSelected(null)} style={backBtn}>← {t('sms.back')}</button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {selected.contact_name || selected.contact_phone}
             </div>
-            <div style={{ fontSize: 10, opacity: 0.5 }}>via {selected.did_number}</div>
+            <div style={{ fontSize: 10, opacity: 0.5 }}>{t('sms.via')} {selected.did_number}</div>
           </div>
         </div>
         <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 4, padding: 4 }}>
@@ -166,7 +168,8 @@ export default function SmsThreads() {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
-            placeholder="Type a message…"
+            placeholder={t('sms.placeholder')}
+            aria-label={t('sms.placeholder')}
             style={inputBox}
           />
           <button onClick={send} disabled={!draft.trim() || sending} style={sendBtn}>
@@ -177,7 +180,7 @@ export default function SmsThreads() {
     );
   }
 
-  if (threads.length === 0) return <div style={center}>No SMS threads</div>;
+  if (threads.length === 0) return <div style={center}>{t('sms.empty')}</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

@@ -4,6 +4,7 @@ import { ArrowUpRight, ArrowDownLeft, PhoneMissed, PhoneCall } from './RowIcons'
 import { supabase } from '@/lib/supabaseClient';
 import SkeletonRows from './ui/SkeletonRows';
 import { theme } from '../lib/theme';
+import { useTranslation } from '../lib/i18n';
 
 const { colors: c } = theme;
 
@@ -41,6 +42,7 @@ export function isOwnRow(r: any, ext: string): boolean {
 }
 
 function RecentsListImpl({ extension, onCall }: Props) {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<CallRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,9 +63,9 @@ function RecentsListImpl({ extension, onCall }: Props) {
         } catch (e: any) {
           const msg = String(e?.message || '');
           if (/NO_CDR_ENDPOINT/i.test(msg)) {
-            setErr('Reconnecting to PBX… realtime updates continue in the background.');
+            setErr(t('recents.reconnecting'));
           } else {
-            setErr(msg || 'Reconnecting to PBX… realtime updates continue in the background.');
+            setErr(msg || t('recents.reconnecting'));
           }
           data = await ava.personalCalls(200, { rangeDays });
         }
@@ -74,14 +76,14 @@ function RecentsListImpl({ extension, onCall }: Props) {
       setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (e: any) {
       if (!silent || force) {
-        setErr(e?.message || 'Unable to load live call records.');
+        setErr(e?.message || t('recents.unavailable'));
         setRows([]);
       }
     } finally {
       if (!silent) setLoading(false);
       if (force) setRefreshing(false);
     }
-  }, [extension, rangeDays]);
+  }, [extension, rangeDays, t]);
 
   const silentLoad = useCallback(() => { void load(true); }, [load]);
 
@@ -144,9 +146,9 @@ function RecentsListImpl({ extension, onCall }: Props) {
     };
   }, [extension, silentLoad]);
 
-  if (!extension) return <div style={center}>Call history will be available as soon as an extension is assigned.</div>;
-  if (loading) return <SkeletonRows rows={6} label="Loading recents" />;
-  if (err && rows.length === 0) return <div style={{ ...center, color: c.danger }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
+  if (!extension) return <div style={center}>{t('recents.waitingExtension')}</div>;
+  if (loading) return <SkeletonRows rows={6} label={t('recents.loading')} />;
+  if (err && rows.length === 0) return <div style={{ ...center, color: c.danger }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>{t('recents.retry')}</button></div>;
 
   const filteredRows = rows.filter((r) => {
     const q = search.trim().toLowerCase();
@@ -155,7 +157,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
       .filter(Boolean).join(' ').toLowerCase().includes(q);
   });
 
-  if (rows.length === 0) return <div style={center}>No recent calls</div>;
+  if (rows.length === 0) return <div style={center}>{t('recents.empty')}</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -166,26 +168,26 @@ function RecentsListImpl({ extension, onCall }: Props) {
           padding: '6px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
         }}>
           <span>{err}</span>
-          <button onClick={() => setErr(null)} style={{ background: 'transparent', border: 'none', color: c.gold, cursor: 'pointer', fontSize: 14, lineHeight: 1 }} aria-label="Dismiss">×</button>
+          <button onClick={() => setErr(null)} style={{ background: 'transparent', border: 'none', color: c.gold, cursor: 'pointer', fontSize: 14, lineHeight: 1 }} aria-label={t('recents.dismiss')}>×</button>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, padding: '0 2px' }}>
         <span style={{ fontSize: 10, opacity: 0.5, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 600 }}>
-          {rows.length} call{rows.length > 1 ? 's' : ''}{lastUpdated ? ` · ${lastUpdated}` : ''}
-          <span data-testid="recents-own-extension" style={{ marginLeft: 6 }}>· My extension {extension}</span>
+          {rows.length} {t('workspace.calls').toLowerCase()}{lastUpdated ? ` · ${lastUpdated}` : ''}
+          <span data-testid="recents-own-extension" style={{ marginLeft: 6 }}>· {t('recents.myExtension')} {extension}</span>
         </span>
         <button
           onClick={() => load(true, true)}
           disabled={refreshing}
           style={{ ...reloadCdrBtn, opacity: refreshing ? 0.55 : 1 }}
-          title="Force-refresh call records from the PBX"
-          aria-label="Reload CDR"
+          title={t('recents.reload')}
+          aria-label={t('recents.reload')}
         >
-          {refreshing ? 'Reloading…' : '↻ Reload CDR'}
+          {refreshing ? t('recents.reloading') : `↻ ${t('recents.reload')}`}
         </button>
       </div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, number, extension…" style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 8, border: `1px solid ${c.border}`, background: c.bgCard, color: c.text, fontSize: 11, outline: 'none' }} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('recents.search')} aria-label={t('recents.search')} style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 8, border: `1px solid ${c.border}`, background: c.bgCard, color: c.text, fontSize: 11, outline: 'none' }} />
         {([7, 30] as const).map((d) => <button key={d} onClick={() => setRangeDays(d)} style={{ ...reloadCdrBtn, padding: '6px 8px', opacity: rangeDays === d ? 1 : 0.55 }}>{d}d</button>)}
       </div>
       {filteredRows.map((r) => {
@@ -228,7 +230,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
           </button>
         );
       })}
-      {filteredRows.length === 0 && <div style={center}>No calls match this filter</div>}
+      {filteredRows.length === 0 && <div style={center}>{t('recents.noMatch')}</div>}
     </div>
   );
 }
@@ -246,4 +248,3 @@ const reloadCdrBtn: React.CSSProperties = {
 };
 
 export default React.memo(RecentsListImpl);
-

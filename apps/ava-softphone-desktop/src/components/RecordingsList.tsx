@@ -4,6 +4,7 @@ import { theme } from '../lib/theme';
 import { ava, RecordingItem } from '../lib/avaApi';
 import { audit } from '../lib/audit';
 import SkeletonRows from './ui/SkeletonRows';
+import { useTranslation } from '../lib/i18n';
 
 const { colors: c, glow } = theme;
 
@@ -31,12 +32,10 @@ export function isOwnRecording(r: any, ext: string): boolean {
   return Boolean(e && r && String(r.extension ?? '').trim() === e);
 }
 
-function displayError(e: any) {
+function displayError(e: any, t: (key: any) => string) {
   const text = String(e?.context?.error || e?.message || e?.details || e?.error || 'Analysis failed');
-  if (/MISSING_SECRET/i.test(text)) return 'AI analysis is not configured yet.';
-  if (/Unauthorized|Forbidden/i.test(text)) return 'You do not have permission to analyze this recording.';
-  if (/required fields missing/i.test(text)) return 'A transcript is required before AI analysis can run.';
-  return text;
+  if (/MISSING_SECRET|Unauthorized|Forbidden|required fields missing/i.test(text)) return t('recordings.failed');
+  return text || t('recordings.failed');
 }
 
 function revokeBlob(url: string | null | undefined) {
@@ -46,6 +45,7 @@ function revokeBlob(url: string | null | undefined) {
 type JobStatus = 'idle' | 'queued' | 'running' | 'succeeded' | 'failed';
 
 export default function RecordingsList({ onAnalyze, extension, sessionUserId }: { onAnalyze?: (id: string) => void; extension?: string | null; sessionUserId?: string | null }) {
+  const { t } = useTranslation();
   const [items, setItems] = useState<RecordingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -153,7 +153,7 @@ export default function RecordingsList({ onAnalyze, extension, sessionUserId }: 
     } catch (e: any) {
       if (!isCurrent(sess)) return;
       if (!silent || force) {
-        setError(e?.message || 'Unable to load recordings.');
+        setError(e?.message || t('recordings.unavailable'));
         setItems([]);
       }
     } finally {
@@ -162,7 +162,7 @@ export default function RecordingsList({ onAnalyze, extension, sessionUserId }: 
         if (force) setRefreshing(false);
       }
     }
-  }, [ext, rangeDays, hydrateTranscripts, captureSession, isCurrent]);
+  }, [ext, rangeDays, hydrateTranscripts, captureSession, isCurrent, t]);
 
   const silentLoad = useCallback(() => { void load(true); }, [load]);
 
@@ -271,11 +271,11 @@ export default function RecordingsList({ onAnalyze, extension, sessionUserId }: 
         analyzed: true,
       } as RecordingItem : x));
       setStatus(r.id, 'succeeded');
-      setItemSuccess((all) => ({ ...all, [r.id]: 'Analyzed ✓' }));
+      setItemSuccess((all) => ({ ...all, [r.id]: `✓ ${t('recordings.analyzed')}` }));
       onAnalyze?.(r.id);
     } catch (e: any) {
       if (!isCurrent(sess)) return;
-      const msg = displayError(e);
+      const msg = displayError(e, t);
       setError(msg);
       setItemErrors((all) => ({ ...all, [r.id]: msg }));
       setStatus(r.id, 'failed');
@@ -309,7 +309,7 @@ export default function RecordingsList({ onAnalyze, extension, sessionUserId }: 
       if (!url) {
         setAudioErrors((all) => ({
           ...all,
-          [r.id]: 'PBX metadata exists, but the audio file is not reachable from FusionPBX storage yet.',
+          [r.id]: t('recordings.audioUnavailable'),
         }));
         return;
       }
@@ -341,30 +341,30 @@ export default function RecordingsList({ onAnalyze, extension, sessionUserId }: 
         setAudio((a) => ({ ...a, [r.id]: url }));
         return;
       }
-      setError('Recording file is listed in PBX, but the audio bytes are not reachable yet. Refresh the PBX sync and retry.');
+      setError(t('recordings.audioUnavailable'));
     } finally {
       if (isCurrent(sess)) setAudioLoading(null);
     }
   };
 
 
-  if (!ext || !sessionUserId || !sessionActive) return <div style={{ textAlign: 'center', padding: 40, color: c.textSub, fontSize: 12 }}>Recordings will be available as soon as an extension and session are assigned.</div>;
-  if (loading) return <SkeletonRows rows={5} label="Loading recordings" />;
+  if (!ext || !sessionUserId || !sessionActive) return <div style={{ textAlign: 'center', padding: 40, color: c.textSub, fontSize: 12 }}>{t('recordings.waiting')}</div>;
+  if (loading) return <SkeletonRows rows={5} label={t('recordings.loading')} />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <div style={{ fontSize: 11, color: c.textSub, letterSpacing: 1, textTransform: 'uppercase' }}>
-          {items.length} recording{items.length !== 1 ? 's' : ''}
+          {items.length} {t('recordings.count')}
         </div>
         <button onClick={() => load(true, true)} disabled={refreshing} style={{
           background: 'rgba(255,255,255,0.05)', border: `1px solid ${c.border}`,
           color: c.text, padding: '4px 10px', borderRadius: 8, fontSize: 11, cursor: refreshing ? 'wait' : 'pointer', opacity: refreshing ? 0.55 : 1,
-        }}>{refreshing ? 'Syncing…' : '↻ Refresh'}</button>
+        }}>{refreshing ? t('recordings.syncing') : `↻ ${t('recordings.refresh')}`}</button>
       </div>
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, number, extension…" style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 8, border: `1px solid ${c.border}`, background: 'rgba(255,255,255,0.06)', color: c.text, fontSize: 11, outline: 'none' }} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('recordings.search')} aria-label={t('recordings.search')} style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 8, border: `1px solid ${c.border}`, background: 'rgba(255,255,255,0.06)', color: c.text, fontSize: 11, outline: 'none' }} />
         {([7, 30] as const).map((d) => (
           <button key={d} onClick={() => setRangeDays(d)} style={{ background: rangeDays === d ? 'rgba(255,215,0,0.16)' : 'rgba(255,255,255,0.05)', border: `1px solid ${rangeDays === d ? c.yellow : c.border}`, color: rangeDays === d ? c.yellow : c.textSub, padding: '6px 8px', borderRadius: 8, fontSize: 11, cursor: 'pointer' }}>{d}d</button>
         ))}
@@ -378,7 +378,7 @@ export default function RecordingsList({ onAnalyze, extension, sessionUserId }: 
 
       {items.filter((r) => !search.trim() || [r.customer, r.from, r.to, (r as any).extension, (r as any).source_number, r.summary, r.transcript_text].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: c.textSub, fontSize: 12 }}>
-          No recordings match this filter.
+          {t('recordings.noMatch')}
         </div>
       ) : items.filter((r) => !search.trim() || [r.customer, r.from, r.to, (r as any).extension, (r as any).source_number, r.summary, r.transcript_text].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).map(r => {
         const sentiment = r.sentiment;
@@ -421,7 +421,7 @@ autoPlay
                     });
                     setAudioErrors((all) => ({
                       ...all,
-                      [r.id]: 'PBX returned an audio file, but Electron could not decode it. The file may still be transcoding or may be corrupted on PBX storage.',
+                      [r.id]: t('recordings.audioUnavailable'),
                     }));
                     return;
                   }
@@ -429,7 +429,7 @@ autoPlay
                 }}
               />
             ) : (
-              <button onClick={() => play(r)} disabled={audioLoading === r.id} style={{ marginTop: 8, width: '100%', padding: 7, borderRadius: 8, background: audioErrors[r.id] ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.06)', border: `1px solid ${audioErrors[r.id] ? c.red : c.border}`, color: audioErrors[r.id] ? c.red : c.text, fontSize: 11, cursor: audioLoading === r.id ? 'wait' : 'pointer' }}>{audioLoading === r.id ? 'Loading PBX audio…' : audioErrors[r.id] ? 'Audio file not reachable on PBX' : `▶ Load PBX audio${r.recording_name ? ` · ${r.recording_name}` : ''}`}</button>
+              <button onClick={() => play(r)} disabled={audioLoading === r.id} style={{ marginTop: 8, width: '100%', padding: 7, borderRadius: 8, background: audioErrors[r.id] ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.06)', border: `1px solid ${audioErrors[r.id] ? c.red : c.border}`, color: audioErrors[r.id] ? c.red : c.text, fontSize: 11, cursor: audioLoading === r.id ? 'wait' : 'pointer' }}>{audioLoading === r.id ? t('recordings.loadingAudio') : audioErrors[r.id] ? t('recordings.audioUnavailable') : `▶ ${t('recordings.loadAudio')}${r.recording_name ? ` · ${r.recording_name}` : ''}`}</button>
             )}
             {audioErrors[r.id] && <div style={{ marginTop: 6, fontSize: 10, color: c.textSub, lineHeight: 1.35 }}>{audioErrors[r.id]}</div>}
 
@@ -439,10 +439,10 @@ autoPlay
                 const isBusy = st === 'queued' || st === 'running' || working === r.id;
                 const pillMap: Record<JobStatus, { bg: string; color: string; label: string }> = {
                   idle: { bg: 'transparent', color: c.textSub, label: '' },
-                  queued: { bg: 'rgba(234,179,8,0.15)', color: c.yellow, label: 'Queued' },
-                  running: { bg: 'rgba(59,130,246,0.18)', color: c.text, label: 'Transcribing…' },
-                  succeeded: { bg: 'rgba(16,185,129,0.15)', color: c.green, label: '✓ Succeeded' },
-                  failed: { bg: 'rgba(239,68,68,0.15)', color: c.red, label: '⚠ Failed' },
+                  queued: { bg: 'rgba(234,179,8,0.15)', color: c.yellow, label: t('recordings.queued') },
+                  running: { bg: 'rgba(59,130,246,0.18)', color: c.text, label: t('recordings.transcribing') },
+                  succeeded: { bg: 'rgba(16,185,129,0.15)', color: c.green, label: `✓ ${t('recordings.succeeded')}` },
+                  failed: { bg: 'rgba(239,68,68,0.15)', color: c.red, label: `⚠ ${t('recordings.failed')}` },
                 };
                 const pill = pillMap[st];
                 return (
@@ -460,13 +460,13 @@ autoPlay
                           boxShadow: isBusy ? glow.ai : 'none',
                         }}
                       >
-                        {isBusy ? '✨ Analyzing…' : '✨ Transcribe & Analyze'}
+                        {isBusy ? `✨ ${t('recordings.analyzing')}` : `✨ ${t('recordings.transcribeAnalyze')}`}
                       </button>
                     ) : (
                       <span style={{
                         fontSize: 10, padding: '4px 8px', borderRadius: 6,
                         background: 'rgba(16,185,129,0.15)', color: c.green, fontWeight: 600,
-                      }}>✓ Analyzed</span>
+                      }}>✓ {t('recordings.analyzed')}</span>
                     )}
                     {pill.label && (
                       <span style={{ fontSize: 9, padding: '3px 7px', borderRadius: 6, background: pill.bg, color: pill.color, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>{pill.label}</span>
@@ -481,7 +481,7 @@ autoPlay
                     onClick={() => analyze(r)}
                     disabled={working === r.id}
                     style={{ background: 'transparent', border: `1px solid ${c.red}`, color: c.red, fontSize: 10, padding: '2px 8px', borderRadius: 6, cursor: working === r.id ? 'wait' : 'pointer' }}
-                  >Retry</button>
+                  >{t('recordings.retry')}</button>
                 </div>
               )}
               {itemSuccess[r.id] && !itemErrors[r.id] && (
@@ -491,13 +491,13 @@ autoPlay
 
             {r.summary && (
               <div style={{ marginTop: 8, padding: 8, background: 'rgba(0,0,0,0.25)', borderRadius: 8, fontSize: 11, color: c.textSub, lineHeight: 1.4 }}>
-                <div style={{ fontSize: 9, color: c.aiLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>Summary</div>
+                <div style={{ fontSize: 9, color: c.aiLight, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>{t('recordings.summary')}</div>
                 {r.summary}
               </div>
             )}
             {r.transcript_text && (
               <details style={{ marginTop: 8 }}>
-                <summary style={{ fontSize: 10, color: c.aiLight, cursor: 'pointer', letterSpacing: 1, textTransform: 'uppercase' }}>Transcript</summary>
+                <summary style={{ fontSize: 10, color: c.aiLight, cursor: 'pointer', letterSpacing: 1, textTransform: 'uppercase' }}>{t('recordings.transcript')}</summary>
                 <div style={{ marginTop: 6, padding: 8, background: 'rgba(0,0,0,0.25)', borderRadius: 8, fontSize: 11, color: c.text, lineHeight: 1.5, maxHeight: 220, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
                   {r.transcript_text}
                 </div>

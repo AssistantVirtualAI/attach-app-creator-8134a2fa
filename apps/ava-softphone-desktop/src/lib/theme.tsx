@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
+// `light` and `midnight` remain accepted only to migrate prior local settings.
+// The Lemtel product surface intentionally exposes exactly two accessible modes.
 export type ThemeMode = 'daylight' | 'light' | 'dark' | 'midnight';
+export const USER_THEME_MODES = ['daylight', 'dark'] as const;
+export type UserThemeMode = (typeof USER_THEME_MODES)[number];
 
 export interface ThemeTokens {
   mode: ThemeMode;
@@ -31,7 +35,7 @@ export interface ThemeTokens {
    Lemtel — product-aligned palette
    Deep brand blue #0023e6 → bright #4d6dff → aurora cyan #21d4fd
    Signal gold #d4a73a for premium accents
-   4 modes: daylight (brightest) · light · dark · midnight (darkest)
+   Public modes: daylight · dark. Legacy light/midnight values migrate safely.
    ============================================================ */
 
 const daylight: ThemeTokens = {
@@ -149,21 +153,24 @@ interface ThemeCtx {
 
 const ThemeContext = createContext<ThemeCtx | null>(null);
 const STORAGE_KEY = 'ava-softphone-theme';
-const cycle: ThemeMode[] = ['daylight', 'light', 'dark', 'midnight'];
+const cycle: UserThemeMode[] = [...USER_THEME_MODES];
+
+function normalizeThemeMode(value: string | null): UserThemeMode {
+  if (value === 'dark' || value === 'midnight') return 'dark';
+  return 'daylight';
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>(() => {
     try {
-      // One-time migration: the app now ships a bright, high-contrast default.
-      if (!localStorage.getItem('ava-softphone-theme-v2')) {
-        localStorage.setItem('ava-softphone-theme-v2', '1');
-        localStorage.setItem(STORAGE_KEY, 'light');
-        return 'light';
-      }
-      const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-      if (saved && cycle.includes(saved)) return saved;
+      // v3 removes duplicate visual modes without losing an existing preference.
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const normalized = normalizeThemeMode(saved);
+      localStorage.setItem('ava-softphone-theme-v3', '1');
+      localStorage.setItem(STORAGE_KEY, normalized);
+      return normalized;
     } catch {}
-    return 'light';
+    return 'daylight';
   });
 
 
@@ -197,6 +204,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     set('glass', t.glass);
     set('glass-border', t.glassBorder);
     set('shadow', t.shadow);
+    // Static legacy components consume these alpha overlays through the
+    // exported `theme` object. Make them ink-on-light and white-on-dark so
+    // controls retain separation and readable labels in both public modes.
+    const overlayBase = mode === 'dark' ? '255,255,255' : '8,16,42';
+    set('overlay-02', `rgba(${overlayBase},0.02)`);
+    set('overlay-04', `rgba(${overlayBase},0.04)`);
+    set('overlay-06', `rgba(${overlayBase},0.06)`);
+    set('overlay-08', `rgba(${overlayBase},0.08)`);
+    set('overlay-10', `rgba(${overlayBase},0.10)`);
+    set('overlay-12', `rgba(${overlayBase},0.12)`);
+    set('overlay-18', `rgba(${overlayBase},0.18)`);
+    set('on-accent', '#ffffff');
     // Global background uses the themed gradient (fixed so it never scrolls).
     root.style.background = t.bgGradient;
     root.style.backgroundColor = t.bg;
@@ -216,17 +235,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key !== STORAGE_KEY || !e.newValue) return;
-      if (cycle.includes(e.newValue as ThemeMode) && e.newValue !== mode) {
-        setModeState(e.newValue as ThemeMode);
+      const normalized = normalizeThemeMode(e.newValue);
+      if (normalized !== mode) {
+        setModeState(normalized);
       }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, [mode]);
 
-  const setMode = (m: ThemeMode) => setModeState(m);
+  const setMode = (m: ThemeMode) => setModeState(normalizeThemeMode(m));
   const toggle = () =>
-    setModeState((m) => cycle[(cycle.indexOf(m) + 1) % cycle.length]);
+    setModeState((m) => cycle[(cycle.indexOf(normalizeThemeMode(m)) + 1) % cycle.length]);
 
   return (
     <ThemeContext.Provider value={{ t, mode, setMode, toggle }}>{children}</ThemeContext.Provider>

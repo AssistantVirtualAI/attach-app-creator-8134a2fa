@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { WHITELABEL } from '../whitelabel.config';
-import { useTheme } from '../lib/theme';
+import { useTheme, USER_THEME_MODES } from '../lib/theme';
 import { useBrightness, Brightness } from '../hooks/useBrightness';
 import { useContrast, Contrast } from '../hooks/useContrast';
 import { sipProvider } from '../lib/sip/jssipProvider';
 import { theme } from '../lib/theme';
 import pkg from '../../package.json';
 import type { BinaryPortalPolicy, RecordingPolicy } from '../lib/lemtelDesktopClientConfig';
+import LanguageSwitcher from './ui/LanguageSwitcher';
+import { useTranslation } from '../lib/i18n';
 
 /** Lemtel Phase 22C — the four validated portal policy labels, read-only. */
 export type PortalTelephonyPolicy = {
@@ -189,6 +191,7 @@ export default function SettingsPage({
   portalTelephonyPolicy?: PortalTelephonyPolicy | null;
 }) {
   const { mode, setMode } = useTheme();
+  const { t } = useTranslation();
   const { brightness, setBrightness } = useBrightness();
   const { contrast, setContrast } = useContrast();
 
@@ -270,15 +273,16 @@ export default function SettingsPage({
             display: 'inline-flex', alignItems: 'center', gap: 5,
           }}
         >
-          ← Back
+          ← {t('workspace.back')}
         </button>
-        <span style={{ fontSize: 15, fontWeight: 700, color: c.text }}>Settings</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{t('nav.settings')}</span>
+        <div style={{ marginLeft: 'auto' }}><LanguageSwitcher compact /></div>
         {savedToast && (
           <span style={{
-            marginLeft: 'auto', fontSize: 11, color: c.green,
+            fontSize: 11, color: c.green,
             background: 'rgba(15,157,88,0.10)', border: `1px solid ${c.green}40`,
             borderRadius: 8, padding: '3px 10px', fontWeight: 700,
-          }}>✓ Saved</span>
+          }}>✓ {t('workspace.saved')}</span>
         )}
       </div>
 
@@ -313,21 +317,25 @@ export default function SettingsPage({
         </div>
 
         {/* ── Appearance ───────────────────────────────────────────────── */}
-        <SectionTitle eyebrow="APPEARANCE" title="Theme & Display" />
+        <SectionTitle eyebrow={t('workspace.appearance')} title={t('workspace.themeAndDisplay')} />
         <Card padded={false}>
+          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid ${c.overlay08}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontSize: 11, color: c.textDim, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+              {t('workspace.language')}
+            </div>
+            <LanguageSwitcher />
+          </div>
           {/* Theme selector */}
           <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid ${c.overlay08}` }}>
             <div style={{ fontSize: 11, color: c.textDim, marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-              Theme
+              {t('workspace.theme')}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {(['daylight', 'light', 'dark', 'midnight'] as const).map((m) => {
+              {USER_THEME_MODES.map((m) => {
                 const active = mode === m;
-                const meta: Record<string, { icon: string; label: string }> = {
-                  daylight: { icon: '🌤️', label: 'Daylight' },
-                  light:    { icon: '☀️', label: 'Light' },
-                  dark:     { icon: '🌙', label: 'Dark' },
-                  midnight: { icon: '🌑', label: 'Midnight' },
+                const meta: Record<(typeof USER_THEME_MODES)[number], { icon: string; label: string }> = {
+                  daylight: { icon: '☀️', label: t('workspace.daylight') },
+                  dark: { icon: '◐', label: t('workspace.dark') },
                 };
                 return (
                   <button

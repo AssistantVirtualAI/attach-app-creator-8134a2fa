@@ -90,7 +90,7 @@ describe('Phase 27B — RecordingsList own_extension_only', () => {
     render(<RecordingsList extension="201" sessionUserId="user-a" />);
     await flush();
     expect(screen.queryByText(/5145550009/)).toBeNull();
-    expect(screen.queryByText(/Load PBX audio/)).toBeNull();
+    expect(screen.queryByText(/Load (PBX )?call audio/)).toBeNull();
   });
 
   it('without extension: no API, no Realtime, empty list', async () => {
@@ -132,7 +132,7 @@ describe('Phase 27B — RecordingsList own_extension_only', () => {
     h.personalRecordings.mockResolvedValue([own, rec('a', '305', '5145550001')]);
     const { container, rerender } = render(<RecordingsList extension="201" sessionUserId="user-a" />);
     await flush();
-    fireEvent.click(screen.getByText(/Load PBX audio/));
+    fireEvent.click(screen.getByText(/Load (PBX )?call audio/));
     await flush();
     expect(container.querySelector('audio')?.getAttribute('src')).toBe('blob:test-audio-a');
     rerender(<RecordingsList extension="305" sessionUserId="user-a" />);
@@ -145,7 +145,7 @@ describe('Phase 27B — RecordingsList own_extension_only', () => {
   it('a different user on the same extension cannot see or replay cached audio', async () => {
     const { container, rerender } = render(<RecordingsList extension="201" sessionUserId="user-a" />);
     await flush();
-    fireEvent.click(screen.getByText(/Load PBX audio/));
+    fireEvent.click(screen.getByText(/Load (PBX )?call audio/));
     await flush();
     expect(container.querySelector('audio')).not.toBeNull();
     rerender(<RecordingsList extension="201" sessionUserId="user-b" />);
@@ -159,7 +159,7 @@ describe('Phase 27B — RecordingsList own_extension_only', () => {
     h.getRecordingSignedUrl.mockImplementationOnce(() => pending.promise);
     const { container } = render(<RecordingsList extension="201" sessionUserId="user-a" />);
     await flush();
-    fireEvent.click(screen.getByText(/Load PBX audio/));
+    fireEvent.click(screen.getByText(/Load (PBX )?call audio/));
     await act(async () => { for (const cb of [...h.authHandlers]) cb('SIGNED_OUT', null); });
     await act(async () => { pending.resolve({ url: 'blob:late' }); });
     await flush();
@@ -171,7 +171,7 @@ describe('Phase 27B — RecordingsList own_extension_only', () => {
   it('a token refresh for the same user keeps the active player', async () => {
     const { container } = render(<RecordingsList extension="201" sessionUserId="user-a" />);
     await flush();
-    fireEvent.click(screen.getByText(/Load PBX audio/));
+    fireEvent.click(screen.getByText(/Load (PBX )?call audio/));
     await flush();
     await act(async () => { for (const cb of [...h.authHandlers]) cb('TOKEN_REFRESHED', { user: { id: 'user-a' } }); });
     expect(container.querySelector('audio')).not.toBeNull();
@@ -199,14 +199,14 @@ describe('Phase 27B.1 — stale async work from an old session is inert', () => 
     h.personalRecordings.mockResolvedValueOnce([own]).mockResolvedValueOnce([rec('a', '305', '5145550001')]);
     const { container, rerender } = render(<RecordingsList extension="201" sessionUserId="user-a" />);
     await flush();
-    fireEvent.click(screen.getByText(/Load PBX audio/));
+    fireEvent.click(screen.getByText(/Load (PBX )?call audio/));
     rerender(<RecordingsList extension="305" sessionUserId="user-a" />);
     await flush();
     await act(async () => { d.resolve({ url: 'blob:stale-a' }); });
     await flush();
     expect(container.querySelector('audio')).toBeNull();
     expect(container.innerHTML).not.toContain('blob:stale-a');
-    expect(screen.queryByText(/Loading PBX audio/)).toBeNull();
+    expect(screen.queryByText(/Loading (PBX )?call audio/)).toBeNull();
   });
 
   it('late audio recovery of A does not modify B', async () => {
@@ -216,7 +216,7 @@ describe('Phase 27B.1 — stale async work from an old session is inert', () => 
     h.personalRecordings.mockResolvedValueOnce([own]).mockResolvedValueOnce([rec('a', '305', '5145550001')]);
     const { container, rerender } = render(<RecordingsList extension="201" sessionUserId="user-a" />);
     await flush();
-    fireEvent.click(screen.getByText(/Load PBX audio/));
+    fireEvent.click(screen.getByText(/Load (PBX )?call audio/));
     await flush();
     fireEvent.error(container.querySelector('audio')!);
     rerender(<RecordingsList extension="305" sessionUserId="user-a" />);

@@ -5,6 +5,7 @@ import { useOrgId } from '@/lib/useOrgId';
 import { audit } from '@/lib/audit';
 import SkeletonRows from './ui/SkeletonRows';
 import { theme } from '../lib/theme';
+import { useTranslation } from '../lib/i18n';
 
 const { colors: c } = theme;
 
@@ -23,6 +24,7 @@ function fmtTime(iso: string | null) {
 }
 
 export default function VoicemailList({ extension, onCall }: Props) {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<VoicemailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,14 +44,14 @@ export default function VoicemailList({ extension, onCall }: Props) {
       setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
       if (!silent || force) {
-        setErr(e?.message || 'Unable to load voicemail.');
+        setErr(e?.message || t('voicemail.unavailable'));
         setRows([]);
       }
     } finally {
       if (!silent) setLoading(false);
       if (force) setRefreshing(false);
     }
-  }, [extension]);
+  }, [extension, t]);
 
   const silentLoad = useCallback(() => { void load(true); }, [load]);
 
@@ -78,24 +80,24 @@ export default function VoicemailList({ extension, onCall }: Props) {
     try {
       const signed = await ava.getRecordingSignedUrl(r);
       const url = signed?.url || (await ava.getRecordingAudioUrl(r));
-      if (!url) { setErr('No voicemail audio available yet'); return; }
+      if (!url) { setErr(t('voicemail.audioUnavailable')); return; }
       voicemailAudioCache.set(r.id, url);
       setAudio((a) => ({ ...a, [r.id]: url }));
       audit('voicemail.played', r.id, { from: r.from, duration: r.durationSec });
       setPlaying(r.id);
     } catch (e: any) {
-      setErr(e?.message || 'Failed to load voicemail audio.');
+      setErr(e?.message || t('voicemail.audioFailed'));
     }
   };
 
-  if (loading) return <SkeletonRows rows={5} label="Loading voicemail" />;
-  if (err) return <div style={{ ...center, color: c.danger }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
-  if (rows.length === 0) return <div style={center}>No voicemail</div>;
+  if (loading) return <SkeletonRows rows={5} label={t('voicemail.loading')} />;
+  if (err) return <div style={{ ...center, color: c.danger }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>{t('voicemail.retry')}</button></div>;
+  if (rows.length === 0) return <div style={center}>{t('voicemail.empty')}</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: 11, opacity: 0.6 }}>{rows.length} message{rows.length > 1 ? 's' : ''}</span>
+        <span style={{ fontSize: 11, opacity: 0.6 }}>{rows.length} {t('voicemail.messages')}</span>
         <button onClick={() => load(true, true)} disabled={refreshing} style={{ ...refreshBtn, opacity: refreshing ? 0.55 : 1 }}>{refreshing ? '…' : '↻'}</button>
       </div>
       {rows.map((r) => {

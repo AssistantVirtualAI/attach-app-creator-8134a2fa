@@ -75,9 +75,9 @@ test('Desktop and mobile use the Lemtel recovery endpoint instead of a reset-lin
   const desktop = read('apps/ava-softphone-desktop/src/components/SetupWizard.tsx');
   const mobile = read('apps/ava-softphone-mobile/src/screens/AuthScreen.tsx');
   assert.match(desktop, /lemtel-password-reset-request/);
-  assert.match(desktop, /Email me a temporary password/);
+  assert.match(desktop, /Send temporary password/);
   assert.match(desktop, /Forgot password\?/);
-  assert.doesNotMatch(desktop, /label="Extension"|label="SIP domain"|Portal URL|Powered by AVA|AVA Statistic/);
+  assert.doesNotMatch(desktop, /label="Extension"|label="SIP domain"|Portal URL|AVA Statistic/);
   assert.match(mobile, /lemtel-password-reset-request/);
   assert.match(mobile, /mot de passe temporaire/);
   assert.doesNotMatch(mobile, /\/auth\/v1\/recover/);
@@ -101,11 +101,11 @@ test('Desktop renews a temporary-password session and opens as a Desktop workspa
   assert.match(wizard, /supabase\.auth\.signInWithPassword\(\{/);
   assert.match(wizard, /email: pending\.email/);
   assert.doesNotMatch(wizard, /supabase\.auth\.refreshSession\(\)/);
-  assert.match(wizard, /lemtel-auth-workspace/);
+  assert.match(wizard, /lemtel-access-console/);
   assert.match(main, /width: 1180/);
   assert.match(main, /minWidth: 840/);
   assert.match(index, /Lemtel · Secure Communications Workspace/);
-  assert.doesNotMatch(index, /Powered by AVA/);
+  assert.doesNotMatch(index, /AVA Statistic/);
 });
 
 test('onboarding CI typechecks npm dependencies without a checked-in node_modules tree', () => {

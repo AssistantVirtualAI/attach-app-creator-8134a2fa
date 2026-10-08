@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { ava } from '../lib/avaApi';
 import { theme } from '../lib/theme';
 import SkeletonRows from './ui/SkeletonRows';
+import { useTranslation, type I18nKey } from '../lib/i18n';
 
 const { colors: c } = theme;
 
@@ -50,15 +51,16 @@ function avatarGradient(ext: string): string {
   return AVATAR_GRADIENTS[idx] || AVATAR_GRADIENTS[0];
 }
 
-function statusLabel(st: string, dnd: boolean): string {
-  if (dnd) return 'Do Not Disturb';
-  if (st === 'oncall' || st === 'busy') return 'On Call';
-  if (st === 'available' || st === 'online') return 'Available';
-  if (st === 'away') return 'Away';
-  return 'Offline';
+function statusLabelKey(st: string, dnd: boolean): I18nKey {
+  if (dnd) return 'contacts.doNotDisturb';
+  if (st === 'oncall' || st === 'busy') return 'contacts.onCall';
+  if (st === 'available' || st === 'online') return 'contacts.available';
+  if (st === 'away') return 'contacts.away';
+  return 'contacts.offline';
 }
 
 export default function ContactsList({ selfExtension, onCall }: Props) {
+  const { t } = useTranslation();
   const [exts, setExts] = useState<ExtRow[]>([]);
   const [presence, setPresence] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -153,7 +155,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
     exts.filter((e) => e.extension !== selfExtension && (presence[e.extension] === 'available' || presence[e.extension] === 'online')).length,
     [exts, presence, selfExtension]);
 
-  if (loading) return <SkeletonRows rows={7} avatar label="Loading contacts" />;
+  if (loading) return <SkeletonRows rows={7} avatar label={t('contacts.loading')} />;
   if (err) return <div style={{ textAlign: 'center', padding: 40, color: c.danger, fontSize: 12 }}>{err}</div>;
 
   return (
@@ -168,7 +170,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
         {/* Stats row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ fontSize: 11, color: c.textDim, fontWeight: 600, letterSpacing: 0.5 }}>
-            {filtered.length} contact{filtered.length !== 1 ? 's' : ''}
+            {filtered.length} {t('contacts.count')}
           </span>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -177,7 +179,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
             borderRadius: 20, padding: '2px 8px',
           }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: c.success, animation: 'statusPulse 2s ease-in-out infinite' }} />
-            {onlineCount} online
+            {onlineCount} {t('contacts.online')}
           </span>
         </div>
 
@@ -190,8 +192,8 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name or extension…"
-            aria-label="Search contacts"
+            placeholder={t('contacts.search')}
+            aria-label={t('contacts.search')}
             style={{
               width: '100%', boxSizing: 'border-box',
               background: c.overlay04,
@@ -229,7 +231,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                 transition: 'all 0.15s ease',
               }}
             >
-              {f === 'all' ? 'All' : f === 'available' ? '● Available' : '● On Call'}
+              {f === 'all' ? t('contacts.all') : f === 'available' ? `● ${t('contacts.available')}` : `● ${t('contacts.onCall')}`}
             </button>
           ))}
         </div>
@@ -239,7 +241,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
       <div className="lemtel-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40, color: c.textDim, fontSize: 12 }}>
-            No contacts found
+            {t('contacts.none')}
           </div>
         ) : (
           grouped.map(([letter, contacts]) => (
@@ -265,7 +267,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                   st === 'available' || st === 'online' ? c.success :
                   st === 'away' ? c.warning :
                   '#4B5563';
-                const name = e.effective_cid_name || e.description || `Extension ${e.extension}`;
+                const name = e.effective_cid_name || e.description || `${t('workspace.extension')} ${e.extension}`;
                 const isOnline = (st === 'available' || st === 'online') && !dnd;
                 const isOnCall = st === 'oncall' || st === 'busy';
 
@@ -290,7 +292,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                         background: avatarGradient(e.extension),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: c.onAccent, fontSize: 14, fontWeight: 700,
-                        border: `2px solid ${dnd ? '${c.danger}' : isOnCall ? '${c.warning}' : isOnline ? '${c.success}' : '${c.overlay10}'}`,
+                        border: `2px solid ${dnd ? c.danger : isOnCall ? c.warning : isOnline ? c.success : c.overlay10}`,
                         boxShadow: isOnline ? '0 0 10px rgba(16,185,129,0.3)' : isOnCall ? '0 0 10px rgba(245,158,11,0.3)' : 'none',
                         letterSpacing: 0.5,
                       }}>
@@ -321,12 +323,12 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                           border: '1px solid rgba(224,168,0,0.25)',
                           borderRadius: 4, padding: '1px 5px',
                           fontSize: 10, fontWeight: 700, flexShrink: 0,
-                        }}>Ext {e.extension}</span>
+                        }}>{t('workspace.extension')} {e.extension}</span>
                         <span style={{
                           fontSize: 10, color: dotColor, fontWeight: 600,
                           whiteSpace: 'nowrap',
                         }}>
-                          {statusLabel(st, dnd)}
+                          {t(statusLabelKey(st, dnd))}
                         </span>
                       </div>
                     </div>
@@ -334,8 +336,8 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                     {/* Call button */}
                     <button
                       onClick={() => onCall(e.extension)}
-                      aria-label={`Call ${name}, extension ${e.extension}`}
-                      title={`Call ${name}`}
+                      aria-label={`${t('contacts.call')} ${name}, ${t('workspace.extension').toLowerCase()} ${e.extension}`}
+                      title={`${t('contacts.call')} ${name}`}
                       style={{
                         width: 36, height: 36, borderRadius: '50%',
                         background: `linear-gradient(135deg, #059669, ${c.success})`,

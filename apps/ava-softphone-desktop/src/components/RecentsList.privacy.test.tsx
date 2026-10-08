@@ -52,7 +52,7 @@ describe('Phase 26B — RecentsList own_extension_only', () => {
   it('Reload calls refreshPersonalCalls only', async () => {
     render(<RecentsList extension="201" onCall={() => {}} />);
     await flush();
-    fireEvent.click(screen.getByLabelText('Reload CDR'));
+    fireEvent.click(screen.getByLabelText('Reload call records'));
     await flush();
     expect(h.refreshPersonalCalls).toHaveBeenCalledWith(200, { rangeDays: 7 });
     expect(h.refreshCalls).not.toHaveBeenCalled();

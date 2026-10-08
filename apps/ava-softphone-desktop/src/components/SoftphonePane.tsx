@@ -11,8 +11,9 @@ import OrgChatView from './console/OrgChatView';
 import RecordingsList from './RecordingsList';
 // ProfileMenu is rendered globally in TitleBar — no longer duplicated here.
 import { AppErrorBoundary } from './AppErrorBoundary';
-import { theme } from '../lib/theme';
+import { theme, useTheme } from '../lib/theme';
 import LemtelLogo from './LemtelLogo';
+import avaPoweredBy from '../assets/ava-powered-by.png';
 import DialerKeypad from './DialerKeypad';
 import SipRecoveryBanner from './SipRecoveryBanner';
 import { ava } from '../lib/avaApi';
@@ -24,6 +25,8 @@ import OutputDevicePicker from './OutputDevicePicker';
 import { watchA11y } from '../lib/a11yAudit';
 import pkg from '../../package.json';
 import SkeletonRows from './ui/SkeletonRows';
+import LanguageSwitcher from './ui/LanguageSwitcher';
+import { useTranslation, type I18nKey } from '../lib/i18n';
 
 const APP_VERSION: string =
   (typeof window !== 'undefined' && (window as any).electronAPI?.getVersion?.()) ||
@@ -47,12 +50,12 @@ type ChatsSubTab = 'team' | 'sms';
 
 const MAIN_TABS: Tab[] = ['contacts', 'chats', 'calls', 'keypad', 'speeddial'];
 
-const TAB_META: Record<Tab, { LucideIcon: React.ComponentType<{ size?: number | string; color?: string; strokeWidth?: number | string }>; label: string }> = {
-  contacts:  { LucideIcon: User,          label: 'Contacts' },
-  chats:     { LucideIcon: MessageCircle, label: 'Chats' },
-  calls:     { LucideIcon: Phone,         label: 'Calls' },
-  keypad:    { LucideIcon: Grid3x3,       label: 'Keypad' },
-  speeddial: { LucideIcon: LayoutGrid,    label: 'Speed Dial' },
+const TAB_META: Record<Tab, { LucideIcon: React.ComponentType<{ size?: number | string; color?: string; strokeWidth?: number | string }>; labelKey: I18nKey }> = {
+  contacts:  { LucideIcon: User,          labelKey: 'nav.contacts' },
+  chats:     { LucideIcon: MessageCircle, labelKey: 'workspace.chats' },
+  calls:     { LucideIcon: Phone,         labelKey: 'workspace.calls' },
+  keypad:    { LucideIcon: Grid3x3,       labelKey: 'workspace.keypad' },
+  speeddial: { LucideIcon: LayoutGrid,    labelKey: 'workspace.speedDial' },
 };
 
 const { colors: c, glow } = theme;
@@ -70,11 +73,12 @@ function WorkspaceRail({
   displayName?: string;
   sipStatus: string;
 }) {
+  const { t } = useTranslation();
   const isReady = sipStatus === 'registered';
   return (
     <aside
       className="lemtel-workspace-rail"
-      aria-label="Lemtel workspace navigation"
+      aria-label={t('workspace.primaryNavigation')}
       style={{
         position: 'absolute', inset: 0, right: 'auto', zIndex: 5, width: 224,
         padding: '22px 14px 16px', boxSizing: 'border-box',
@@ -88,23 +92,24 @@ function WorkspaceRail({
         <LemtelLogo size="sm" glow />
         <div style={{ minWidth: 0 }}>
           <div style={{ color: '#f4f7ff', fontSize: 15, fontWeight: 850, letterSpacing: -0.25 }}>Lemtel</div>
-          <div style={{ color: 'rgba(189,208,255,0.66)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.05, textTransform: 'uppercase' }}>Communications</div>
+          <div style={{ color: 'rgba(211,225,255,0.82)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.05, textTransform: 'uppercase' }}>{t('workspace.secureNetwork')}</div>
         </div>
       </div>
 
       <div style={{ margin: '0 4px 16px', padding: '12px', borderRadius: 16, background: 'linear-gradient(145deg, rgba(59,103,255,0.20), rgba(19,41,94,0.28))', border: '1px solid rgba(122,162,255,0.22)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: isReady ? '#7ff3c3' : '#ffd37a', fontSize: 10.5, fontWeight: 800 }}>
           <span className={isReady ? 'lemtel-status-orb is-ready' : 'lemtel-status-orb'} style={{ width: 7, height: 7, borderRadius: '50%', background: isReady ? '#22d39a' : '#ffb84a', boxShadow: `0 0 12px ${isReady ? '#22d39a' : '#ffb84a'}` }} />
-          {isReady ? 'Line ready' : 'Connecting line'}
+          {isReady ? t('workspace.lineReady') : t('workspace.connectingLine')}
         </div>
-        <div style={{ marginTop: 8, color: '#eaf1ff', fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName || 'Lemtel member'}</div>
-        <div style={{ marginTop: 3, color: 'rgba(189,208,255,0.62)', fontSize: 10 }}>Extension {extension || '—'}</div>
+        <div style={{ marginTop: 8, color: '#f3f7ff', fontSize: 12, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName || t('workspace.member')}</div>
+        <div style={{ marginTop: 3, color: 'rgba(211,225,255,0.76)', fontSize: 10 }}>{t('workspace.extension')} {extension || '—'}</div>
       </div>
 
-      <nav aria-label="Primary workspace" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <nav aria-label={t('workspace.primaryNavigation')} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {MAIN_TABS.map((item) => {
           const active = activeTab === item;
-          const { LucideIcon, label } = TAB_META[item];
+          const { LucideIcon, labelKey } = TAB_META[item];
+          const label = t(labelKey);
           return (
             <button
               key={item}
@@ -133,9 +138,43 @@ function WorkspaceRail({
       </nav>
 
       <div style={{ marginTop: 'auto', padding: '15px 10px 2px', borderTop: '1px solid rgba(179,202,255,0.12)' }}>
-        <div style={{ color: 'rgba(189,208,255,0.56)', fontSize: 9.5, lineHeight: 1.45 }}>Private, intelligent communications.</div>
+        <div style={{ color: 'rgba(211,225,255,0.76)', fontSize: 9.5, lineHeight: 1.45 }}>{t('workspace.privateComms')}</div>
+        <a href="https://assistantvirtualai.com" target="_blank" rel="noreferrer" aria-label="Powered by AVA — assistantvirtualai.com" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, color: 'rgba(211,225,255,0.8)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', textDecoration: 'none' }}>
+          <span>{t('workspace.poweredBy')}</span>
+          <img src={avaPoweredBy} alt="AVA" style={{ width: 22, height: 22, objectFit: 'contain', filter: 'drop-shadow(0 3px 7px rgba(0,0,0,.30))' }} />
+        </a>
       </div>
     </aside>
+  );
+}
+
+function WorkspaceAppearanceControls({ compact }: { compact: boolean }) {
+  const { mode, setMode } = useTheme();
+  const { t } = useTranslation();
+  const buttonStyle = (active: boolean): React.CSSProperties => ({
+    minWidth: compact ? 28 : 74,
+    padding: compact ? '4px 6px' : '5px 9px',
+    borderRadius: 9,
+    border: `1px solid ${active ? c.primary : c.borderStrong}`,
+    background: active ? c.primarySoft : c.overlay04,
+    color: active ? c.primary : c.textSub,
+    cursor: 'pointer',
+    fontSize: compact ? 0 : 10,
+    fontWeight: 800,
+    letterSpacing: 0.25,
+    lineHeight: 1.2,
+  });
+
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} aria-label={t('workspace.appearance')}>
+      {!compact && (
+        <div role="group" aria-label={t('workspace.theme')} style={{ display: 'inline-flex', gap: 3, padding: 2, borderRadius: 11, background: c.overlay04, border: `1px solid ${c.border}` }}>
+          <button type="button" aria-pressed={mode === 'daylight'} title={t('workspace.daylight')} onClick={() => setMode('daylight')} style={buttonStyle(mode === 'daylight')}>☀ {t('workspace.daylight')}</button>
+          <button type="button" aria-pressed={mode === 'dark'} title={t('workspace.dark')} onClick={() => setMode('dark')} style={buttonStyle(mode === 'dark')}>◐ {t('workspace.dark')}</button>
+        </div>
+      )}
+      <LanguageSwitcher compact />
+    </div>
   );
 }
 
@@ -168,6 +207,7 @@ export default function SoftphonePane({
   // Always use the context instance if available; fall back to local only in
   // standalone / embed mode where SipKeepAlive is not mounted.
   const sp = ctxSp ?? _localSp;
+  const { t } = useTranslation();
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -498,8 +538,8 @@ export default function SoftphonePane({
 
         {workspaceWide && (
           <div style={{ minWidth: 174 }}>
-            <div style={{ color: c.textDim, fontSize: 9.5, fontWeight: 850, letterSpacing: 1.1, textTransform: 'uppercase' }}>Lemtel workspace</div>
-            <div style={{ marginTop: 3, color: c.text, fontSize: 18, fontWeight: 850, letterSpacing: -0.45 }}>{TAB_META[tab].label}</div>
+            <div style={{ color: c.textDim, fontSize: 9.5, fontWeight: 850, letterSpacing: 1.1, textTransform: 'uppercase' }}>{t('workspace.title')}</div>
+            <div style={{ marginTop: 3, color: c.text, fontSize: 18, fontWeight: 850, letterSpacing: -0.45 }}>{t(TAB_META[tab].labelKey)}</div>
           </div>
         )}
 
@@ -518,7 +558,7 @@ export default function SoftphonePane({
             />
             <span style={{
               fontSize: compact ? 11 : 12, fontWeight: 700, color: c.text, letterSpacing: 0.4,
-            }}>Ext {creds.extension}</span>
+            }}>{t('workspace.extension')} {creds.extension}</span>
           </div>
           {!ultraCompact && (
             <div style={{
@@ -532,22 +572,23 @@ export default function SoftphonePane({
 
         {/* RIGHT: Sync + AI + Settings */}
         <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 4 : 6, flexShrink: 0 }}>
+          {!ultraCompact && <WorkspaceAppearanceControls compact={compact} />}
           <button
             onClick={syncPhoneSystem}
             disabled={syncingPhone}
-            title="Sync phone system"
+            title={t('workspace.sync')}
             style={{
               background: c.overlay06, border: `1px solid ${c.overlay10}`,
               color: c.textDim, cursor: syncingPhone ? 'wait' : 'pointer',
               width: compact ? 26 : 28, height: compact ? 24 : 26, borderRadius: 8, fontSize: 12,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
-            aria-label="Sync phone system"
+            aria-label={t('workspace.sync')}
           >{syncingPhone ? '…' : '↻'}</button>
           <button
             onClick={() => setShowAvaChat((v) => !v)}
-            title="Lemtel Intelligence"
-            aria-label="Lemtel Intelligence"
+            title={t('workspace.assistant')}
+            aria-label={t('workspace.assistant')}
             style={{
               background: showAvaChat ? `linear-gradient(135deg, ${c.ai}, #23d6ff)` : 'rgba(122,76,255,0.15)',
               border: '1px solid rgba(122,76,255,0.30)',
@@ -566,7 +607,7 @@ export default function SoftphonePane({
               width: compact ? 26 : 28, height: compact ? 24 : 26, borderRadius: 8, fontSize: 14,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
-            aria-label="Settings"
+            aria-label={t('workspace.settings')}
           >⚙</button>
         </div>
 
@@ -585,12 +626,12 @@ export default function SoftphonePane({
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center',
         }}>
           <div style={{ fontSize: 32, lineHeight: 1 }} aria-hidden>🔐</div>
-          <div style={{ color: c.text, fontSize: 16, fontWeight: 700 }}>SIP Not Configured</div>
+          <div style={{ color: c.text, fontSize: 16, fontWeight: 700 }}>{t('workspace.sipNotConfigured')}</div>
           <div style={{ color: c.mutedSilver, fontSize: 12, lineHeight: 1.5, maxWidth: 280 }}>
-            Your extension needs a SIP password. Contact your administrator or visit the portal.
+            {t('workspace.sipPasswordHelp')}
           </div>
           <button
-            onClick={() => window.electronAPI?.openExternal?.('https://avastatistic.ca')}
+            onClick={() => window.electronAPI?.openExternal?.(BACKEND_URL)}
             style={{
               marginTop: 4, padding: '8px 16px', borderRadius: 10,
               background: `linear-gradient(135deg, ${c.primary}, ${c.ai})`,
@@ -598,7 +639,7 @@ export default function SoftphonePane({
               color: c.onAccent, fontSize: 12, fontWeight: 700, cursor: 'pointer',
               boxShadow: '0 4px 14px rgba(124,58,237,0.35)',
             }}
-          >Open Portal →</button>
+          >{t('workspace.openPortal')} →</button>
           <div style={{ color: c.mutedSilver, fontSize: 10, marginTop: 4 }}>{sp.credError}</div>
         </div>
       )}
@@ -629,7 +670,7 @@ export default function SoftphonePane({
         {/* Incoming */}
         {sp.snap.callState === 'ringing-in' && (
           <IncomingCall
-            who={sp.snap.remoteIdentity || sp.snap.remoteNumber || 'Unknown'}
+            who={sp.snap.remoteIdentity || sp.snap.remoteNumber || t('workspace.unknownCaller')}
             number={sp.snap.remoteNumber}
             onAnswer={() => { setTimeout(() => { try { sp.answer(); } catch (e) { console.warn('[softphone] answer failed', e); } }, 0); }}
             onDecline={sp.hangup}
@@ -676,15 +717,15 @@ export default function SoftphonePane({
             border: '1px solid rgba(220, 38, 38, 0.35)',
             display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start',
           }}>
-            <div style={{ fontSize: 18 }}>🎤 Microphone Access Required</div>
+            <div style={{ fontSize: 18 }}>🎤 {t('workspace.microphoneRequired')}</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>
-              Allow microphone access to make calls. On macOS, enable Lemtel Telecom in System Preferences → Privacy → Microphone.
+              {t('workspace.microphoneHelp')}
             </div>
             <button onClick={requestMic} style={{
               background: `linear-gradient(135deg, ${c.primary}, ${c.ai})`,
               border: 'none', borderRadius: 8, color: 'white',
               padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-            }}>Allow Microphone</button>
+            }}>{t('workspace.allowMicrophone')}</button>
           </div>
         )}
 
@@ -717,7 +758,7 @@ export default function SoftphonePane({
               }}>
                 {(['team', 'sms'] as ChatsSubTab[]).map((st) => {
                   const active = chatsSubTab === st;
-                  const labels: Record<ChatsSubTab, string> = { team: 'Team Chat', sms: 'SMS' };
+                  const labels: Record<ChatsSubTab, string> = { team: t('workspace.teamChat'), sms: 'SMS' };
                   return (
                     <button
                       key={st}
@@ -768,7 +809,7 @@ export default function SoftphonePane({
               }}>
                 {(['recents', 'recordings', 'voicemail'] as CallsSubTab[]).map((st) => {
                   const active = callsSubTab === st;
-                  const labels: Record<CallsSubTab, string> = { recents: 'Recents', recordings: 'Recordings', voicemail: 'Voicemail' };
+                  const labels: Record<CallsSubTab, string> = { recents: t('workspace.recents'), recordings: t('workspace.recordings'), voicemail: t('workspace.voicemail') };
                   return (
                     <button
                       key={st}
@@ -859,7 +900,8 @@ export default function SoftphonePane({
           }}>
             {MAIN_TABS.map((tk) => {
               const active = tab === tk;
-              const { LucideIcon, label } = TAB_META[tk];
+              const { LucideIcon, labelKey } = TAB_META[tk];
+              const label = t(labelKey);
               const accent = '#7FA0FF';
               const inactiveColor = c.textDim;
               return (
@@ -943,20 +985,20 @@ export default function SoftphonePane({
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: c.gold }}>
-              {xferMode === 'blind' ? '↪ Blind transfer' : '↗ Attended transfer'}
+              {xferMode === 'blind' ? `↪ ${t('workspace.blindTransfer')}` : `↗ ${t('workspace.attendedTransfer')}`}
             </div>
             <input
               autoFocus
               className="lemtel-input"
               value={xferTarget}
               onChange={(e) => setXferTarget(e.target.value)}
-              placeholder="Extension or number"
+              placeholder={t('workspace.extensionOrNumber')}
               onKeyDown={(e) => e.key === 'Enter' && handleXferSubmit()}
             />
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button onClick={() => setShowXfer(false)} style={ghostBtn}>Cancel</button>
+              <button onClick={() => setShowXfer(false)} style={ghostBtn}>{t('common.cancel')}</button>
               <button onClick={handleXferSubmit} className="lemtel-btn-primary" style={{ ...ghostBtn, color: c.onAccent, border: 'none' }}>
-                {xferMode === 'blind' ? 'Transfer' : 'Start consult'}
+                {xferMode === 'blind' ? t('workspace.blindTransfer') : t('workspace.startConsult')}
               </button>
             </div>
           </div>
@@ -1005,20 +1047,21 @@ const Dialer = React.memo(function Dialer({
   const handleClear = useCallback(() => setDial(''), [setDial]);
   const handleSubmit = useMemo(() => (canCall ? onCall : undefined), [canCall, onCall]);
   const density = ultraCompact ? 'ultra' : compact ? 'compact' : 'spacious';
+  const { t } = useTranslation();
 
   const sipOk = sipRegistered && !sipError;
   const sipBanner = sipError || sipStatus === 'error' || sipStatus === 'failed'
-      ? { bg: 'rgba(239,68,68,0.12)', bd: 'rgba(239,68,68,0.30)', fg: c.danger, text: `🔴 SIP indisponible — ${sipError || sipStatus}` }
-      : { bg: 'rgba(245,158,11,0.12)', bd: 'rgba(245,158,11,0.30)', fg: c.warning, text: '🟡 Connexion en cours…' };
+      ? { bg: 'rgba(239,68,68,0.12)', bd: 'rgba(239,68,68,0.30)', fg: c.danger, text: `🔴 ${t('workspace.sipUnavailable')}${sipError ? ` — ${sipError}` : ''}` }
+      : { bg: 'rgba(245,158,11,0.12)', bd: 'rgba(245,158,11,0.30)', fg: c.warning, text: `🟡 ${t('workspace.connecting')}` };
 
   return (
     <div style={{ animation: 'fadeIn .25s ease-out', padding: compact ? '2px 0 8px' : '4px 4px 8px', minWidth: 0 }}>
 
       {!compact && (
         <div className="lemtel-dialer-hero" style={{ maxWidth: 620, margin: '0 auto 22px', textAlign: 'center' }}>
-          <div style={{ color: c.primary, fontSize: 10, fontWeight: 850, letterSpacing: 1.35, textTransform: 'uppercase' }}>Direct calling</div>
-          <h2 style={{ margin: '7px 0 6px', color: c.text, fontSize: 26, letterSpacing: -0.8 }}>Start a conversation.</h2>
-          <p style={{ margin: 0, color: c.textDim, fontSize: 12.5, lineHeight: 1.55 }}>Dial a colleague, a customer, or use a saved speed dial. Your Lemtel line stays private in the background.</p>
+          <div style={{ color: c.primary, fontSize: 10, fontWeight: 850, letterSpacing: 1.35, textTransform: 'uppercase' }}>{t('workspace.directCalling')}</div>
+          <h2 style={{ margin: '7px 0 6px', color: c.text, fontSize: 26, letterSpacing: -0.8 }}>{t('workspace.startConversation')}</h2>
+          <p style={{ margin: 0, color: c.textDim, fontSize: 12.5, lineHeight: 1.55 }}>{t('workspace.dialHint')}</p>
         </div>
       )}
 
@@ -1043,7 +1086,7 @@ const Dialer = React.memo(function Dialer({
         textAlign: 'center', minHeight: 64,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
       }}>
-        {!dial && <div style={{ color: c.textDim, fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, textTransform: 'uppercase' }}>Ready to call</div>}
+        {!dial && <div style={{ color: c.textDim, fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, textTransform: 'uppercase' }}>{t('workspace.readyToCall')}</div>}
         <div
           className="ava-display-num"
           style={{
@@ -1054,7 +1097,7 @@ const Dialer = React.memo(function Dialer({
             minHeight: 36,
             maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-          {dial || 'Enter a number'}
+          {dial || t('workspace.enterNumber')}
         </div>
       </div>
 
@@ -1080,14 +1123,14 @@ const Dialer = React.memo(function Dialer({
             cursor: dial ? 'pointer' : 'default', padding: 8, width: 56,
             transition: 'color 120ms ease',
           }}
-          title="Clear"
-        >Clear</button>
+          title={t('workspace.clear')}
+        >{t('workspace.clear')}</button>
 
         <button
           onClick={onCall}
           disabled={!canCall}
           className={canCall ? 'lemtel-glass' : undefined}
-          title={canCall && !sipRegistered ? 'SIP connecting — call may fail' : undefined}
+          title={canCall && !sipRegistered ? t('workspace.sipConnecting') : undefined}
           style={{
             width: 78, height: 78, borderRadius: '50%',
             background: !canCall
@@ -1109,7 +1152,7 @@ const Dialer = React.memo(function Dialer({
           }}
           onMouseEnter={(e) => { if (canCall) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.08)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
-          aria-label="Call"
+          aria-label={t('workspace.call')}
         >
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.9.36 1.78.7 2.6a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.82.34 1.7.57 2.6.7A2 2 0 0 1 22 16.92z" />
@@ -1123,7 +1166,7 @@ const Dialer = React.memo(function Dialer({
             background: 'none', border: 'none', color: dial ? c.textDim : 'transparent',
             fontSize: 22, cursor: dial ? 'pointer' : 'default', padding: 8, width: 56,
           }}
-          aria-label="Backspace"
+          aria-label={t('workspace.backspace')}
         >⌫</button>
       </div>
     </div>
@@ -1136,6 +1179,7 @@ const MemoKeypad = React.memo(DialerKeypad);
 
 
 function CallingState({ who, onHangup }: { who: string; onHangup: () => void }) {
+  const { t } = useTranslation();
   return (
     <div style={callViewStyle}>
       <div style={{ position: 'relative', marginBottom: 22 }}>
@@ -1154,7 +1198,7 @@ function CallingState({ who, onHangup }: { who: string; onHangup: () => void }) 
           position: 'relative', zIndex: 1,
         }}>☏</div>
       </div>
-      <div style={{ fontSize: 11, color: c.aiLight, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>Calling…</div>
+      <div style={{ fontSize: 11, color: c.aiLight, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>{t('dialer.calling')}</div>
       <div style={{ fontSize: 24, fontWeight: 600, marginBottom: 32, color: c.text }}>{who}</div>
       <button onClick={onHangup} style={hangupBtn}>📵</button>
     </div>
@@ -1162,6 +1206,7 @@ function CallingState({ who, onHangup }: { who: string; onHangup: () => void }) 
 }
 
 function IncomingCall({ who, number, onAnswer, onDecline }: { who: string; number?: string; onAnswer: () => void; onDecline: () => void }) {
+  const { t } = useTranslation();
   return (
     <div style={{ ...callViewStyle, animation: 'slideDown .35s ease-out' }}>
       <div style={{ position: 'relative', marginBottom: 22 }}>
@@ -1180,14 +1225,14 @@ function IncomingCall({ who, number, onAnswer, onDecline }: { who: string; numbe
           position: 'relative', zIndex: 1, fontWeight: 700,
         }}>{String(who).charAt(0).toUpperCase()}</div>
       </div>
-      <div style={{ fontSize: 11, color: c.gold, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>Incoming Call</div>
+      <div style={{ fontSize: 11, color: c.gold, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>{t('workspace.incomingCall')}</div>
       <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 4, color: c.text }}>{who}</div>
       {number && number !== who && <div style={{ fontSize: 13, color: c.textDim, marginBottom: 32 }}>{number}</div>}
       <div style={{ display: 'flex', gap: 28, marginTop: 24 }}>
-        <button onClick={onDecline} className="lemtel-glass lemtel-focus" aria-label="Decline incoming call" style={{
+        <button onClick={onDecline} className="lemtel-glass lemtel-focus" aria-label={t('workspace.declineCall')} style={{
           ...hangupBtn, background: `linear-gradient(135deg, #DC2626, ${c.danger})`, boxShadow: glow.red,
         }}>✕</button>
-        <button onClick={onAnswer} className="lemtel-glass lemtel-focus" aria-label="Answer incoming call" style={{
+        <button onClick={onAnswer} className="lemtel-glass lemtel-focus" aria-label={t('workspace.answerCall')} style={{
           ...hangupBtn, background: `linear-gradient(135deg, #059669, ${c.success})`, boxShadow: glow.green,
         }}>✓</button>
       </div>
@@ -1206,7 +1251,8 @@ export function ActiveCall({
   onAutoResetChange: (v: boolean) => void;
   onActiveOutputLabel: (label: string) => void;
 }) {
-  const remote = sp.snap.remoteIdentity || sp.snap.remoteNumber || 'Unknown';
+  const { t } = useTranslation();
+  const remote = sp.snap.remoteIdentity || sp.snap.remoteNumber || t('workspace.unknownCaller');
   // Phase 24B — the manual control exists only for the exact validated 'user_allowed'.
   const manualRecordingAllowed = sp.manualRecordingAllowed === true && sp.recordingPolicy === 'user_allowed';
 
@@ -1237,11 +1283,11 @@ export function ActiveCall({
         boxShadow: glow.green, marginBottom: 6,
       }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.green }} />
-        {sp.snap.onHold ? 'On Hold' : 'Active Call'}
+        {sp.snap.onHold ? t('workspace.onHold') : t('workspace.activeCall')}
       </div>
       {sp.recording && (
         <div data-testid="desktop-recording-indicator" aria-live="polite" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: c.red, marginBottom: 6 }}>
-          ● Recording in progress
+          ● {t('workspace.recordingInProgress')}
         </div>
       )}
       <div className="ava-display-num" style={{
@@ -1270,7 +1316,7 @@ export function ActiveCall({
       </div>
 
       {showDTMF && (
-        <div role="group" aria-label="DTMF keypad" style={{
+        <div role="group" aria-label={t('workspace.dtmfKeypad')} style={{
           display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: compact ? 6 : 10,
           marginBottom: 16, width: compact ? '100%' : 'min(100%, 260px)',
           padding: compact ? '8px' : '14px',
@@ -1285,7 +1331,7 @@ export function ActiveCall({
             <button
               key={k}
               onClick={() => sp.sendDTMF(k)}
-              aria-label={`Send DTMF tone ${k}`}
+                aria-label={`${t('workspace.sendDtmfTone')} ${k}`}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 padding: compact ? '10px 0' : '14px 0', borderRadius: 14,
@@ -1321,7 +1367,7 @@ export function ActiveCall({
           collapse to icon-only (labels still exposed via aria-label + title). */}
       <div
         role="toolbar"
-        aria-label="Call controls"
+        aria-label={t('workspace.callControls')}
         aria-keyshortcuts="M H K T E"
         className={compact ? 'lemtel-control-strip' : 'lemtel-scroll'}
         style={compact ? {
@@ -1333,31 +1379,31 @@ export function ActiveCall({
         }}
       >
 
-        <ControlBtn iconOnly={ultraCompact} icon="🎤" label={sp.snap.muted ? 'Unmute' : 'Mute'} ariaLabel={`${sp.snap.muted ? 'Unmute microphone' : 'Mute microphone'} (shortcut M)`} active={sp.snap.muted} danger onClick={sp.snap.muted ? sp.unmute : sp.mute} />
-        <ControlBtn iconOnly={ultraCompact} icon="⏸" label={sp.snap.onHold ? 'Resume' : 'Hold'} ariaLabel={`${sp.snap.onHold ? 'Resume call' : 'Place call on hold'} (shortcut H)`} active={sp.snap.onHold} warning onClick={sp.snap.onHold ? sp.unhold : sp.hold} />
-        <ControlBtn iconOnly={ultraCompact} icon="#" label="Keypad" ariaLabel={`${showDTMF ? 'Hide DTMF keypad' : 'Show DTMF keypad'} (shortcut K)`} active={showDTMF} onClick={toggleDTMF} />
+        <ControlBtn iconOnly={ultraCompact} icon="🎤" label={sp.snap.muted ? t('workspace.unmute') : t('workspace.mute')} ariaLabel={`${sp.snap.muted ? t('workspace.unmuteMicrophone') : t('workspace.muteMicrophone')} (M)`} active={sp.snap.muted} danger onClick={sp.snap.muted ? sp.unmute : sp.mute} />
+        <ControlBtn iconOnly={ultraCompact} icon="⏸" label={sp.snap.onHold ? t('workspace.resume') : t('workspace.hold')} ariaLabel={`${sp.snap.onHold ? t('workspace.resumeCall') : t('workspace.holdCall')} (H)`} active={sp.snap.onHold} warning onClick={sp.snap.onHold ? sp.unhold : sp.hold} />
+        <ControlBtn iconOnly={ultraCompact} icon="#" label={t('workspace.keypad')} ariaLabel={`${showDTMF ? t('workspace.hideKeypad') : t('workspace.showKeypad')} (K)`} active={showDTMF} onClick={toggleDTMF} />
         {manualRecordingAllowed && (
-          <ControlBtn iconOnly={ultraCompact} icon="⏺" label={sp.recording ? 'Stop' : 'Record'} ariaLabel={sp.recording ? 'Stop recording call' : 'Start recording call'} active={sp.recording} onClick={sp.toggleRecording} />
+          <ControlBtn iconOnly={ultraCompact} icon="⏺" label={sp.recording ? t('workspace.stopRecording') : t('workspace.record')} ariaLabel={sp.recording ? t('workspace.stopRecording') : t('workspace.startRecording')} active={sp.recording} onClick={sp.toggleRecording} />
         )}
-        <ControlBtn iconOnly={ultraCompact} icon="↪" label="Blind Xfer" ariaLabel="Blind transfer call (shortcut T)" onClick={() => onTransfer('blind')} />
-        <ControlBtn iconOnly={ultraCompact} icon="↗" label="Attended" ariaLabel="Attended transfer call (shortcut Shift+T)" onClick={() => onTransfer('attended')} disabled={sp.hasConsult()} active={sp.hasConsult()} />
+        <ControlBtn iconOnly={ultraCompact} icon="↪" label={t('workspace.blindTransfer')} ariaLabel={`${t('workspace.blindTransfer')} (T)`} onClick={() => onTransfer('blind')} />
+        <ControlBtn iconOnly={ultraCompact} icon="↗" label={t('workspace.attendedTransfer')} ariaLabel={`${t('workspace.attendedTransfer')} (⇧T)`} onClick={() => onTransfer('attended')} disabled={sp.hasConsult()} active={sp.hasConsult()} />
       </div>
       {!manualRecordingAllowed && (
         <div data-testid="desktop-recording-policy-note" role="note" style={{ fontSize: 11, color: c.textDim, textAlign: 'center', marginBottom: 10 }}>
-          {sp.recordingPolicy === 'portal_managed' ? 'Recording managed in portal' : 'Manual recording is not allowed'}
+          {sp.recordingPolicy === 'portal_managed' ? t('workspace.recordingManaged') : t('workspace.manualRecordingDenied')}
         </div>
       )}
 
 
       {sp.hasConsult() ? (
         <div style={{ width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={sp.completeAttendedTransfer} className="lemtel-btn-primary lemtel-glass lemtel-focus" aria-label="Complete attended transfer" style={{
+          <button onClick={sp.completeAttendedTransfer} className="lemtel-btn-primary lemtel-glass lemtel-focus" aria-label={t('workspace.completeTransfer')} style={{
             height: 44, borderRadius: 12, color: c.onAccent, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}>✓ Complete Transfer</button>
-          <button onClick={sp.cancelAttendedConsult} className="lemtel-glass lemtel-focus" aria-label="Cancel attended transfer consult" style={endCallBtn}>✕ Cancel Consult</button>
+          }}>✓ {t('workspace.completeTransfer')}</button>
+          <button onClick={sp.cancelAttendedConsult} className="lemtel-glass lemtel-focus" aria-label={t('workspace.cancelConsult')} style={endCallBtn}>✕ {t('workspace.cancelConsult')}</button>
         </div>
       ) : (
-        <button onClick={sp.hangup} className="lemtel-glass lemtel-focus" aria-label="End call" style={endCallBtn}>📵 End Call</button>
+        <button onClick={sp.hangup} className="lemtel-glass lemtel-focus" aria-label={t('workspace.endCall')} style={endCallBtn}>📵 {t('workspace.endCall')}</button>
       )}
     </div>
   );

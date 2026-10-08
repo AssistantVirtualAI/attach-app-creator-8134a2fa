@@ -7,7 +7,9 @@ import SettingsPage from './components/SettingsPage';
 import BrightnessOverlay from './components/BrightnessOverlay';
 import ResponsiveLab from './components/ResponsiveLab';
 import DialerBaselineCheck from './components/DialerBaselineCheck';
+import WorkspacePreview from './test-harness/WorkspacePreview';
 import { useTheme } from './lib/theme';
+import { useTranslation } from './lib/i18n';
 import { useContrast } from './hooks/useContrast';
 import { supabase } from './lib/supabaseClient';
 import { BACKEND_URL, BACKEND_STORAGE_SUFFIX, LEGACY_BACKEND_URL } from './lib/backendOrigin';
@@ -59,6 +61,7 @@ const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.s
 const IS_LAB = qs?.get('lab') === 'responsive';
 const IS_DIALER_CHECK = qs?.get('check') === 'dialer';
 const IS_EMBED = qs?.get('embed') === '1';
+const IS_WORKSPACE_PREVIEW = qs?.get('preview') === 'workspace';
 
 async function clearDesktopAuthState() {
   try { await supabase.auth.signOut(); } catch { /* noop */ }
@@ -147,13 +150,17 @@ export default function App() {
   if (IS_LAB) return <ResponsiveLab />;
   // Dialer baseline check — visit ?check=dialer to open it.
   if (IS_DIALER_CHECK) return <DialerBaselineCheck />;
+  // Visual review route, available only in development. It has no access to
+  // a customer session, the PBX, or real data.
+  if (IS_WORKSPACE_PREVIEW && import.meta.env.DEV) return <WorkspacePreview />;
 
   return <DesktopApp />;
 }
 
 // ── CDR sync au démarrage ──────────────────────────────────
 function DesktopApp() {
-  const { t } = useTheme();
+  const { t: themeTokens } = useTheme();
+  const { t } = useTranslation();
   useContrast(); // applies low/med/high contrast preset on mount
 
   const [creds, setCreds] = useState<Creds>(null);
@@ -361,21 +368,21 @@ function DesktopApp() {
     return (
       <div style={{
         height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: t.bgGradient, color: t.textMuted, fontSize: 13,
+        background: themeTokens.bgGradient, color: themeTokens.textMuted, fontSize: 13,
       }}>
-        Loading…
+        {t('workspace.loading')}
       </div>
     );
   }
 
   const accessScreen = (title: string, withButton: boolean) => (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: themeTokens.bg, position: 'relative' }}>
       <TitleBar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: t.textMuted, fontSize: 14 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: themeTokens.textMuted, fontSize: 14 }}>
         <div>{title}</div>
         {withButton && (
           <button type="button" onClick={() => { void returnToSignIn(); }} style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer' }}>
-            Revenir à la connexion
+            {t('workspace.returnToSignIn')}
           </button>
         )}
       </div>
@@ -383,15 +390,13 @@ function DesktopApp() {
   );
 
   if (policyBlocked || (creds && (lifecycleStatus === 'unavailable' || lifecycleStatus === 'blocked'))) {
-    return accessScreen('Accès Desktop indisponible', true);
+    return accessScreen(t('workspace.desktopUnavailable'), true);
   }
 
   if (!creds) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
-        <BrightnessOverlay />
-        <TitleBar />
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', zIndex: 1 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#08111f', position: 'relative' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
           <SetupWizard onComplete={(c: any) => { setCreds(c); }} />
         </div>
       </div>
@@ -399,14 +404,14 @@ function DesktopApp() {
   }
 
   if (lifecycleStatus === 'checking') {
-    return accessScreen('Vérification de l’accès Lemtel Desktop…', false);
+    return accessScreen(t('workspace.checkingAccess'), false);
   }
 
   const lifecycleAllowed = lifecycleStatus === 'allowed';
   return (
     <RecordingPolicyContext.Provider value={recordingPolicy}>
     <SipKeepAlive creds={creds} allowNewActions={lifecycleAllowed}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: themeTokens.bg, position: 'relative' }}>
         {lifecycleAllowed && <AllowedCdrSync />}
         {lifecycleAllowed && <DesktopBackgroundSync fallbackExtension={creds.extension} />}
         <BrightnessOverlay />

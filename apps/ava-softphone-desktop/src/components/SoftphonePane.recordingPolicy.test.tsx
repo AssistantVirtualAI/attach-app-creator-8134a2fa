@@ -35,7 +35,7 @@ const draw = (sp: any, onTransfer = vi.fn()) => render(
   <ActiveCall sp={sp} timer="00:10" showDTMF={false} toggleDTMF={vi.fn()} dialKeys={[]} onTransfer={onTransfer}
     activeOutputLabel="Default" autoResetOutput={false} onAutoResetChange={vi.fn()} onActiveOutputLabel={vi.fn()} />,
 );
-const recBtn = () => screen.queryByRole('button', { name: /recording call/i });
+const recBtn = () => screen.queryByRole('button', { name: /start recording|démarrer l’enregistrement/i });
 
 describe('ActiveCall — Phase 24B recording policy', () => {
   it('user_allowed renders Record and its click calls the action', () => {
@@ -65,7 +65,7 @@ describe('ActiveCall — Phase 24B recording policy', () => {
     draw(sp);
     const ind = screen.getByTestId('desktop-recording-indicator');
     expect(ind.querySelectorAll('button, a').length).toBe(0);
-    expect(screen.queryByRole('button', { name: /Stop recording call/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /stop recording|arrêter l’enregistrement/i })).toBeNull();
     fireEvent.click(ind);
     expect(sp.toggleRecording).not.toHaveBeenCalled();
   });

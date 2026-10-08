@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import DialerKeypad, { DIALER_TOKENS, DialerDensity } from './DialerKeypad';
-import { useTheme, ThemeMode } from '../lib/theme';
+import { useTheme, UserThemeMode } from '../lib/theme';
 
 /* ============================================================
    Automated visual check: renders the dialer at every theme
@@ -11,7 +11,7 @@ import { useTheme, ThemeMode } from '../lib/theme';
    Open with ?check=dialer in the desktop app.
    ============================================================ */
 
-const MODES: ThemeMode[] = ['daylight', 'light', 'dark', 'midnight'];
+const MODES: UserThemeMode[] = ['daylight', 'dark'];
 const DENSITIES: { d: DialerDensity; label: string; width: number }[] = [
   { d: 'spacious', label: 'Spacious (≥440px)', width: 320 },
   { d: 'compact',  label: 'Compact (360–439)',  width: 280 },

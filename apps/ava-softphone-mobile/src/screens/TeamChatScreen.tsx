@@ -17,7 +17,7 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
   const channelUnread = props.channelUnread || {};
   const mobile = useMobileCredentials();
   const { tx } = useT();
-  const organizationName = props.organizationName || mobile.organizationName || mobile.sipDomain || 'Lemtel';
+  const organizationName = props.organizationName || mobile.sipDomain || 'Lemtel';
   const token = mobile.accessToken;
   const userId = mobile.userId;
   const [view, setView] = useState<'channels' | 'members' | 'chat'>('channels');

@@ -61,7 +61,7 @@ export default function HomeScreen({ onNavigate, haptic, onOpenProfile }: HomeSc
       <section style={{
         position: 'relative', overflow: 'hidden', borderRadius: 24, padding: '20px 18px 18px',
         background: `radial-gradient(circle at 92% 4%, ${colors.avaCyan}44 0, transparent 40%), radial-gradient(circle at 12% 100%, ${colors.lemtelBlue}66 0, transparent 56%), ${colors.graphite}`,
-        border: `1px solid ${colors.lemtelBlue}66`, boxShadow: shadow.glow,
+        border: `1px solid ${colors.lemtelBlue}66`, boxShadow: shadow.lift,
       }}>
         <span aria-hidden style={{
           position: 'absolute', right: -30, bottom: -44, width: 150, height: 150, borderRadius: 999,

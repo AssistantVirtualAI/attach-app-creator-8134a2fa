@@ -173,7 +173,6 @@ export interface CallRecord {
   startedAt: string;
   durationSec: number;
   hasRecording: boolean;
-  hasTranscript: boolean;
   pbx_uuid?: string | null;
   organization_id?: string | null;
   domain_uuid?: string | null;
@@ -215,8 +214,6 @@ export interface RecordingEntry {
   customer?: string;
   startedAt: string;
   durationSec: number;
-  hasTranscript: boolean;
-  summary?: string;
   xml_cdr_uuid?: string;
   pbx_uuid?: string;
   record_path?: string;
@@ -294,23 +291,15 @@ const dashboardMock: DashboardBrief = {
 };
 
 const callsMock: CallRecord[] = [
-  { id: 'c1', direction: 'in',  status: 'answered',  from: '+1 514 555 0123', to: '+1 514 555 0100', customer: 'Marie Tremblay', startedAt: new Date(Date.now() - 36e5).toISOString(),    durationSec: 245, hasRecording: true,  hasTranscript: true,  sentiment: 'positive' },
-  { id: 'c2', direction: 'out', status: 'answered',  from: '+1 514 555 0100', to: '+1 438 555 9988', customer: 'Acme Corp',       startedAt: new Date(Date.now() - 5*36e5).toISOString(),  durationSec: 412, hasRecording: true,  hasTranscript: true,  sentiment: 'neutral'  },
-  { id: 'c3', direction: 'in',  status: 'missed',    from: '+1 514 555 7711', to: '+1 514 555 0100',                              startedAt: new Date(Date.now() - 8*36e5).toISOString(),  durationSec: 0,   hasRecording: false, hasTranscript: false                          },
-  { id: 'c4', direction: 'in',  status: 'voicemail', from: '+1 438 555 6612', to: '+1 514 555 0100', customer: 'Vincent K.',      startedAt: new Date(Date.now() - 26*36e5).toISOString(), durationSec: 72,  hasRecording: true,  hasTranscript: true,  sentiment: 'negative' },
+  { id: 'c1', direction: 'in',  status: 'answered',  from: '+1 514 555 0123', to: '+1 514 555 0100', customer: 'Marie Tremblay', startedAt: new Date(Date.now() - 36e5).toISOString(),    durationSec: 245, hasRecording: true,  sentiment: 'positive' },
+  { id: 'c2', direction: 'out', status: 'answered',  from: '+1 514 555 0100', to: '+1 438 555 9988', customer: 'Acme Corp',       startedAt: new Date(Date.now() - 5*36e5).toISOString(),  durationSec: 412, hasRecording: true,  sentiment: 'neutral'  },
+  { id: 'c3', direction: 'in',  status: 'missed',    from: '+1 514 555 7711', to: '+1 514 555 0100',                              startedAt: new Date(Date.now() - 8*36e5).toISOString(),  durationSec: 0,   hasRecording: false                          },
+  { id: 'c4', direction: 'in',  status: 'voicemail', from: '+1 438 555 6612', to: '+1 514 555 0100', customer: 'Vincent K.',      startedAt: new Date(Date.now() - 26*36e5).toISOString(), durationSec: 72,  hasRecording: true,  sentiment: 'negative' },
 ];
 
 const callDetailMock = (id: string): CallDetail => {
   const base = callsMock.find((c) => c.id === id) || callsMock[0];
-  return {
-    ...base,
-    transcript: [
-      { speaker: 'agent',    text: 'Hi, thanks for calling Lemtel. How can I help?', t: 0 },
-      { speaker: 'customer', text: 'I wanted to renew my plan.', t: 6 },
-    ],
-    summary: 'Renewal call.', topics: ['renewal'], actionItems: ['Send pricing PDF'],
-    qualityScore: 87, intent: 'Renewal', tags: ['priority'],
-  };
+  return { ...base, tags: ['priority'] };
 };
 
 const threadsMock: SmsThread[] = [
@@ -322,7 +311,7 @@ const messagesMock: Record<string, SmsMessage[]> = {
   t2: [{ id: 'm4', from: 'them', body: 'Can we reschedule?', at: '09:30' }],
 };
 const voicemailMock: VoicemailEntry[] = [
-  { id: 'v1', from: '+1 514 555 0123', customer: 'Marie Tremblay', receivedAt: new Date(Date.now() - 30*60e3).toISOString(), durationSec: 72, transcript: 'Calling to renew.', summary: 'Wants to renew today.', priority: 'high', sentiment: 'positive', isNew: true },
+  { id: 'v1', from: '+1 514 555 0123', customer: 'Marie Tremblay', receivedAt: new Date(Date.now() - 30*60e3).toISOString(), durationSec: 72, priority: 'high', sentiment: 'positive', isNew: true },
 ];
 
 /* ─── Public API ──────────────────────────────────────────────── */
@@ -342,7 +331,6 @@ function mapCdrToCallRecord(r: any): CallRecord {
     startedAt:    r.start_at ?? new Date().toISOString(),
     durationSec:  billsec,
     hasRecording: !!(r.has_recording || r.recording_path || r.recording_name),
-    hasTranscript: false,
     sentiment:    undefined,
   };
 }
@@ -354,10 +342,6 @@ function mapCdrToVoicemailEntry(r: any): VoicemailEntry {
     customer:    r.caller_name ?? undefined,
     receivedAt:  r.start_at ?? new Date().toISOString(),
     durationSec: Number(r.billsec ?? r.duration_seconds ?? 0),
-    transcript:  r.voicemail_message ?? 'Transcription non disponible.',
-    summary:     r.voicemail_message
-                   ? r.voicemail_message.slice(0, 120)
-                   : 'Aucun résumé disponible.',
     priority:    'normal' as const,
     sentiment:   'neutral' as const,
     isNew:       !r.voicemail_read,

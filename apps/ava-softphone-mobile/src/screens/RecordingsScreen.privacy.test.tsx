@@ -32,7 +32,7 @@ vi.mock('../lib/i18n', () => ({ useT: () => ({ lang: 'en' }) }));
 
 import RecordingsScreen from './RecordingsScreen';
 
-const own = { id: 'r1', from: '5145550000', to: '201', extension: '201', organization_id: 'org-test', customer: 'Own Caller', startedAt: new Date().toISOString(), durationSec: 60, hasTranscript: true };
+const own = { id: 'r1', from: '5145550000', to: '201', extension: '201', organization_id: 'org-test', customer: 'Own Caller', startedAt: new Date().toISOString(), durationSec: 60 };
 
 const flush = async () => { await act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); }); };
 const creds: any = { userId: 'user-test', organizationId: 'org-test', extension: '201', accessToken: 'token-test' };

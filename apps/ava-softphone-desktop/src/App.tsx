@@ -13,6 +13,7 @@ import { setAuthToken } from './lib/avaApi';
 import { audit } from './lib/audit';
 import { sipProvider } from './lib/sip/jssipProvider';
 import { useLemtelDesktopSessionBootstrap } from './hooks/useLemtelDesktopSessionBootstrap';
+import DesktopReadOnlyWorkspace from './components/DesktopReadOnlyWorkspace';
 
 const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 const IS_LAB = qs?.get('lab') === 'responsive';
@@ -211,40 +212,8 @@ function DesktopApp() {
 
   // This is the expected and safe response from the current server contract.
   if (bootstrap.status === 'not_provisioned') {
-    return <DesktopProvisioningWorkspace email={creds.email} organizationId={bootstrap.organizationId} onRetry={() => { void bootstrap.refresh(); }} onSignOut={() => { void returnToSignIn(); }} />;
+    return <DesktopReadOnlyWorkspace email={creds.email} organizationId={bootstrap.organizationId} onRetry={() => { void bootstrap.refresh(); }} onSignOut={() => { void returnToSignIn(); }} />;
   }
 
   return null;
-}
-
-function DesktopProvisioningWorkspace({ email, organizationId, onRetry, onSignOut }: { email: string; organizationId: string | null; onRetry: () => void; onSignOut: () => void }) {
-  const { t } = useTranslation();
-  const { t: themeTokens } = useTheme();
-  return (
-    <div data-testid="lemtel-desktop-not-provisioned" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: themeTokens.bg, position: 'relative' }}>
-      <TitleBar />
-      <main style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24, background: `radial-gradient(620px 420px at 50% 38%, rgba(74,123,241,.18), transparent 70%), ${themeTokens.bg}` }}>
-        <section style={{ width: 'min(100%, 620px)', padding: 'clamp(26px,5vw,46px)', borderRadius: 24, border: `1px solid ${themeTokens.border}`, background: themeTokens.surface, boxShadow: '0 26px 80px rgba(0,0,0,.22)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 26 }}>
-            <div style={{ width: 48, height: 48, display: 'grid', placeItems: 'center', borderRadius: 15, background: 'linear-gradient(135deg,#5d8dff,#315fcf)', color: '#fff', fontSize: 23, fontWeight: 900 }}>L</div>
-            <div><p style={{ margin: 0, color: themeTokens.textMuted, fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{t('workspace.desktopReadyEyebrow')}</p><strong style={{ color: themeTokens.text, fontSize: 15 }}>Lemtel Desktop</strong></div>
-          </div>
-          <h1 style={{ margin: 0, color: themeTokens.text, fontSize: 'clamp(25px,4vw,34px)', lineHeight: 1.12 }}>{t('workspace.desktopReadyTitle')}</h1>
-          <p style={{ margin: '16px 0 0', color: themeTokens.textMuted, fontSize: 15, lineHeight: 1.65 }}>{t('workspace.telephonyNotProvisioned')}</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, padding: '14px 16px', borderRadius: 14, background: 'rgba(98,149,255,.10)', border: '1px solid rgba(98,149,255,.24)', color: themeTokens.text }}>
-            <span aria-hidden="true" style={{ width: 9, height: 9, flex: '0 0 auto', borderRadius: '50%', background: '#71e6bd', boxShadow: '0 0 0 5px rgba(113,230,189,.10)' }} />
-            <span style={{ fontSize: 13, fontWeight: 700 }}>{t('workspace.callingDisabled')}</span>
-          </div>
-          <dl style={{ margin: '22px 0 0', padding: 0, display: 'grid', gap: 8, color: themeTokens.textMuted, fontSize: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18 }}><dt>{t('workspace.member')}</dt><dd style={{ margin: 0, color: themeTokens.text }}>{email}</dd></div>
-            {organizationId && <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18 }}><dt>{t('workspace.organization')}</dt><dd style={{ margin: 0, color: themeTokens.text }}>{t('workspace.verified')}</dd></div>}
-          </dl>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 28 }}>
-            <button type="button" onClick={onRetry} style={{ minHeight: 42, padding: '0 16px', border: 0, borderRadius: 10, background: 'linear-gradient(135deg,#5d8dff,#315fcf)', color: '#fff', cursor: 'pointer', fontWeight: 800 }}>{t('workspace.retrySessionCheck')}</button>
-            <button type="button" onClick={onSignOut} style={{ minHeight: 42, padding: '0 16px', borderRadius: 10, border: `1px solid ${themeTokens.border}`, background: 'transparent', color: themeTokens.text, cursor: 'pointer', fontWeight: 750 }}>{t('workspace.returnToSignIn')}</button>
-          </div>
-        </section>
-      </main>
-    </div>
-  );
 }

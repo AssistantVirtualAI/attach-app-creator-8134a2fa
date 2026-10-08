@@ -1,10 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import TitleBar from './components/TitleBar';
 import SetupWizard from './components/SetupWizard';
-import UpdateBanner from './components/UpdateBanner';
-import SoftphonePane from './components/SoftphonePane';
-import SettingsPage from './components/SettingsPage';
-import BrightnessOverlay from './components/BrightnessOverlay';
 import ResponsiveLab from './components/ResponsiveLab';
 import DialerBaselineCheck from './components/DialerBaselineCheck';
 import WorkspacePreview from './test-harness/WorkspacePreview';
@@ -12,64 +8,28 @@ import { useTheme } from './lib/theme';
 import { useTranslation } from './lib/i18n';
 import { useContrast } from './hooks/useContrast';
 import { supabase } from './lib/supabaseClient';
-import { BACKEND_URL, BACKEND_STORAGE_SUFFIX, LEGACY_BACKEND_URL } from './lib/backendOrigin';
+import { BACKEND_STORAGE_SUFFIX, BACKEND_URL, LEGACY_BACKEND_URL } from './lib/backendOrigin';
 import { setAuthToken } from './lib/avaApi';
 import { audit } from './lib/audit';
 import { sipProvider } from './lib/sip/jssipProvider';
-import { useSoftphone } from './hooks/useSoftphone';
-import { SoftphoneProvider } from './contexts/SoftphoneContext';
-import { useTenant } from './hooks/useTenant';
-import { useRealtimeSync } from './hooks/useRealtimeSync';
-import { useExtensionDataSync } from './hooks/useExtensionDataSync';
-import { useLemtelDesktopClientConfig } from './hooks/useLemtelDesktopClientConfig';
-import type { RecordingPolicy } from './lib/lemtelDesktopClientConfig';
-
-const LEMTEL_ORG_ID = '71755d33-ed64-4ad5-a828-61c9d2029eb7';
-
-async function resolveCurrentOrganizationId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return LEMTEL_ORG_ID;
-  const { data: softphoneUser } = await supabase
-    .from('pbx_softphone_users')
-    .select('organization_id')
-    .eq('portal_user_id', user.id)
-    .limit(1)
-    .maybeSingle();
-  if (softphoneUser?.organization_id) return softphoneUser.organization_id;
-  const { data: member } = await supabase
-    .from('organization_members')
-    .select('organization_id')
-    .eq('user_id', user.id)
-    .limit(1)
-    .maybeSingle();
-  return member?.organization_id || LEMTEL_ORG_ID;
-}
-
-async function triggerCdrSync() {
-  try {
-    const organizationId = await resolveCurrentOrganizationId();
-    const { data } = await supabase.functions.invoke('fusionpbx-proxy', {
-      body: { action: 'sync-cdrs', organization_id: organizationId, limit: 500, page_size: 500, max_pages: 2, from_beginning: true },
-    });
-    console.log('CDR sync triggered:', data);
-  } catch (err) {
-    console.warn('CDR sync failed:', err);
-  }
-}
+import { useLemtelDesktopSessionBootstrap } from './hooks/useLemtelDesktopSessionBootstrap';
 
 const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 const IS_LAB = qs?.get('lab') === 'responsive';
 const IS_DIALER_CHECK = qs?.get('check') === 'dialer';
-const IS_EMBED = qs?.get('embed') === '1';
 const IS_WORKSPACE_PREVIEW = qs?.get('preview') === 'workspace';
 
 async function clearDesktopAuthState() {
+  try { await sipProvider.stop?.(); } catch { /* no active call path is expected before provisioning */ }
   try { await supabase.auth.signOut(); } catch { /* noop */ }
   try {
     window.localStorage.removeItem('lemtel-desktop-auth');
     window.sessionStorage.removeItem('lemtel-desktop-auth');
     window.localStorage.removeItem(`lemtel-desktop-auth${BACKEND_STORAGE_SUFFIX}`);
     window.sessionStorage.removeItem(`lemtel-desktop-auth${BACKEND_STORAGE_SUFFIX}`);
+    // A previous Desktop build could have kept a local SIP password fallback.
+    // The Lemtel bootstrap-only path never reads it and clears it on sign-out.
+    window.localStorage.removeItem('lemtel.sip_password');
   } catch { /* noop */ }
   try { await window.electronAPI?.saveCredentials?.(null); } catch { /* noop */ }
   setAuthToken(null);
@@ -79,145 +39,41 @@ type Creds = {
   portalUrl: string;
   backendOrigin?: string;
   email: string;
-  extension: string;
   displayName?: string;
-  sipDomain?: string;
-  wssUrl?: string;
   accessToken?: string;
   refreshToken?: string;
   userId?: string;
+  organizationId?: string;
 } | null;
 
 type ActiveCreds = Exclude<Creds, null>;
 
-// Phase 24B — local carrier of the normalized portal recording policy into SipKeepAlive (restrictive default).
-const RecordingPolicyContext = React.createContext<RecordingPolicy>('not_allowed');
-
-function SipKeepAlive({ creds, allowNewActions, children }: { creds: ActiveCreds; allowNewActions: boolean; children?: React.ReactNode }) {
-  const recordingPolicy = React.useContext(RecordingPolicyContext);
-  const sp = useSoftphone({
-    allowNewActions,
-    recordingPolicy,
-    extension: creds.extension,
-    displayName: creds.displayName,
-    sipDomain: creds.sipDomain,
-    wssUrl: creds.wssUrl,
-    accessToken: creds.accessToken,
-    refreshToken: creds.refreshToken,
-  });
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent('lemtel:sip-status', { detail: sp.snap.status }));
-  }, [sp.snap.status]);
-  // Expose the single SIP instance to all children via context
-  return <SoftphoneProvider value={sp}>{children ?? null}</SoftphoneProvider>;
-}
-
-// Phase 21B: the existing CDR sync is triggered only while the portal manifest is allowed.
-// Mounted only in the allowed subtree; unmounting stops its existing cadence immediately.
-function AllowedCdrSync() {
-  useEffect(() => {
-    triggerCdrSync();
-    const syncTimer = setInterval(triggerCdrSync, 5 * 60 * 1000);
-    return () => clearInterval(syncTimer);
-  }, []);
-  return null;
-}
-
-/** Phase 21B: strictly local cleanup for the Desktop policy flow (no server sign-out, no reload). */
-async function clearLocalDesktopPolicyState() {
-  try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* noop */ }
-  try { await window.electronAPI?.saveCredentials?.(null); } catch { /* noop */ }
-  try {
-    window.localStorage.removeItem('lemtel-desktop-auth');
-    window.sessionStorage.removeItem('lemtel-desktop-auth');
-    window.localStorage.removeItem('lemtel.sip_password');
-  } catch { /* noop */ }
-  setAuthToken(null);
-}
-
-const isBusyCallState = (s?: string) => s === 'ringing-in' || s === 'ringing-out' || s === 'active' || s === 'held';
-
-function DesktopBackgroundSync({ fallbackExtension }: { fallbackExtension?: string | null }) {
-  const { orgId, extension } = useTenant();
-  useRealtimeSync(orgId);
-  useExtensionDataSync(orgId, extension || fallbackExtension, { intervalMs: 60_000, firstRunDeepLimit: 2000 });
-  return null;
-}
-
-
 export default function App() {
-  // Responsive testing utility — visit ?lab=responsive to open it.
   if (IS_LAB) return <ResponsiveLab />;
-  // Dialer baseline check — visit ?check=dialer to open it.
   if (IS_DIALER_CHECK) return <DialerBaselineCheck />;
-  // Visual review route, available only in development. It has no access to
-  // a customer session, the PBX, or real data.
+  // Development-only visual review; it has no customer session or telephony.
   if (IS_WORKSPACE_PREVIEW && import.meta.env.DEV) return <WorkspacePreview />;
-
   return <DesktopApp />;
 }
 
-// ── CDR sync au démarrage ──────────────────────────────────
+/**
+ * The currently deployed Hostinger contract authenticates a Lemtel member but
+ * explicitly reports telephony as not_provisioned. This component deliberately
+ * does not mount any SIP, CDR, realtime, or credential-loading code until an
+ * independently-authorized provisioning contract exists.
+ */
 function DesktopApp() {
   const { t: themeTokens } = useTheme();
   const { t } = useTranslation();
-  useContrast(); // applies low/med/high contrast preset on mount
+  useContrast();
 
   const [creds, setCreds] = useState<Creds>(null);
   const [loading, setLoading] = useState(true);
-  const [mobileSettings, setMobileSettings] = useState(false);
-  const finalizingRef = useRef(false);
-  const [policyBlocked, setPolicyBlocked] = useState(false);
-  const [callState, setCallState] = useState<string | undefined>(() => sipProvider.getSnapshot?.().callState);
-
-  // Phase 21B: portal lifecycle runs before SipKeepAlive is ever mounted. Without a session, Desktop is unavailable.
-  const lifecycle = useLemtelDesktopClientConfig(creds?.accessToken || null);
-  const lifecycleStatus = lifecycle.status;
-  const portalTelephonyPolicy = lifecycle.manifest?.telephonyPolicy ?? null;
-  // Phase 24B — strict normalization from the validated manifest only; anything else is restrictive.
-  const rawRecordingPolicy = portalTelephonyPolicy?.recordingPolicy;
-  const recordingPolicy: RecordingPolicy =
-    rawRecordingPolicy === 'user_allowed' || rawRecordingPolicy === 'portal_managed' ? rawRecordingPolicy : 'not_allowed';
-  const { refresh: refreshLifecycle, finalizeBlock } = lifecycle;
-
-  useEffect(() => {
-    const unsubscribe = sipProvider.subscribe?.((snap) => setCallState(snap.callState));
-    return () => { unsubscribe?.(); };
-  }, []);
-
-  // Foreground refresh only when idle; the hook itself enforces the 900 s minimum.
-  useEffect(() => {
-    const onForeground = () => {
-      if (document.visibilityState === 'hidden') return;
-      if (isBusyCallState(sipProvider.getSnapshot?.().callState)) return;
-      void refreshLifecycle();
-    };
-    window.addEventListener('focus', onForeground);
-    document.addEventListener('visibilitychange', onForeground);
-    return () => {
-      window.removeEventListener('focus', onForeground);
-      document.removeEventListener('visibilitychange', onForeground);
-    };
-  }, [refreshLifecycle]);
-
-  // Deferred revocation: an existing call stays up; once idle, stop SIP once and clear local state.
-  useEffect(() => {
-    if (lifecycleStatus !== 'pending_block' || isBusyCallState(callState)) return;
-    if (finalizingRef.current) return;
-    finalizingRef.current = true;
-    setPolicyBlocked(true);
-    void (async () => {
-      try { await sipProvider.stop?.(); } catch { /* noop */ }
-      finalizeBlock();
-      await clearLocalDesktopPolicyState();
-    })();
-  }, [lifecycleStatus, callState, finalizeBlock]);
+  const bootstrap = useLemtelDesktopSessionBootstrap(creds?.accessToken || null);
 
   const returnToSignIn = async () => {
-    if (!finalizingRef.current) await clearLocalDesktopPolicyState();
-    setPolicyBlocked(false);
+    await clearDesktopAuthState();
     setCreds(null);
-    finalizingRef.current = false;
   };
 
   useEffect(() => {
@@ -234,16 +90,14 @@ function DesktopApp() {
         return;
       }
 
-      // Restore session from saved tokens BEFORE checking session
       if (saved?.accessToken && saved?.refreshToken) {
         await supabase.auth.setSession({
           access_token: saved.accessToken,
           refresh_token: saved.refreshToken,
-        }).catch(() => { /* token expired — fall through */ });
+        }).catch(() => { /* expired token falls through to sign-in */ });
       }
 
       const { data: { session } } = await supabase.auth.getSession();
-
       if (cancelled) return;
 
       const sessionEmail = session?.user?.email?.toLowerCase() || '';
@@ -255,59 +109,34 @@ function DesktopApp() {
         (!!savedEmail && !!sessionEmail && savedEmail !== sessionEmail)
       );
 
-      if (!session || mismatchedSavedSession) {
-        // No valid session, or Electron credentials belong to a different Supabase user → force login wizard.
+      if (!session || mismatchedSavedSession || !saved) {
         await clearDesktopAuthState();
         setCreds(null);
-      } else if (saved) {
-        // Refresh stored tokens in case they rotated
-        setAuthToken(session.access_token);
-        // Re-fetch the latest pbx_softphone_users row so extension/display name reflect current DB state
-        // (saved Electron credentials may be stale, e.g. extension stored as 'N/A' from a prior login).
-        let refreshed = { ...saved };
-        try {
-          const { data: row } = await supabase
-            .from('pbx_softphone_users')
-            .select('extension, display_name, sip_domain, wss_url')
-            .eq('portal_user_id', session.user.id)
-            .maybeSingle();
-          if (row?.extension) {
-            refreshed = {
-              ...refreshed,
-              backendOrigin: BACKEND_URL,
-              extension: String(row.extension),
-              displayName: row.display_name || refreshed.displayName,
-              sipDomain: row.sip_domain || refreshed.sipDomain,
-              wssUrl: row.wss_url || refreshed.wssUrl,
-            };
-            try { await window.electronAPI?.saveCredentials?.(refreshed); } catch { /* noop */ }
-          }
-        } catch { /* noop */ }
-        setCreds({
-          ...refreshed,
+      } else {
+        // Preserve only the authenticated identity needed by the bootstrap gate.
+        // Historic extension/WSS values are intentionally discarded.
+        const restored: ActiveCreds = {
+          portalUrl: BACKEND_URL,
+          backendOrigin: BACKEND_URL,
+          email: session.user.email || saved.email,
+          displayName: saved.displayName || session.user.email?.split('@')[0],
           userId: session.user.id,
           accessToken: session.access_token,
           refreshToken: session.refresh_token,
-        });
-
-      } else {
-        // A browser-local Supabase session without Electron credentials is stale for the packaged app.
-        await clearDesktopAuthState();
-        setCreds(null);
+        };
+        setAuthToken(session.access_token);
+        try { await window.electronAPI?.saveCredentials?.(restored); } catch { /* noop */ }
+        setCreds(restored);
       }
       setLoading(false);
     };
 
-    init();
-
+    void init();
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         try { audit('softphone.signed_out'); } catch { /* noop */ }
-        // Phase 21B: the policy flow already stopped SIP once; never stop it twice.
-        if (!finalizingRef.current) {
-          try { await sipProvider.stop?.(); } catch { /* noop */ }
-        }
-        await window.electronAPI?.saveCredentials?.(null).catch(() => {});
+        try { await sipProvider.stop?.(); } catch { /* noop */ }
+        try { await window.electronAPI?.saveCredentials?.(null); } catch { /* noop */ }
         setAuthToken(null);
         setCreds(null);
         return;
@@ -315,117 +144,107 @@ function DesktopApp() {
       if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
         setAuthToken(session.access_token);
         if (event === 'SIGNED_IN') {
-          audit('softphone.signed_in', session.user?.id, { email: session.user?.email });
+          try { audit('softphone.signed_in', session.user?.id, { email: session.user?.email }); } catch { /* noop */ }
         }
-        setCreds((prev) => prev ? {
-          ...prev,
+        setCreds((previous) => previous ? {
+          ...previous,
           accessToken: session.access_token,
           refreshToken: session.refresh_token,
-        } : prev);
+        } : previous);
       }
-    });
-
-    window.electronAPI?.onSetStatus?.((s: any) => {
-      window.dispatchEvent(new CustomEvent('lemtel:set-status', { detail: s }));
-    });
-    const isCallBusy = () => {
-      const s = sipProvider.getSnapshot?.().callState;
-      return s === 'ringing-in' || s === 'ringing-out' || s === 'active' || s === 'held';
-    };
-    const unsubscribeSip = sipProvider.subscribe?.((snap) => { void snap; });
-
-    import('./lib/mediaPermissions').then(({ requestMediaPermissions }) => {
-      requestMediaPermissions().catch(() => { /* noop */ });
     });
 
     return () => {
       cancelled = true;
       subscription.unsubscribe();
-      try { unsubscribeSip?.(); } catch { /* noop */ }
     };
   }, []);
 
-  const openSettingsMobile = () => {
-    // Navigate to the settings view via the global nav bus so SoftphonePane
-    // and the standalone SoftphonePane gear button reach the SettingsPage.
-    setMobileSettings(true);
-    window.dispatchEvent(new CustomEvent('lemtel:nav', { detail: 'settings' }));
-  };
-
-  const signOutDesktop = async () => {
-    try { setAuthToken(null); } catch { /* noop */ }
-    try { await supabase.auth.signOut(); } catch { /* noop */ }
-    try {
-      window.localStorage.removeItem('lemtel-desktop-auth');
-      window.sessionStorage.removeItem('lemtel-desktop-auth');
-    } catch { /* noop */ }
-    await window.electronAPI?.clearCredentials?.();
-    window.location.reload();
-  };
-
-
-  if (loading) {
-    return (
-      <div style={{
-        height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: themeTokens.bgGradient, color: themeTokens.textMuted, fontSize: 13,
-      }}>
-        {t('workspace.loading')}
-      </div>
-    );
-  }
-
-  const accessScreen = (title: string, withButton: boolean) => (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: themeTokens.bg, position: 'relative' }}>
+  const stateScreen = (title: string, actions?: React.ReactNode, testId?: string) => (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: themeTokens.bg, position: 'relative' }} data-testid={testId}>
       <TitleBar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: themeTokens.textMuted, fontSize: 14 }}>
-        <div>{title}</div>
-        {withButton && (
-          <button type="button" onClick={() => { void returnToSignIn(); }} style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer' }}>
-            {t('workspace.returnToSignIn')}
-          </button>
-        )}
+      <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24 }}>
+        <section style={{ width: 'min(100%, 540px)', padding: 30, borderRadius: 22, border: `1px solid ${themeTokens.border}`, background: themeTokens.surface, boxShadow: '0 24px 70px rgba(0,0,0,.22)', textAlign: 'center' }}>
+          <div style={{ width: 46, height: 46, margin: '0 auto 16px', display: 'grid', placeItems: 'center', borderRadius: 14, background: 'linear-gradient(135deg,#5d8dff,#315fcf)', color: '#fff', fontWeight: 900, fontSize: 22 }}>L</div>
+          <p style={{ margin: '0 0 8px', color: themeTokens.textMuted, fontSize: 12, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{t('workspace.desktopReadyEyebrow')}</p>
+          <h1 style={{ margin: '0 0 12px', color: themeTokens.text, fontSize: 24, lineHeight: 1.18 }}>{title}</h1>
+          {actions && <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 10, marginTop: 22 }}>{actions}</div>}
+        </section>
       </div>
     </div>
   );
 
-  if (policyBlocked || (creds && (lifecycleStatus === 'unavailable' || lifecycleStatus === 'blocked'))) {
-    return accessScreen(t('workspace.desktopUnavailable'), true);
+  const secondaryAction = (label: string, onClick: () => void) => (
+    <button type="button" onClick={onClick} style={{ minHeight: 40, padding: '0 15px', borderRadius: 10, border: `1px solid ${themeTokens.border}`, background: themeTokens.surface, color: themeTokens.text, cursor: 'pointer', fontWeight: 750 }}>{label}</button>
+  );
+
+  const primaryAction = (label: string, onClick: () => void) => (
+    <button type="button" onClick={onClick} style={{ minHeight: 40, padding: '0 15px', border: 0, borderRadius: 10, background: 'linear-gradient(135deg,#5d8dff,#315fcf)', color: '#fff', cursor: 'pointer', fontWeight: 800 }}>{label}</button>
+  );
+
+  if (loading) {
+    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: themeTokens.bgGradient, color: themeTokens.textMuted, fontSize: 13 }}>{t('workspace.loading')}</div>;
   }
 
   if (!creds) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#08111f', position: 'relative' }}>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
-          <SetupWizard onComplete={(c: any) => { setCreds(c); }} />
-        </div>
-      </div>
+    return <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#08111f', position: 'relative' }}><div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}><SetupWizard onComplete={setCreds} /></div></div>;
+  }
+
+  if (bootstrap.status === 'idle' || bootstrap.status === 'checking') {
+    return stateScreen(t('workspace.checkingAccess'), undefined, 'lemtel-desktop-checking-access');
+  }
+
+  if (bootstrap.status === 'denied') {
+    return stateScreen(t('workspace.sessionAccessDenied'), secondaryAction(t('workspace.returnToSignIn'), () => { void returnToSignIn(); }), 'lemtel-desktop-session-denied');
+  }
+
+  if (bootstrap.status === 'retryable_error') {
+    return stateScreen(
+      t('workspace.verifySessionFailed'),
+      <>
+        {primaryAction(t('workspace.retrySessionCheck'), () => { void bootstrap.refresh(); })}
+        {secondaryAction(t('workspace.returnToSignIn'), () => { void returnToSignIn(); })}
+      </>,
+      'lemtel-desktop-bootstrap-retry',
     );
   }
 
-  if (lifecycleStatus === 'checking') {
-    return accessScreen(t('workspace.checkingAccess'), false);
+  // This is the expected and safe response from the current server contract.
+  if (bootstrap.status === 'not_provisioned') {
+    return <DesktopProvisioningWorkspace email={creds.email} organizationId={bootstrap.organizationId} onRetry={() => { void bootstrap.refresh(); }} onSignOut={() => { void returnToSignIn(); }} />;
   }
 
-  const lifecycleAllowed = lifecycleStatus === 'allowed';
+  return null;
+}
+
+function DesktopProvisioningWorkspace({ email, organizationId, onRetry, onSignOut }: { email: string; organizationId: string | null; onRetry: () => void; onSignOut: () => void }) {
+  const { t } = useTranslation();
+  const { t: themeTokens } = useTheme();
   return (
-    <RecordingPolicyContext.Provider value={recordingPolicy}>
-    <SipKeepAlive creds={creds} allowNewActions={lifecycleAllowed}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: themeTokens.bg, position: 'relative' }}>
-        {lifecycleAllowed && <AllowedCdrSync />}
-        {lifecycleAllowed && <DesktopBackgroundSync fallbackExtension={creds.extension} />}
-        <BrightnessOverlay />
-        {!IS_EMBED && <TitleBar />}
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-          {mobileSettings ? (
-            <SettingsPage creds={creds} onSignOut={signOutDesktop} onBack={() => setMobileSettings(false)} portalTelephonyPolicy={portalTelephonyPolicy} />
-          ) : (
-            <SoftphonePane creds={creds} onOpenSettings={openSettingsMobile} />
-          )}
-        </div>
-        {!IS_EMBED && <UpdateBanner />}
-      </div>
-    </SipKeepAlive>
-    </RecordingPolicyContext.Provider>
+    <div data-testid="lemtel-desktop-not-provisioned" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: themeTokens.bg, position: 'relative' }}>
+      <TitleBar />
+      <main style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24, background: `radial-gradient(620px 420px at 50% 38%, rgba(74,123,241,.18), transparent 70%), ${themeTokens.bg}` }}>
+        <section style={{ width: 'min(100%, 620px)', padding: 'clamp(26px,5vw,46px)', borderRadius: 24, border: `1px solid ${themeTokens.border}`, background: themeTokens.surface, boxShadow: '0 26px 80px rgba(0,0,0,.22)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 26 }}>
+            <div style={{ width: 48, height: 48, display: 'grid', placeItems: 'center', borderRadius: 15, background: 'linear-gradient(135deg,#5d8dff,#315fcf)', color: '#fff', fontSize: 23, fontWeight: 900 }}>L</div>
+            <div><p style={{ margin: 0, color: themeTokens.textMuted, fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{t('workspace.desktopReadyEyebrow')}</p><strong style={{ color: themeTokens.text, fontSize: 15 }}>Lemtel Desktop</strong></div>
+          </div>
+          <h1 style={{ margin: 0, color: themeTokens.text, fontSize: 'clamp(25px,4vw,34px)', lineHeight: 1.12 }}>{t('workspace.desktopReadyTitle')}</h1>
+          <p style={{ margin: '16px 0 0', color: themeTokens.textMuted, fontSize: 15, lineHeight: 1.65 }}>{t('workspace.telephonyNotProvisioned')}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, padding: '14px 16px', borderRadius: 14, background: 'rgba(98,149,255,.10)', border: '1px solid rgba(98,149,255,.24)', color: themeTokens.text }}>
+            <span aria-hidden="true" style={{ width: 9, height: 9, flex: '0 0 auto', borderRadius: '50%', background: '#71e6bd', boxShadow: '0 0 0 5px rgba(113,230,189,.10)' }} />
+            <span style={{ fontSize: 13, fontWeight: 700 }}>{t('workspace.callingDisabled')}</span>
+          </div>
+          <dl style={{ margin: '22px 0 0', padding: 0, display: 'grid', gap: 8, color: themeTokens.textMuted, fontSize: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18 }}><dt>{t('workspace.member')}</dt><dd style={{ margin: 0, color: themeTokens.text }}>{email}</dd></div>
+            {organizationId && <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18 }}><dt>{t('workspace.organization')}</dt><dd style={{ margin: 0, color: themeTokens.text }}>{t('workspace.verified')}</dd></div>}
+          </dl>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 28 }}>
+            <button type="button" onClick={onRetry} style={{ minHeight: 42, padding: '0 16px', border: 0, borderRadius: 10, background: 'linear-gradient(135deg,#5d8dff,#315fcf)', color: '#fff', cursor: 'pointer', fontWeight: 800 }}>{t('workspace.retrySessionCheck')}</button>
+            <button type="button" onClick={onSignOut} style={{ minHeight: 42, padding: '0 16px', borderRadius: 10, border: `1px solid ${themeTokens.border}`, background: 'transparent', color: themeTokens.text, cursor: 'pointer', fontWeight: 750 }}>{t('workspace.returnToSignIn')}</button>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }

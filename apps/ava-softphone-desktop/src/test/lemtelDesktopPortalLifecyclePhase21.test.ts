@@ -1,4 +1,4 @@
-// Lemtel Phase 21B — Desktop-local static checks (no Git, no network, no telephony).
+// Desktop bootstrap boundary — local static checks only; no network or telephony.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,30 +6,31 @@ import path from 'node:path';
 const src = path.resolve(__dirname, '..');
 const rd = (p: string) => fs.readFileSync(path.join(src, p), 'utf8');
 
-describe('Lemtel Phase 21B — Desktop lifecycle (local)', () => {
-  it('pure module enforces the desktop policy and the 900 s minimum', () => {
-    const s = rd('lib/lemtelDesktopClientConfig.ts');
-    expect(s).toContain("if (m.access.desktopEnabled !== true) return 'blocked_desktop_access'");
-    expect(s).toContain('m.routing.edgeFeatureGate !== false');
-    expect(s).toContain('MIN_REFRESH_SECONDS = 900');
-    expect(s).not.toMatch(/setTimeout|setInterval|\bfetch\(|WebSocket|console\./);
+describe('Lemtel Desktop bootstrap boundary', () => {
+  it('uses the deployed authenticated bootstrap as the only post-login authority', () => {
+    const hook = rd('hooks/useLemtelDesktopSessionBootstrap.ts');
+    expect(hook).toContain('lemtel-session-bootstrap');
+    expect(hook).toContain("method: 'GET'");
+    expect(hook).not.toContain('lemtel-client-config');
+    expect(hook).not.toContain('lemtel-device-register');
+    expect(hook).not.toMatch(/WebSocket|setInterval|console\./);
   });
 
-  it('hook only calls lemtel-client-config, has no legacy mode', () => {
-    const s = rd('hooks/useLemtelDesktopClientConfig.ts');
-    expect(s).toContain("const FN = 'lemtel-client-config'");
-    expect(s).not.toMatch(/legacy|softphone-credentials|setInterval|console\./);
+  it('renders a truthful provision-pending workspace and never mounts SIP on the current contract', () => {
+    const app = rd('App.tsx');
+    expect(app).toContain("bootstrap.status === 'not_provisioned'");
+    expect(app).toContain('DesktopProvisioningWorkspace');
+    expect(app).not.toContain('useLemtelDesktopClientConfig');
+    expect(app).not.toContain('<SipKeepAlive');
+    expect(app).not.toContain('softphone-credentials');
+    expect(app).not.toContain('desktopUnavailable');
+    expect(rd('lib/i18n.ts')).not.toContain('Desktop access is unavailable');
+    expect(rd('lib/i18n.ts')).not.toContain('L’accès Desktop est indisponible');
   });
 
-  it('App gates SipKeepAlive, CDR and background sync behind the manifest', () => {
-    const s = rd('App.tsx');
-    expect(s.indexOf('useLemtelDesktopClientConfig(')).toBeLessThan(s.indexOf('<SipKeepAlive creds={creds}'));
-    expect(s).toContain('{lifecycleAllowed && <AllowedCdrSync />}');
-    expect(s).toContain('{lifecycleAllowed && <DesktopBackgroundSync');
-    expect(s).toContain("supabase.auth.signOut({ scope: 'local' })");
-  });
-
-  it('useSoftphone exposes allowNewActions defaulting to true', () => {
-    expect(rd('hooks/useSoftphone.ts')).toContain('const allowNewActions = args.allowNewActions !== false;');
+  it('keeps recording policy restrictive by default', () => {
+    const policy = rd('lib/lemtelTelephonyPolicy.ts');
+    expect(policy).toContain("'not_allowed'");
+    expect(rd('hooks/useSoftphone.ts')).toContain("? args.recordingPolicy : 'not_allowed'");
   });
 });

@@ -6,7 +6,7 @@ import { useContrast, Contrast } from '../hooks/useContrast';
 import { sipProvider } from '../lib/sip/jssipProvider';
 import { theme } from '../lib/theme';
 import pkg from '../../package.json';
-import type { BinaryPortalPolicy, RecordingPolicy } from '../lib/lemtelDesktopClientConfig';
+import type { BinaryPortalPolicy, RecordingPolicy } from '../lib/lemtelTelephonyPolicy';
 import LanguageSwitcher from './ui/LanguageSwitcher';
 import { useTranslation } from '../lib/i18n';
 

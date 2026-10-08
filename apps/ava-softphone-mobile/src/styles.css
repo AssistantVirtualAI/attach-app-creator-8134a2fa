@@ -8,7 +8,7 @@
   --ava-cyan: #23d6ff;
   --ava-violet: #7A4CFF;
   --text: #E8EEFB;
-  --text-muted: #7C8AA8;
+  --text-muted: #9AA8C2;
   --border: rgba(255,255,255,0.08);
   --success: #10B981;
   --warning: #F59E0B;
@@ -60,6 +60,17 @@ body {
   box-shadow: 0 10px 32px -16px rgba(0,0,0,0.5);
   border-radius: 16px;
 }
+
+.lemtel-powered-by {
+  text-decoration: none;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+.lemtel-powered-by:focus-visible {
+  outline: 2px solid var(--ava-cyan);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.lemtel-powered-by:active { opacity: 0.72; transform: scale(0.98); }
 
 button, input, textarea { font-family: inherit; }
 textarea, input { user-select: text; }
@@ -326,4 +337,13 @@ body[data-theme="light"] a { color: #0023e6; }
 body[data-theme="light"] [data-muted="true"],
 body[data-theme="light"] .muted {
   color: #6b7a99 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
 }

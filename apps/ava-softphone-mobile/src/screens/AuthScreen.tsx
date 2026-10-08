@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import type { Creds } from '../lib/creds';
 import { txStatic as tx } from '../lib/i18n';
 import { bootstrapLemtelMobileSession, LemtelSessionBootstrapError, type LemtelSessionBootstrap } from '../lib/lemtelSessionBootstrap';
+import PoweredByAva from '../components/PoweredByAva';
 
 type Screen = 'login' | 'forgot' | 'first-password';
 type ForgotStep = 'form' | 'confirm' | 'sent';
@@ -35,8 +36,8 @@ const C = {
   border: 'rgba(255,255,255,0.08)',
   text: '#E8EEFB',
   textIce: '#F4F8FF',
-  textSub: 'rgba(232,238,251,0.62)',
-  textDim: 'rgba(232,238,251,0.42)',
+  textSub: 'rgba(232,238,251,0.78)',
+  textDim: 'rgba(232,238,251,0.66)',
   gold: '#FFD700',
   cyan: '#0BB5D6',
   green: '#22C55E',
@@ -560,7 +561,8 @@ function Footer() {
       fontSize: 11, color: C.textDim, letterSpacing: 0.4,
       position: 'relative', zIndex: 1,
     }}>
-      <span style={{ color: C.gold, fontWeight: 600 }}>{tx('Lemtel Communications', 'Lemtel Communications')}</span>
+      <div style={{ color: C.gold, fontWeight: 700 }}>{tx('Lemtel Communications', 'Lemtel Communications')}</div>
+      <PoweredByAva style={{ marginTop: 8, justifyContent: 'center', color: C.textSub }} />
     </div>
   );
 }

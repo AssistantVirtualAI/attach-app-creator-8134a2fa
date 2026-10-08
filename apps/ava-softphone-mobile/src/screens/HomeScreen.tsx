@@ -6,6 +6,7 @@ import { Card, Chip, StatusDot, SectionTitle, AIPanel, Skeleton, PrimaryButton, 
 import { LemtelMark, LemtelBadge, HeroGradient } from '../components/Brand';
 import type { Tab } from '../components/BottomTabs';
 import StatsDashboard from '../components/StatsDashboard';
+import { useT } from '../lib/i18n';
 
 
 interface Props { onNavigate: (t: Tab) => void; haptic: (s?: ImpactStyle) => Promise<void> }
@@ -13,6 +14,7 @@ interface Props { onNavigate: (t: Tab) => void; haptic: (s?: ImpactStyle) => Pro
 export default function HomeScreen({ onNavigate, haptic }: Props) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [data, setData] = useState<DashboardBrief | null>(null);
+  const { tx } = useT();
 
   useEffect(() => {
     mobileApi.me().then(setMe);
@@ -31,7 +33,7 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
               <LemtelBadge />
             </div>
             <div style={{ fontSize: 10.5, color: colors.signalGold, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', marginTop: 2 }}>
-              AI Phone
+              {tx('Téléphonie intelligente', 'AI phone')}
             </div>
           </div>
           {data ? <StatusDot state={data?.status?.sipState ?? 'offline'} /> : <Skeleton w={50} h={14} />}
@@ -39,10 +41,10 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
 
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: font.sm, color: colors.mutedSilver }}>
-            {me ? `${me?.dataScope === 'domain_admin' ? 'Admin domaine' : 'Extension'} ${me?.extension?.number ?? '—'} · ${me?.domain?.sipDomain || me?.organization?.name || 'Lemtel'}` : <Skeleton w="60%" h={10} />}
+            {me ? `${me?.dataScope === 'domain_admin' ? tx('Admin du domaine', 'Domain admin') : tx('Extension', 'Extension')} ${me?.extension?.number ?? '—'} · ${me?.domain?.sipDomain || me?.organization?.name || 'Lemtel'}` : <Skeleton w="60%" h={10} />}
           </div>
           <h1 style={{ fontSize: font.xxl, color: colors.textIce, margin: '6px 0 4px', fontWeight: 800, letterSpacing: -0.5 }}>
-            {data?.greeting || (me ? `Bonjour, ${(me?.user?.name || me?.user?.email || 'Utilisateur').split(/[\s@]/).filter(Boolean)[0]}` : <Skeleton w="70%" h={26} />)}
+            {data?.greeting || (me ? `${tx('Bonjour', 'Hello')}, ${(me?.user?.name || me?.user?.email || tx('Utilisateur', 'User')).split(/[\s@]/).filter(Boolean)[0]}` : <Skeleton w="70%" h={26} />)}
           </h1>
           <p style={{ fontSize: font.base, color: colors.textSub, margin: 0, lineHeight: 1.5 }}>
             {data?.brief || <Skeleton w="100%" h={14} />}
@@ -51,32 +53,32 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
       </HeroGradient>
 
       {/* Quick actions */}
-      <SectionTitle eyebrow="Raccourcis" title="Actions rapides" />
+      <SectionTitle eyebrow={tx('Raccourcis', 'Shortcuts')} title={tx('Actions rapides', 'Quick actions')} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        <QuickAction label="Appeler" icon="☎" tone="gold" onPress={() => { haptic(ImpactStyle.Medium); onNavigate('calls'); }} />
-        <QuickAction label="Message" icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('messages'); }} />
-        <QuickAction label="Assistant Lemtel" icon="✦" tone="violet" onPress={() => { haptic(); onNavigate('ava'); }} />
-        <QuickAction label="Accueil" icon="◉" tone="violet" onPress={() => { haptic(); onNavigate('home'); }} />
-        <QuickAction label="Transfert" icon="↪" tone="gold" onPress={() => { haptic(); onNavigate('settings'); }} />
-        <QuickAction label="Messagerie" icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('calls'); }} />
+        <QuickAction label={tx('Appeler', 'Call')} icon="☎" tone="gold" onPress={() => { haptic(ImpactStyle.Medium); onNavigate('calls'); }} />
+        <QuickAction label={tx('Message', 'Message')} icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('messages'); }} />
+        <QuickAction label={tx('Assistant Lemtel', 'Lemtel assistant')} icon="✦" tone="violet" onPress={() => { haptic(); onNavigate('ava'); }} />
+        <QuickAction label={tx('Accueil', 'Home')} icon="◉" tone="violet" onPress={() => { haptic(); onNavigate('home'); }} />
+        <QuickAction label={tx('Transfert', 'Transfer')} icon="↪" tone="gold" onPress={() => { haptic(); onNavigate('settings'); }} />
+        <QuickAction label={tx('Messagerie', 'Voicemail')} icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('calls'); }} />
       </div>
 
       {/* Data scope */}
-      <SectionTitle eyebrow="Données PBX réelles" title="Portée d'accès" />
+      <SectionTitle eyebrow={tx('Données PBX', 'PBX data')} title={tx("Portée d'accès", 'Access scope')} />
       <Card padded={true} style={{ marginBottom: 10, background: 'linear-gradient(145deg, rgba(23,198,204,0.12), rgba(255,255,255,0.045))' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 38, height: 38, borderRadius: 14, display: 'grid', placeItems: 'center', background: gradients.ai, fontSize: 18 }}>⌁</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: font.base, fontWeight: 800, color: colors.textIce }}>{data?.scope?.label || (me?.dataScope === 'domain_admin' ? 'Admin du domaine' : 'Utilisateur extension')}</div>
-            <div style={{ fontSize: font.sm, color: colors.mutedSilver, marginTop: 2 }}>{me ? `${me?.client?.name ? `${me.client.name} · ` : ''}${me?.organization?.name || 'Lemtel'} · ${me?.domain?.sipDomain || me?.extension?.sipDomain || '—'}` : 'Chargement de la portée du domaine…'}</div>
+            <div style={{ fontSize: font.base, fontWeight: 800, color: colors.textIce }}>{data?.scope?.label || (me?.dataScope === 'domain_admin' ? tx('Admin du domaine', 'Domain admin') : tx("Utilisateur d'extension", 'Extension user'))}</div>
+            <div style={{ fontSize: font.sm, color: colors.mutedSilver, marginTop: 2 }}>{me ? `${me?.client?.name ? `${me.client.name} · ` : ''}${me?.organization?.name || 'Lemtel'} · ${me?.domain?.sipDomain || me?.extension?.sipDomain || '—'}` : tx('Chargement de la portée du domaine…', 'Loading domain scope…')}</div>
           </div>
-          <Chip tone={me?.permissions?.admin ? 'gold' : 'cyan'}>{me?.permissions?.admin ? 'Admin' : 'Utilisateur'}</Chip>
+          <Chip tone={me?.permissions?.admin ? 'gold' : 'cyan'}>{me?.permissions?.admin ? 'Admin' : tx('Utilisateur', 'User')}</Chip>
         </div>
       </Card>
 
       {me?.status?.updatedAt && (
         <div style={{ margin: '8px 2px 0', fontSize: font.xs, color: colors.mutedSilver }}>
-          État PBX synchronisé {new Date(me.status.updatedAt).toLocaleString()}
+          {tx('État PBX synchronisé', 'PBX status synced')} {new Date(me.status.updatedAt).toLocaleString()}
         </div>
       )}
 
@@ -85,11 +87,11 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
 
 
       {/* Activity sparkline */}
-      <SectionTitle eyebrow="12 dernières heures" title="Activité d'appels" />
-      <ActivitySpark answered={data?.metrics?.answeredCalls ?? 0} missed={data?.metrics?.missedCalls ?? 0} />
+      <SectionTitle eyebrow={tx('12 dernières heures', 'Last 12 hours')} title={tx("Activité d'appels", 'Call activity')} />
+      <ActivitySpark answered={data?.metrics?.answeredCalls ?? 0} missed={data?.metrics?.missedCalls ?? 0} tx={tx} />
 
       {/* Needs attention */}
-      <SectionTitle eyebrow="Priorisé par Lemtel AI" title="À traiter" />
+      <SectionTitle eyebrow={tx('Priorisé par Lemtel AI', 'Prioritized by Lemtel AI')} title={tx('À traiter', 'Needs attention')} />
       {!data && <Card><Skeleton w="80%" h={12} /><div style={{ height: 8 }} /><Skeleton w="50%" h={10} /></Card>}
       {data?.needsAttention?.map?.((n) => (
         <Card key={n.id} accent={n.accent === 'danger' ? 'gold' : (n.accent as any)} style={{ marginBottom: 10 }} onPress={() => haptic()}>
@@ -108,15 +110,15 @@ export default function HomeScreen({ onNavigate, haptic }: Props) {
       ))}
 
       {/* AI brief */}
-      <SectionTitle eyebrow="Résumé Lemtel AI" title="Ce qui a changé depuis votre dernière connexion" />
-      <AIPanel title="Résumé quotidien Lemtel AI" right={<GhostButton tone="cyan" style={{ padding: '6px 10px' }} onClick={() => onNavigate('ava')}>Ouvrir l'IA</GhostButton>}>
+      <SectionTitle eyebrow={tx('Résumé Lemtel AI', 'Lemtel AI summary')} title={tx('Depuis votre dernière connexion', 'Since your last sign-in')} />
+      <AIPanel title={tx('Résumé quotidien Lemtel AI', 'Daily Lemtel AI summary')} right={<GhostButton tone="cyan" style={{ padding: '6px 10px' }} onClick={() => onNavigate('ava')}>{tx("Ouvrir l'IA", 'Open AI')}</GhostButton>}>
         <p style={{ fontSize: font.base, lineHeight: 1.55, color: colors.textIce, margin: 0 }}>
-          {data?.brief || "Génération du résumé du jour…"}
+          {data?.brief || tx('Génération du résumé du jour…', 'Generating today’s summary…')}
         </p>
         <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-          <Chip tone="gold">{data?.metrics?.actionItems ?? '·'} tâches</Chip>
-          <Chip tone="cyan">{data?.metrics?.unreadSms ?? '·'} non lus</Chip>
-          <Chip tone="violet">Agents Lemtel AI en ligne</Chip>
+          <Chip tone="gold">{data?.metrics?.actionItems ?? '·'} {tx('tâches', 'tasks')}</Chip>
+          <Chip tone="cyan">{data?.metrics?.unreadSms ?? '·'} {tx('non lus', 'unread')}</Chip>
+          <Chip tone="violet">{tx('Agents Lemtel AI en ligne', 'Lemtel AI agents online')}</Chip>
         </div>
       </AIPanel>
 
@@ -256,7 +258,7 @@ function AnswerRateHero({ answered, missed }: { answered?: number; missed?: numb
   );
 }
 
-function ActivitySpark({ answered, missed }: { answered: number; missed: number }) {
+function ActivitySpark({ answered, missed, tx }: { answered: number; missed: number; tx: (fr: string, en: string) => string }) {
   // Deterministic pseudo-distribution across 12 hourly buckets
   const buckets = Array.from({ length: 12 }, (_, i) => {
     const seed = Math.sin(i * 1.3 + answered * 0.7 + missed * 0.3) * 0.5 + 0.5;
@@ -292,8 +294,8 @@ function ActivitySpark({ answered, missed }: { answered: number; missed: number 
         <span>8AM</span><span>12PM</span><span>4PM</span><span>8PM</span>
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-        <LegendDot color={colors.avaCyan} label="Répondus" />
-        <LegendDot color={colors.signalGold} label="Manqués" />
+        <LegendDot color={colors.avaCyan} label={tx('Répondus', 'Answered')} />
+        <LegendDot color={colors.signalGold} label={tx('Manqués', 'Missed')} />
       </div>
     </Card>
   );

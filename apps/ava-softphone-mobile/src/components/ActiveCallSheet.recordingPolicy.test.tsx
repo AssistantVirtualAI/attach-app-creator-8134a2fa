@@ -1,6 +1,6 @@
 /**
  * Lemtel Phase 24A — the validated portal recordingPolicy is the only authority
- * for the manual Record / Stop Rec control on the Mobile active-call sheet.
+ * for the manual Record / Stop recording control on the Mobile active-call sheet.
  * No real WebSocket, SIP call, device, Supabase function or PBX write.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -33,7 +33,7 @@ function makeSp(recording = false) {
 }
 const haptic = vi.fn().mockResolvedValue(undefined);
 const draw = (sp: any, recordingPolicy?: any) => render(<ActiveCallSheet sp={sp} haptic={haptic} {...(recordingPolicy === undefined ? {} : { recordingPolicy })} />);
-const recBtn = () => screen.queryByRole('button', { name: /^(●|■)?\s*(Record|Stop Rec)$/ }) || screen.queryByText(/^(Record|Stop Rec)$/);
+const recBtn = () => screen.queryByRole('button', { name: /^(●|■)?\s*(Record|Stop recording|Enregistrer|Arrêter)$/ }) || screen.queryByText(/^(Record|Stop recording|Enregistrer|Arrêter)$/);
 const clickAll = () => document.querySelectorAll('button').forEach((b) => fireEvent.click(b));
 
 beforeEach(() => { invoke.mockReset(); vi.spyOn(window, 'prompt').mockReturnValue(null); });
@@ -50,7 +50,7 @@ describe('ActiveCallSheet — Phase 24A recording policy', () => {
 
     const sp2 = makeSp(true);
     const { unmount } = draw(sp2, 'user_allowed');
-    await act(async () => { fireEvent.click(screen.getByText('Stop Rec')); });
+    await act(async () => { fireEvent.click(screen.getByText('Stop recording')); });
     expect(sp2.stopRecord).toHaveBeenCalledTimes(1);
     expect(sp2.startRecord).not.toHaveBeenCalled();
     unmount();
@@ -84,7 +84,7 @@ describe('ActiveCallSheet — Phase 24A recording policy', () => {
     const sp = makeSp(true);
     draw(sp, 'portal_managed');
     expect(screen.getByText(/Recording in progress|Enregistrement en cours/)).toBeTruthy();
-    expect(screen.queryByText('Stop Rec')).toBeNull();
+    expect(screen.queryByText(/Stop recording|Arrêter/)).toBeNull();
     await act(async () => { clickAll(); });
     expect(sp.stopRecord).not.toHaveBeenCalled();
   });

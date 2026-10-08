@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { validateReleaseAssets } from "./validate-release-assets.mjs";
 
-const version = "2.5.16";
+const version = "2.5.17";
 
 function fixture({ windows = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "desktop-release-"));
@@ -72,7 +72,7 @@ for (const [title, tamper, error] of [
         path,
         readFileSync(path, "utf8").replace(
           `version: ${version}`,
-          "version: 2.5.17",
+          "version: 2.5.18",
         ),
       );
     },

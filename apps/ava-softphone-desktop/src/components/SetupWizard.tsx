@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { setAuthToken } from '../lib/avaApi';
 import { supabase } from '../lib/supabaseClient';
 import { BACKEND_URL } from '../lib/backendOrigin';
+import { edgeFailure, lemtelAuthErrorMessage } from '../lib/lemtelAuthErrors';
 import LemtelLogo from './LemtelLogo';
 import avaPoweredBy from '../assets/ava-powered-by.png';
 
@@ -61,11 +62,13 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
   };
 
   const finalize = async (session: PendingSession) => {
-    const { data: bootstrap, error: bootstrapError } = await supabase.functions.invoke('lemtel-session-bootstrap');
+    // The authoritative Lemtel bootstrap endpoint is intentionally GET-only.
+    // supabase.functions.invoke defaults to POST unless the method is explicit.
+    const { data: bootstrap, error: bootstrapError } = await supabase.functions.invoke('lemtel-session-bootstrap', { method: 'GET' });
     const first = (bootstrap as any)?.organizations?.[0];
     if (bootstrapError || (bootstrap as any)?.error || !first?.organizationId) {
       await supabase.auth.signOut({ scope: 'local' });
-      throw new Error((bootstrap as any)?.error || bootstrapError?.message || 'Lemtel account setup is unavailable.');
+      throw new Error(lemtelAuthErrorMessage('bootstrap', edgeFailure(bootstrapError, bootstrap)));
     }
     const credentials: Creds = {
       portalUrl: BACKEND_URL,
@@ -116,7 +119,9 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
     setLoading(true); setError('');
     try {
       const { data, error: requestError } = await supabase.functions.invoke('lemtel-password-reset-request', { body: { email: recoveryEmail.trim() } });
-      if (requestError || (data as any)?.ok !== true) throw new Error((data as any)?.error || requestError?.message || 'Password recovery is temporarily unavailable.');
+      if (requestError || (data as any)?.ok !== true) {
+        throw new Error(lemtelAuthErrorMessage('password-recovery', edgeFailure(requestError, data)));
+      }
       setRecoverySent(true);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Password recovery is temporarily unavailable.');
@@ -134,7 +139,7 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
       const completionStatus = Number((completionError as any)?.context?.status ?? 0);
       const alreadyCompleted = (data as any)?.error === 'first_password_change_not_required' || completionStatus === 409;
       if (!alreadyCompleted && (completionError || (data as any)?.ok !== true)) {
-        throw new Error((data as any)?.error || completionError?.message || 'Password update failed');
+        throw new Error(lemtelAuthErrorMessage('first-password', edgeFailure(completionError, data)));
       }
       // Updating a password through the server can revoke the temporary refresh
       // token. Sign in once with the just-selected password to obtain a fresh,

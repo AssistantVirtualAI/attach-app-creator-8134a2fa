@@ -32,6 +32,7 @@ test("APNs entitlement is configuration-specific for device tests and TestFlight
   const entitlements = read("ios/App/App/App.entitlements");
   const project = read("ios/App/App.xcodeproj/project.pbxproj");
   assert.match(entitlements, /<string>\$\(APS_ENVIRONMENT\)<\/string>/);
+  assert.doesNotMatch(entitlements, /com\.apple\.developer\.pushkit\.unrestricted-voip/);
   assert.match(project, /APS_ENVIRONMENT = development;[\s\S]*?name = Debug;/);
   assert.match(project, /APS_ENVIRONMENT = production;[\s\S]*?name = Release;/);
   assert.match(project, /CURRENT_PROJECT_VERSION = 2;/);

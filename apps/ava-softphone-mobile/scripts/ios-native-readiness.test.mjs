@@ -38,10 +38,18 @@ test("APNs entitlement is configuration-specific for device tests and TestFlight
   assert.match(project, /MARKETING_VERSION = 1\.1;/);
 });
 
-test("TestFlight delivery is manual, signed, internal, and Hostinger-bound", () => {
+test("TestFlight delivery is signed, internal, Hostinger-bound, and Lemtel-tag controlled", () => {
   const workflow = readRepo(".github/workflows/lemtel-ios-testflight.yml");
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /confirm_testflight_upload/);
+  assert.match(
+    workflow,
+    /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-v\*"/,
+  );
+  assert.match(
+    workflow,
+    /github\.event_name == 'push' \|\| inputs\.confirm_testflight_upload == true/,
+  );
   assert.match(workflow, /environment: lemtel-ios-testflight/);
   assert.match(workflow, /VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved/);
   assert.match(workflow, /apple-actions\/import-codesign-certs@v7/);
@@ -50,5 +58,5 @@ test("TestFlight delivery is manual, signed, internal, and Hostinger-bound", () 
   assert.match(workflow, /bundle-id: com\.lemtel\.softphone/);
   assert.match(workflow, /profile-type: IOS_APP_STORE/);
   assert.doesNotMatch(workflow, /apps\/planipret-mobile/);
-  assert.doesNotMatch(workflow, /push:\s*\n/);
+  assert.doesNotMatch(workflow, /branches:\s*\n\s+- "Planipret"/);
 });

@@ -45,6 +45,7 @@ type Tab = "personal" | "favorites" | "directory" | "clients";
 
 // ---- Favorites (local, per-device) ----
 const FAV_KEY = "planipret.contacts.favorites.v1";
+const EMPTY_TARGET = { phone: "" };
 type FavEntry = {
   key: string;                 // unique id (source:id/ext/phone)
   source: "personal" | "shared" | "directory" | "maestro" | "native";
@@ -880,7 +881,7 @@ export default function MContacts() {
 
       {createOpen && (
         <CreateMaestroClientSheet
-          target={{ phone: "" }}
+          target={EMPTY_TARGET}
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
             setCreateOpen(false);

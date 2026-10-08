@@ -141,7 +141,7 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
       const { error: fnErr } = await supabase.functions.invoke('lemtel-password-reset-request', { body: { email: email.trim().toLowerCase() } });
       const status = (fnErr as any)?.context?.status;
       if (status === 429) { setError(MSG.throttled); setCool(60); return; }
-      if (fnErr && (status ?? 500) >= 500) { setError(MSG.unavailable); return; }
+      if (fnErr) { setError(MSG.unavailable); return; }
       setNotice('If an account exists for this email, a temporary password has just been sent.');
       setCool(60);
     } catch { setError(MSG.network); } finally { setLoading(false); }

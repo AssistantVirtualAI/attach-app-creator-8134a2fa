@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>AVA Softphone</string>
+	<string>Lemtel</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -44,31 +44,32 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 
-	<!-- Privacy usage strings (App Store required) -->
+	<!-- Privacy usage strings. Lemtel is powered by AVA. -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>AVA Softphone uses the microphone so you can speak during phone calls. / AVA Softphone utilise le microphone pour vous permettre de parler pendant vos appels.</string>
+	<string>Lemtel, powered by AVA, uses the microphone so you can speak during phone calls. / Lemtel, propulsé par AVA, utilise le microphone pour vous permettre de parler pendant vos appels.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>AVA Softphone peut acceder au carnet seulement apres votre consentement dans l'application pour faciliter la composition et identifier les appelants. Sur un compte historique, le consentement peut aussi autoriser une synchronisation serveur. Sur un nouveau serveur Lemtel, l'acces au carnet et sa synchronisation ne sont pas disponibles. Vous pouvez gerer la permission dans les Reglages du telephone. / AVA Softphone can access contacts only after in-app consent to help with dialing and caller identification. On historical accounts, consent may also permit server sync. On a new Lemtel server, address-book access and sync are unavailable. Manage permission in your phone Settings.</string>
-
+	<string>Lemtel, powered by AVA, accesses contacts only after your in-app consent to help with dialing and caller identification. Manage permission in iPhone Settings. / Lemtel, propulsé par AVA, accède aux contacts seulement après votre consentement dans l’application pour faciliter la composition et identifier les appelants. Gérez cette permission dans les Réglages de l’iPhone.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>AVA Softphone uses photos only when you choose a profile picture. / AVA Softphone accède aux photos uniquement lorsque vous choisissez une photo de profil.</string>
+	<string>Lemtel, powered by AVA, uses photos only when you choose a profile picture. / Lemtel, propulsé par AVA, accède aux photos uniquement lorsque vous choisissez une photo de profil.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>AVA Softphone needs local network access to establish your SIP phone calls. / AVA Softphone a besoin du réseau local pour établir vos appels SIP.</string>
+	<string>Lemtel, powered by AVA, needs local network access to establish authorized SIP phone calls. / Lemtel, propulsé par AVA, a besoin du réseau local pour établir les appels SIP autorisés.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_sip._tcp</string>
 		<string>_sip._udp</string>
 	</array>
 	<key>NSUserNotificationsUsageDescription</key>
-	<string>AVA Softphone uses notifications to alert you about missed calls, voicemails, and new messages. / AVA Softphone utilise les notifications pour vous prévenir des appels manqués, messages vocaux et SMS.</string>
+	<string>Lemtel, powered by AVA, uses notifications to alert you about missed calls, voicemails, and new messages. / Lemtel, propulsé par AVA, utilise les notifications pour vous prévenir des appels manqués, messages vocaux et SMS.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Lemtel, powered by AVA, uses the camera to scan QR codes for authorized account configuration. / Lemtel, propulsé par AVA, utilise la caméra pour numériser des codes QR de configuration de compte autorisée.</string>
 
-	<!-- Encryption export compliance -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 
-	<!-- WebKit / WebRTC for SIP -->
+	<!-- Hostinger Auth is explicitly allowed. SIP/PBX endpoints remain unchanged until FusionPBX test details are approved. -->
 	<key>WKAppBoundDomains</key>
 	<array>
+		<string>lemtel.avastatistic.ca</string>
 		<string>pbxnode.lemtel.tel</string>
 		<string>lemtel.lemtel.tel</string>
 		<string>node.lemtelcloud.net</string>
@@ -78,7 +79,7 @@
 	<key>WebKitEnumeratingAllNetworkInterfacesEnabled</key>
 	<true/>
 
-	<!-- Background modes: audio + VoIP push (PushKit) for incoming calls when app is in background/terminated -->
+	<!-- Incoming-call behavior remains gated by verified PushKit, CallKit, APNs and PBX testing. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
@@ -89,21 +90,13 @@
 	<array>
 		<string>com.lemtel.softphone.sip-refresh</string>
 	</array>
-	<key>UIRequiresPersistentWiFi</key>
-	<true/>
 
-
-	<!-- App-to-app schemes used by click-to-call fallbacks -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>
 		<string>sms</string>
 		<string>mailto</string>
 	</array>
-
-	<!-- Register URL schemes this app handles.
-	     tel:   → iOS Recents/Contacts tap opens app and auto-dials
-	     avastatistic: → deep-link for auto-login token -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -123,7 +116,5 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>AVA Softphone uses the camera to scan QR codes for quick SIP account configuration.</string>
 </dict>
 </plist>

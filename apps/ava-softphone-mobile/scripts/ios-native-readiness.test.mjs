@@ -34,8 +34,8 @@ test("APNs entitlement is configuration-specific for device tests and TestFlight
   assert.match(entitlements, /<string>\$\(APS_ENVIRONMENT\)<\/string>/);
   assert.match(project, /APS_ENVIRONMENT = development;[\s\S]*?name = Debug;/);
   assert.match(project, /APS_ENVIRONMENT = production;[\s\S]*?name = Release;/);
-  assert.match(project, /CURRENT_PROJECT_VERSION = 113;/);
-  assert.match(project, /MARKETING_VERSION = 1\.0\.22;/);
+  assert.match(project, /CURRENT_PROJECT_VERSION = 2;/);
+  assert.match(project, /MARKETING_VERSION = 1\.1;/);
 });
 
 test("TestFlight delivery is manual, signed, internal, and Hostinger-bound", () => {

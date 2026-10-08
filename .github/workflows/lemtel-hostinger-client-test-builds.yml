@@ -5,6 +5,12 @@ on:
     branches: [lemtel/integration]
     paths:
       - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
+      - 'apps/ava-softphone-mobile/**'
+      - 'apps/ava-softphone-desktop/**'
+      - 'infra/lemtel-client-config/**'
+      - 'scripts/lemtel-hostinger-client-config-filter.mjs'
+      - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
+      - 'scripts/lemtel-email-only-client-login.test.mjs'
   workflow_dispatch:
     inputs:
       reason:

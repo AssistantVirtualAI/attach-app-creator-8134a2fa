@@ -21,3 +21,17 @@ test('workflow builds only test artifacts and sends the same bundle to both rece
   assert.match(workflow, /push:\n    branches: \[lemtel\/integration\]/);
   for (const forbidden of ['bundleRelease', 'electron-builder', 'app-store', 'docker compose up', 'ufw allow', 'Planipret']) assert.doesNotMatch(workflow, new RegExp(forbidden, 'i'));
 });
+
+test('Lemtel client changes on integration automatically refresh the private Hostinger and DO copies', () => {
+  for (const path of [
+    "'apps/ava-softphone-mobile/**'",
+    "'apps/ava-softphone-desktop/**'",
+    "'infra/lemtel-client-config/**'",
+    "'scripts/lemtel-hostinger-client-config-filter.mjs'",
+  ]) {
+    assert.ok(workflow.includes(path), `missing automatic replication path ${path}`);
+  }
+  assert.match(workflow, /branches: \[lemtel\/integration\]/);
+  assert.match(workflow, /hostinger-staging-drop:/);
+  assert.match(workflow, /digitalocean-standby-drop:/);
+});

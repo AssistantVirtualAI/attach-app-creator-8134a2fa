@@ -1,49 +1,60 @@
-# AVA Softphone — Store Release Checklist
+# Lemtel Softphone — release mobile contrôlée
 
-## 1. Version
-- Bump `package.json` version (semver).
-- iOS: increase `CFBundleShortVersionString` + `CFBundleVersion`.
-- Android: bump `versionName` + `versionCode` in `android/app/build.gradle`.
+> **Portée :** Lemtel uniquement. Les builds utilisent le profil Hostinger approuvé et une copie privée identique est déposée sur le secours DigitalOcean. Ce mécanisme ne démarre pas le secours, ne change pas le DNS et ne crée pas de basculement automatique.
 
-## 2. Build
-```bash
-cd apps/ava-softphone-mobile
-npm install
-npm run build           # vite build → dist/
-npx cap sync ios        # or android
-```
+## 1. Préconditions de build
 
-## 3. iOS — App Store Connect
-1. Open `ios/App` in Xcode.
-2. Merge `native-config/ios-Info.plist.snippet.xml` into `App/App/Info.plist`.
-3. Enable capabilities: Background Modes (Audio/VoIP, Remote notifications, Background fetch), Push Notifications.
-4. Set Bundle ID `com.lemtel.softphone` and team.
-5. Archive → Distribute → App Store Connect.
-6. In App Store Connect:
-   - Use `store-metadata/ios/metadata.txt` (EN) and `metadata-fr.txt` (FR).
-   - Upload screenshots from `store-metadata/screenshots/ios/{en,fr}/`.
-   - Demo account: extension `999` / sandbox tenant (see Notion).
-   - App Privacy → check Data Collected (Microphone, Contacts, Account info).
-   - Export Compliance → uses standard encryption only, no submission required.
-   - Submit for review.
+- La branche source est `lemtel/integration`; aucune branche Planiprêt ne doit être fusionnée globalement.
+- Le profil de build Lemtel doit contenir uniquement `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_LEMTEL_TARGET` et `VITE_LEMTEL_EMAIL_ONLY_SIGNIN=approved`.
+- Les fonctions d’authentification Hostinger doivent avoir été vérifiées avec les méthodes HTTP attendues avant une recette authentifiée.
+- Les paramètres SIP/WSS/TURN restent configurés séparément après réception et validation des données FusionPBX. Aucun endpoint PBX n’est introduit par ce guide.
 
-## 4. Android — Play Console
-1. Build signed AAB:
-   ```bash
-   cd android && ./gradlew bundleRelease
-   ```
-2. Merge `native-config/android-AndroidManifest.snippet.xml` into `app/src/main/AndroidManifest.xml`.
-3. Upload AAB to Play Console (Internal track first).
-4. Fill Store Listing using `store-metadata/android/metadata.txt` (EN) + `metadata-fr.txt` (FR).
-5. Upload screenshots from `store-metadata/screenshots/android/{en,fr}/`.
-6. Complete Data Safety form (see metadata file for mapping).
-7. Promote internal → closed → production.
+## 2. Builds privés Hostinger + DigitalOcean
 
-## 5. Compliance preflight
-- [ ] Privacy Policy live at https://avastatistic.ca/privacy
-- [ ] Terms of Service live at https://avastatistic.ca/terms
-- [ ] In-app Account Deletion accessible (More → Delete my account)
-- [ ] Push notifications opt-in prompt fires on first launch
-- [ ] All permission usage strings match `native-config/*` snippets
-- [ ] Reviewer demo account works on the published Lovable Cloud backend
-- [ ] Security scan passes (run via lovable security scan)
+Chaque merge Lemtel touchant le mobile lance **Lemtel Hostinger — private test builds** :
+
+1. la WebView Android/iOS est construite avec le profil Hostinger;
+2. un APK Android de débogage et un `.app` iOS non signé sont produits pour contrôle;
+3. le même bundle chiffrable est déposé sur Hostinger primaire puis sur DigitalOcean standby;
+4. aucun artefact iOS n’est distribué aux utilisateurs et aucune app n’est installée à cette étape.
+
+Le résultat confirme la cohérence des entrées de build, **pas** une disponibilité de téléphonie, de notifications entrantes ou de failover automatique.
+
+## 3. Bêta iOS TestFlight interne
+
+Le workflow **Lemtel iOS — TestFlight internal beta** n’est disponible qu’en lancement manuel. Il exige la confirmation `confirm_testflight_upload=true` et un environnement GitHub protégé `lemtel-ios-testflight`.
+
+Secrets requis dans cet environnement :
+
+| Nom                                 | Contenu                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| `APPSTORE_CERTIFICATES_FILE_BASE64` | Certificat **Apple Distribution** exporté au format `.p12`, encodé Base64 |
+| `APPSTORE_CERTIFICATES_PASSWORD`    | Mot de passe du `.p12`                                                    |
+| `APPSTORE_API_PRIVATE_KEY`          | Contenu de la clé App Store Connect `AuthKey_*.p8`                        |
+| `VITE_SUPABASE_PUBLISHABLE_KEY`     | Clé publique Lemtel Hostinger                                             |
+
+Variables requises :
+
+| Nom                             | Contenu                               |
+| ------------------------------- | ------------------------------------- |
+| `APPLE_TEAM_ID`                 | Identifiant d’équipe Apple            |
+| `APPSTORE_ISSUER_ID`            | Issuer ID App Store Connect           |
+| `APPSTORE_API_KEY_ID`           | Key ID App Store Connect              |
+| `VITE_LEMTEL_TARGET`            | Cible Lemtel approuvée                |
+| `VITE_SUPABASE_URL`             | URL HTTPS Hostinger Lemtel            |
+| `VITE_LEMTEL_PRIVATE_DIRECTORY` | Indicateur de répertoire privé Lemtel |
+| `VITE_LEMTEL_AUTH_REDIRECT_URL` | URL de retour autorisée Lemtel        |
+
+Le workflow importe le certificat, obtient un profil `IOS_APP_STORE` pour `com.lemtel.softphone`, archive une IPA **Release**, puis la téléverse uniquement dans TestFlight. Il ne soumet pas l’application à l’App Store public.
+
+## 4. Recette sur iPhone réel
+
+Avant de promouvoir une bêta, vérifier au minimum :
+
+- connexion e-mail/mot de passe et récupération;
+- mot de passe temporaire → mot de passe personnel → nouvelle session → bootstrap;
+- Dark et Daylight, anglais et français;
+- microphone, haut-parleur, Bluetooth et changement Wi-Fi/LTE/5G;
+- appels entrants en arrière-plan, PushKit/CallKit et FCM/Android séparément, une fois les données FusionPBX/TURN validées.
+
+Ne pas affirmer le comportement Ringotel ou les appels en arrière-plan avant ces tests physiques et les paramètres FusionPBX/WSS/TURN réels.

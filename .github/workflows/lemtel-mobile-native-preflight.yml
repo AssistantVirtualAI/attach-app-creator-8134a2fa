@@ -3,9 +3,9 @@ name: Lemtel mobile — native build preflight
 on:
   pull_request:
     paths:
-      - 'apps/ava-softphone-mobile/**'
-      - 'docs/lemtel-mobile/phase-30c-native-build-preflight.md'
-      - '.github/workflows/lemtel-mobile-native-preflight.yml'
+      - "apps/ava-softphone-mobile/**"
+      - "docs/lemtel-mobile/phase-30c-native-build-preflight.md"
+      - ".github/workflows/lemtel-mobile-native-preflight.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,13 +27,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
       - name: Use hosted Android SDK 36
         run: |
           test -n "${ANDROID_HOME:-}"
@@ -79,11 +79,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
       - name: Install locked client dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify Lemtel iOS TestFlight readiness contract
+        run: node scripts/ios-native-readiness.test.mjs
       - name: Build web bundle
         run: npm run build
       - name: Sync native iOS project and CocoaPods (runner only)

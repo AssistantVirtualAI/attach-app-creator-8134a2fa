@@ -1,18 +1,18 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: 'com.lemtel.softphone',
-  appName: 'Lemtel Softphone',
-  webDir: 'dist',
+  appId: "com.lemtel.softphone",
+  appName: "Lemtel Softphone",
+  webDir: "dist",
   server: {
-    androidScheme: 'https',
+    androidScheme: "https",
   },
   ios: {
     allowsLinkPreview: false,
     scrollEnabled: false,
-    contentInset: 'automatic',
-    preferredContentMode: 'mobile',
-    webContentsDebuggingEnabled: true,
+    contentInset: "automatic",
+    preferredContentMode: "mobile",
+    webContentsDebuggingEnabled: false,
   },
   plugins: {
     CapacitorHttp: {
@@ -20,19 +20,19 @@ const config: CapacitorConfig = {
     },
     SplashScreen: {
       launchShowDuration: 1800,
-      backgroundColor: '#EEF3FB',
+      backgroundColor: "#EEF3FB",
       showSpinner: false,
     },
     StatusBar: {
-      style: 'light',
-      backgroundColor: '#0023e6',
+      style: "light",
+      backgroundColor: "#0023e6",
     },
     PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert'],
+      presentationOptions: ["badge", "sound", "alert"],
     },
     LocalNotifications: {
-      smallIcon: 'ic_stat_icon_config_sample',
-      iconColor: '#0023e6',
+      smallIcon: "ic_stat_icon_config_sample",
+      iconColor: "#0023e6",
     },
   },
 };

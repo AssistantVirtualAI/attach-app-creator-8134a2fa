@@ -391,7 +391,7 @@ function DesktopApp() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
         <BrightnessOverlay />
         <TitleBar />
-        <div style={{ flex: 1, overflow: 'auto', position: 'relative', zIndex: 1 }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', zIndex: 1 }}>
           <SetupWizard onComplete={(c: any) => { setCreds(c); }} />
         </div>
       </div>

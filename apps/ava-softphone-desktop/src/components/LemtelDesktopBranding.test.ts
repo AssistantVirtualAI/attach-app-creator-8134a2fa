@@ -9,6 +9,8 @@ describe('Lemtel Desktop product branding', () => {
     const wizard = source('./SetupWizard.tsx');
     expect(wizard).toContain('Lemtel Telecom · Private, intelligent communications');
     expect(wizard).toContain('Forgot password?');
+    expect(wizard).toContain('Encrypted account verification · Email-only access');
+    expect(wizard).toContain("color: '#f4f8ff'");
     expect(wizard).not.toContain('AVA Statistic · assistantvirtualai.com');
     expect(wizard).not.toContain('Powered by AVA');
   });

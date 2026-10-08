@@ -9,8 +9,10 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 test('mobile sign-in is email-only and blocks on first password replacement', () => {
   const source = read('apps/ava-softphone-mobile/src/screens/AuthScreen.tsx');
   assert.match(source, /lemtel-complete-first-password/);
-  assert.match(source, /lemtel_organization_memberships/);
+  assert.match(source, /bootstrapLemtelMobileSession/);
+  assert.match(source, /authenticatedCreds/);
   assert.match(source, /lemtel_onboarding_required/);
+  assert.doesNotMatch(source, /lemtel_organization_memberships/);
   assert.doesNotMatch(source, /extension-signin/);
   assert.doesNotMatch(source, /ModeToggle/);
   assert.doesNotMatch(source, /Manual SIP configuration/);
@@ -36,7 +38,8 @@ test('mobile exchanges the temporary-password session for a new session', () => 
   assert.match(source, /email: pending\.email, password: newPassword/);
   assert.match(source, /response\.status === 409/);
   assert.match(source, /alreadyCompleted/);
-  assert.match(source, /onCompleted\(\{ accessToken: renewed\.access_token, refreshToken: renewed\.refresh_token \}\)/);
+  assert.match(source, /const bootstrap = await loadAuthoritativeSession\(renewed\.access_token, pending\.userId\)/);
+  assert.match(source, /onCompleted\(\{ accessToken: renewed\.access_token, refreshToken: renewed\.refresh_token, bootstrap \}\)/);
 });
 
 test('portal onboarding is isolated behind an explicit Lemtel build flag', () => {

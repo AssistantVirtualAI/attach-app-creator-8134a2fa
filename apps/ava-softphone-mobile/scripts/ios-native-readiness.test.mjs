@@ -37,6 +37,7 @@ test("APNs entitlement is configuration-specific for device tests and TestFlight
   assert.match(project, /CURRENT_PROJECT_VERSION = 2;/);
   assert.match(project, /MARKETING_VERSION = 1\.1;/);
   assert.match(project, /CODE_SIGN_IDENTITY = "Apple Distribution";[\s\S]*?name = Release;/);
+  assert.match(project, /CODE_SIGN_STYLE = Manual;[\s\S]*?PROVISIONING_PROFILE_SPECIFIER = "\$\(LEMTEL_APP_STORE_PROFILE_UUID\)";[\s\S]*?name = Release;/);
 });
 
 test("TestFlight delivery is signed, internal, Hostinger-bound, and Lemtel-tag controlled", () => {
@@ -58,7 +59,10 @@ test("TestFlight delivery is signed, internal, Hostinger-bound, and Lemtel-tag c
   assert.match(workflow, /apple-actions\/upload-testflight-build@v5/);
   assert.match(workflow, /bundle-id: com\.lemtel\.softphone/);
   assert.match(workflow, /profile-type: IOS_APP_STORE/);
-  assert.match(workflow, /CODE_SIGN_IDENTITY="Apple Distribution"/);
+  assert.match(workflow, /id: app_store_profile/);
+  assert.match(workflow, /steps\.app_store_profile\.outputs\.profiles/);
+  assert.match(workflow, /LEMTEL_APP_STORE_PROFILE_UUID/);
+  assert.match(workflow, /signingStyle<\/key><string>manual<\/string>/);
   assert.doesNotMatch(workflow, /apps\/planipret-mobile/);
   assert.doesNotMatch(workflow, /branches:\s*\n\s+- "Planipret"/);
 });

@@ -6,7 +6,8 @@
 
 1. Revoir et fusionner le changement Desktop dans `lemtel/integration`. Ne jamais fusionner Planiprêt dans cette branche et ne jamais partir de `Planipret` pour un tag Lemtel.
 2. Vérifier la suite Desktop, le contrôle TypeScript, le build Electron et le contrat de lecture d’enregistrements sans PBX réel.
-3. Configurer les secrets GitHub Actions depuis des comptes propriétaires, sans exposer leurs valeurs :
+3. Le tag de release doit utiliser l’environnement GitHub `lemtel-hostinger-staging`. Les builds macOS et Windows reçoivent uniquement le profil approuvé (origine HTTPS Hostinger, clé publishable contrôlée et flags Lemtel), puis exécutent `scripts/lemtel-hostinger-client-config-filter.mjs`. Un profil manquant, Planiprêt ou historique bloque la release avant compilation.
+4. Configurer les secrets GitHub Actions depuis des comptes propriétaires, sans exposer leurs valeurs :
 
 | Secret                                                     | Utilisation                                                           |
 | ---------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -36,8 +37,8 @@ Quand un certificat Authenticode sera disponible, une version ultérieure et un 
 ## Séquence opérateur après validation
 
 1. Faire correspondre `apps/ava-softphone-desktop/package.json` et son lockfile à la nouvelle version, puis fusionner le commit dans `lemtel/integration`.
-2. Vérifier que les contrôles CI de la PR passent et que les secrets macOS/Apple sont présents. Vérifier les secrets Windows seulement si une signature Authenticode est attendue.
-3. Créer et pousser un **nouveau** tag `vX.Y.Z` sur ce commit fusionné. Le job vérifie lui-même la version du paquet et l’appartenance à `lemtel/integration`. Ne jamais réutiliser un tag existant.
+2. Vérifier que les contrôles CI de la PR passent, que l’environnement `lemtel-hostinger-staging` possède son profil complet, et que les secrets macOS/Apple sont présents. Vérifier les secrets Windows seulement si une signature Authenticode est attendue.
+3. Créer et pousser un **nouveau** tag `vX.Y.Z` sur ce commit fusionné. Le job vérifie lui-même la version du paquet, l’appartenance à `lemtel/integration` et le profil Hostinger. Ne jamais réutiliser un tag existant.
 4. Vérifier la release GitHub : `.dmg`, `.zip`, `.blockmap`, `latest-mac.yml`, `.exe`, `.blockmap` et `latest.yml`. Pour une release Windows sans certificat, vérifier aussi que l’avertissement SmartScreen est visible dans les notes avant diffusion.
 5. Installer la version empaquetée sur un Mac réel, contrôler le téléchargement, le redémarrage et la version. Sur Windows, faire la même recette en tenant compte de l’avertissement SmartScreen lorsqu’aucun certificat Authenticode n’est configuré. Tester séparément l’accès refusé à un enregistrement d’un autre poste et un redémarrage/rollback opérationnel.
 

@@ -244,7 +244,8 @@ export default function SoftphonePane({
 
   const compact = paneWidth < 440;
   const ultraCompact = paneWidth < 360;
-  const workspaceWide = paneWidth >= 940 && !hideTabs;
+  const showTabLabels = paneWidth >= 560;
+  const workspaceWide = paneWidth >= 1024 && !hideTabs;
 
   // Dev-only a11y audit on every DOM mutation inside the pane.
   useEffect(() => {
@@ -852,7 +853,7 @@ export default function SoftphonePane({
             display: 'grid',
             gridTemplateColumns: 'repeat(5, 1fr)',
             alignItems: 'center',
-            height: ultraCompact ? 50 : compact ? 56 : 64,
+            height: showTabLabels ? 64 : ultraCompact ? 50 : 56,
             minWidth: 0,
             width: '100%',
           }}>
@@ -869,7 +870,7 @@ export default function SoftphonePane({
                   aria-label={label}
                   style={{
                     position: 'relative',
-                    minHeight: ultraCompact ? 42 : compact ? 48 : 54,
+                    minHeight: showTabLabels ? 54 : ultraCompact ? 42 : 48,
                     display: 'flex', flexDirection: 'column',
                     alignItems: 'center', justifyContent: 'center',
                     gap: 3, padding: compact ? '4px 2px' : '6px 2px',
@@ -905,7 +906,7 @@ export default function SoftphonePane({
                   }}>
                     <LucideIcon size={ultraCompact ? 16 : compact ? 18 : 20} strokeWidth={active ? 2.6 : 2} color={active ? accent : 'currentColor'} />
                   </span>
-                  {!ultraCompact && (
+                  {showTabLabels && (
                     <span style={{
                       fontSize: compact ? 9 : 10,
                       fontWeight: active ? 800 : 600,
@@ -974,7 +975,7 @@ export default function SoftphonePane({
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: compact ? 10 : 11, color: c.textSub, letterSpacing: 0.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           <span style={{ color: c.gold, fontWeight: 800 }}>L</span>
-          {ultraCompact ? 'Lemtel' : `Lemtel Communications · v${APP_VERSION}`}
+          {paneWidth < 520 ? 'Lemtel' : `Lemtel Communications · v${APP_VERSION}`}
         </div>
       </div>
 

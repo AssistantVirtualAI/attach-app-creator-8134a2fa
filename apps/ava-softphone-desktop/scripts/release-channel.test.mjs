@@ -23,8 +23,24 @@ test("Desktop public-release tags are accepted only from Lemtel integration", ()
   assert.doesNotMatch(workflow, /git fetch --no-tags origin Planipret/);
 });
 
+test("Windows release preserves explicit signing state and a working unsigned path", () => {
+  assert.match(workflow, /windows_signed/);
+  assert.match(
+    workflow,
+    /Windows signed build disabled: Authenticode secrets are absent/,
+  );
+  assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY = 'false'/);
+  assert.match(
+    workflow,
+    /Windows installer intentionally unsigned; SmartScreen warning is expected/,
+  );
+  assert.match(workflow, /may trigger Microsoft SmartScreen/);
+  assert.match(workflow, /needs\.build-windows\.result == 'success'/);
+});
+
 test("Desktop release documentation preserves the Lemtel-only release boundary", () => {
   assert.match(runbook, /déjà fusionné dans `lemtel\/integration`/);
   assert.match(runbook, /fusionner le commit dans `lemtel\/integration`/);
+  assert.match(runbook, /non signé/);
   assert.doesNotMatch(runbook, /fusionner le commit dans `Planipret`/);
 });

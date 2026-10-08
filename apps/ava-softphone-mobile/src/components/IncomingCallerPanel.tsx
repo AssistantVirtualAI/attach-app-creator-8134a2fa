@@ -17,7 +17,7 @@ interface Props {
 function sourceLabel(s: CallerLookup['source'], fr: boolean): string | null {
   switch (s) {
     case 'maestro': return fr ? 'Client Maestro' : 'Maestro client';
-    case 'broker': return fr ? 'Collègue Planiprêt' : 'Planiprêt colleague';
+    case 'broker': return fr ? 'Collègue Lemtel' : 'Lemtel colleague';
     case 'microsoft': return fr ? 'Contact Microsoft' : 'Microsoft contact';
     case 'device': return fr ? 'Contact téléphone' : 'Phone contact';
     default: return null;

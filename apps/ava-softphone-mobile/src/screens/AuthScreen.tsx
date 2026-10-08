@@ -1,3 +1,4 @@
+import PoweredByAva from '../components/PoweredByAva';
 import React, { useEffect, useState } from 'react';
 import type { Creds } from '../lib/creds';
 import SipConfigScreen from './SipConfigScreen';
@@ -29,7 +30,7 @@ const C = {
   text: '#E8EEFB',
   textIce: '#F4F8FF',
   textSub: 'rgba(232,238,251,0.62)',
-  textDim: 'rgba(232,238,251,0.42)',
+  textDim: 'rgba(232,238,251,0.72)',
   gold: '#FFD700',
   avaCyan: '#0BB5D6',
   green: '#22C55E',
@@ -539,7 +540,7 @@ function Footer() {
       fontSize: 11, color: C.textDim, letterSpacing: 0.4,
       position: 'relative', zIndex: 1,
     }}>
-      {tx('Conçu par', 'Crafted by')} <span style={{ color: C.gold, fontWeight: 600 }}>AVA Statistic · assistantvirtualai.com</span>
+      <PoweredByAva style={{ color: C.textIce }} />
     </div>
   );
 }

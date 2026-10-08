@@ -1,3 +1,5 @@
+import SegmentedChoice from '../components/SegmentedChoice';
+import PoweredByAva from '../components/PoweredByAva';
 import React, { useEffect, useState } from 'react';
 import { colors, font, radius, gradients } from '../lib/theme';
 import type { Creds } from '../lib/creds';
@@ -63,7 +65,7 @@ export default function SettingsScreen({
   creds, sp, onSignOut, onNavigate, preferClickToCall = false, togglePreferC2C = () => {}, portalTelephonyPolicy = null,
 }: { creds: Creds; sp: any; onSignOut: () => void; onNavigate?: (t: Tab) => void; preferClickToCall?: boolean; togglePreferC2C?: () => void; portalTelephonyPolicy?: PortalTelephonyPolicy | null }) {
   const { t, lang, setLang } = useT();
-  const { mode, toggle: toggleTheme } = useTheme();
+  const { mode, setMode: setThemeMode } = useTheme();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [perms, setPerms] = useState<AllPermissions | null>(null);
   const [haptics, setHaptics] = useState<boolean>(() => localStorage.getItem('ava.haptics') !== 'off');
@@ -219,15 +221,15 @@ export default function SettingsScreen({
       <Card padded={false}>
         <SettingsRow
           label={t('settings.theme')} icon="🌓"
-          value={mode === 'dark' ? t('settings.themeDark') : t('settings.themeLight')}
-          right={<Switch on={mode === 'dark'} />}
-          onPress={toggleTheme}
+          right={<SegmentedChoice ariaLabel={t('settings.theme')} value={mode}
+            options={[{ value: 'dark', label: t('settings.themeDark') }, { value: 'light', label: t('settings.themeDaylight' as any) }]}
+            onChange={(m) => setThemeMode(m as 'dark' | 'light')} />}
         />
         <SettingsRow
           label={t('settings.language')} icon="🌐"
-          value={lang === 'fr' ? 'Français' : 'English'}
-          right={<LangPill lang={lang} />}
-          onPress={() => setLang(lang === 'fr' ? 'en' : 'fr')}
+          right={<SegmentedChoice ariaLabel={t('settings.language')} value={lang}
+            options={[{ value: 'en', label: 'English' }, { value: 'fr', label: 'Français' }]}
+            onChange={(l) => setLang(l as 'en' | 'fr')} />}
         />
       </Card>
 
@@ -430,7 +432,7 @@ export default function SettingsScreen({
       <SectionTitle eyebrow={t('settings.about')} title={t('settings.helpSupport')} />
       <Card padded={false}>
         <SettingsRow label={t('settings.helpSupport')} icon="❓" onPress={() => window.open('mailto:support@lemtel.tel?subject=AVA%20Softphone%20support', '_blank')} />
-        <SettingsRow label={t('settings.about')} icon="ⓘ" value={`${t('settings.version')} 1.0.0`} onPress={() => alert('AVA Softphone v1.0.0\nPowered by Lemtel · AVA AI')} />
+        <SettingsRow label={t('settings.about')} icon="ⓘ" value={`${t('settings.version')} 1.0.0`} onPress={() => alert(`${t('brand.appName' as any)} v1.0.0\n${t('brand.poweredBy' as any)}`)} />
       </Card>
 
       <AIPanel title="AVA" accent={colors.avaCyan}>
@@ -450,7 +452,7 @@ export default function SettingsScreen({
       </button>
 
       <div style={{ textAlign: 'center', marginTop: 18, fontSize: 10, color: colors.mutedSilver, letterSpacing: 0.4 }}>
-        AVA Softphone · Powered by AVA AI
+        {t('brand.appName' as any)} · <PoweredByAva />
       </div>
       <div style={{ height: 80 }} />
 

@@ -25,8 +25,8 @@ export const darkColors: Record<string, string> = {
   avaViolet:  '#7A4CFF',
   // Text on dark
   textIce:    '#E8EEFB',
-  textSub:    '#B0BACC',
-  mutedSilver:'#7C8AA8',
+  textSub:    '#C3CDE0',
+  mutedSilver:'#9AA8C4',
   // Lines
   border:     'rgba(255,255,255,0.08)',
   borderGold: 'rgba(255,196,0,0.45)',
@@ -35,6 +35,8 @@ export const darkColors: Record<string, string> = {
   danger:     '#EF4444',
   success:    '#10B981',
   warning:    '#F59E0B',
+  mint:       '#3DDCB4',
+  navSurface: 'rgba(12,22,46,0.92)',
 };
 
 export type ColorTokens = typeof darkColors;
@@ -60,6 +62,8 @@ export const lightColors: ColorTokens = {
   danger:     '#dc2626',
   success:    '#16a34a',
   warning:    '#d97706',
+  mint:       '#0F9F7E',
+  navSurface: 'rgba(255,255,255,0.94)',
 };
 
 function currentPalette(): ColorTokens {

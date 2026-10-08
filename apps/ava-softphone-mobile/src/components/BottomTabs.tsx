@@ -43,11 +43,10 @@ export default function BottomTabs({
         marginBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)',
         display: 'flex', flexDirection: 'column',
         padding: '10px 8px 8px',
-        background:
-          'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,247,255,0.86) 100%)',
+        background: colors.navSurface,
         backdropFilter: 'blur(28px) saturate(180%)',
         WebkitBackdropFilter: 'blur(28px) saturate(180%)',
-        border: '1px solid rgba(255,255,255,0.9)',
+        border: `1px solid ${colors.border}`,
         borderRadius: radius.xxl,
         boxShadow:
           '0 24px 60px -28px rgba(7,22,168,0.35), 0 1px 0 rgba(255,255,255,0.9) inset, 0 -1px 0 rgba(0,35,230,0.05) inset',
@@ -76,7 +75,7 @@ export default function BottomTabs({
 }
 
 function TabBtn({ label, Icon, active, onPress, badge }: { label: string; Icon: LucideIcon; active: boolean; onPress: () => void; badge?: number }) {
-  const accent = colors.lemtelBlue;
+  const accent = document.documentElement.getAttribute('data-theme') === 'light' ? colors.lemtelBlue : colors.blueGlow;
   return (
     <button
       onClick={onPress}
@@ -85,13 +84,13 @@ function TabBtn({ label, Icon, active, onPress, badge }: { label: string; Icon: 
         alignItems: 'center', justifyContent: 'center', gap: 3, padding: '6px 2px',
         borderRadius: radius.lg,
         background: active
-          ? `linear-gradient(180deg, ${accent}22 0%, rgba(255,255,255,0.4) 100%)`
+          ? `${accent}1f`
           : 'transparent',
         border: active ? `1px solid ${accent}33` : '1px solid transparent',
         boxShadow: active
-          ? `0 8px 20px -10px ${accent}66, 0 1px 0 rgba(255,255,255,0.9) inset`
+          ? `0 8px 20px -10px ${accent}66`
           : 'none',
-        color: active ? accent : colors.mutedSilver,
+        color: active ? (document.documentElement.getAttribute('data-theme') === 'light' ? accent : colors.textIce) : colors.textSub,
         cursor: 'pointer',
         transition: 'all .22s cubic-bezier(.34,1.56,.64,1)',
         transform: active ? 'translateY(-2px)' : 'translateY(0)',

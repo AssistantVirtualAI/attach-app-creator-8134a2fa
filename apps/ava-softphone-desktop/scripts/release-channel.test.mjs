@@ -12,6 +12,10 @@ const runbook = readFileSync(
   resolve(root, "apps/ava-softphone-desktop/RELEASE.md"),
   "utf8",
 );
+const builderConfig = readFileSync(
+  resolve(root, "apps/ava-softphone-desktop/electron-builder.yml"),
+  "utf8",
+);
 
 test("Desktop public-release tags are accepted only from Lemtel integration", () => {
   assert.match(workflow, /git fetch --no-tags origin lemtel\/integration/);
@@ -36,6 +40,17 @@ test("Windows release preserves explicit signing state and a working unsigned pa
   );
   assert.match(workflow, /may trigger Microsoft SmartScreen/);
   assert.match(workflow, /needs\.build-windows\.result == 'success'/);
+});
+
+test("Release manifests reference stable artifact names on every platform", () => {
+  assert.match(
+    builderConfig,
+    /artifactName: "Lemtel-Telecom-\$\{version\}-\$\{arch\}\.\$\{ext\}"/,
+  );
+  assert.match(
+    builderConfig,
+    /artifactName: "Lemtel-Telecom-Setup-\$\{version\}\.\$\{ext\}"/,
+  );
 });
 
 test("Desktop release documentation preserves the Lemtel-only release boundary", () => {

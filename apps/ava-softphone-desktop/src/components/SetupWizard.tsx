@@ -10,10 +10,7 @@ type Creds = {
   portalUrl: string;
   backendOrigin?: string;
   email: string;
-  extension: string;
   displayName?: string;
-  sipDomain?: string;
-  wssUrl?: string;
   userId?: string;
   accessToken?: string;
   refreshToken?: string;
@@ -74,7 +71,6 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
       portalUrl: BACKEND_URL,
       backendOrigin: BACKEND_URL,
       email: session.email,
-      extension: '',
       displayName: (bootstrap as any)?.user?.displayName || session.email.split('@')[0],
       userId: session.userId,
       accessToken: session.accessToken,

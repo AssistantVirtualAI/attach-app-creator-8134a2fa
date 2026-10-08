@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { sipProvider, SoftphoneSnapshot, SoftphoneConfig } from '@/lib/sip/jssipProvider';
 import { ringtone } from '@/lib/sip/ringtonePlayer';
 import { supabase, SB_URL, SB_KEY } from '@/lib/supabaseClient';
-import type { RecordingPolicy } from '../lib/lemtelDesktopClientConfig';
+import type { RecordingPolicy } from '../lib/lemtelTelephonyPolicy';
 
 interface UseSoftphoneArgs {
   extension: string;
@@ -351,4 +351,3 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     }, []),
   };
 }
-

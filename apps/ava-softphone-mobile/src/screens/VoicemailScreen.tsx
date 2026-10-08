@@ -3,7 +3,7 @@ import { ImpactStyle } from '@capacitor/haptics';
 import { Search, RefreshCw, Voicemail as VmIcon } from 'lucide-react';
 import { colors, font, radius, gradients } from '../lib/theme';
 import { mobileApi, VoicemailEntry } from '../lib/mobileApi';
-import { Card, Chip, EmptyState, GhostButton, AIPanel, Skeleton } from '../components/ui/Primitives';
+import { Card, Chip, EmptyState, GhostButton, Skeleton } from '../components/ui/Primitives';
 import { audit } from '../lib/audit';
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { authedRealtime, edgeCall, loadPbxRecordingAudioMobile } from '../lib/mobileSupabase';
@@ -26,10 +26,6 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ id: string; cur: number; dur: number } | null>(null);
-  const [transcripts, setTranscripts] = useState<Record<string, string>>({});
-  const [analyses, setAnalyses] = useState<Record<string, { summary?: string; sentiment?: string; topics?: string[]; action_items?: string[] }>>({});
-  const [transcribing, setTranscribing] = useState<string | null>(null);
-  const [transcribeError, setTranscribeError] = useState<Record<string, string>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playEpochRef = useRef(0);
   const playbackScope = `${mobile.userId || ''}:${mobile.organizationId || ''}:${mobile.extension || ''}:${mobile.accessToken || ''}`;
@@ -57,7 +53,7 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
     playEpochRef.current++;
     audioRef.current?.pause(); audioRef.current = null;
     setPlaying(null); setLoadingId(null); setProgress(null);
-    setItems(null); setItemsScope(playbackScope); setTranscripts({}); setAnalyses({});
+    setItems(null); setItemsScope(playbackScope);
     if (mobile.userId && mobile.accessToken) reload();
     return () => { playEpochRef.current++; audioRef.current?.pause(); audioRef.current = null; };
   }, [playbackScope]);
@@ -97,7 +93,7 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
       const audioUrl = activated?.audio_url || created?.greeting?.audio_url || null;
       await edgeCall<any>('user-voicemail-greeting', mobile.accessToken, {
         action: 'save_settings',
-        payload: { greeting_type: 'tts', greeting_tts_text: greetingText.trim(), greeting_voice_id: voiceId, greeting_voice_name: voices.find((v) => v.id === voiceId)?.name || null, greeting_storage_path: storagePath, greeting_audio_url: audioUrl, transcription_enabled: true, ai_summary_enabled: true },
+        payload: { greeting_type: 'tts', greeting_tts_text: greetingText.trim(), greeting_voice_id: voiceId, greeting_voice_name: voices.find((v) => v.id === voiceId)?.name || null, greeting_storage_path: storagePath, greeting_audio_url: audioUrl, transcription_enabled: false, ai_summary_enabled: false },
       });
       setGreetingPreviewUrl(audioUrl);
       setGreetingMsg('Greeting updated with ElevenLabs voice.');
@@ -141,29 +137,6 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
     return `${m}:${String(sec).padStart(2, '0')}`;
   };
 
-  const transcribe = async (v: VoicemailEntry, force = false) => {
-    if (!force && (transcripts[v.id] || transcribing === v.id)) return;
-    setTranscribing(v.id);
-    setTranscribeError((p) => { const n = { ...p }; delete n[v.id]; return n; });
-    try {
-      let txt: string | null = null;
-      let analysis: any = null;
-      try {
-        const d: any = await mobileApi.analyzeCall(v.id);
-        txt = d?.transcript || d?.transcript_text || null;
-        analysis = d?.analysis || d?.summary ? { summary: d?.summary, sentiment: d?.sentiment, topics: d?.topics, action_items: d?.action_items, ...(d?.analysis || {}) } : null;
-      } catch {}
-      if (!txt) {
-        setTranscribeError((p) => ({ ...p, [v.id]: 'No authenticated transcript is available for this voicemail yet.' }));
-      }
-      if (txt) setTranscripts((p) => ({ ...p, [v.id]: txt! }));
-      else if (!transcribeError[v.id]) setTranscribeError((p) => ({ ...p, [v.id]: 'No transcript returned' }));
-      if (analysis) setAnalyses((p) => ({ ...p, [v.id]: analysis }));
-    } finally {
-      setTranscribing(null);
-    }
-  };
-
   const fetchUrl = async (v: VoicemailEntry): Promise<string> => {
     if (!v.xml_cdr_uuid) return '';
     return loadPbxRecordingAudioMobile({ xml_cdr_uuid: v.xml_cdr_uuid }, mobile.accessToken, mobile.organizationId, mobile.fusionpbxDomainUuid)
@@ -192,7 +165,7 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
     const current = () => epoch === playEpochRef.current && scope === playbackScopeRef.current;
     audio.ontimeupdate = () => { if (current()) setProgress({ id, cur: audio.currentTime, dur: audio.duration || v.durationSec }); };
     audio.onloadedmetadata = () => { if (current()) setProgress({ id, cur: 0, dur: audio.duration || v.durationSec }); };
-    audio.onended = () => { if (current()) { setPlaying(null); transcribe(v); } };
+    audio.onended = () => { if (current()) { setPlaying(null); } };
     audio.onerror = () => { if (current()) { setErrorId(id); setPlaying(null); } };
     audioRef.current = audio;
     setPlaying(id);
@@ -222,8 +195,7 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
     return items.filter((v) =>
       (v.customer || '').toLowerCase().includes(k) ||
       (v.from || '').toLowerCase().includes(k) ||
-      (v.transcript || '').toLowerCase().includes(k) ||
-      (v.summary || '').toLowerCase().includes(k)
+      false
     );
   }, [items, q]);
 
@@ -306,7 +278,7 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
           <EmptyState
             icon={<VmIcon size={28} />}
             title={q ? 'No matching voicemails' : 'No voicemails'}
-            hint={q ? 'Try a different search term.' : 'When callers leave a message, Lemtel AI will transcribe and summarize it here.'}
+            hint={q ? 'Try a different search term.' : 'New voicemail messages will appear here.'}
           />
         </div>
       </div>
@@ -325,7 +297,6 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
         const dur = p?.dur || v.durationSec;
         const cur = p?.cur || 0;
         const pct = dur > 0 ? Math.min(100, (cur / dur) * 100) : 0;
-        const liveTranscript = transcripts[v.id];
         return (
           <Card key={v.id} style={{ marginBottom: 10 }} accent={v.priority === 'high' ? 'gold' : undefined}>
             <button onClick={() => { haptic?.(); setOpenId(isOpen ? null : v.id); }} style={{
@@ -381,45 +352,6 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
                     }}>Retry</button>
                   </div>
                 )}
-
-                <div style={{ marginTop: 10 }}>
-                  <AIPanel title="Lemtel AI summary" accent={colors.avaViolet}>
-                  <div style={{ fontSize: font.sm, color: colors.textIce, lineHeight: 1.5 }}>{analyses[v.id]?.summary || v.summary}</div>
-                  {analyses[v.id]?.sentiment && (
-                    <div style={{ marginTop: 6, fontSize: 11, color: colors.mutedSilver }}>Sentiment: <span style={{ color: colors.avaCyan }}>{analyses[v.id]!.sentiment}</span></div>
-                  )}
-                  {analyses[v.id]?.topics?.length ? (
-                    <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {analyses[v.id]!.topics!.map((t, i) => <Chip key={i} tone="violet" size="xs">{t}</Chip>)}
-                    </div>
-                  ) : null}
-                  {analyses[v.id]?.action_items?.length ? (
-                    <div style={{ marginTop: 8, fontSize: 11, color: colors.textSub }}>
-                      <div style={{ fontWeight: 700, color: colors.signalGold, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Action items</div>
-                      {analyses[v.id]!.action_items!.map((a, i) => <div key={i}>• {a}</div>)}
-                    </div>
-                  ) : null}
-                  <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: `1px solid ${colors.border}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <div style={{ fontSize: 10, color: colors.avaCyan, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                        Transcript {transcribing === v.id && '· transcribing…'}
-                      </div>
-                      {(transcribeError[v.id] || (!liveTranscript && !v.transcript)) && transcribing !== v.id && (
-                        <button onClick={() => transcribe(v, true)} style={{
-                          padding: '4px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                          background: 'transparent', border: `1px solid ${colors.avaCyan}`, color: colors.avaCyan,
-                        }}>↻ Retry transcription</button>
-                      )}
-                    </div>
-                    {transcribeError[v.id] && (
-                      <div style={{ fontSize: 11, color: colors.danger, marginBottom: 6 }}>⚠ {transcribeError[v.id]}</div>
-                    )}
-                    <div style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.5 }}>
-                      {liveTranscript || v.transcript || (transcribing === v.id ? '…' : '(no transcript yet)')}
-                    </div>
-                  </div>
-                  </AIPanel>
-                </div>
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <GhostButton tone="cyan" onClick={() => haptic?.(ImpactStyle.Medium)}>📞 Call back</GhostButton>

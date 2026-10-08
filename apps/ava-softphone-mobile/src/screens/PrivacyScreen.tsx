@@ -1,184 +1,49 @@
 import React from 'react';
-import { colors, font, radius } from '../lib/theme';
+import { colors, font } from '../lib/theme';
 import { Card, SectionTitle } from '../components/ui/Primitives';
 import { useT } from '../lib/i18n';
 
 export default function PrivacyScreen() {
-  const { lang } = useT();
+  const { lang, tx } = useT();
   const fr = lang === 'fr';
-  const T = fr ? FR : EN;
+  const sections = fr ? [
+    { title: '1. Compte et organisation', items: [['Collecté', 'Adresse courriel, nom affiché, rôle et organisation active.'], ['Finalité', 'Authentification, accès à votre organisation et soutien.'], ['Conservation', 'Jusqu’à la fermeture du compte, selon les règles de votre organisation.']] },
+    { title: '2. Appels et historique', items: [['Collecté', 'Métadonnées d’appel : direction, heure, durée et état.'], ['Finalité', 'Afficher l’historique, les appels manqués et les alertes.'], ['Accès', 'Limité à votre organisation et à votre rôle authentifiés.']] },
+    { title: '3. Enregistrements audio', items: [['Accès', 'La lecture est vérifiée à chaque demande par le chemin authentifié Lemtel.'], ['Appareil', 'L’audio est diffusé à la demande; il n’est pas conservé par défaut sur l’appareil.'], ['Contrôle', 'Votre organisation définit la politique d’enregistrement et de conservation.']] },
+    { title: '4. Aucune transcription IA mobile', items: [['Engagement', 'Cette application mobile ne demande pas, ne génère pas et ne présente pas de transcription ou d’analyse IA d’appels.'], ['Portail', 'Toute politique d’organisation distincte est gérée par les administrateurs dans le portail, jamais par une commande de l’application mobile.']] },
+  ] : [
+    { title: '1. Account and organization', items: [['Collected', 'Email address, display name, role, and active organization.'], ['Purpose', 'Authentication, organization access, and support.'], ['Retention', 'Until account closure, subject to organization rules.']] },
+    { title: '2. Calls and history', items: [['Collected', 'Call metadata: direction, time, duration, and status.'], ['Purpose', 'Show history, missed calls, and alerts.'], ['Access', 'Limited to your authenticated organization and role.']] },
+    { title: '3. Recording audio', items: [['Access', 'Playback is checked for every request through the authenticated Lemtel path.'], ['Device', 'Audio streams on demand and is not retained on the device by default.'], ['Control', 'Your organization defines the recording and retention policy.']] },
+    { title: '4. No mobile AI call transcription', items: [['Commitment', 'This mobile application does not request, generate, or display AI call transcription or analysis.'], ['Portal', 'Any separate organization policy is managed by administrators in the portal, never by a mobile app command.']] },
+  ];
 
   return (
     <div style={{ padding: 16, overflowY: 'auto', paddingBottom: 120 }}>
-      <SectionTitle eyebrow={T.eyebrow} title={T.title} />
-
+      <SectionTitle eyebrow={tx('Confidentialité', 'Privacy')} title={tx('Vos données dans Lemtel', 'Your data in Lemtel')} />
       <Card padded={true}>
-        <p style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.6 }}
-           dangerouslySetInnerHTML={{ __html: T.intro }} />
+        <p style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.6, margin: 0 }}>
+          {tx('Lemtel applique le principe de confidentialité dès la conception : seules les données nécessaires au service de communication sont utilisées, les organisations restent isolées, et vos données ne sont jamais vendues à des annonceurs.', 'Lemtel follows privacy by design: only data needed for communication service is used, organizations remain isolated, and your data is never sold to advertisers.')}
+        </p>
       </Card>
-
-      {T.sections.map((s) => (
-        <Section key={s.title} title={s.title} items={s.items} />
+      {sections.map((section) => (
+        <Card key={section.title} padded={true}>
+          <h3 style={{ color: colors.textIce, fontSize: font.md, margin: '0 0 10px', fontWeight: 800 }}>{section.title}</h3>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {section.items.map(([label, detail]) => (
+              <div key={label} style={{ padding: '9px 10px', border: `1px solid ${colors.border}`, borderRadius: 10, background: `${colors.lemtelBlue}08` }}>
+                <div style={{ color: colors.lemtelBlue, fontSize: 10, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</div>
+                <div style={{ marginTop: 3, color: colors.textSub, fontSize: font.sm, lineHeight: 1.48 }}>{detail}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
       ))}
-
       <Card padded={true}>
-        <h3 style={{ fontSize: font.md, fontWeight: 800, color: colors.textIce, margin: '0 0 8px' }}>
-          {T.controlsTitle}
-        </h3>
-        {T.controls.map((c) => <ControlRow key={c.label} label={c.label} desc={c.desc} />)}
-      </Card>
-
-      <Card padded={true}>
-        <p style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.6, margin: 0 }}
-           dangerouslySetInnerHTML={{ __html: T.contact }} />
-        <p style={{ fontSize: font.sm, color: colors.lemtelBlue, marginTop: 10, marginBottom: 0 }}>
-          {T.fullPolicy}: <a href="https://avastatistic.ca/privacy" target="_blank" rel="noreferrer" style={{ color: colors.lemtelBlue }}>avastatistic.ca/privacy</a><br/>
-          {T.terms}: <a href="https://avastatistic.ca/terms" target="_blank" rel="noreferrer" style={{ color: colors.lemtelBlue }}>avastatistic.ca/terms</a>
+        <p style={{ margin: 0, color: colors.textSub, fontSize: font.sm, lineHeight: 1.6 }}>
+          {tx('Pour toute question ou demande relative à vos données : ', 'For any data question or request: ')}<a href="mailto:privacy@avastatistic.ca" style={{ color: colors.lemtelBlue }}>privacy@avastatistic.ca</a>
         </p>
       </Card>
     </div>
   );
 }
-
-function Section({ title, items }: { title: string; items: { k: string; v: string }[] }) {
-  return (
-    <Card padded={true}>
-      <h3 style={{ fontSize: font.md, fontWeight: 800, color: colors.textIce, margin: '0 0 10px' }}>{title}</h3>
-      <div style={{ display: 'grid', gap: 8 }}>
-        {items.map((it) => (
-          <div key={it.k} style={{
-            display: 'grid', gridTemplateColumns: '110px 1fr', gap: 10,
-            padding: '8px 10px', background: 'rgba(0,35,230,0.04)',
-            borderRadius: radius.sm, border: `1px solid ${colors.border}`,
-          }}>
-            <span style={{ fontSize: font.xs, fontWeight: 800, color: colors.lemtelBlue, letterSpacing: 0.3, textTransform: 'uppercase' }}>{it.k}</span>
-            <span style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.5 }}>{it.v}</span>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function ControlRow({ label, desc }: { label: string; desc: string }) {
-  return (
-    <div style={{ padding: '10px 0', borderTop: `1px solid ${colors.border}` }}>
-      <div style={{ fontSize: font.sm, fontWeight: 800, color: colors.textIce }}>{label}</div>
-      <div style={{ fontSize: font.sm, color: colors.textSub, lineHeight: 1.5, marginTop: 2 }}>{desc}</div>
-    </div>
-  );
-}
-
-const EN = {
-  eyebrow: 'Privacy',
-  title: 'How Lemtel uses your data',
-  intro: 'Lemtel is built around <strong>privacy-by-design</strong>. We only collect what is strictly required to deliver voice service, notify you about calls, transcribe and analyse conversations for your own workspace, and protect your account. All traffic is encrypted with TLS 1.2+ and stored in your workspace database with row-level security.',
-  controlsTitle: '7. Your data controls',
-  contact: 'We <strong>never</strong> sell your data and <strong>never</strong> share it with advertisers. Questions, exercising rights, or breach reports: <a href="mailto:privacy@avastatistic.ca" style="color:#0023e6">privacy@avastatistic.ca</a>.',
-  fullPolicy: 'Full policy',
-  terms: 'Terms of service',
-  sections: [
-    { title: '1. Call history (CDRs)', items: [
-      { k: 'Collected', v: 'Caller/callee number, direction, start time, duration, disposition, queue, agent extension.' },
-      { k: 'Source', v: 'Synced from your company PBX over a secure backend connection.' },
-      { k: 'Purpose', v: 'Display recent calls, dashboards, missed-call alerts.' },
-      { k: 'Retention', v: 'Mirrors PBX retention policy — default 90 days, configurable by your workspace admin.' },
-      { k: 'Sharing', v: 'Never shared with third parties. Stays inside your workspace.' },
-      { k: 'Your control', v: 'Clear local cache · Request data export · Delete account.' },
-    ]},
-    { title: '2. Call recordings', items: [
-      { k: 'Collected', v: 'Audio file reference and metadata. Audio is streamed on demand — never stored on your device.' },
-      { k: 'Legal basis', v: 'Recording follows your company PBX recording rules. You are informed before playback.' },
-      { k: 'Purpose', v: 'Quality assurance, training, dispute resolution.' },
-      { k: 'Retention', v: 'Per workspace policy (typically 30 / 60 / 90 days).' },
-      { k: 'Access', v: 'Gated by role. Every playback is written to the audit log.' },
-      { k: 'Your control', v: 'Request deletion of recordings tied to your extension via Support.' },
-    ]},
-    { title: '3. AI transcription & analysis', items: [
-      { k: 'Collected', v: 'Transcript text, speaker turns (Agent/Caller), sentiment, summary, key topics, action items.' },
-      { k: 'Processing', v: 'Audio is sent to the Lemtel AI service over TLS and processed transiently. Audio is NOT used to train any third-party model.' },
-      { k: 'Storage', v: 'Transcript + analysis stored in your workspace database, linked to the call record.' },
-      { k: 'Purpose', v: 'Searchable history, coaching, sentiment trends, customer-experience scoring.' },
-      { k: 'Retention', v: 'Same lifecycle as the parent call recording.' },
-      { k: 'Your control', v: 'Per-recording "Delete transcript" · Workspace toggle "Disable AI analysis on my calls".' },
-    ]},
-    { title: '4. Voicemail', items: [
-      { k: 'Collected', v: 'Audio + AI transcript + caller metadata.' },
-      { k: 'Purpose', v: 'Listen, read, return missed calls.' },
-      { k: 'Retention', v: 'Workspace default (30 days). Deleted voicemails are purged within 24h.' },
-    ]},
-    { title: '5. Account & device', items: [
-      { k: 'Collected', v: 'Email, display name, SIP extension, role, device push token, app version, OS.' },
-      { k: 'Purpose', v: 'Authentication, push delivery, support diagnostics.' },
-      { k: 'Retention', v: 'Until account deletion. 30-day grace period, then full purge.' },
-    ]},
-    { title: '6. Diagnostics & crash logs', items: [
-      { k: 'Collected', v: 'Anonymous error events, build version, SIP connectivity state. NO call content.' },
-      { k: 'Your control', v: 'Toggle off in More → Permissions → Diagnostics.' },
-    ]},
-  ],
-  controls: [
-    { label: 'Export my data', desc: 'Download a JSON archive of your account, call history, and transcripts.' },
-    { label: 'Delete my account', desc: 'Permanent removal of your account, sessions, push tokens, and personal data.' },
-    { label: 'Revoke this device', desc: 'Sign out and remove the device push token from our servers.' },
-      { label: 'Disable AI analysis on my calls', desc: 'Stops Lemtel AI from transcribing or analyzing future calls tied to your extension.' },
-    { label: 'Manage permissions', desc: 'Microphone, Notifications, Contacts, Background sync — toggle any time.' },
-  ],
-};
-
-const FR = {
-  eyebrow: 'Confidentialité',
-  title: "Comment Lemtel utilise vos données",
-  intro: "Lemtel est conçu selon le principe de <strong>confidentialité dès la conception</strong>. Nous ne collectons que ce qui est strictement nécessaire pour fournir le service vocal, vous notifier des appels, transcrire et analyser les conversations pour votre propre espace de travail, et protéger votre compte. Tout le trafic est chiffré en TLS 1.2+ et stocké dans la base de données de votre espace avec sécurité au niveau des lignes.",
-  controlsTitle: '7. Vos contrôles de données',
-  contact: "Nous ne vendons <strong>jamais</strong> vos données et ne les partageons <strong>jamais</strong> avec des annonceurs. Questions, exercice de vos droits ou signalement d'incident : <a href=\"mailto:privacy@avastatistic.ca\" style=\"color:#0023e6\">privacy@avastatistic.ca</a>.",
-  fullPolicy: 'Politique complète',
-  terms: "Conditions d'utilisation",
-  sections: [
-    { title: "1. Historique d'appels (CDR)", items: [
-      { k: 'Collecté', v: "Numéro appelant/appelé, direction, heure de début, durée, disposition, file, extension de l'agent." },
-      { k: 'Source', v: 'Synchronisé depuis le PBX de votre entreprise via une connexion backend sécurisée.' },
-      { k: 'Finalité', v: "Afficher les appels récents, tableaux de bord, alertes d'appels manqués." },
-      { k: 'Conservation', v: 'Reflète la politique du PBX — 90 jours par défaut, configurable par votre admin.' },
-      { k: 'Partage', v: "Jamais partagé avec des tiers. Reste dans votre espace de travail." },
-      { k: 'Votre contrôle', v: "Vider le cache local · Demander l'export des données · Supprimer le compte." },
-    ]},
-    { title: "2. Enregistrements d'appels", items: [
-      { k: 'Collecté', v: "Référence du fichier audio et métadonnées. L'audio est diffusé à la demande — jamais stocké sur votre appareil." },
-      { k: 'Base légale', v: "L'enregistrement suit les règles du PBX de votre entreprise. Vous êtes informé avant la lecture." },
-      { k: 'Finalité', v: "Assurance qualité, formation, résolution de litiges." },
-      { k: 'Conservation', v: 'Selon la politique de votre espace (typiquement 30 / 60 / 90 jours).' },
-      { k: 'Accès', v: "Contrôlé par rôle. Chaque lecture est inscrite au journal d'audit." },
-      { k: 'Votre contrôle', v: 'Demander la suppression via le Support.' },
-    ]},
-    { title: "3. Transcription et analyse IA", items: [
-      { k: 'Collecté', v: "Texte de transcription, tours de parole (Agent/Appelant), sentiment, résumé, sujets clés, actions." },
-      { k: 'Traitement', v: "L'audio est envoyé au service Lemtel AI en TLS et traité de manière transitoire. L'audio n'est PAS utilisé pour entraîner un modèle tiers." },
-      { k: 'Stockage', v: 'Transcription + analyse stockées dans votre espace, liées à l\'appel.' },
-      { k: 'Finalité', v: 'Historique recherchable, coaching, tendances de sentiment, score client.' },
-      { k: 'Conservation', v: "Même cycle de vie que l'enregistrement parent." },
-      { k: 'Votre contrôle', v: "« Supprimer la transcription » par enregistrement · Bascule « Désactiver l'analyse IA »." },
-    ]},
-    { title: '4. Messagerie vocale', items: [
-      { k: 'Collecté', v: "Audio + transcription IA + métadonnées de l'appelant." },
-      { k: 'Finalité', v: 'Écouter, lire, rappeler les appels manqués.' },
-      { k: 'Conservation', v: 'Par défaut 30 jours. Les messages supprimés sont purgés sous 24h.' },
-    ]},
-    { title: '5. Compte et appareil', items: [
-      { k: 'Collecté', v: "E-mail, nom affiché, extension SIP, rôle, jeton push, version de l'app, OS." },
-      { k: 'Finalité', v: 'Authentification, livraison des notifications, diagnostics de support.' },
-      { k: 'Conservation', v: 'Jusqu\'à la suppression du compte. 30 jours de grâce, puis purge complète.' },
-    ]},
-    { title: '6. Diagnostics et journaux de crash', items: [
-      { k: 'Collecté', v: "Événements d'erreur anonymes, version, état SIP. AUCUN contenu d'appel." },
-      { k: 'Votre contrôle', v: 'Désactivez dans Plus → Permissions → Diagnostics.' },
-    ]},
-  ],
-  controls: [
-    { label: 'Exporter mes données', desc: "Téléchargez une archive JSON de votre compte, historique d'appels et transcriptions." },
-    { label: 'Supprimer mon compte', desc: 'Suppression permanente du compte, sessions, jetons push et données personnelles.' },
-    { label: 'Révoquer cet appareil', desc: 'Déconnexion et retrait du jeton push de nos serveurs.' },
-    { label: "Désactiver l'analyse IA sur mes appels", desc: "Empêche Lemtel AI de transcrire ou analyser les futurs appels liés à votre extension." },
-    { label: 'Gérer les permissions', desc: 'Microphone, notifications, contacts, sync arrière-plan — à tout moment.' },
-  ],
-};

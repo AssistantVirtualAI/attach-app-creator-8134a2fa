@@ -173,7 +173,6 @@ export interface CallRecord {
   startedAt: string;
   durationSec: number;
   hasRecording: boolean;
-  hasTranscript: boolean;
   pbx_uuid?: string | null;
   organization_id?: string | null;
   domain_uuid?: string | null;
@@ -187,22 +186,7 @@ export interface CallRecord {
 export interface CallDetail extends CallRecord {
   record_path?: string | null;
   record_name?: string | null;
-  transcript: { speaker: 'agent' | 'customer'; text: string; t: number }[];
-  summary: string;
-  topics: string[];
-  actionItems: string[];
-  qualityScore: number;
-  coachingScore?: number | null;
-  coachingNotes?: string[];
-  aiStatus?: 'cached' | 'processing' | 'failed' | 'missing';
-  aiError?: string | null;
-  aiCached?: boolean;
-  transcriptionStatus?: 'pending' | 'processing' | 'done' | 'failed' | 'missing';
-  transcriptionProvider?: string | null;
-  transcriptionProviderRaw?: string | null;
-  transcriptionError?: string | null;
-  intent: string;
-  tags: string[];
+  tags?: string[];
 }
 
 export interface SmsThread { id: string; contact: string; number: string; lastMessage: string; unread: number; updatedAt: string }
@@ -210,7 +194,7 @@ export interface SmsMessage { id: string; from: 'me' | 'them'; body: string; at:
 
 export interface VoicemailEntry {
   id: string; from: string; customer?: string; receivedAt: string;
-  durationSec: number; transcript: string; summary: string;
+  durationSec: number;
   priority: 'low' | 'normal' | 'high'; sentiment: 'positive' | 'neutral' | 'negative';
   isNew: boolean;
   // Fields needed by `voicemailAudio` to issue a signed URL.
@@ -230,8 +214,6 @@ export interface RecordingEntry {
   customer?: string;
   startedAt: string;
   durationSec: number;
-  hasTranscript: boolean;
-  summary?: string;
   xml_cdr_uuid?: string;
   pbx_uuid?: string;
   record_path?: string;
@@ -309,23 +291,15 @@ const dashboardMock: DashboardBrief = {
 };
 
 const callsMock: CallRecord[] = [
-  { id: 'c1', direction: 'in',  status: 'answered',  from: '+1 514 555 0123', to: '+1 514 555 0100', customer: 'Marie Tremblay', startedAt: new Date(Date.now() - 36e5).toISOString(),    durationSec: 245, hasRecording: true,  hasTranscript: true,  sentiment: 'positive' },
-  { id: 'c2', direction: 'out', status: 'answered',  from: '+1 514 555 0100', to: '+1 438 555 9988', customer: 'Acme Corp',       startedAt: new Date(Date.now() - 5*36e5).toISOString(),  durationSec: 412, hasRecording: true,  hasTranscript: true,  sentiment: 'neutral'  },
-  { id: 'c3', direction: 'in',  status: 'missed',    from: '+1 514 555 7711', to: '+1 514 555 0100',                              startedAt: new Date(Date.now() - 8*36e5).toISOString(),  durationSec: 0,   hasRecording: false, hasTranscript: false                          },
-  { id: 'c4', direction: 'in',  status: 'voicemail', from: '+1 438 555 6612', to: '+1 514 555 0100', customer: 'Vincent K.',      startedAt: new Date(Date.now() - 26*36e5).toISOString(), durationSec: 72,  hasRecording: true,  hasTranscript: true,  sentiment: 'negative' },
+  { id: 'c1', direction: 'in',  status: 'answered',  from: '+1 514 555 0123', to: '+1 514 555 0100', customer: 'Marie Tremblay', startedAt: new Date(Date.now() - 36e5).toISOString(),    durationSec: 245, hasRecording: true,  sentiment: 'positive' },
+  { id: 'c2', direction: 'out', status: 'answered',  from: '+1 514 555 0100', to: '+1 438 555 9988', customer: 'Acme Corp',       startedAt: new Date(Date.now() - 5*36e5).toISOString(),  durationSec: 412, hasRecording: true,  sentiment: 'neutral'  },
+  { id: 'c3', direction: 'in',  status: 'missed',    from: '+1 514 555 7711', to: '+1 514 555 0100',                              startedAt: new Date(Date.now() - 8*36e5).toISOString(),  durationSec: 0,   hasRecording: false                          },
+  { id: 'c4', direction: 'in',  status: 'voicemail', from: '+1 438 555 6612', to: '+1 514 555 0100', customer: 'Vincent K.',      startedAt: new Date(Date.now() - 26*36e5).toISOString(), durationSec: 72,  hasRecording: true,  sentiment: 'negative' },
 ];
 
 const callDetailMock = (id: string): CallDetail => {
   const base = callsMock.find((c) => c.id === id) || callsMock[0];
-  return {
-    ...base,
-    transcript: [
-      { speaker: 'agent',    text: 'Hi, thanks for calling Lemtel. How can I help?', t: 0 },
-      { speaker: 'customer', text: 'I wanted to renew my plan.', t: 6 },
-    ],
-    summary: 'Renewal call.', topics: ['renewal'], actionItems: ['Send pricing PDF'],
-    qualityScore: 87, intent: 'Renewal', tags: ['priority'],
-  };
+  return { ...base, tags: ['priority'] };
 };
 
 const threadsMock: SmsThread[] = [
@@ -337,7 +311,7 @@ const messagesMock: Record<string, SmsMessage[]> = {
   t2: [{ id: 'm4', from: 'them', body: 'Can we reschedule?', at: '09:30' }],
 };
 const voicemailMock: VoicemailEntry[] = [
-  { id: 'v1', from: '+1 514 555 0123', customer: 'Marie Tremblay', receivedAt: new Date(Date.now() - 30*60e3).toISOString(), durationSec: 72, transcript: 'Calling to renew.', summary: 'Wants to renew today.', priority: 'high', sentiment: 'positive', isNew: true },
+  { id: 'v1', from: '+1 514 555 0123', customer: 'Marie Tremblay', receivedAt: new Date(Date.now() - 30*60e3).toISOString(), durationSec: 72, priority: 'high', sentiment: 'positive', isNew: true },
 ];
 
 /* ─── Public API ──────────────────────────────────────────────── */
@@ -357,7 +331,6 @@ function mapCdrToCallRecord(r: any): CallRecord {
     startedAt:    r.start_at ?? new Date().toISOString(),
     durationSec:  billsec,
     hasRecording: !!(r.has_recording || r.recording_path || r.recording_name),
-    hasTranscript: false,
     sentiment:    undefined,
   };
 }
@@ -369,10 +342,6 @@ function mapCdrToVoicemailEntry(r: any): VoicemailEntry {
     customer:    r.caller_name ?? undefined,
     receivedAt:  r.start_at ?? new Date().toISOString(),
     durationSec: Number(r.billsec ?? r.duration_seconds ?? 0),
-    transcript:  r.voicemail_message ?? 'Transcription non disponible.',
-    summary:     r.voicemail_message
-                   ? r.voicemail_message.slice(0, 120)
-                   : 'Aucun résumé disponible.',
     priority:    'normal' as const,
     sentiment:   'neutral' as const,
     isNew:       !r.voicemail_read,
@@ -467,52 +436,6 @@ export const mobileApi = {
       { ok: true, url: '', expiresInSec: 0, contentType: 'audio/wav' },
     ),
 
-  analyzeCall: (callId: string, opts?: { force?: boolean }) => call<{ jobId?: string; transcript?: string; transcript_text?: string; summary?: string; sentiment?: string; topics?: string[]; action_items?: string[]; analysis?: any; insights?: any }>(
-    '/ai-analyze-call', {
-      method: 'POST',
-      body: JSON.stringify({
-        call_id: callId,
-        call_record_id: callId,
-        force: opts?.force || undefined,
-      }),
-    },
-    { jobId: 'job-' + Date.now() },
-  ),
-  transcribeCall: async (callId: string, opts?: { force?: boolean; disableClaude?: boolean }) => {
-    const cid = String(callId);
-    const tag = `[mobileApi.transcribeCall] cid=${cid}`;
-    const startedAt = Date.now();
-    const payload = {
-      call_record_id: callId,
-      force: opts?.force || undefined,
-      disable_claude: opts?.disableClaude || undefined,
-    };
-    console.log(`${tag} action=invoke`, { force: !!payload.force });
-    try {
-      const res = await call<{ transcript_text?: string; stub?: boolean; reason?: string; error?: string; details?: string; fetchErrors?: string[]; provider?: string; attempts?: any[]; cid?: string }>(
-        '/ai-transcribe-call', { method: 'POST', body: JSON.stringify(payload) },
-        { transcript_text: 'Mock transcript', stub: false },
-      );
-      console.log(`${tag} action=response`, {
-        ms: Date.now() - startedAt,
-        provider: res?.provider || null,
-        stub: !!res?.stub,
-        reason: res?.reason || null,
-        error: res?.error || null,
-        text_len: res?.transcript_text?.length || 0,
-      });
-      return res;
-    } catch (e: any) {
-      console.warn(`${tag} action=error`, {
-        ms: Date.now() - startedAt,
-        status: e?.status,
-        code: e?.code,
-        message: e?.message,
-        detail: e?.detail,
-      });
-      throw e;
-    }
-  },
   generateGreeting: (prompt: string) => call<{ text: string; audioUrl?: string }>(
     '/elevenlabs-generate-greeting', { method: 'POST', body: JSON.stringify({ prompt }) },
     { text: `Thanks for calling Lemtel. Leave a message and we'll call you back. ${prompt ? `(${prompt})` : ''}` },

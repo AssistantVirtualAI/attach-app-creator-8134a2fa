@@ -31,7 +31,6 @@ function mapRow(r: any): CallRecord {
     startedAt: r.start_at ?? new Date().toISOString(),
     durationSec: billsec,
     hasRecording: !!(r.has_recording || r.recording_path || r.recording_name),
-    hasTranscript: false,
     pbx_uuid: r.pbx_uuid ?? undefined,
     organization_id: r.organization_id ?? undefined,
     domain_uuid: r.domain_uuid ?? undefined,

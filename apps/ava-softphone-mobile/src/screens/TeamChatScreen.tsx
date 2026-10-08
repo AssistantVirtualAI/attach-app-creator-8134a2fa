@@ -3,6 +3,7 @@ import { ArrowLeft, Circle, MessageCircle, Plus, Search, Send, Users } from 'luc
 import { colors, radius } from '../lib/theme';
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { authedRealtime, edgeCall, restGet } from '../lib/mobileSupabase';
+import { useT } from '../lib/i18n';
 
 type Channel = { id: string; name: string; channel_type: string; members: string[] | null };
 type Message = { id: string; channel_id: string; sender_id: string; sender_name: string | null; content: string; created_at: string };
@@ -12,9 +13,11 @@ type Member = { user_id: string; full_name: string | null; email: string | null;
 
 const STATUS_COLOR: Record<string, string> = { online: '#22d39a', available: '#22d39a', busy: '#ff5a5f', dnd: '#ff5a5f', on_call: '#ff8a3d', away: '#f4c248', offline: '#6b7280', meeting: '#a855f7', lunch: '#eab308', break: '#f97316' };
 
-export default function TeamChatScreen(props: { accessToken?: string | null; userId?: string; channelUnread?: Record<string, number> }) {
+export default function TeamChatScreen(props: { accessToken?: string | null; userId?: string; organizationName?: string; channelUnread?: Record<string, number> }) {
   const channelUnread = props.channelUnread || {};
   const mobile = useMobileCredentials();
+  const { tx } = useT();
+  const organizationName = props.organizationName || mobile.sipDomain || 'Lemtel';
   const token = mobile.accessToken;
   const userId = mobile.userId;
   const [view, setView] = useState<'channels' | 'members' | 'chat'>('channels');
@@ -98,7 +101,7 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
         loadMembers().catch(() => {});
         chatCall('heartbeat', { status: 'available', platform: 'mobile', call_state: 'idle' }).catch(() => {});
       } catch (e: any) {
-        if (!cancelled) { setError(e?.message || 'Failed to load team chat'); setLoading(false); }
+        if (!cancelled) { setError(e?.message || tx("Impossible de charger le chat d’équipe", 'Unable to load team chat')); setLoading(false); }
       }
     })();
     // Heartbeat sent once on screen open only — periodic 30s interval removed
@@ -144,14 +147,14 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
 
   const openDm = async (m: Member) => {
     if (!m.user_id || String(m.user_id).startsWith('ext:')) {
-      setError("This teammate hasn't activated their portal yet — DM unavailable.");
+      setError(tx("Ce collègue n’a pas encore activé son portail — message direct indisponible.", 'This teammate has not activated their portal yet — direct message unavailable.'));
       return;
     }
     try {
       const r = await chatCall('ensure_dm_channel', { user_id: m.user_id });
-      if (r?.error) { setError(r.error === 'not_in_org' ? 'Teammate is not in your workspace.' : String(r.error)); return; }
+      if (r?.error) { setError(r.error === 'not_in_org' ? tx("Ce collègue n’est pas dans votre organisation.", 'This teammate is not in your organization.') : String(r.error)); return; }
       if (r.channel) { setActiveChannel(r.channel); setView('chat'); await loadChannels(); }
-    } catch (e: any) { setError(e?.message || 'DM failed'); }
+    } catch (e: any) { setError(e?.message || tx('Le message direct a échoué.', 'Direct message failed.')); }
   };
 
   const sendMessage = async () => {
@@ -164,7 +167,7 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
         setMessages((prev) => prev.some((m) => m.id === r.message.id) ? prev : [...prev, r.message]);
         requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }));
       }
-    } catch (e: any) { setError(e?.message || 'Send failed'); }
+    } catch (e: any) { setError(e?.message || tx("L’envoi a échoué.", 'Message send failed.')); }
   };
 
   const createGroup = async () => {
@@ -172,17 +175,17 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
       const r = await chatCall('create_group', { name: groupName || 'group', member_ids: Array.from(groupPicks) });
       setGroupOpen(false); setGroupName(''); setGroupPicks(new Set()); await loadChannels();
       if (r.channel) { setActiveChannel(r.channel); setView('chat'); }
-    } catch (e: any) { setError(e?.message || 'Group failed'); }
+    } catch (e: any) { setError(e?.message || tx('La création du groupe a échoué.', 'Group creation failed.')); }
   };
 
   const channelDisplay = useCallback((ch: Channel) => {
     if (ch.channel_type === 'dm' || ch.name.startsWith('dm:')) {
       const other = (ch.members || []).find((m) => m !== userId);
       const mem = members.find((m) => m.user_id === other);
-      return mem ? (mem.full_name || `Ext ${mem.extension || ''}`) : 'Direct message';
+      return mem ? (mem.full_name || `Ext ${mem.extension || ''}`) : tx('Message direct', 'Direct message');
     }
     return ch.name.toLowerCase() === 'general' ? '# General' : `# ${ch.name}`;
-  }, [members, userId]);
+  }, [members, tx, userId]);
 
   const visibleMessages = useMemo(() => msgQuery.trim() ? messages.filter((m) => m.content.toLowerCase().includes(msgQuery.trim().toLowerCase()) || (m.sender_name || '').toLowerCase().includes(msgQuery.trim().toLowerCase())) : messages, [messages, msgQuery]);
 
@@ -190,15 +193,15 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <button onClick={() => { setView('channels'); setActiveChannel(null); setShowMsgSearch(false); setMsgQuery(''); }} style={{ background: 'none', border: 'none', color: colors.textIce, cursor: 'pointer' }}><ArrowLeft size={20} /></button>
-        {showMsgSearch ? <input autoFocus value={msgQuery} onChange={(e) => setMsgQuery(e.target.value)} placeholder="Search messages…" style={{ flex: 1, padding: '6px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', color: colors.textIce, fontSize: 13, outline: 'none' }} /> : <div style={{ flex: 1, fontWeight: 800, color: colors.textIce, fontSize: 15 }}>{channelDisplay(activeChannel)}</div>}
+        {showMsgSearch ? <input autoFocus value={msgQuery} onChange={(e) => setMsgQuery(e.target.value)} placeholder={tx('Rechercher dans les messages…', 'Search messages…')} style={{ flex: 1, padding: '6px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', color: colors.textIce, fontSize: 13, outline: 'none' }} /> : <div style={{ flex: 1, fontWeight: 800, color: colors.textIce, fontSize: 15 }}>{channelDisplay(activeChannel)}</div>}
         <button onClick={() => { setShowMsgSearch((v) => !v); if (showMsgSearch) setMsgQuery(''); }} style={{ background: 'none', border: 'none', color: showMsgSearch ? '#21d4fd' : colors.mutedSilver, cursor: 'pointer' }}><Search size={18} /></button>
       </header>
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {visibleMessages.map((m) => <Bubble key={m.id} m={m} mine={m.sender_id === userId} />)}
-        {messages.length === 0 && <div style={{ textAlign: 'center', color: colors.mutedSilver, fontSize: 12, padding: 32 }}>No messages yet.</div>}
+        {messages.length === 0 && <div style={{ textAlign: 'center', color: colors.mutedSilver, fontSize: 12, padding: 32 }}>{tx('Aucun message pour le moment.', 'No messages yet.')}</div>}
       </div>
       <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }} placeholder="Message…" style={{ flex: 1, padding: '10px 14px', borderRadius: 20, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: colors.textIce, fontSize: 14, outline: 'none' }} />
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }} placeholder={tx('Message…', 'Message…')} style={{ flex: 1, padding: '10px 14px', borderRadius: 20, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: colors.textIce, fontSize: 14, outline: 'none' }} />
         <button onClick={sendMessage} disabled={!input.trim()} style={{ width: 40, height: 40, borderRadius: 20, border: 'none', background: input.trim() ? 'linear-gradient(135deg, #0023e6, #21d4fd)' : 'rgba(255,255,255,0.08)', color: '#fff', cursor: input.trim() ? 'pointer' : 'not-allowed', display: 'grid', placeItems: 'center' }}><Send size={16} /></button>
       </div>
     </div>
@@ -206,14 +209,14 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <header style={{ padding: '14px 16px 8px' }}><div style={{ fontSize: 11, color: colors.mutedSilver, textTransform: 'uppercase', letterSpacing: 1.6, fontWeight: 700 }}>{mobile.sipDomain || 'Team'}</div><div style={{ fontSize: 22, fontWeight: 800, color: colors.textIce, marginTop: 2 }}>Chat</div></header>
-      <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px' }}>{(['channels', 'members'] as const).map((v) => <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: '8px', borderRadius: radius.md, background: view === v ? 'rgba(0,35,230,0.25)' : 'rgba(255,255,255,0.04)', border: `1px solid ${view === v ? '#0023e6' : 'rgba(255,255,255,0.06)'}`, color: view === v ? colors.textIce : colors.mutedSilver, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>{v === 'channels' ? <MessageCircle size={14} /> : <Users size={14} />}{v === 'channels' ? 'Channels' : `Team (${members.length})`}</button>)}</div>
+      <header style={{ padding: '14px 16px 8px' }}><div style={{ fontSize: 11, color: colors.avaCyan, textTransform: 'uppercase', letterSpacing: 1.6, fontWeight: 800 }}>{tx('Organisation', 'Organization')} · {organizationName}</div><div style={{ fontSize: 22, fontWeight: 800, color: colors.textIce, marginTop: 2 }}>{tx("Conversations d’équipe", 'Team conversations')}</div></header>
+      <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px' }}>{(['channels', 'members'] as const).map((v) => <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: '8px', borderRadius: radius.md, background: view === v ? 'rgba(0,35,230,0.25)' : 'rgba(255,255,255,0.04)', border: `1px solid ${view === v ? '#0023e6' : 'rgba(255,255,255,0.06)'}`, color: view === v ? colors.textIce : colors.mutedSilver, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>{v === 'channels' ? <MessageCircle size={14} /> : <Users size={14} />}{v === 'channels' ? tx('Canaux', 'Channels') : `${tx('Équipe', 'Team')} (${members.length})`}</button>)}</div>
       {error && <div style={{ padding: '0 14px 8px', color: '#ff8a3d', fontSize: 12 }}>{error}</div>}
-      {loading && <div style={{ padding: 24, textAlign: 'center', color: colors.mutedSilver, fontSize: 13 }}>Loading…</div>}
-      <div style={{ padding: '0 14px 8px' }}><div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}><Search size={14} color={colors.mutedSilver} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={view === 'channels' ? 'Search channels…' : 'Search teammates…'} style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: colors.textIce }} /></div></div>
+      {loading && <div style={{ padding: 24, textAlign: 'center', color: colors.mutedSilver, fontSize: 13 }}>{tx('Chargement…', 'Loading…')}</div>}
+      <div style={{ padding: '0 14px 8px' }}><div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}><Search size={14} color={colors.mutedSilver} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={view === 'channels' ? tx('Rechercher des canaux…', 'Search channels…') : tx('Rechercher des collègues…', 'Search teammates…')} style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: colors.textIce }} /></div></div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 12px 16px' }}>
-        {view === 'channels' && <><button onClick={() => setGroupOpen(true)} style={rowStyle(true)}><Plus size={16} /> New group chat</button>{channels.filter((ch) => !query.trim() || channelDisplay(ch).toLowerCase().includes(query.trim().toLowerCase())).map((ch) => { const n = channelUnread[ch.id] || 0; return <button key={ch.id} onClick={() => { setActiveChannel(ch); setView('chat'); }} style={rowStyle()}><MessageCircle size={16} style={{ color: colors.mutedSilver }} /><span style={{ flex: 1, fontSize: 14, fontWeight: n > 0 ? 800 : 600 }}>{channelDisplay(ch)}</span>{n > 0 && <UnreadBadge n={n} />}</button>; })}{channels.length === 0 && !loading && <EmptyText text="No channels yet." />}</>}
-        {view === 'members' && <>{members.filter((m) => !m.is_self && (!query.trim() || `${m.full_name || ''} ${m.extension || ''}`.toLowerCase().includes(query.trim().toLowerCase()))).map((m) => { const dm = channels.find((ch) => (ch.channel_type === 'dm' || ch.name.startsWith('dm:')) && (ch.members || []).includes(m.user_id) && (ch.members || []).includes(userId || '')); const n = dm ? (channelUnread[dm.id] || 0) : 0; return <button key={m.user_id} onClick={() => openDm(m)} style={rowStyle()}><Avatar m={m} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: n > 0 ? 800 : 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.full_name || `Ext ${m.extension}`}</div><div style={{ fontSize: 11, color: colors.mutedSilver, display: 'flex', alignItems: 'center', gap: 6 }}><Circle size={6} fill={STATUS_COLOR[m.status]} color={STATUS_COLOR[m.status]} />{m.status}{m.extension ? ` · Ext ${m.extension}` : ''}</div></div>{n > 0 && <UnreadBadge n={n} />}</button>; })}{members.filter((m) => !m.is_self).length === 0 && !loading && <EmptyText text="No teammates found in your domain yet." />}</>}
+        {view === 'channels' && <><button onClick={() => setGroupOpen(true)} style={rowStyle(true)}><Plus size={16} />{tx('Nouveau groupe', 'New group chat')}</button>{channels.filter((ch) => !query.trim() || channelDisplay(ch).toLowerCase().includes(query.trim().toLowerCase())).map((ch) => { const n = channelUnread[ch.id] || 0; return <button key={ch.id} onClick={() => { setActiveChannel(ch); setView('chat'); }} style={rowStyle()}><MessageCircle size={16} style={{ color: colors.mutedSilver }} /><span style={{ flex: 1, fontSize: 14, fontWeight: n > 0 ? 800 : 600 }}>{channelDisplay(ch)}</span>{n > 0 && <UnreadBadge n={n} />}</button>; })}{channels.length === 0 && !loading && <EmptyText text={tx('Aucun canal pour le moment.', 'No channels yet.')} />}</>}
+        {view === 'members' && <>{members.filter((m) => !m.is_self && (!query.trim() || `${m.full_name || ''} ${m.extension || ''}`.toLowerCase().includes(query.trim().toLowerCase()))).map((m) => { const dm = channels.find((ch) => (ch.channel_type === 'dm' || ch.name.startsWith('dm:')) && (ch.members || []).includes(m.user_id) && (ch.members || []).includes(userId || '')); const n = dm ? (channelUnread[dm.id] || 0) : 0; return <button key={m.user_id} onClick={() => openDm(m)} style={rowStyle()}><Avatar m={m} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: n > 0 ? 800 : 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.full_name || `Ext ${m.extension}`}</div><div style={{ fontSize: 11, color: colors.mutedSilver, display: 'flex', alignItems: 'center', gap: 6 }}><Circle size={6} fill={STATUS_COLOR[m.status]} color={STATUS_COLOR[m.status]} />{m.status}{m.extension ? ` · Ext ${m.extension}` : ''}</div></div>{n > 0 && <UnreadBadge n={n} />}</button>; })}{members.filter((m) => !m.is_self).length === 0 && !loading && <EmptyText text={tx('Aucun collègue trouvé dans cette organisation.', 'No teammates found in this organization yet.')} />}</>}
       </div>
       {groupOpen && <GroupSheet members={members} groupName={groupName} setGroupName={setGroupName} groupPicks={groupPicks} setGroupPicks={setGroupPicks} onClose={() => setGroupOpen(false)} onCreate={createGroup} />}
     </div>
@@ -236,5 +239,6 @@ function UnreadBadge({ n }: { n: number }) {
 }
 
 function GroupSheet({ members, groupName, setGroupName, groupPicks, setGroupPicks, onClose, onCreate }: any) {
-  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', zIndex: 100 }} onClick={onClose}><div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxHeight: '80vh', background: '#0d1426', borderRadius: '20px 20px 0 0', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}><div style={{ fontSize: 16, fontWeight: 800, color: colors.textIce }}>New group chat</div><input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Group name" style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: colors.textIce, fontSize: 14, outline: 'none' }} /><div style={{ fontSize: 11, color: colors.mutedSilver, textTransform: 'uppercase', letterSpacing: 1 }}>Add members ({groupPicks.size})</div><div style={{ flex: 1, overflowY: 'auto', maxHeight: '40vh' }}>{members.filter((m: Member) => !m.is_self).map((m: Member) => { const picked = groupPicks.has(m.user_id); return <button key={m.user_id} onClick={() => { const next = new Set(groupPicks); picked ? next.delete(m.user_id) : next.add(m.user_id); setGroupPicks(next); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 4, borderRadius: 10, background: picked ? 'rgba(0,35,230,0.20)' : 'rgba(255,255,255,0.04)', border: `1px solid ${picked ? '#0023e6' : 'rgba(255,255,255,0.06)'}`, color: colors.textIce, cursor: 'pointer', textAlign: 'left', fontSize: 13 }}><span style={{ flex: 1 }}>{m.full_name || `Ext ${m.extension}`}</span>{picked && <span style={{ fontSize: 11, color: '#21d4fd' }}>✓</span>}</button>; })}</div><div style={{ display: 'flex', gap: 8 }}><button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: 'none', color: colors.textIce, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Cancel</button><button onClick={onCreate} disabled={groupPicks.size === 0} style={{ flex: 1, padding: '10px', borderRadius: 10, background: 'linear-gradient(135deg, #0023e6, #21d4fd)', border: 'none', color: '#fff', cursor: groupPicks.size ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 700, opacity: groupPicks.size ? 1 : 0.5 }}>Create</button></div></div></div>;
+  const { tx } = useT();
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', zIndex: 100 }} onClick={onClose}><div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxHeight: '80vh', background: '#0d1426', borderRadius: '20px 20px 0 0', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}><div style={{ fontSize: 16, fontWeight: 800, color: colors.textIce }}>{tx('Nouveau groupe', 'New group chat')}</div><input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder={tx('Nom du groupe', 'Group name')} style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: colors.textIce, fontSize: 14, outline: 'none' }} /><div style={{ fontSize: 11, color: colors.mutedSilver, textTransform: 'uppercase', letterSpacing: 1 }}>{tx('Ajouter des membres', 'Add members')} ({groupPicks.size})</div><div style={{ flex: 1, overflowY: 'auto', maxHeight: '40vh' }}>{members.filter((m: Member) => !m.is_self).map((m: Member) => { const picked = groupPicks.has(m.user_id); return <button key={m.user_id} onClick={() => { const next = new Set(groupPicks); picked ? next.delete(m.user_id) : next.add(m.user_id); setGroupPicks(next); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 4, borderRadius: 10, background: picked ? 'rgba(0,35,230,0.20)' : 'rgba(255,255,255,0.04)', border: `1px solid ${picked ? '#0023e6' : 'rgba(255,255,255,0.06)'}`, color: colors.textIce, cursor: 'pointer', textAlign: 'left', fontSize: 13 }}><span style={{ flex: 1 }}>{m.full_name || `Ext ${m.extension}`}</span>{picked && <span style={{ fontSize: 11, color: '#21d4fd' }}>✓</span>}</button>; })}</div><div style={{ display: 'flex', gap: 8 }}><button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: 'none', color: colors.textIce, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{tx('Annuler', 'Cancel')}</button><button onClick={onCreate} disabled={groupPicks.size === 0} style={{ flex: 1, padding: '10px', borderRadius: 10, background: 'linear-gradient(135deg, #0023e6, #21d4fd)', border: 'none', color: '#fff', cursor: groupPicks.size ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 700, opacity: groupPicks.size ? 1 : 0.5 }}>{tx('Créer', 'Create')}</button></div></div></div>;
 }

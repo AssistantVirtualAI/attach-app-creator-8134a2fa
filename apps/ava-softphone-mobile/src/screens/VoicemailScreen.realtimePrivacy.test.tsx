@@ -31,7 +31,7 @@ vi.mock('../lib/mobileSupabase', () => ({
 }));
 const voicemails = vi.fn();
 vi.mock('../lib/mobileApi', () => ({
-  mobileApi: { voicemails: (...a: any[]) => voicemails(...a), analyzeCall: vi.fn(), voicemailAudio: vi.fn() },
+  mobileApi: { voicemails: (...a: any[]) => voicemails(...a), voicemailAudio: vi.fn() },
 }));
 vi.mock('../hooks/useMobileCredentials', () => ({ useMobileCredentials: () => creds.current }));
 vi.mock('../lib/audit', () => ({ audit: vi.fn() }));
@@ -125,7 +125,7 @@ describe('Phase 29A — VoicemailScreen Realtime privacy', () => {
     let finish!: (url: string) => void;
     const createAudio = vi.fn(() => ({ pause: vi.fn(), play: vi.fn().mockResolvedValue(undefined) }));
     vi.stubGlobal('Audio', createAudio);
-    voicemails.mockResolvedValue([{ id: 'v1', xml_cdr_uuid: 'cdr-1', from: '201', customer: 'Own voice', durationSec: 30, receivedAt: new Date().toISOString(), priority: 'normal', isNew: false, summary: '' }]);
+    voicemails.mockResolvedValue([{ id: 'v1', xml_cdr_uuid: 'cdr-1', from: '201', customer: 'Own voice', durationSec: 30, receivedAt: new Date().toISOString(), priority: 'normal', isNew: false }]);
     loadAudio.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
     const { unmount } = render(<VoicemailScreen />);
     await flush();

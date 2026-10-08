@@ -11,7 +11,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/mobileApi', () => ({
-  mobileApi: { callDetail: h.callDetail, transcribeCall: vi.fn(), analyzeCall: vi.fn() },
+  mobileApi: { callDetail: h.callDetail },
 }));
 vi.mock('../lib/mobileSupabase', () => ({ loadPbxRecordingAudioMobile: h.loadAudio }));
 vi.mock('../hooks/useMobileCredentials', () => ({
@@ -27,7 +27,7 @@ const cdr = (over: any = {}) => ({
   id: 'c1', pbx_uuid: 'pbx-1', hasRecording: true, record_path: '/rec/a', record_name: 'a.mp3',
   domain_uuid: 'dom-cdr', organization_id: 'org-cdr', start_at: '2026-01-01T00:00:00Z',
   from: '201', to: '5145550000', customer: 'Own', startedAt: '2026-01-01T00:00:00Z', durationSec: 30,
-  transcript: [], insights: null, ...over,
+  insights: null, ...over,
 });
 
 const flush = async () => { await act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); }); };

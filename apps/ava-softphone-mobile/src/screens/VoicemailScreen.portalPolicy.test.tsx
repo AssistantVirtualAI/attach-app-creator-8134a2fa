@@ -13,7 +13,7 @@ vi.mock('../lib/mobileSupabase', () => ({
   authedRealtime: () => ({ channel: () => ({ on: function () { return this; }, subscribe: function () { return this; } }), removeChannel: () => {} }),
 }));
 vi.mock('../lib/mobileApi', () => ({
-  mobileApi: { voicemails: vi.fn().mockResolvedValue([]), analyzeCall: vi.fn(), voicemailAudio: vi.fn() },
+  mobileApi: { voicemails: vi.fn().mockResolvedValue([]), voicemailAudio: vi.fn() },
 }));
 vi.mock('../hooks/useMobileCredentials', () => ({
   useMobileCredentials: () => ({ accessToken: 'test-token', extension: 'x', domainUuid: null }),

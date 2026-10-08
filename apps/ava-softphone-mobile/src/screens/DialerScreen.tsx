@@ -146,12 +146,12 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       <style>{dialerButtonCss}</style>
       {diagOpen && <WssDiagnostics config={sp.sipConfig || null} onClose={() => setDiagOpen(false)} />}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 8px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 14px', padding: '14px 6px 10px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ width: 8, height: 8, borderRadius: 4, background: bannerColor }} />
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{statusLabel}</span>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: .65, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{statusLabel}</span>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Lemtel Télécom</div>
+        <div style={{ fontSize: 11, fontWeight: 750, letterSpacing: .35, color: 'var(--text-muted)' }}>Lemtel Softphone</div>
       </div>
       {isFailed && (
         <div style={{ margin: '10px 16px 0', padding: '10px 12px', borderRadius: 12, background: bannerBg, border: `1px solid ${bannerColor}55`, color: bannerColor, fontSize: 12, flexShrink: 0 }}>

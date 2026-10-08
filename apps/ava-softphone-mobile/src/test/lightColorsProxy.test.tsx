@@ -31,7 +31,7 @@ describe('colors Proxy', () => {
     document.documentElement.setAttribute('data-theme', 'light');
     expect(colors.textIce).toBe(lightColors.textIce);
     expect(colors.mutedSilver).toBe(lightColors.mutedSilver);
-    expect(colors.midnight).toBe('#ffffff');
+    expect(colors.midnight).toBe('#f6f9ff');
   });
 
   it('has the same keys in dark and light palettes', () => {

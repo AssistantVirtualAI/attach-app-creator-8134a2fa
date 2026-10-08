@@ -25,7 +25,7 @@ import BottomTabs, { Tab } from './components/BottomTabs';
 import NotificationsSheet from './components/NotificationsSheet';
 import { useTheme } from './lib/ThemeContext';
 import { useT } from './lib/i18n';
-import { Bell, Sun, Moon, Globe } from 'lucide-react';
+import { Bell, Sun, Moon, Globe, Grid3X3, Home, Menu, MessageCircle, MoreHorizontal, Phone, Settings, UsersRound } from 'lucide-react';
 import ActiveCallSheet from './components/ActiveCallSheet';
 import SipDebugPanel from './components/SipDebugPanel';
 import SplashAva from './components/SplashAva';
@@ -576,7 +576,7 @@ function AuthenticatedShell({
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100vh',
       background: gradients.app,
-      paddingTop: 'calc(var(--safe-top) + 52px)',
+      paddingTop: 'calc(var(--safe-top) + 8px)',
       paddingBottom: 'var(--safe-bottom)',
       color: colors.textIce,
       position: 'relative',
@@ -704,219 +704,117 @@ class ScreenErrorBoundary extends Component<
 function TopHeader({
   tab, onNavigate, haptic, creds, onOpenProfile,
 }: { tab: Tab; onNavigate: (t: Tab) => void; haptic: (s?: ImpactStyle) => Promise<void>; creds: Creds; onOpenProfile: () => void }) {
-  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const { mode, toggle: toggleTheme } = useTheme();
   const { lang, toggle: toggleLang, t: tr } = useT();
-  const [presence, setPresence] = useState<{ status: string; color: string }>({ status: 'available', color: '#22c55e' });
+  const [presence, setPresence] = useState<{ status: string; color: string }>({ status: 'available', color: '#22d39a' });
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!creds?.accessToken || !creds?.userId) return;
     let cancelled = false;
-    const STATUS_COLORS: Record<string, string> = {
-      available: '#22c55e', busy: '#f59e0b', on_call: '#3b82f6', meeting: '#8b5cf6',
-      lunch: '#f97316', break: '#14b8a6', dnd: '#ef4444', away: '#94a3b8',
-      out_of_office: '#6366f1', offline: '#64748b',
+    const statusColors: Record<string, string> = {
+      available: '#22d39a', busy: '#ffb84a', on_call: '#4d6dff', meeting: '#7a4cff',
+      lunch: '#d4a73a', break: '#21d4fd', dnd: '#ff5577', away: '#8a9bc4',
+      out_of_office: '#6680ff', offline: '#64748b',
     };
     (async () => {
       try {
-        const [{ data: pres }, { data: prof }] = await Promise.all([
+        const [{ data: pres }, { data: profile }] = await Promise.all([
           supabase.from('user_presence').select('status').eq('user_id', creds.userId!).maybeSingle(),
           supabase.from('profiles').select('avatar_url').eq('id', creds.userId!).maybeSingle(),
         ]);
         if (cancelled) return;
-        const s = (pres?.status as string) || 'available';
-        setPresence({ status: s, color: STATUS_COLORS[s] || '#22c55e' });
-        if (prof?.avatar_url) setAvatarUrl(prof.avatar_url);
-      } catch {}
+        const status = (pres?.status as string) || 'available';
+        setPresence({ status, color: statusColors[status] || '#22d39a' });
+        if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
+      } catch { /* presence enhances the visual shell but never blocks it */ }
     })();
-    const ch = supabase.channel(`presence-self-${creds.userId}`)
+    const channel = supabase.channel(`presence-self-${creds.userId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence', filter: `user_id=eq.${creds.userId}` }, (payload: any) => {
-        const s = payload?.new?.status || 'available';
-        setPresence({ status: s, color: STATUS_COLORS[s] || '#22c55e' });
+        const status = payload?.new?.status || 'available';
+        setPresence({ status, color: statusColors[status] || '#22d39a' });
       })
       .subscribe();
-    return () => { cancelled = true; try { supabase.removeChannel(ch); } catch {} };
+    return () => { cancelled = true; try { supabase.removeChannel(channel); } catch {} };
   }, [creds?.accessToken, creds?.userId]);
 
   const initials = (creds?.email || creds?.extension || 'U').slice(0, 2).toUpperCase();
-  const titles: Partial<Record<Tab, string>> = {
-    contacts: tr('tabs.contacts' as any),
-    chats: tr('tabs.chats' as any),
-    calls: tr('tabs.calls' as any),
-    keypad: tr('tabs.keypad' as any),
-    speeddial: tr('tabs.speeddial' as any),
-    settings: tr('tabs.settings' as any),
-    home: tr('tabs.home' as any),
+  const labels: Partial<Record<Tab, string>> = {
+    contacts: tr('tabs.contacts' as any), chats: tr('tabs.chats' as any), calls: tr('tabs.calls' as any),
+    keypad: tr('tabs.keypad' as any), speeddial: tr('tabs.speeddial' as any), settings: tr('tabs.settings' as any), home: tr('tabs.home' as any),
   };
-  const items: { id: Tab; label: string; icon: string }[] = [
-    { id: 'home',     label: tr('tabs.home' as any),     icon: '🏠' },
-    { id: 'contacts', label: tr('tabs.contacts' as any), icon: '👤' },
-    { id: 'chats',    label: tr('tabs.chats' as any),    icon: '💬' },
-    { id: 'calls',    label: tr('tabs.calls' as any),    icon: '📞' },
-    { id: 'keypad',   label: tr('tabs.keypad' as any),   icon: '⌨️' },
-    { id: 'settings', label: tr('tabs.settings' as any), icon: '⚙️' },
+  const navItems: { id: Tab; label: string; Icon: typeof Home }[] = [
+    { id: 'home', label: tr('tabs.home' as any), Icon: Home },
+    { id: 'contacts', label: tr('tabs.contacts' as any), Icon: UsersRound },
+    { id: 'chats', label: tr('tabs.chats' as any), Icon: MessageCircle },
+    { id: 'calls', label: tr('tabs.calls' as any), Icon: Phone },
+    { id: 'keypad', label: tr('tabs.keypad' as any), Icon: Grid3X3 },
+    { id: 'settings', label: tr('tabs.settings' as any), Icon: Settings },
   ];
-
-  const iconBtn: React.CSSProperties = {
-    width: 36, height: 36, borderRadius: 10,
-    background: colors.graphite,
-    border: `1px solid ${colors.border}`,
-    display: 'grid', placeItems: 'center', cursor: 'pointer',
-    color: colors.textIce, WebkitTapHighlightColor: 'transparent',
-    padding: 0,
+  const shellButton: React.CSSProperties = {
+    width: 40, height: 40, flex: '0 0 auto', display: 'grid', placeItems: 'center', padding: 0,
+    borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.graphite,
+    color: colors.textIce, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
   };
+  const closePanels = () => { setMenuOpen(false); setToolsOpen(false); };
 
   return (
-    <header style={{ position: 'relative', padding: '8px 12px 6px', background: colors.navSurface, borderBottom: `1px solid ${colors.border}`, boxShadow: `0 8px 26px -24px ${colors.midnight}` }}>
-      {/* Centered logo at the very top of every page */}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 36 }}>
-        <img
-          src="/lemtel-icon.png"
-          alt="Lemtel"
-          width={32}
-          height={32}
-          style={{ width: 32, height: 32, borderRadius: 8, boxShadow: `0 6px 18px -8px ${colors.lemtelBlue}` }}
-        />
-      </div>
-
-      {/* Title row: hamburger | title | (lang, theme, bell) */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        marginTop: 4, minHeight: 48,
-      }}>
-        <button
-          onClick={() => { haptic(ImpactStyle.Light); setOpen((v) => !v); }}
-          aria-label="Open menu"
-          style={{
-            position: 'relative',
-            width: 44, height: 44, borderRadius: 12,
-            background: open ? `${colors.lemtelBlue}22` : colors.graphite,
-            border: `1px solid ${colors.border}`, display: 'grid', placeItems: 'center',
-            cursor: 'pointer', color: colors.textIce,
-            WebkitTapHighlightColor: 'transparent', padding: 0,
-          }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-            <line x1="4" y1="7"  x2="20" y2="7" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="17" x2="14" y2="17" />
-          </svg>
-          <span style={{
-            position: 'absolute', right: 6, top: 6, width: 8, height: 8,
-            borderRadius: '50%', background: colors.lemtelBlue,
-          }} />
+    <header style={{ position: 'relative', zIndex: 65, padding: '8px 12px', background: colors.navSurface, borderBottom: `1px solid ${colors.border}`, boxShadow: '0 10px 30px -24px rgba(0,0,0,.72)', backdropFilter: 'blur(22px) saturate(160%)', WebkitBackdropFilter: 'blur(22px) saturate(160%)' }}>
+      <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,#0023e6,#7a4cff 52%,#21d4fd)', opacity: .92 }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 46 }}>
+        <button type="button" aria-label={tr('tabs.more' as any) || 'Menu'} onClick={() => { void haptic(ImpactStyle.Light); setMenuOpen((open) => !open); setToolsOpen(false); }} style={{ ...shellButton, background: menuOpen ? `${colors.lemtelBlue}22` : colors.graphite }}>
+          <Menu size={21} strokeWidth={2.3} />
         </button>
-
-        <span style={{
-          flex: 1, marginLeft: 4,
-          fontSize: 22, fontWeight: 700, color: colors.textIce,
-          letterSpacing: 0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
-          {titles[tab] || ''}
-        </span>
-
-        <button
-          onClick={() => { haptic(ImpactStyle.Light); onOpenProfile(); }}
-          aria-label="Profile and status"
-          title={`Profile · ${presence.status.replace('_', ' ')}`}
-          style={{
-            position: 'relative', width: 36, height: 36, borderRadius: '50%',
-            background: colors.graphite, border: `1px solid ${colors.border}`,
-            display: 'grid', placeItems: 'center', cursor: 'pointer',
-            color: colors.textIce, WebkitTapHighlightColor: 'transparent', padding: 0,
-            overflow: 'hidden',
-          }}
-        >
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-          ) : (
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4 }}>{initials}</span>
-          )}
-          <span style={{
-            position: 'absolute', right: -1, bottom: -1, width: 11, height: 11,
-            borderRadius: '50%', background: presence.color,
-            boxShadow: `0 0 0 2px ${colors.navSurface}`,
-          }} />
-        </button>
-        <button
-          onClick={() => { haptic(ImpactStyle.Light); toggleLang(); }}
-          aria-label="Switch language"
-          title="Switch language"
-          style={{ ...iconBtn, gap: 4, width: 'auto', padding: '0 10px', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center' }}
-        >
-          <Globe size={14} />
-          <span style={{ textTransform: 'uppercase' }}>{lang}</span>
-        </button>
-        <button
-          onClick={() => { haptic(ImpactStyle.Light); toggleTheme(); }}
-          aria-label="Toggle theme"
-          title="Toggle theme"
-          style={iconBtn}
-        >
-          {mode === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-        <button
-          onClick={() => { haptic(ImpactStyle.Light); setNotifOpen(true); }}
-          aria-label="Notifications"
-          title="Notifications"
-          style={iconBtn}
-        >
-          <Bell size={16} />
-        </button>
-      </div>
-
-      {open && (
-        <>
-          <div
-            onClick={() => setOpen(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'transparent' }}
-          />
-          <div
-            role="menu"
-            style={{
-              position: 'absolute', top: 92, left: 12, zIndex: 71,
-              minWidth: 220, padding: 6,
-              borderRadius: 14,
-              background: colors.navSurface,
-              border: `1px solid ${colors.border}`,
-              boxShadow: `0 24px 60px -20px ${colors.midnight}`,
-              backdropFilter: 'blur(20px)',
-            }}
-          >
-            {items.map((it) => {
-              const active = tab === it.id;
-              return (
-                <button
-                  key={it.id}
-                  onClick={() => { setOpen(false); onNavigate(it.id); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    width: '100%', padding: '10px 12px',
-                    borderRadius: 10, border: 'none', cursor: 'pointer',
-                    background: active ? `${colors.lemtelBlue}1f` : 'transparent',
-                    color: active ? colors.lemtelBlue : colors.textIce,
-                    fontSize: 15, fontWeight: active ? 700 : 500,
-                    textAlign: 'left',
-                  }}
-                >
-                  <span style={{ fontSize: 18, width: 22, textAlign: 'center' }}>{it.icon}</span>
-                  <span>{it.label}</span>
-                </button>
-              );
-            })}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src="/lemtel-icon.png" alt="Lemtel" width={32} height={32} style={{ width: 32, height: 32, borderRadius: 10, boxShadow: `0 8px 20px -10px ${colors.lemtelBlue}` }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ fontFamily: 'Space Grotesk, DM Sans, sans-serif', color: colors.textIce, fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Lemtel</span>
+              <span style={{ width: 6, height: 6, borderRadius: 99, background: presence.color, boxShadow: `0 0 9px ${presence.color}` }} />
+            </div>
+            <div style={{ color: colors.mutedSilver, fontSize: 10.5, fontWeight: 700, letterSpacing: .35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labels[tab] || 'Lemtel Softphone'}</div>
           </div>
-        </>
-      )}
+        </div>
+        <button type="button" aria-label="Profile and status" title={`Profile · ${presence.status.replace('_', ' ')}`} onClick={() => { void haptic(ImpactStyle.Light); onOpenProfile(); closePanels(); }} style={{ ...shellButton, width: 38, height: 38, borderRadius: 19, overflow: 'hidden', position: 'relative' }}>
+          {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: .35 }}>{initials}</span>}
+          <span style={{ position: 'absolute', right: 0, bottom: 0, width: 10, height: 10, borderRadius: '50%', background: presence.color, border: `2px solid ${colors.navSurface}` }} />
+        </button>
+        <button type="button" aria-label="Workspace controls" onClick={() => { void haptic(ImpactStyle.Light); setToolsOpen((open) => !open); setMenuOpen(false); }} style={{ ...shellButton, width: 40, height: 40, background: toolsOpen ? `${colors.lemtelBlue}22` : colors.graphite }}>
+          <MoreHorizontal size={21} strokeWidth={2.4} />
+        </button>
+      </div>
 
-      <NotificationsSheet
-        open={notifOpen}
-        onClose={() => setNotifOpen(false)}
-        onNavigate={(t) => { setNotifOpen(false); onNavigate(t); }}
-      />
+      {(menuOpen || toolsOpen) && <button type="button" aria-label="Close menu" onClick={closePanels} style={{ position: 'fixed', zIndex: 66, inset: 0, border: 0, background: 'transparent', padding: 0 }} />}
+      {menuOpen && (
+        <nav aria-label="Lemtel navigation" style={{ position: 'absolute', zIndex: 67, top: 62, left: 12, width: 'min(288px, calc(100vw - 24px))', padding: 8, borderRadius: 18, background: colors.navSurface, border: `1px solid ${colors.border}`, boxShadow: '0 28px 70px -28px rgba(0,0,0,.72)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)' }}>
+          <div style={{ padding: '7px 8px 9px', color: colors.mutedSilver, fontSize: 10, fontWeight: 800, letterSpacing: 1.3, textTransform: 'uppercase' }}>Lemtel workspace</div>
+          {navItems.map(({ id, label, Icon }) => {
+            const active = tab === id;
+            return <button key={id} type="button" onClick={() => { closePanels(); onNavigate(id); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 12px', borderRadius: 12, border: active ? `1px solid ${colors.lemtelBlue}44` : '1px solid transparent', background: active ? `${colors.lemtelBlue}18` : 'transparent', color: active ? colors.lemtelBlue : colors.textIce, cursor: 'pointer', textAlign: 'left', fontSize: 14, fontWeight: active ? 800 : 650 }}><Icon size={18} strokeWidth={active ? 2.5 : 2} /><span>{label}</span></button>;
+          })}
+        </nav>
+      )}
+      {toolsOpen && (
+        <aside aria-label="Workspace controls" style={{ position: 'absolute', zIndex: 67, top: 62, right: 12, width: 'min(260px, calc(100vw - 24px))', padding: 8, borderRadius: 18, background: colors.navSurface, border: `1px solid ${colors.border}`, boxShadow: '0 28px 70px -28px rgba(0,0,0,.72)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)' }}>
+          <button type="button" onClick={() => { toggleLang(); }} style={toolRow(colors)}><Globe size={17} /><span style={{ flex: 1 }}>{lang === 'fr' ? 'Français' : 'English'}</span><span style={{ color: colors.avaCyan, fontSize: 11, fontWeight: 800 }}>{lang.toUpperCase()}</span></button>
+          <button type="button" onClick={() => { toggleTheme(); }} style={toolRow(colors)}>{mode === 'dark' ? <Sun size={17} /> : <Moon size={17} />}<span style={{ flex: 1 }}>{mode === 'dark' ? 'Dark' : 'Daylight'}</span></button>
+          <button type="button" onClick={() => { closePanels(); setNotifOpen(true); }} style={toolRow(colors)}><Bell size={17} /><span style={{ flex: 1 }}>{tr('notifications.title' as any) || 'Notifications'}</span></button>
+        </aside>
+      )}
+      <NotificationsSheet open={notifOpen} onClose={() => setNotifOpen(false)} onNavigate={(next) => { setNotifOpen(false); onNavigate(next); }} />
     </header>
   );
+}
+
+function toolRow(c: typeof colors): React.CSSProperties {
+  return {
+    width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, padding: '10px 11px',
+    borderRadius: 12, border: '1px solid transparent', background: 'transparent', color: c.textIce,
+    cursor: 'pointer', textAlign: 'left', fontSize: 13, fontWeight: 700,
+  };
 }
 
 // Phase 21A: local notice after a finalized access block. Shows no device reference,

@@ -53,7 +53,7 @@ describe('useThemeColors re-render guarantee', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     for (const id of screens) {
       const el = getByTestId(`probe-${id}`);
-      expect(getComputedStyle(el).color).toBe('rgb(13, 20, 38)'); // #0d1426
+      expect(getComputedStyle(el).color).toBe('rgb(8, 16, 42)'); // #08102a
     }
   });
 });

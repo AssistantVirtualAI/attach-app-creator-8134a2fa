@@ -13,9 +13,10 @@ describe('Lemtel mobile call-transcription boundary', () => {
       'src/screens/VoicemailScreen.tsx',
       'src/screens/SettingsScreen.tsx',
       'src/screens/MoreScreen.tsx',
+      'src/components/ActiveCallSheet.tsx',
       'src/lib/mobileApi.ts',
     ].map(read).join('\n');
-    expect(activeSources).not.toMatch(/ai-transcribe-call|ai-analyze-call|useCallAi|CallIntelligencePanel|AIAuditScreen|LiveTranscriptPanel|transcription_enabled: true|ai_summary_enabled: true/);
+    expect(activeSources).not.toMatch(/ai-transcribe-call|ai-analyze-call|useCallAi|CallIntelligencePanel|AIAuditScreen|LiveTranscriptPanel|Lemtel AI live assist|Assistant Lemtel AI en direct|transcription_enabled: true|ai_summary_enabled: true/);
   });
 
   it('keeps recording playback on the authenticated audio helper only', () => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Circle, MessageCircle, Plus, Search, Send, Users } from 'lucide-react';
 import { colors, radius } from '../lib/theme';
+import { useThemeColors } from '../lib/ThemeContext';
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { authedRealtime, edgeCall, restGet } from '../lib/mobileSupabase';
 import { useT } from '../lib/i18n';
@@ -17,6 +18,7 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
   const channelUnread = props.channelUnread || {};
   const mobile = useMobileCredentials();
   const { tx } = useT();
+  const themeColors = useThemeColors();
   const organizationName = props.organizationName || mobile.sipDomain || 'Lemtel';
   const token = mobile.accessToken;
   const userId = mobile.userId;
@@ -209,7 +211,7 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <header style={{ padding: '14px 16px 8px' }}><div style={{ fontSize: 11, color: colors.avaCyan, textTransform: 'uppercase', letterSpacing: 1.6, fontWeight: 800 }}>{tx('Organisation', 'Organization')} · {organizationName}</div><div style={{ fontSize: 22, fontWeight: 800, color: colors.textIce, marginTop: 2 }}>{tx("Conversations d’équipe", 'Team conversations')}</div></header>
+      <header style={{ padding: '4px 16px 8px' }}><div style={{ fontSize: 10, color: themeColors.avaCyan, textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 850 }}>{tx('Espace d’équipe', 'Team space')} · {organizationName}</div><div style={{ fontFamily: "'Space Grotesk', 'DM Sans', sans-serif", fontSize: 20, fontWeight: 750, color: themeColors.textIce, marginTop: 3 }}>{tx("Conversations d’équipe", 'Team conversations')}</div></header>
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px' }}>{(['channels', 'members'] as const).map((v) => <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: '8px', borderRadius: radius.md, background: view === v ? 'rgba(0,35,230,0.25)' : 'rgba(255,255,255,0.04)', border: `1px solid ${view === v ? '#0023e6' : 'rgba(255,255,255,0.06)'}`, color: view === v ? colors.textIce : colors.mutedSilver, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>{v === 'channels' ? <MessageCircle size={14} /> : <Users size={14} />}{v === 'channels' ? tx('Canaux', 'Channels') : `${tx('Équipe', 'Team')} (${members.length})`}</button>)}</div>
       {error && <div style={{ padding: '0 14px 8px', color: '#ff8a3d', fontSize: 12 }}>{error}</div>}
       {loading && <div style={{ padding: 24, textAlign: 'center', color: colors.mutedSilver, fontSize: 13 }}>{tx('Chargement…', 'Loading…')}</div>}

@@ -25,6 +25,8 @@ export function Card({
       borderRadius: radius.xl,
       padding: padded ? 16 : 0,
       boxShadow: shadow.glass,
+      backdropFilter: 'blur(20px) saturate(150%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(150%)',
       overflow: 'hidden',
       cursor: onPress ? 'pointer' : 'default',
       ...style,
@@ -110,8 +112,8 @@ export function SectionTitle({
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', margin: '20px 0 10px', padding: '0 4px' }}>
       <div>
-        {eyebrow && <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.8, color: colors.signalGold, textTransform: 'uppercase' }}>{eyebrow}</div>}
-        <h2 style={{ fontSize: font.lg, color: colors.textIce, margin: '2px 0 0', fontWeight: 700, letterSpacing: -0.3 }}>{title}</h2>
+        {eyebrow && <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.65, color: colors.avaCyan, textTransform: 'uppercase' }}>{eyebrow}</div>}
+        <h2 style={{ fontFamily: font.display, fontSize: font.lg, color: colors.textIce, margin: '3px 0 0', fontWeight: 700, letterSpacing: -0.45 }}>{title}</h2>
       </div>
       {right}
     </div>
@@ -133,11 +135,11 @@ export function PrimaryButton({
         position: 'relative',
         minHeight: 48,
         padding: '13px 22px',
-        borderRadius: radius.xl,
-        border: '1px solid rgba(255,255,255,0.25)',
+        borderRadius: radius.lg,
+        border: '1px solid rgba(255,255,255,0.28)',
         background: disabled
-          ? 'rgba(255,255,255,0.06)'
-          : `linear-gradient(135deg, ${colors.lemtelBlue} 0%, #2247ff 55%, ${colors.avaCyan} 130%)`,
+          ? colors.graphite2
+          : gradients.shinyPrimary,
         color: disabled ? colors.mutedSilver : '#fff',
         fontSize: font.base,
         fontWeight: 700,
@@ -145,7 +147,7 @@ export function PrimaryButton({
         cursor: disabled ? 'not-allowed' : 'pointer',
         boxShadow: disabled
           ? 'none'
-          : '0 18px 40px -18px rgba(7,22,168,0.75), 0 1px 0 rgba(255,255,255,0.4) inset, 0 -2px 8px rgba(0,0,0,0.15) inset',
+          : '0 18px 40px -20px rgba(0,35,230,0.75), 0 1px 0 rgba(255,255,255,0.42) inset, 0 -2px 8px rgba(0,0,0,0.14) inset',
         transition: 'transform .15s ease, box-shadow .2s ease, filter .2s ease',
         overflow: 'hidden',
         ...style,
@@ -187,15 +189,15 @@ export function GhostButton({
       style={{
         minHeight: 44,
         padding: '11px 16px',
-        borderRadius: radius.xl,
-        background: `linear-gradient(180deg, rgba(255,255,255,0.95) 0%, ${c}10 100%)`,
+        borderRadius: radius.lg,
+        background: `linear-gradient(180deg, ${colors.graphite2} 0%, ${c}10 100%)`,
         border: `1px solid ${c}40`,
         color: c,
         fontSize: font.sm,
         fontWeight: 700,
         letterSpacing: 0.2,
         cursor: 'pointer',
-        boxShadow: `0 6px 16px -8px ${c}55, 0 1px 0 rgba(255,255,255,0.8) inset`,
+        boxShadow: `0 8px 20px -12px ${c}55, 0 1px 0 rgba(255,255,255,0.14) inset`,
         transition: 'transform .15s ease, box-shadow .2s ease, background .2s ease',
         display: 'inline-flex',
         alignItems: 'center',
@@ -209,7 +211,7 @@ export function GhostButton({
   );
 }
 
-/* ─── Lemtel AI insight panel ───────────────────────────────── */
+/* ─── Lemtel assistant panel (never used for call transcription) ─────── */
 export function AIPanel({
   title = 'Lemtel AI insight', children, accent = colors.avaViolet, right,
 }: { title?: string; children: React.ReactNode; accent?: string; right?: React.ReactNode }) {

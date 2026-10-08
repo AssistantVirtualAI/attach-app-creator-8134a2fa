@@ -37,7 +37,6 @@ export default function ActiveCallSheet({
   const { organizationId } = useMobileCredentials();
   const [timer, setTimer] = useState(0);
   const [showKeypad, setShowKeypad] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   const [audio, setAudio] = useState<AudioState>(getAudioState());
   const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'err' | 'info' } | null>(null);
   const [recPending, setRecPending] = useState(false);
@@ -307,21 +306,6 @@ export default function ActiveCallSheet({
         )}
       </div>
 
-      {/* AI Assist drawer */}
-      {aiOpen && (
-        <div style={{
-          margin: '0 16px 12px', padding: 14, borderRadius: radius.lg,
-          background: `linear-gradient(135deg, rgba(122,76,255,0.20), rgba(35,214,255,0.14), rgba(255,255,255,0.04))`,
-          border: `1px solid ${colors.borderAI}`,
-          boxShadow: shadow.glass,
-        }}>
-          <div style={{ fontSize: 10, color: colors.avaCyan, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>{tx('Assistant Lemtel AI en direct', 'Lemtel AI live assist')}</div>
-          <div style={{ fontSize: 13, color: colors.textIce, lineHeight: 1.5 }}>
-            {tx("À l’écoute… Lemtel AI fera ressortir les objections, suggérera les prochaines étapes et préparera les tâches à suivre à la fin de l’appel.", 'Listening… Lemtel AI will surface objections, suggest next steps and capture action items when the call ends.')}
-          </div>
-        </div>
-      )}
-
       {/* Control grid */}
       {inCall && (
         <div style={{
@@ -377,8 +361,6 @@ export default function ActiveCallSheet({
                 : tx('Enregistrement manuel non autorisé', 'Manual recording is not allowed')}
             </div>
           )}
-          <Ctrl label="Lemtel AI" icon="✦" tone="ai" active={aiOpen}
-            onClick={() => { haptic(); setAiOpen((v) => !v); }} />
         </div>
       )}
 

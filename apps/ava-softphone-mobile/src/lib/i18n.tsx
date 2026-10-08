@@ -99,6 +99,7 @@ const DICT = {
     'settings.language': 'Language',
     'settings.themeDark': 'Dark',
     'settings.themeLight': 'Light',
+    'settings.themeDaylight': 'Daylight',
     'settings.diagnostics': 'Diagnostics',
     'settings.about': 'About',
     'settings.privacy': 'Privacy',
@@ -256,6 +257,9 @@ const DICT = {
     'auth.or': 'or',
     'auth.signInGoogle': 'Continue with Google',
 
+    'brand.poweredBy': 'Powered by AVA',
+    'brand.poweredByAria': 'Open Assistant Virtual AI website',
+
     'contacts.search': 'Search contacts',
     'contacts.empty': 'No contacts yet',
     'contacts.emptyHint': 'Contacts synced from your device or organization will appear here.',
@@ -381,6 +385,7 @@ const DICT = {
     'settings.language': 'Langue',
     'settings.themeDark': 'Sombre',
     'settings.themeLight': 'Clair',
+    'settings.themeDaylight': 'Jour',
     'settings.diagnostics': 'Diagnostics',
     'settings.about': 'À propos',
     'settings.privacy': 'Confidentialité',
@@ -537,6 +542,9 @@ const DICT = {
     'auth.continue': 'Continuer',
     'auth.or': 'ou',
     'auth.signInGoogle': 'Continuer avec Google',
+
+    'brand.poweredBy': 'Propulsé par AVA',
+    'brand.poweredByAria': 'Ouvrir le site Assistant Virtual AI',
 
     'contacts.search': 'Rechercher des contacts',
     'contacts.empty': 'Aucun contact',

@@ -8,6 +8,8 @@ import { checkAllPermissions, openAppSettings, type AllPermissions, type Permiss
 import { getAnnounceConsent, setAnnounceConsent } from '../lib/recordingConsent';
 import { useTheme } from '../lib/ThemeContext';
 import { useT } from '../lib/i18n';
+import PoweredByAva from '../components/PoweredByAva';
+import SegmentedChoice from '../components/SegmentedChoice';
 import type { Tab } from '../components/BottomTabs';
 import { setRoute as setAudioRoute, type AudioRoute } from '../lib/sip/audioOutput';
 import { audioPrefs, type NCMode } from '../lib/audioPrefs';
@@ -63,7 +65,7 @@ export default function SettingsScreen({
   creds, sp, onSignOut, onNavigate, preferClickToCall = false, togglePreferC2C = () => {}, portalTelephonyPolicy = null,
 }: { creds: Creds; sp: any; onSignOut: () => void; onNavigate?: (t: Tab) => void; preferClickToCall?: boolean; togglePreferC2C?: () => void; portalTelephonyPolicy?: PortalTelephonyPolicy | null }) {
   const { t, lang, setLang } = useT();
-  const { mode, toggle: toggleTheme } = useTheme();
+  const { mode, setMode } = useTheme();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [perms, setPerms] = useState<AllPermissions | null>(null);
   const [haptics, setHaptics] = useState<boolean>(() => localStorage.getItem('ava.haptics') !== 'off');
@@ -219,19 +221,37 @@ export default function SettingsScreen({
 
       {/* Appearance & language */}
       <SectionTitle eyebrow={t('settings.appearance')} title={t('settings.appearance')} />
-      <Card padded={false}>
-        <SettingsRow
-          label={t('settings.theme')} icon="🌓"
-          value={mode === 'dark' ? t('settings.themeDark') : t('settings.themeLight')}
-          right={<Switch on={mode === 'dark'} />}
-          onPress={toggleTheme}
-        />
-        <SettingsRow
-          label={t('settings.language')} icon="🌐"
-          value={lang === 'fr' ? 'Français' : 'English'}
-          right={<LangPill lang={lang} />}
-          onPress={() => setLang(lang === 'fr' ? 'en' : 'fr')}
-        />
+      <Card padded={true}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '2px 0 14px', borderBottom: `1px solid ${colors.border}` }}>
+          <div>
+            <div style={{ color: colors.textIce, fontSize: font.base, fontWeight: 800 }}>{t('settings.theme')}</div>
+            <div style={{ color: colors.textSub, fontSize: font.xs, marginTop: 3 }}>{mode === 'dark' ? t('settings.themeDark') : t('settings.themeDaylight')}</div>
+          </div>
+          <SegmentedChoice
+            ariaLabel={t('settings.theme')}
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'dark', label: t('settings.themeDark') },
+              { value: 'light', label: t('settings.themeDaylight') },
+            ]}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 14 }}>
+          <div>
+            <div style={{ color: colors.textIce, fontSize: font.base, fontWeight: 800 }}>{t('settings.language')}</div>
+            <div style={{ color: colors.textSub, fontSize: font.xs, marginTop: 3 }}>{lang === 'fr' ? 'Français' : 'English'}</div>
+          </div>
+          <SegmentedChoice
+            ariaLabel={t('settings.language')}
+            value={lang}
+            onChange={setLang}
+            options={[
+              { value: 'en', label: 'English' },
+              { value: 'fr', label: 'Français' },
+            ]}
+          />
+        </div>
       </Card>
 
       {portalTelephonyPolicy && <PortalPolicyCard policy={portalTelephonyPolicy} lang={lang} />}
@@ -452,8 +472,9 @@ export default function SettingsScreen({
         {t('settings.signOut')}
       </button>
 
-      <div style={{ textAlign: 'center', marginTop: 18, fontSize: 10, color: colors.mutedSilver, letterSpacing: 0.4 }}>
-        Lemtel · Secure communications
+      <div style={{ display: 'grid', justifyItems: 'center', gap: 8, marginTop: 18, fontSize: 10, color: colors.mutedSilver, letterSpacing: 0.4 }}>
+        <span>Lemtel · Secure communications</span>
+        <PoweredByAva />
       </div>
       <div style={{ height: 80 }} />
 

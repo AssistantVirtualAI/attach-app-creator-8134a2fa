@@ -269,7 +269,7 @@ export default function ActiveCallSheet({
           {isEnded && (lang === 'en' ? 'Call has ended' : 'Appel terminé')}
         </div>
         {sp.snap.muted && inCall && (
-          <div style={{ fontSize: 11, color: colors.warning, letterSpacing: 1.2, fontWeight: 700, textTransform: 'uppercase' }}>Microphone muted</div>
+          <div style={{ fontSize: 11, color: colors.warning, letterSpacing: 1.2, fontWeight: 700, textTransform: 'uppercase' }}>{tx('Microphone coupé', 'Microphone muted')}</div>
         )}
         {sp.snap.recording && inCall && (
           <div style={{
@@ -315,9 +315,9 @@ export default function ActiveCallSheet({
           border: `1px solid ${colors.borderAI}`,
           boxShadow: shadow.glass,
         }}>
-          <div style={{ fontSize: 10, color: colors.avaCyan, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>Lemtel AI Live Assist</div>
+          <div style={{ fontSize: 10, color: colors.avaCyan, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>{tx('Assistant Lemtel AI en direct', 'Lemtel AI live assist')}</div>
           <div style={{ fontSize: 13, color: colors.textIce, lineHeight: 1.5 }}>
-            Listening… Lemtel AI will surface objections, suggest next steps and capture action items when the call ends.
+            {tx("À l’écoute… Lemtel AI fera ressortir les objections, suggérera les prochaines étapes et préparera les tâches à suivre à la fin de l’appel.", 'Listening… Lemtel AI will surface objections, suggest next steps and capture action items when the call ends.')}
           </div>
         </div>
       )}
@@ -328,14 +328,14 @@ export default function ActiveCallSheet({
           display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 18,
           padding: '6px 20px 14px',
         }}>
-          <Ctrl label={sp.snap.muted ? 'Unmute' : 'Mute'} icon="🎙" active={sp.snap.muted}
+          <Ctrl label={sp.snap.muted ? tx('Activer le micro', 'Unmute') : tx('Couper le micro', 'Mute')} icon="🎙" active={sp.snap.muted}
             disabled={audioBusy}
             onClick={() => { haptic(); sp.snap.muted ? sp.unmute() : sp.mute(); }} />
-          <Ctrl label={onHold ? 'Resume' : 'Hold'} icon="⏸" active={onHold}
+          <Ctrl label={onHold ? tx('Reprendre', 'Resume') : tx('Mettre en attente', 'Hold')} icon="⏸" active={onHold}
             disabled={audioBusy}
             onClick={() => { haptic(); onHold ? sp.unhold() : sp.hold(); }} />
           <Ctrl
-            label={audio.route === 'speaker' ? 'Speaker' : 'Speaker'}
+            label={tx('Haut-parleur', 'Speaker')}
             icon={audio.busy && audio.route !== 'speaker' ? '…' : '🔊'}
             active={audio.route === 'speaker'}
             disabled={audio.busy || audioBusy}
@@ -349,20 +349,20 @@ export default function ActiveCallSheet({
             disabled={audio.busy || audioBusy || !audio.bluetoothAvailable}
             onClick={() => switchRoute(audio.route === 'bluetooth' ? 'earpiece' : 'bluetooth')}
           />
-          <Ctrl label="Keypad" icon="⌨" active={showKeypad}
+          <Ctrl label={tx('Clavier', 'Keypad')} icon="⌨" active={showKeypad}
             onClick={() => { haptic(); setShowKeypad((v) => !v); }} />
-          <Ctrl label="Transfer" icon="↗" disabled={audioBusy}
+          <Ctrl label={tx('Transférer', 'Transfer')} icon="↗" disabled={audioBusy}
             onClick={() => { haptic(ImpactStyle.Medium); transfer(); }} />
-          <Ctrl label="Add" icon="＋" disabled={audioBusy}
+          <Ctrl label={tx('Ajouter', 'Add')} icon="＋" disabled={audioBusy}
             onClick={() => { haptic(ImpactStyle.Medium); addCall(); }} />
-          <Ctrl label="Park" icon="🅿" disabled={audioBusy}
+          <Ctrl label={tx('Parquer', 'Park')} icon="🅿" disabled={audioBusy}
             onClick={() => { haptic(ImpactStyle.Medium); park(); }} />
           {manualRecordAllowed ? (
             <Ctrl
               label={
-                audioBusy ? (audioStatus === 'retrying' ? `Retry ${audioRestartAttempts}` : 'Audio…')
+                audioBusy ? (audioStatus === 'retrying' ? `${tx('Nouvel essai', 'Retry')} ${audioRestartAttempts}` : tx('Audio…', 'Audio…'))
                 : recPending ? (sp.snap.recording ? tx('Arrêt…', 'Stopping…') : tx('Démarrage…', 'Starting…'))
-                : sp.snap.recording ? 'Stop Rec' : 'Record'
+                : sp.snap.recording ? tx('Arrêter', 'Stop recording') : tx('Enregistrer', 'Record')
               }
               icon={audioBusy || recPending ? '…' : sp.snap.recording ? '■' : '●'}
               tone={audioFailed ? 'danger' : sp.snap.recording ? 'danger' : 'default'}
@@ -393,17 +393,17 @@ export default function ActiveCallSheet({
           <span style={{ fontSize: 16 }}>{audioFailed ? '⚠️' : '⏳'}</span>
           <span style={{ flex: 1 }}>
             {audioFailed
-              ? `Audio engine error — ${audioError || 'unable to start RTP audio'}. Try reconnecting.`
+              ? tx(`Erreur audio — ${audioError || "impossible de démarrer l'audio"}. Réessayez de vous reconnecter.`, `Audio error — ${audioError || 'unable to start call audio'}. Try reconnecting.`)
               : audioStatus === 'retrying'
-                ? `Reconnecting audio engine… attempt ${audioRestartAttempts}/8`
-                : 'Starting audio engine…'}
+                ? `${tx('Reconnexion audio… essai', 'Reconnecting audio… attempt')} ${audioRestartAttempts}/8`
+                : tx('Démarrage audio…', 'Starting audio…')}
           </span>
           {audioFailed && (
             <button onClick={() => sp.reconnect?.()} style={{
               border: `1px solid ${colors.danger}`, background: 'transparent',
               color: '#fff', borderRadius: radius.sm, padding: '4px 10px',
               fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            }}>Retry</button>
+            }}>{tx('Réessayer', 'Retry')}</button>
           )}
         </div>
       )}
@@ -412,11 +412,11 @@ export default function ActiveCallSheet({
       <div style={{ display: 'flex', justifyContent: 'center', gap: 28, paddingBottom: 'calc(36px + var(--safe-bottom))' }}>
         {isIncoming ? (
           <>
-            <BigButton color={colors.danger} onClick={() => { haptic(ImpactStyle.Heavy); sp.hangup(); }} label="Decline" icon="✕" />
-            <BigButton color={colors.success} onClick={() => { haptic(ImpactStyle.Medium); sp.answer(); }} label="Accept" icon="✓" />
+            <BigButton color={colors.danger} onClick={() => { haptic(ImpactStyle.Heavy); sp.hangup(); }} label={tx('Refuser', 'Decline')} icon="✕" />
+            <BigButton color={colors.success} onClick={() => { haptic(ImpactStyle.Medium); sp.answer(); }} label={tx('Accepter', 'Accept')} icon="✓" />
           </>
         ) : (
-          <BigButton color={colors.danger} onClick={() => { haptic(ImpactStyle.Heavy); sp.hangup(); }} label={isOutgoing ? 'Cancel' : 'End call'} icon="✕" />
+          <BigButton color={colors.danger} onClick={() => { haptic(ImpactStyle.Heavy); sp.hangup(); }} label={isOutgoing ? tx('Annuler', 'Cancel') : tx("Terminer l'appel", 'End call')} icon="✕" />
         )}
       </div>
 
@@ -526,7 +526,7 @@ const callButtonCss = `
 
 const sheetStyle: React.CSSProperties = {
   position: 'fixed', inset: 0, zIndex: 100,
-  background: `radial-gradient(900px 600px at 50% -12%, rgba(0,35,230,0.32), transparent 66%), radial-gradient(720px 520px at 100% 100%, rgba(224,168,0,0.20), transparent 60%), linear-gradient(180deg, #060C1C 0%, #0A1429 50%, #0E1B3D 100%)`,
+  background: `radial-gradient(900px 600px at 50% -12%, rgba(0,35,230,0.32), transparent 66%), radial-gradient(720px 520px at 100% 100%, rgba(224,168,0,0.20), transparent 60%), var(--bg-0)`,
   paddingTop: 'calc(36px + var(--safe-top))',
   display: 'flex', flexDirection: 'column',
   color: colors.textIce,

@@ -3,12 +3,12 @@ name: Lemtel Desktop — validate and release
 on:
   pull_request:
     paths:
-      - 'apps/ava-softphone-desktop/**'
-      - 'supabase/functions/fusionpbx-proxy/recordingAccess.contract.test.ts'
-      - '.github/workflows/release-desktop.yml'
+      - "apps/ava-softphone-desktop/**"
+      - "supabase/functions/fusionpbx-proxy/recordingAccess.contract.test.ts"
+      - ".github/workflows/release-desktop.yml"
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 permissions:
   contents: read
@@ -36,7 +36,7 @@ jobs:
           }
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
       - name: Install locked dependencies
@@ -44,7 +44,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Verify release artifact validator
         working-directory: apps/ava-softphone-desktop
-        run: node --test scripts/validate-release-assets.test.mjs
+        run: node --test scripts/validate-release-assets.test.mjs scripts/release-channel.test.mjs
       - name: Run the complete Lemtel Desktop test suite
         working-directory: apps/ava-softphone-desktop
         run: npm test
@@ -59,6 +59,28 @@ jobs:
           deno-version: v2.5.4
       - name: Test authenticated recording contract without live PBX
         run: deno test --no-check --allow-read --no-lock supabase/functions/fusionpbx-proxy/recordingAccess.contract.test.ts
+
+  release-plan:
+    name: Determine signed release platforms
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      windows_signed: ${{ steps.windows.outputs.signed }}
+    steps:
+      - id: windows
+        name: Check Windows signing availability without revealing secrets
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -n "$WIN_CSC_LINK" && -n "$WIN_CSC_KEY_PASSWORD" ]]; then
+            echo 'signed=true' >> "$GITHUB_OUTPUT"
+            echo 'Windows signed build enabled.'
+          else
+            echo 'signed=false' >> "$GITHUB_OUTPUT"
+            echo 'Windows signed build disabled: Authenticode secrets are absent.'
+          fi
 
   build-mac:
     name: Signed macOS x64 and arm64
@@ -75,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
       - name: Require macOS signing and notarization configuration
@@ -116,36 +138,41 @@ jobs:
   build-windows:
     name: Signed Windows NSIS x64
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: verify
+    needs: [verify, release-plan]
     runs-on: windows-2022
     env:
       CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      WINDOWS_SIGNED: ${{ needs.release-plan.outputs.windows_signed }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
-      - name: Require Windows signing certificate
-        shell: pwsh
-        run: |
-          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD) { throw 'Missing Windows signing secrets' }
       - name: Install and build
         working-directory: apps/ava-softphone-desktop
         run: npm ci --no-audit --no-fund && npm run build
-      - name: Package NSIS installer
+      - name: Package signed or explicitly unsigned Windows NSIS installer
+        shell: pwsh
         working-directory: apps/ava-softphone-desktop
-        run: npx electron-builder --win --x64 --publish never
-      - name: Verify Authenticode signature and updater manifest
+        run: |
+          if ($env:WINDOWS_SIGNED -eq 'true') {
+            npx electron-builder --win --x64 --publish never
+          } else {
+            $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
+            npx electron-builder --win --x64 --publish never
+          }
+      - name: Verify installer and updater manifest
         shell: pwsh
         working-directory: apps/ava-softphone-desktop
         run: |
           $installers = @(Get-ChildItem dist-electron -Filter '*.exe')
           if ($installers.Count -ne 1 -or -not (Test-Path dist-electron/latest.yml)) { throw 'Installer or latest.yml missing' }
           $signature = Get-AuthenticodeSignature $installers[0].FullName
-          if ($signature.Status -ne 'Valid') { throw "Invalid installer signature: $($signature.Status)" }
+          if ($env:WINDOWS_SIGNED -eq 'true' -and $signature.Status -ne 'Valid') { throw "Invalid installer signature: $($signature.Status)" }
+          if ($env:WINDOWS_SIGNED -ne 'true') { Write-Host "Windows installer intentionally unsigned; SmartScreen warning is expected." }
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows
@@ -156,15 +183,22 @@ jobs:
             apps/ava-softphone-desktop/dist-electron/latest.yml
 
   publish:
-    name: Publish complete verified Desktop release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, build-mac, build-windows]
+    name: Publish verified Desktop release
+    if: >-
+      always() &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.verify.result == 'success' &&
+      needs.release-plan.result == 'success' &&
+      needs.build-mac.result == 'success' &&
+      needs.build-windows.result == 'success'
+    needs: [verify, release-plan, build-mac, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      WINDOWS_SIGNED: ${{ needs.release-plan.outputs.windows_signed }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -172,22 +206,39 @@ jobs:
           pattern: desktop-*
           merge-multiple: true
           path: release-assets
-      - name: Verify all artifacts, manifest versions and SHA-512 hashes
+      - id: release-mode
+        name: Declare only the verified release platforms
+        shell: bash
+        run: |
+          echo 'mode=all' >> "$GITHUB_OUTPUT"
+          if [[ "$WINDOWS_SIGNED" == 'true' ]]; then
+            cat > release-notes.md <<'EOF'
+          Lemtel Desktop — Windows x64 and macOS x64/arm64, signed and verified.
+          EOF
+          else
+            cat > release-notes.md <<'EOF'
+          Lemtel Desktop — macOS x64/arm64, signed and notarized by Apple; Windows x64 installer available.
+
+          The Windows x64 installer is intentionally unsigned by the owner’s release policy and may trigger Microsoft SmartScreen. A valid Authenticode certificate will be added in a later release; no signature is claimed for this installer.
+          EOF
+          fi
+      - name: Verify platform-specific artifacts, manifests and SHA-512 hashes
         shell: bash
         run: |
           VERSION="$(node -p 'require("./apps/ava-softphone-desktop/package.json").version')"
           test "$GITHUB_REF_NAME" = "v$VERSION"
-          node apps/ava-softphone-desktop/scripts/validate-release-assets.mjs release-assets "$VERSION"
+          node apps/ava-softphone-desktop/scripts/validate-release-assets.mjs \
+            release-assets "$VERSION" "${{ steps.release-mode.outputs.mode }}"
       - name: Create a new release without deleting or replacing an existing one
         shell: bash
         run: |
           set -euo pipefail
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo 'This release already exists; refusing to replace its signed binaries'; exit 1
+            echo 'This release already exists; refusing to replace its verified binaries'; exit 1
           fi
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --draft --verify-tag --title "Lemtel Telecom $GITHUB_REF_NAME" \
-            --notes "Lemtel Desktop $GITHUB_REF_NAME — Windows x64 and macOS x64/arm64."
+            --notes-file release-notes.md
           # A failed upload leaves only an unpublished draft, never a partial
           # auto-update release for installed clients to discover.
           diff -u \

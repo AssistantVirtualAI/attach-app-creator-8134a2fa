@@ -49,10 +49,10 @@ test("TestFlight delivery is signed, internal, Hostinger-bound, and Lemtel-tag c
     workflow,
     /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-v\*"/,
   );
-  assert.match(
-    workflow,
-    /github\.event_name == 'push' \|\| inputs\.confirm_testflight_upload == true/,
-  );
+  assert.match(workflow, /github\.event_name == 'push' \|\| inputs\.confirm_testflight_upload == true/);
+  assert.match(workflow, /runs-on: macos-26/);
+  assert.match(workflow, /name: Validate Apple upload SDK/);
+  assert.match(workflow, /test "\$xcode_major" -ge 26/);
   assert.match(workflow, /environment: lemtel-ios-testflight/);
   assert.match(workflow, /VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved/);
   assert.match(workflow, /apple-actions\/import-codesign-certs@v7/);

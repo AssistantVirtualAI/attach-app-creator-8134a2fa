@@ -28,7 +28,7 @@ jobs:
   internal-testflight:
     if: github.event_name == 'push' || inputs.confirm_testflight_upload == true
     name: Signed iOS beta → TestFlight internal
-    runs-on: macos-14
+    runs-on: macos-26
     timeout-minutes: 60
     environment: lemtel-ios-testflight
     defaults:
@@ -44,6 +44,14 @@ jobs:
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate Apple upload SDK
+        run: |
+          xcodebuild -version
+          xcode_version="$(xcodebuild -version | awk '/^Xcode / { print $2; exit }')"
+          xcode_major="${xcode_version%%.*}"
+          test -n "$xcode_major"
+          test "$xcode_major" -ge 26
 
       - uses: actions/setup-node@v4
         with:

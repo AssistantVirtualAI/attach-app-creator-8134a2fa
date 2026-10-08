@@ -137,7 +137,6 @@ jobs:
           api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
           release-notes: "${{ github.event_name == 'push' && 'Lemtel 1.1 (2): test email-only access, French/English, and Dark/Daylight mobile refresh.' || inputs.release_notes }}"
-          uses-non-exempt-encryption: "false"
           wait-for-processing: "true"
 
       - name: Save signed IPA for the internal test record

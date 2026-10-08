@@ -12,15 +12,15 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { validateReleaseAssets } from "./validate-release-assets.mjs";
 
-const version = "2.5.12";
+const version = "2.5.13";
 
 function fixture({ windows = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "desktop-release-"));
   const macNames = [
-    `Lemtel-Telecom-${version}.dmg`,
+    `Lemtel-Telecom-${version}-x64.dmg`,
     `Lemtel-Telecom-${version}-arm64.dmg`,
-    `Lemtel-Telecom-${version}-mac.zip`,
-    `Lemtel-Telecom-${version}-arm64-mac.zip`,
+    `Lemtel-Telecom-${version}-x64.zip`,
+    `Lemtel-Telecom-${version}-arm64.zip`,
   ];
   const names = windows
     ? [`Lemtel-Telecom-${version}.exe`, ...macNames]
@@ -43,7 +43,7 @@ function fixture({ windows = true } = {}) {
   if (windows) writeFileSync(join(dir, "latest.yml"), manifest([names[0]]));
   writeFileSync(
     join(dir, "latest-mac.yml"),
-    manifest(macNames.filter((name) => name.endsWith("-mac.zip"))),
+    manifest(macNames.filter((name) => name.endsWith(".zip"))),
   );
   return { dir, names, macNames };
 }
@@ -72,7 +72,7 @@ for (const [title, tamper, error] of [
         path,
         readFileSync(path, "utf8").replace(
           `version: ${version}`,
-          "version: 2.5.13",
+          "version: 2.5.14",
         ),
       );
     },

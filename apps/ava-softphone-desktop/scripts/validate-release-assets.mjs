@@ -44,7 +44,7 @@ export async function validateReleaseAssets(directory, version, mode = "all") {
     files.filter((file) => file.endsWith(suffix) && file.includes(version))
       .length;
 
-  if (count(".dmg") !== 2 || count("-mac.zip") !== 2) {
+  if (count(".dmg") !== 2 || count(".zip") !== 2) {
     throw new Error(
       "Expected two signed macOS DMGs and two macOS ZIPs for both architectures",
     );
@@ -58,7 +58,7 @@ export async function validateReleaseAssets(directory, version, mode = "all") {
     throw new Error("macOS-only release must not contain a Windows installer");
   }
 
-  const manifests = [["latest-mac.yml", "-mac.zip", 2]];
+  const manifests = [["latest-mac.yml", ".zip", 2]];
   if (requiresWindows) manifests.unshift(["latest.yml", ".exe", 1]);
 
   for (const [manifest, extension, minimum] of manifests) {

@@ -58,8 +58,8 @@ export default function MoreScreen({
               <span style={{ fontSize: font.md, fontWeight: 800, color: colors.textIce }}>{creds.displayName || creds.email}</span>
               <LemtelBadge compact />
             </div>
-            <div style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 3, fontFamily: 'JetBrains Mono, monospace' }}>
-              Ext {creds.extension} · {creds.sipDomain || 'Lemtel'}
+            <div style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 3, fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {creds.email} · Lemtel
             </div>
           </div>
         </div>
@@ -137,7 +137,7 @@ export default function MoreScreen({
 
 
       <div style={{ textAlign: 'center', marginTop: 18, fontSize: 10, color: colors.mutedSilver }}>
-        Lemtel · v1.0.0
+        Lemtel Mobile
       </div>
       <div style={{ height: 80 }} />
     </div>
@@ -154,7 +154,7 @@ function SubPage({ onBack, title, children }: { onBack: () => void; title: strin
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '10px 14px 6px', borderBottom: `1px solid ${colors.border}`,
-        background: 'rgba(14,27,61,0.78)', backdropFilter: 'blur(14px)',
+        background: colors.navSurface, backdropFilter: 'blur(14px)',
       }}>
         <button onClick={onBack} style={{
           background: 'transparent', border: 'none', color: colors.lemtelBlue,

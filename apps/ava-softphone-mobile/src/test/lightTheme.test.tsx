@@ -37,14 +37,14 @@ describe('lightTheme tokens', () => {
 
   it('uses dark-on-light text contrast for primary text', () => {
     // textPrimary on surface — WCAG AA ≈ 4.5:1 minimum.
-    // #0d1426 on #ffffff ≈ 18.7:1 → safe.
-    expect(lightTheme.textPrimary).toBe('#0d1426');
+    // #08102a on #f6f9ff ≈ 17.81:1 → safe.
+    expect(lightTheme.textPrimary).toBe('#08102a');
     expect(lightTheme.surface).toBe('#ffffff');
   });
 
   it('keeps muted text above the 4.5:1 readability floor', () => {
-    // #6b7a99 on #ffffff ≈ 4.6:1 — minimum readable; do not lighten.
-    expect(lightTheme.textMuted).toBe('#6b7a99');
+    // #5a6987 on #f6f9ff ≈ 5.23:1 — minimum readable; do not lighten.
+    expect(lightTheme.textMuted).toBe('#5a6987');
   });
 
   it('keeps status colors distinct from neutral text', () => {

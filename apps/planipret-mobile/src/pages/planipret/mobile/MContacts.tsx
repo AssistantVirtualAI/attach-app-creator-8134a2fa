@@ -880,7 +880,7 @@ export default function MContacts() {
 
       {createOpen && (
         <CreateMaestroClientSheet
-          target={{ phone: "" }}
+          target={EMPTY_TARGET}
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
             setCreateOpen(false);

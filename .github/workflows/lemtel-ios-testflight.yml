@@ -13,6 +13,9 @@ on:
         required: true
         default: "Lemtel beta: email-only access, French/English, Dark/Daylight visual refresh."
         type: string
+  push:
+    tags:
+      - "lemtel-ios-testflight-v*"
 
 permissions:
   contents: read
@@ -23,7 +26,7 @@ concurrency:
 
 jobs:
   internal-testflight:
-    if: inputs.confirm_testflight_upload == true
+    if: github.event_name == 'push' || inputs.confirm_testflight_upload == true
     name: Signed iOS beta → TestFlight internal
     runs-on: macos-14
     timeout-minutes: 60
@@ -115,7 +118,7 @@ jobs:
           issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
           api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-          release-notes: ${{ inputs.release_notes }}
+          release-notes: "${{ github.event_name == 'push' && 'Lemtel 1.1 (2): test email-only access, French/English, and Dark/Daylight mobile refresh.' || inputs.release_notes }}"
           uses-non-exempt-encryption: "false"
           wait-for-processing: "true"
 

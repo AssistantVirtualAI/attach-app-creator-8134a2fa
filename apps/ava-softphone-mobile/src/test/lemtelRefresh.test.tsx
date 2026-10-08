@@ -3,7 +3,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import { I18nProvider } from '../lib/i18n';
+import { MobileI18nProvider as I18nProvider } from '../lib/i18n';
 import PoweredByAva, { AVA_URL } from '../components/PoweredByAva';
 import SegmentedChoice from '../components/SegmentedChoice';
 import { darkColors, lightColors } from '../lib/theme';

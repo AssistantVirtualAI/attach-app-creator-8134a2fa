@@ -11710,6 +11710,27 @@ export type Database = {
           },
         ]
       }
+      planipret_mplanipret_exceptions: {
+        Row: {
+          created_at: string
+          email: string | null
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_ms_auth_attempts: {
         Row: {
           attempt_type: string
@@ -18156,6 +18177,10 @@ export type Database = {
           overdue_tasks: number
           user_id: string
         }[]
+      }
+      planipret_mplanipret_allowed: {
+        Args: { _user_id: string }
+        Returns: boolean
       }
       planipret_signin_eligible: {
         Args: { _user_id: string }

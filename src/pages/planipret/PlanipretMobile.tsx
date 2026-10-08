@@ -944,6 +944,18 @@ export default function PlanipretMobile() {
         return;
       }
     } catch { /* réseau : la vérification serveur reste en place */ }
+    // mplanipret web : administrateurs + exceptions seulement.
+    {
+      const { data: allowed, error: allowErr } = await supabase.rpc("planipret_mplanipret_allowed" as any, { _user_id: user.id });
+      if (allowErr || allowed !== true) {
+        await supabase.auth.signOut();
+        toast.error("Accès réservé aux administrateurs.");
+        setProfile(null);
+        setAccessError("unauthenticated");
+        setLoading(false);
+        return;
+      }
+    }
     // Capture Microsoft 365 tokens once after Azure SSO redirect.
     try {
       const captured = sessionStorage.getItem("pp_ms_captured");

@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  User, MessageCircle, Phone, Grid3x3, LayoutGrid,
+  Home, User, MessageCircle, Phone, Grid3x3,
   type LucideIcon,
 } from 'lucide-react';
 import { colors, radius } from '../lib/theme';
@@ -14,16 +14,16 @@ export type Tab =
   | 'audiodiag' | 'permissions';
 
 type LabelKey =
-  | 'tabs.contacts' | 'tabs.chats' | 'tabs.calls' | 'tabs.keypad' | 'tabs.speeddial';
+  | 'tabs.home' | 'tabs.contacts' | 'tabs.chats' | 'tabs.calls' | 'tabs.keypad';
 
 type Item = { id: Tab; labelKey: LabelKey; Icon: LucideIcon };
 
 const TABS: Item[] = [
-  { id: 'contacts',  labelKey: 'tabs.contacts',  Icon: User },
-  { id: 'chats',     labelKey: 'tabs.chats',     Icon: MessageCircle },
-  { id: 'calls',     labelKey: 'tabs.calls',     Icon: Phone },
-  { id: 'keypad',    labelKey: 'tabs.keypad',    Icon: Grid3x3 },
-  { id: 'speeddial', labelKey: 'tabs.speeddial', Icon: LayoutGrid },
+  { id: 'home',     labelKey: 'tabs.home',     Icon: Home },
+  { id: 'calls',    labelKey: 'tabs.calls',    Icon: Phone },
+  { id: 'keypad',   labelKey: 'tabs.keypad',   Icon: Grid3x3 },
+  { id: 'chats',    labelKey: 'tabs.chats',    Icon: MessageCircle },
+  { id: 'contacts', labelKey: 'tabs.contacts', Icon: User },
 ];
 
 export default function BottomTabs({

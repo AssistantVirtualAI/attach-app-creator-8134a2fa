@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
 import { colors, font, radius, gradients } from '../lib/theme';
 import { mobileApi, RecordingEntry } from '../lib/mobileApi';
-import { Card, Chip, EmptyState, Skeleton, AIPanel } from '../components/ui/Primitives';
+import { Card, Chip, EmptyState, Skeleton } from '../components/ui/Primitives';
 import type { Creds } from '../lib/creds';
 import { downloadRecording, getCachedRecordingUrl, type RecordingScope } from '../lib/recordingCache';
 import { showMobileToast } from '../lib/mobileToast';
-import { useCallAi } from '../hooks/useCallAi';
 import { useT } from '../lib/i18n';
 
 export default function RecordingsScreen({
@@ -23,7 +21,6 @@ export default function RecordingsScreen({
   const [items, setItems] = useState<RecordingEntry[] | null>(null);
   const [loadedForScope, setLoadedForScope] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -56,7 +53,7 @@ export default function RecordingsScreen({
     recoveringRef.current = false;
     setError(null);
     setPlayingId(null); setLoadingId(null); setDownloadingId(null);
-    setExpandedId(null); setCachedIds(new Set()); setPlaybackErrors({});
+    setCachedIds(new Set()); setPlaybackErrors({});
     setItems(scopeId ? null : []);
     setLoadedForScope(scopeId);
   }, [scopeId]);
@@ -270,10 +267,6 @@ export default function RecordingsScreen({
 
 
 
-  const toggleExpand = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
-
   return (
     <div>
       {myExtension && (
@@ -346,17 +339,17 @@ export default function RecordingsScreen({
       )}
 
       {!visibleItems && <ListSkeleton rows={5} />}
-      {visibleItems && visibleItems.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension, r.summary].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).length === 0 && (
+      {visibleItems && visibleItems.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).length === 0 && (
         <EmptyState icon="🎙" title={fr ? 'Aucun enregistrement' : 'No recordings yet'} hint={fr ? 'Les enregistrements de votre extension apparaîtront ici.' : 'Recordings for your extension will appear here.'} />
       )}
-      {visibleItems && visibleItems.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension, r.summary].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).map((r) => (
+      {visibleItems && visibleItems.filter((r) => !search.trim() || [r.customer, r.from, r.to, r.extension].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase())).map((r) => (
         <div key={r.id} style={{ marginBottom: 8 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 12,
             padding: '12px 14px',
             borderRadius: radius.lg,
             background: gradients.card,
-            border: `1px solid ${playingId === r.id || expandedId === r.id ? colors.signalGold : colors.border}`,
+            border: `1px solid ${playingId === r.id ? colors.signalGold : colors.border}`,
             color: colors.textIce,
           }}>
             <button onClick={() => play(r)} style={{
@@ -366,24 +359,20 @@ export default function RecordingsScreen({
             }}>
               {loadingId === r.id ? '…' : playingId === r.id ? '❚❚' : '▶'}
             </button>
-            <button onClick={() => toggleExpand(r.id)} style={{
-              flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'inherit',
-              textAlign: 'left', cursor: 'pointer', padding: 0,
-            }}>
+            <div style={{ flex: 1, minWidth: 0, padding: 0 }}>
               <div style={{ fontSize: font.base, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {r.customer || r.from || r.to || (fr ? 'Appelant inconnu' : 'Unknown caller')}
               </div>
               <div style={{ fontSize: font.xs, color: colors.mutedSilver, fontFamily: 'JetBrains Mono, monospace', marginTop: 2 }}>
                 {r.from} → {r.to}{r.extension ? ` · ext ${r.extension}` : ''}
               </div>
-            </button>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
               <span style={{ fontSize: font.xs, color: colors.mutedSilver }}>
                 {new Date(r.startedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
               </span>
               <div style={{ display: 'flex', gap: 4 }}>
                 <Chip tone="gold" size="xs">{Math.max(1, Math.round(r.durationSec / 60))}m</Chip>
-                {r.hasTranscript && <Chip tone="violet" size="xs">AI</Chip>}
                 {cachedIds.has(r.id) && <Chip tone="success" size="xs">{fr ? 'Hors-ligne' : 'Offline'}</Chip>}
                 <button
                   onClick={() => download(r)}
@@ -395,13 +384,6 @@ export default function RecordingsScreen({
                     cursor: downloadingId === r.id ? 'wait' : 'pointer',
                   }}>
                   {downloadingId === r.id ? '…' : cachedIds.has(r.id) ? '↻' : '⬇'}
-                </button>
-                <button onClick={() => toggleExpand(r.id)} style={{
-                  background: 'transparent', border: `1px solid ${colors.borderAI}`, color: colors.avaViolet,
-                  borderRadius: 8, padding: '2px 6px', fontSize: 10, fontWeight: 800, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}>
-                  <Sparkles size={10} /> {expandedId === r.id ? (fr ? 'Masquer' : 'Hide') : 'AI'}
                 </button>
               </div>
             </div>
@@ -430,161 +412,7 @@ export default function RecordingsScreen({
               </div>
             );
           })()}
-          {expandedId === r.id && (
-            <RecordingAiPanel rec={r} />
-          )}
         </div>
-      ))}
-    </div>
-  );
-}
-
-function RecordingAiPanel({ rec }: { rec: RecordingEntry }) {
-  const { lang } = useT();
-  const fr = lang === 'fr';
-  const { data, loading, running, stage, error, run } = useCallAi(rec.id);
-
-  const hasTranscript = (data?.transcript?.length || 0) > 0;
-  const hasAi = !!data?.summary || (data?.coachingNotes?.length || 0) > 0;
-
-  // Auto-trigger AI on first expand if nothing is cached and no prior error.
-  const autoStartedRef = useRef(false);
-  useEffect(() => {
-    if (autoStartedRef.current) return;
-    if (loading || running) return;
-    if (hasTranscript || hasAi || error) return;
-    autoStartedRef.current = true;
-    run();
-  }, [loading, running, hasTranscript, hasAi, error, run]);
-
-  const statusText = running
-    ? stage === 'analyzing' ? (fr ? 'Analyse · coaching et sentiment…' : 'Analyzing call · coaching & sentiment…') : (fr ? 'Transcription audio par IA…' : 'Transcribing audio with AI…')
-    : error ? (fr ? 'Échec de l\'IA' : 'AI run failed')
-    : hasAi ? (fr ? 'IA prête · en cache' : 'AI ready · cached')
-    : hasTranscript ? (fr ? 'Transcription prête' : 'Transcript ready')
-    : (fr ? 'Préparation de l\'IA…' : 'Preparing AI…');
-
-  return (
-    <div style={{ margin: '8px 0 0', padding: 12, borderRadius: radius.lg, border: `1px solid ${colors.borderAI}`, background: 'rgba(122,76,255,0.05)' }}>
-      {loading && !data ? (
-        <Skeleton w="60%" h={14} />
-      ) : (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-            <div style={{ fontSize: 10, color: colors.avaViolet, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 800 }}>{statusText}</div>
-            <button onClick={() => run()} disabled={running} style={{
-              padding: '6px 10px', borderRadius: 999, border: 'none',
-              background: running ? 'rgba(255,255,255,0.06)' : `linear-gradient(135deg, ${colors.avaViolet}, ${colors.avaCyan})`,
-              color: '#fff', fontSize: 11, fontWeight: 800, cursor: running ? 'wait' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-            }}>
-              {running ? <Loader2 size={11} className="spin" /> : <Sparkles size={11} />}
-              {running ? (fr ? 'Traitement…' : 'Working…') : error ? (fr ? 'Réessayer' : 'Retry') : (hasTranscript || hasAi) ? (fr ? 'Relancer l\'IA' : 'Re-run AI') : (fr ? 'Transcrire et analyser' : 'Transcribe & analyze')}
-            </button>
-          </div>
-
-          {/* Progress stepper */}
-          {(running || (!hasAi && !error)) && (
-            <ProgressStepper stage={running ? stage : (hasTranscript ? 'analyzing' : 'transcribing')} />
-          )}
-
-          {error && (
-            <div style={{ marginBottom: 8, padding: 10, borderRadius: radius.md, border: `1px solid ${colors.danger}55`, background: `${colors.danger}10` }}>
-              <div style={{ color: colors.danger, fontSize: 11, fontWeight: 800, marginBottom: 4 }}>⚠ {fr ? 'Échec de la transcription' : 'Transcription failed'}</div>
-              <div style={{ color: colors.mutedSilver, fontSize: 11, marginBottom: 8, wordBreak: 'break-word' }}>{error}</div>
-              <button onClick={() => run()} disabled={running} style={{
-                padding: '5px 10px', borderRadius: 8, border: `1px solid ${colors.danger}80`,
-                background: 'transparent', color: colors.danger, fontSize: 10.5, fontWeight: 800, cursor: 'pointer',
-              }}>↻ {fr ? 'Relancer l\'IA' : 'Retry AI run'}</button>
-            </div>
-          )}
-
-          {data?.summary && (
-            <AIPanel title={fr ? 'Résumé' : 'Summary'} accent={colors.avaViolet}>
-              <p style={{ fontSize: font.sm, lineHeight: 1.5, color: colors.textIce, margin: 0 }}>{data.summary}</p>
-              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                {data.coachingScore != null && <Chip tone="cyan" size="xs">Coaching {data.coachingScore}/5</Chip>}
-                {data.qualityScore > 0 && <Chip tone="gold" size="xs">{fr ? 'Qualité' : 'Quality'} {data.qualityScore}/100</Chip>}
-                {data.sentiment && <Chip tone={data.sentiment === 'positive' ? 'success' : data.sentiment === 'negative' ? 'danger' : 'neutral'} size="xs">{data.sentiment}</Chip>}
-              </div>
-            </AIPanel>
-          )}
-
-          {data?.coachingNotes && data.coachingNotes.length > 0 && (
-            <AIPanel title={fr ? 'Notes de coaching' : 'Coaching notes'} accent={colors.avaCyan}>
-              {data.coachingNotes.map((n, i) => (
-                <div key={i} style={{ fontSize: font.sm, color: colors.textIce, lineHeight: 1.45, padding: '4px 0' }}>✦ {n}</div>
-              ))}
-            </AIPanel>
-          )}
-
-          {data?.actionItems && data.actionItems.length > 0 && (
-            <AIPanel title={fr ? 'Actions à faire' : 'Action items'} accent={colors.success}>
-              {data.actionItems.map((a, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, padding: '4px 0', fontSize: font.sm, color: colors.textIce }}>
-                  <span style={{ color: colors.success }}>→</span><span>{a}</span>
-                </div>
-              ))}
-            </AIPanel>
-          )}
-
-          {hasTranscript && (
-            <AIPanel title={fr ? 'Transcription' : 'Transcript'} accent={colors.signalGold}>
-              <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                {data!.transcript.map((line, i) => (
-                  <div key={i} style={{
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: line.speaker === 'agent' ? 'flex-end' : 'flex-start',
-                    marginBottom: 6,
-                  }}>
-                    <div style={{ fontSize: 9, color: colors.mutedSilver, marginBottom: 2, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: 700 }}>
-                      {line.speaker === 'agent' ? 'Agent' : line.speaker === 'customer' ? (fr ? 'Appelant' : 'Caller') : (fr ? 'Interlocuteur' : 'Speaker')}
-                    </div>
-                    <div style={{
-                      maxWidth: '88%', padding: '6px 10px', borderRadius: 12,
-                      fontSize: font.sm, lineHeight: 1.4,
-                      background: line.speaker === 'agent' ? 'rgba(106,225,255,0.12)' : 'rgba(255,255,255,0.05)',
-                      color: colors.textIce,
-                    }}>{line.text}</div>
-                  </div>
-                ))}
-              </div>
-            </AIPanel>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function ProgressStepper({ stage }: { stage: 'idle' | 'transcribing' | 'analyzing' | 'done' | 'error' }) {
-  const { lang } = useT();
-  const fr = lang === 'fr';
-  const steps = [
-    { id: 'transcribing', label: fr ? 'Transcrire' : 'Transcribe' },
-    { id: 'analyzing', label: fr ? 'Analyser' : 'Analyze' },
-    { id: 'done', label: fr ? 'Prêt' : 'Ready' },
-  ];
-  const activeIdx = stage === 'analyzing' ? 1 : stage === 'done' ? 2 : 0;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0 10px' }}>
-      {steps.map((s, i) => (
-        <React.Fragment key={s.id}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            padding: '3px 8px', borderRadius: 999,
-            background: i <= activeIdx ? `${colors.avaViolet}25` : 'rgba(255,255,255,0.04)',
-            border: `1px solid ${i <= activeIdx ? colors.avaViolet : colors.border}`,
-            fontSize: 10, fontWeight: 800, letterSpacing: 0.4,
-            color: i <= activeIdx ? colors.avaViolet : colors.mutedSilver,
-          }}>
-            {i === activeIdx && stage !== 'done' ? <Loader2 size={10} className="spin" /> : i < activeIdx || stage === 'done' ? '✓' : i + 1}
-            {s.label}
-          </div>
-          {i < steps.length - 1 && (
-            <div style={{ flex: 1, height: 2, background: i < activeIdx ? colors.avaViolet : colors.border, borderRadius: 2 }} />
-          )}
-        </React.Fragment>
       ))}
     </div>
   );

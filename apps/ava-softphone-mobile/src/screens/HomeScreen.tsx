@@ -1,311 +1,143 @@
-import React, { useEffect, useState } from 'react';
-import { ImpactStyle } from '@capacitor/haptics';
-import { colors, gradients, font, radius } from '../lib/theme';
-import { mobileApi, DashboardBrief, MeResponse } from '../lib/mobileApi';
-import { Card, Chip, StatusDot, SectionTitle, AIPanel, Skeleton, PrimaryButton, GhostButton } from '../components/ui/Primitives';
-import { LemtelMark, LemtelBadge, HeroGradient } from '../components/Brand';
-import type { Tab } from '../components/BottomTabs';
-import StatsDashboard from '../components/StatsDashboard';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowUpRight, Clock3, MessageCircle, Phone, ShieldCheck, UsersRound } from 'lucide-react';
+import { colors, font, radius, shadow } from '../lib/theme';
+import { mobileApi } from '../lib/mobileApi';
 import { useT } from '../lib/i18n';
+import type { Tab } from '../components/BottomTabs';
+import PoweredByAva from '../components/PoweredByAva';
 
+type HomeScreenProps = {
+  onNavigate: (tab: Tab) => void;
+  haptic?: () => Promise<void>;
+  onOpenProfile?: () => void;
+};
 
-interface Props { onNavigate: (t: Tab) => void; haptic: (s?: ImpactStyle) => Promise<void> }
+type WorkspaceSnapshot = {
+  organization?: { name?: string };
+  profile?: { displayName?: string };
+  calls?: { today?: number; missed?: number };
+  messages?: { unread?: number };
+  brief?: string;
+};
 
-export default function HomeScreen({ onNavigate, haptic }: Props) {
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [data, setData] = useState<DashboardBrief | null>(null);
+export default function HomeScreen({ onNavigate, haptic, onOpenProfile }: HomeScreenProps) {
   const { tx } = useT();
+  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
+  const [refreshing, setRefreshing] = useState(true);
 
   useEffect(() => {
-    mobileApi.me().then(setMe);
-    mobileApi.dashboard().then(setData);
+    let active = true;
+    const load = async () => {
+      setRefreshing(true);
+      try {
+        const data = await mobileApi.dashboard() as WorkspaceSnapshot;
+        if (active) setSnapshot(data || {});
+      } catch {
+        if (active) setSnapshot({});
+      } finally {
+        if (active) setRefreshing(false);
+      }
+    };
+    void load();
+    return () => { active = false; };
   }, []);
 
+  const name = useMemo(() => snapshot?.profile?.displayName || '', [snapshot]);
+  const organization = snapshot?.organization?.name || 'Lemtel';
+  const go = (tab: Tab) => {
+    void haptic?.();
+    onNavigate(tab);
+  };
+
+  const actions: Array<{ id: Tab; icon: React.ReactNode; title: string; detail: string; tone: string }> = [
+    { id: 'keypad', icon: <Phone size={20} />, tone: colors.lemtelBlue, title: tx('Nouvel appel', 'New call'), detail: tx('Ouvrir le clavier', 'Open keypad') },
+    { id: 'chats', icon: <MessageCircle size={20} />, tone: colors.avaCyan, title: tx('Équipe', 'Team'), detail: tx('Conversations de l’organisation', 'Organization conversations') },
+    { id: 'calls', icon: <Clock3 size={20} />, tone: colors.signalGold, title: tx('Historique', 'History'), detail: tx('Appels et messages vocaux', 'Calls and voicemail') },
+    { id: 'contacts', icon: <UsersRound size={20} />, tone: colors.mint, title: tx('Répertoire', 'Directory'), detail: tx('Votre organisation', 'Your organization') },
+  ];
+
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '14px 14px 20px' }}>
-      {/* Account header */}
-      <HeroGradient>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <LemtelMark size={40} />
+    <main style={{ height: '100%', overflowY: 'auto', padding: '8px 16px 132px' }}>
+      <section style={{
+        position: 'relative', overflow: 'hidden', borderRadius: 24, padding: '20px 18px 18px',
+        background: `radial-gradient(circle at 92% 4%, ${colors.avaCyan}44 0, transparent 40%), radial-gradient(circle at 12% 100%, ${colors.lemtelBlue}66 0, transparent 56%), ${colors.graphite}`,
+        border: `1px solid ${colors.lemtelBlue}66`, boxShadow: shadow.glow,
+      }}>
+        <span aria-hidden style={{
+          position: 'absolute', right: -30, bottom: -44, width: 150, height: 150, borderRadius: 999,
+          border: `1px solid ${colors.avaCyan}44`, boxShadow: `0 0 0 22px ${colors.avaCyan}0d, 0 0 0 44px ${colors.avaCyan}08`,
+        }} />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <button onClick={onOpenProfile} aria-label={tx('Ouvrir le profil', 'Open profile')} style={{
+            width: 42, height: 42, borderRadius: 14, display: 'grid', placeItems: 'center', cursor: 'pointer',
+            border: `1px solid ${colors.avaCyan}66`, color: '#fff', background: `${colors.avaCyan}1f`, fontWeight: 800,
+          }}>{name ? name.slice(0, 2).toUpperCase() : 'L'}</button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce, letterSpacing: -0.3 }}>Lemtel</span>
-              <LemtelBadge />
+            <div style={{ color: colors.avaCyan, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.6 }}>
+              {tx('Espace de travail', 'Workspace')}
             </div>
-            <div style={{ fontSize: 10.5, color: colors.signalGold, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', marginTop: 2 }}>
-              {tx('Téléphonie intelligente', 'AI phone')}
-            </div>
+            <h1 style={{ margin: '3px 0 0', color: colors.textIce, fontSize: 23, lineHeight: 1.18, letterSpacing: -0.45 }}>
+              {name ? tx(`Bonjour, ${name}`, `Welcome, ${name}`) : tx('Bienvenue dans Lemtel', 'Welcome to Lemtel')}
+            </h1>
           </div>
-          {data ? <StatusDot state={data?.status?.sipState ?? 'offline'} /> : <Skeleton w={50} h={14} />}
         </div>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 7, marginTop: 18, color: colors.textSub, fontSize: font.sm }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: colors.success, boxShadow: `0 0 12px ${colors.success}` }} />
+          <span>{tx('Connecté à', 'Connected to')} <strong style={{ color: colors.textIce }}>{organization}</strong></span>
+        </div>
+        {snapshot?.brief && <p style={{ position: 'relative', margin: '10px 0 0', maxWidth: '85%', color: colors.textSub, fontSize: 12, lineHeight: 1.45 }}>{snapshot.brief}</p>}
+      </section>
 
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: font.sm, color: colors.mutedSilver }}>
-            {me ? `${me?.dataScope === 'domain_admin' ? tx('Admin du domaine', 'Domain admin') : tx('Extension', 'Extension')} ${me?.extension?.number ?? '—'} · ${me?.domain?.sipDomain || me?.organization?.name || 'Lemtel'}` : <Skeleton w="60%" h={10} />}
+      <section style={{ marginTop: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 3px 10px' }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.6, color: colors.signalGold, textTransform: 'uppercase' }}>{tx('Actions rapides', 'Quick actions')}</div>
+            <h2 style={{ margin: '3px 0 0', fontSize: 19, color: colors.textIce }}>{tx('Tout est à portée de main', 'Everything in reach')}</h2>
           </div>
-          <h1 style={{ fontSize: font.xxl, color: colors.textIce, margin: '6px 0 4px', fontWeight: 800, letterSpacing: -0.5 }}>
-            {data?.greeting || (me ? `${tx('Bonjour', 'Hello')}, ${(me?.user?.name || me?.user?.email || tx('Utilisateur', 'User')).split(/[\s@]/).filter(Boolean)[0]}` : <Skeleton w="70%" h={26} />)}
-          </h1>
-          <p style={{ fontSize: font.base, color: colors.textSub, margin: 0, lineHeight: 1.5 }}>
-            {data?.brief || <Skeleton w="100%" h={14} />}
-          </p>
+          <button onClick={() => go('keypad')} aria-label={tx('Composer un numéro', 'Dial a number')} style={{ background: 'transparent', border: 'none', color: colors.avaCyan, cursor: 'pointer', padding: 4 }}><ArrowUpRight size={20} /></button>
         </div>
-      </HeroGradient>
-
-      {/* Quick actions */}
-      <SectionTitle eyebrow={tx('Raccourcis', 'Shortcuts')} title={tx('Actions rapides', 'Quick actions')} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        <QuickAction label={tx('Appeler', 'Call')} icon="☎" tone="gold" onPress={() => { haptic(ImpactStyle.Medium); onNavigate('calls'); }} />
-        <QuickAction label={tx('Message', 'Message')} icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('messages'); }} />
-        <QuickAction label={tx('Assistant Lemtel', 'Lemtel assistant')} icon="✦" tone="violet" onPress={() => { haptic(); onNavigate('ava'); }} />
-        <QuickAction label={tx('Accueil', 'Home')} icon="◉" tone="violet" onPress={() => { haptic(); onNavigate('home'); }} />
-        <QuickAction label={tx('Transfert', 'Transfer')} icon="↪" tone="gold" onPress={() => { haptic(); onNavigate('settings'); }} />
-        <QuickAction label={tx('Messagerie', 'Voicemail')} icon="✉" tone="cyan" onPress={() => { haptic(); onNavigate('calls'); }} />
-      </div>
-
-      {/* Data scope */}
-      <SectionTitle eyebrow={tx('Données PBX', 'PBX data')} title={tx("Portée d'accès", 'Access scope')} />
-      <Card padded={true} style={{ marginBottom: 10, background: 'linear-gradient(145deg, rgba(23,198,204,0.12), rgba(255,255,255,0.045))' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 14, display: 'grid', placeItems: 'center', background: gradients.ai, fontSize: 18 }}>⌁</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: font.base, fontWeight: 800, color: colors.textIce }}>{data?.scope?.label || (me?.dataScope === 'domain_admin' ? tx('Admin du domaine', 'Domain admin') : tx("Utilisateur d'extension", 'Extension user'))}</div>
-            <div style={{ fontSize: font.sm, color: colors.mutedSilver, marginTop: 2 }}>{me ? `${me?.client?.name ? `${me.client.name} · ` : ''}${me?.organization?.name || 'Lemtel'} · ${me?.domain?.sipDomain || me?.extension?.sipDomain || '—'}` : tx('Chargement de la portée du domaine…', 'Loading domain scope…')}</div>
-          </div>
-          <Chip tone={me?.permissions?.admin ? 'gold' : 'cyan'}>{me?.permissions?.admin ? 'Admin' : tx('Utilisateur', 'User')}</Chip>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+          {actions.map((action) => (
+            <button key={action.id} onClick={() => go(action.id)} style={{
+              minHeight: 118, padding: 14, textAlign: 'left', cursor: 'pointer', borderRadius: radius.xl,
+              background: `linear-gradient(145deg, ${action.tone}1f, ${colors.graphite} 78%)`,
+              border: `1px solid ${action.tone}44`, boxShadow: `0 14px 30px -22px ${action.tone}bb`, color: colors.textIce,
+            }}>
+              <span style={{ width: 34, height: 34, borderRadius: 12, display: 'grid', placeItems: 'center', color: action.tone, background: `${action.tone}22`, border: `1px solid ${action.tone}44` }}>{action.icon}</span>
+              <span style={{ display: 'block', marginTop: 12, fontWeight: 800, fontSize: 14 }}>{action.title}</span>
+              <span style={{ display: 'block', marginTop: 3, color: colors.textSub, fontSize: 11, lineHeight: 1.35 }}>{action.detail}</span>
+            </button>
+          ))}
         </div>
-      </Card>
+      </section>
 
-      {me?.status?.updatedAt && (
-        <div style={{ margin: '8px 2px 0', fontSize: font.xs, color: colors.mutedSilver }}>
-          {tx('État PBX synchronisé', 'PBX status synced')} {new Date(me.status.updatedAt).toLocaleString()}
+      <section style={{ marginTop: 22 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.6, color: colors.signalGold, textTransform: 'uppercase', padding: '0 3px 10px' }}>{tx("Aujourd’hui", 'Today')}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <Metric label={tx('Appels', 'Calls')} value={refreshing ? '—' : String(snapshot?.calls?.today ?? 0)} tone={colors.lemtelBlue} />
+          <Metric label={tx('Manqués', 'Missed')} value={refreshing ? '—' : String(snapshot?.calls?.missed ?? 0)} tone={colors.signalGold} />
+          <Metric label={tx('Messages', 'Messages')} value={refreshing ? '—' : String(snapshot?.messages?.unread ?? 0)} tone={colors.avaCyan} />
         </div>
-      )}
+      </section>
 
-      {/* Comprehensive stats dashboard with period toggle */}
-      <StatsDashboard />
-
-
-      {/* Activity sparkline */}
-      <SectionTitle eyebrow={tx('12 dernières heures', 'Last 12 hours')} title={tx("Activité d'appels", 'Call activity')} />
-      <ActivitySpark answered={data?.metrics?.answeredCalls ?? 0} missed={data?.metrics?.missedCalls ?? 0} tx={tx} />
-
-      {/* Needs attention */}
-      <SectionTitle eyebrow={tx('Priorisé par Lemtel AI', 'Prioritized by Lemtel AI')} title={tx('À traiter', 'Needs attention')} />
-      {!data && <Card><Skeleton w="80%" h={12} /><div style={{ height: 8 }} /><Skeleton w="50%" h={10} /></Card>}
-      {data?.needsAttention?.map?.((n) => (
-        <Card key={n.id} accent={n.accent === 'danger' ? 'gold' : (n.accent as any)} style={{ marginBottom: 10 }} onPress={() => haptic()}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 12, display: 'grid', placeItems: 'center',
-              background: gradients.ai, fontSize: 16,
-            }}>{n.kind === 'voicemail' ? '✉' : n.kind === 'callback' ? '↺' : '✓'}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: font.base, fontWeight: 700, color: colors.textIce }}>{n.title}</div>
-              <div style={{ fontSize: font.sm, color: colors.mutedSilver }}>{n.subtitle}</div>
-            </div>
-            <Chip tone={n.accent === 'gold' ? 'gold' : n.accent === 'cyan' ? 'cyan' : 'violet'}>{(n.kind || '').replace('_', ' ')}</Chip>
-          </div>
-        </Card>
-      ))}
-
-      {/* AI brief */}
-      <SectionTitle eyebrow={tx('Résumé Lemtel AI', 'Lemtel AI summary')} title={tx('Depuis votre dernière connexion', 'Since your last sign-in')} />
-      <AIPanel title={tx('Résumé quotidien Lemtel AI', 'Daily Lemtel AI summary')} right={<GhostButton tone="cyan" style={{ padding: '6px 10px' }} onClick={() => onNavigate('ava')}>{tx("Ouvrir l'IA", 'Open AI')}</GhostButton>}>
-        <p style={{ fontSize: font.base, lineHeight: 1.55, color: colors.textIce, margin: 0 }}>
-          {data?.brief || tx('Génération du résumé du jour…', 'Generating today’s summary…')}
-        </p>
-        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-          <Chip tone="gold">{data?.metrics?.actionItems ?? '·'} {tx('tâches', 'tasks')}</Chip>
-          <Chip tone="cyan">{data?.metrics?.unreadSms ?? '·'} {tx('non lus', 'unread')}</Chip>
-          <Chip tone="violet">{tx('Agents Lemtel AI en ligne', 'Lemtel AI agents online')}</Chip>
+      <section style={{ marginTop: 18, padding: '14px 15px', borderRadius: radius.xl, background: `${colors.mint}0f`, border: `1px solid ${colors.mint}38`, display: 'flex', gap: 10 }}>
+        <ShieldCheck size={19} color={colors.mint} style={{ flex: '0 0 auto', marginTop: 1 }} />
+        <div>
+          <div style={{ color: colors.textIce, fontSize: 13, fontWeight: 800 }}>{tx('Espace sécurisé par organisation', 'Organization-secured workspace')}</div>
+          <div style={{ color: colors.textSub, fontSize: 11, lineHeight: 1.45, marginTop: 3 }}>{tx('Vos conversations, appels et contacts restent séparés par organisation.', 'Your conversations, calls, and contacts remain separated by organization.')}</div>
         </div>
-      </AIPanel>
+      </section>
 
-      <div style={{ height: 80 }} />
-    </div>
+      <div style={{ display: 'grid', justifyItems: 'center', marginTop: 24 }}><PoweredByAva /></div>
+    </main>
   );
 }
 
-function QuickAction({
-  label, icon, tone, onPress,
-}: { label: string; icon: string; tone: 'gold' | 'cyan' | 'violet'; onPress: () => void }) {
-  const c = tone === 'gold' ? colors.signalGold : tone === 'cyan' ? colors.avaCyan : colors.avaViolet;
+function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <button onClick={onPress} style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-      minHeight: 78,
-      padding: '14px 8px', borderRadius: radius.xl,
-      background: `linear-gradient(155deg, ${c}1a, ${colors.graphite} 70%)`,
-      border: `1px solid ${c}44`,
-      color: colors.textIce, fontSize: font.sm, fontWeight: 800, cursor: 'pointer', boxShadow: '0 10px 24px -18px rgba(0,35,230,0.35)',
-    }}>
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      {label}
-    </button>
-  );
-}
-
-function toneColor(tone: 'success' | 'danger' | 'cyan' | 'gold' | 'violet') {
-  switch (tone) {
-    case 'success': return colors.success;
-    case 'danger': return colors.danger;
-    case 'cyan': return colors.avaCyan;
-    case 'gold': return colors.signalGold;
-    case 'violet': return colors.avaViolet;
-  }
-}
-
-function Metric({
-  label, value, tone, icon, trend,
-}: { label: string; value?: number; tone: 'success' | 'danger' | 'cyan' | 'gold' | 'violet'; icon?: string; trend?: number }) {
-  const c = toneColor(tone);
-  const pct = Math.min(100, ((value ?? 0) / 20) * 100);
-  const up = (trend ?? 0) >= 0;
-  return (
-    <Card padded={true} style={{
-      padding: 14,
-      position: 'relative',
-      overflow: 'hidden',
-      background: `linear-gradient(155deg, ${c}1f, ${colors.graphite} 75%)`,
-      border: `1px solid ${c}33`,
-    }}>
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: `radial-gradient(120% 60% at 100% 0%, ${c}22, transparent 60%)`,
-        pointerEvents: 'none',
-      }} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-        <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.6, color: c, textTransform: 'uppercase' }}>{label}</div>
-        <div style={{
-          width: 22, height: 22, borderRadius: 8, display: 'grid', placeItems: 'center',
-          background: `${c}26`, color: c, fontSize: 12, fontWeight: 900,
-        }}>{icon ?? '•'}</div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, position: 'relative' }}>
-        <div style={{ fontSize: 30, fontWeight: 800, color: colors.textIce, marginTop: 6, fontFamily: 'JetBrains Mono, monospace', letterSpacing: -0.5 }}>
-          {value ?? <Skeleton w={40} h={22} />}
-        </div>
-        {trend != null && value != null && (
-          <div style={{
-            fontSize: 10, fontWeight: 800, color: up ? colors.success : colors.danger,
-            background: `${up ? colors.success : colors.danger}1f`,
-            padding: '2px 6px', borderRadius: 6,
-          }}>{up ? '▲' : '▼'} {Math.abs(trend)}%</div>
-        )}
-      </div>
-      <div style={{ marginTop: 10, height: 4, borderRadius: 999, background: 'rgba(255,255,255,0.06)', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, width: `${pct}%`, background: `linear-gradient(90deg, ${c}, ${c}88)`, borderRadius: 999 }} />
-      </div>
-    </Card>
-  );
-}
-
-function AnswerRateHero({ answered, missed }: { answered?: number; missed?: number }) {
-  const a = answered ?? 0;
-  const m = missed ?? 0;
-  const total = a + m;
-  const rate = total > 0 ? Math.round((a / total) * 100) : 0;
-  const size = 88;
-  const stroke = 9;
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (rate / 100) * circ;
-  return (
-    <Card padded={true} style={{
-      padding: 16,
-      background: `linear-gradient(135deg, rgba(0,35,230,0.22), rgba(23,198,204,0.10) 60%, rgba(10,15,32,0.9))`,
-      border: '1px solid rgba(23,198,204,0.28)',
-      position: 'relative', overflow: 'hidden',
-    }}>
-      <div style={{
-        position: 'absolute', right: -30, top: -30, width: 160, height: 160,
-        background: 'radial-gradient(circle, rgba(23,198,204,0.18), transparent 70%)',
-      }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
-        <div style={{ position: 'relative', width: size, height: size }}>
-          <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-            <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} fill="none" />
-            <circle
-              cx={size / 2} cy={size / 2} r={r}
-              stroke="url(#answerGrad)" strokeWidth={stroke} fill="none"
-              strokeLinecap="round"
-              strokeDasharray={circ} strokeDashoffset={offset}
-              style={{ transition: 'stroke-dashoffset 600ms ease' }}
-            />
-            <defs>
-              <linearGradient id="answerGrad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor={colors.avaCyan} />
-                <stop offset="100%" stopColor={colors.signalGold} />
-              </linearGradient>
-            </defs>
-          </svg>
-          <div style={{
-            position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-            fontSize: 22, fontWeight: 800, color: colors.textIce, fontFamily: 'JetBrains Mono, monospace',
-          }}>{rate}%</div>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.6, color: colors.avaCyan, textTransform: 'uppercase' }}>Answer rate</div>
-          <div style={{ fontSize: font.lg, fontWeight: 800, color: colors.textIce, marginTop: 2 }}>{a} of {total} calls handled</div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-            <Chip tone="cyan">{a} answered</Chip>
-            <Chip tone="gold">{m} missed</Chip>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function ActivitySpark({ answered, missed, tx }: { answered: number; missed: number; tx: (fr: string, en: string) => string }) {
-  // Deterministic pseudo-distribution across 12 hourly buckets
-  const buckets = Array.from({ length: 12 }, (_, i) => {
-    const seed = Math.sin(i * 1.3 + answered * 0.7 + missed * 0.3) * 0.5 + 0.5;
-    const aH = Math.max(1, Math.round(seed * Math.max(answered, 2) * 0.9));
-    const mH = Math.max(0, Math.round((1 - seed) * Math.max(missed, 1) * 0.6));
-    return { aH, mH };
-  });
-  const max = Math.max(...buckets.map(b => b.aH + b.mH), 4);
-  return (
-    <Card padded={true} style={{
-      padding: 14,
-      background: `linear-gradient(160deg, rgba(106,77,255,0.12), ${colors.graphite} 70%)`,
-      border: '1px solid rgba(106,77,255,0.28)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 84 }}>
-        {buckets.map((b, i) => {
-          const total = b.aH + b.mH;
-          const h = max > 0 ? (total / max) * 78 : 0;
-          const aRatio = total > 0 ? b.aH / total : 0;
-          return (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}>
-              <div style={{
-                height: h,
-                borderRadius: 4,
-                background: `linear-gradient(180deg, ${colors.avaCyan} 0%, ${colors.avaCyan} ${aRatio * 100}%, ${colors.signalGold} ${aRatio * 100}%, ${colors.signalGold} 100%)`,
-                boxShadow: `0 0 12px -4px ${colors.avaCyan}88`,
-              }} />
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 9, color: colors.mutedSilver, letterSpacing: 1 }}>
-        <span>8AM</span><span>12PM</span><span>4PM</span><span>8PM</span>
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-        <LegendDot color={colors.avaCyan} label={tx('Répondus', 'Answered')} />
-        <LegendDot color={colors.signalGold} label={tx('Manqués', 'Missed')} />
-      </div>
-    </Card>
-  );
-}
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: colors.mutedSilver, fontWeight: 700 }}>
-      <span style={{ width: 8, height: 8, borderRadius: 999, background: color, boxShadow: `0 0 8px ${color}` }} />
-      {label}
+    <div style={{ borderRadius: radius.lg, padding: '12px 10px', background: `${tone}12`, border: `1px solid ${tone}33` }}>
+      <div style={{ color: tone, fontSize: 9, fontWeight: 800, letterSpacing: 1.1, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+      <div style={{ marginTop: 5, color: colors.textIce, fontSize: 22, fontWeight: 800, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>{value}</div>
     </div>
   );
 }

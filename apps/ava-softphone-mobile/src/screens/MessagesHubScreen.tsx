@@ -9,10 +9,11 @@ import { useTr } from '../lib/i18n';
 type Sub = 'team' | 'sms' | 'contacts';
 
 export default function MessagesHubScreen({
-  accessToken, userId, sp, haptic, channelUnread,
+  accessToken, userId, organizationName, sp, haptic, channelUnread,
 }: {
   accessToken: string | null;
   userId: string | undefined;
+  organizationName?: string;
   sp: any;
   haptic: (s?: ImpactStyle) => Promise<void>;
   channelUnread?: Record<string, number>;
@@ -26,7 +27,7 @@ export default function MessagesHubScreen({
         <Segmented value={sub} onChange={(v) => { haptic(); setSub(v); }} tr={tr} />
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {sub === 'team' && <TeamChatScreen accessToken={accessToken} userId={userId} channelUnread={channelUnread} />}
+        {sub === 'team' && <TeamChatScreen accessToken={accessToken} userId={userId} organizationName={organizationName} channelUnread={channelUnread} />}
         {sub === 'sms' && <MessagesScreen haptic={haptic} />}
         {sub === 'contacts' && <ContactsScreen sp={sp} />}
       </div>

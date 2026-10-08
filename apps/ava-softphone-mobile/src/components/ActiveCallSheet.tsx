@@ -13,7 +13,7 @@ import IncomingCallerPanel from './IncomingCallerPanel';
 import { lookupCaller, type CallerLookup } from '../lib/sip/callerLookup';
 import { formatSipParty } from '../lib/sip/formatSipParty';
 import { useCallActionBridge } from '../lib/sip/useCallActionBridge';
-// LiveTranscriptPanel intentionally not imported — live transcription disabled during calls.
+// No call transcription surface is imported in the mobile client.
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { useT } from '../lib/i18n';
 
@@ -193,7 +193,7 @@ export default function ActiveCallSheet({
         endReason={endReasonText}
         endCode={sp.lastSipCode ?? null}
       />
-      {/* Live transcription removed during calls — caused app freeze (background audio tap + main-thread work). Transcription now only runs post-call. */}
+      {/* Call transcription is intentionally unavailable in the mobile client. */}
       {/* Top brand strip */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 16px 8px', padding: '10px 12px', borderRadius: radius.lg, background: 'rgba(255,255,255,0.04)', border: `1px solid ${stateAccent}55`, boxShadow: shadow.glass }}>
         <CallStatusBadge

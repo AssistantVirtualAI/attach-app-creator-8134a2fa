@@ -28,9 +28,6 @@ vi.mock('../lib/mobileSupabase', () => ({
 }));
 vi.mock('../lib/recordingCache', () => ({ downloadRecording: h.download, getCachedRecordingUrl: h.cached }));
 vi.mock('../lib/mobileToast', () => ({ showMobileToast: h.toast }));
-vi.mock('../hooks/useCallAi', () => ({
-  useCallAi: () => ({ data: { summary: 'Personal summary' }, loading: false, running: false, stage: 'idle', error: null, run: vi.fn() }),
-}));
 vi.mock('../lib/i18n', () => ({ useT: () => ({ lang: 'en' }) }));
 
 import RecordingsScreen from './RecordingsScreen';
@@ -129,14 +126,12 @@ describe('Phase 27A — RecordingsScreen own_extension_only', () => {
     expect(names).toContain('ava:callEnded');
   });
 
-  it('play, download and AI panel remain rendered for a personal recording', async () => {
+  it('keeps personal playback and download, without a transcript or analysis control', async () => {
     render(<Screen myExtension="201" />);
     await flush();
     expect(screen.getByText('▶')).toBeTruthy();
     expect(screen.getByTitle('Download for offline playback')).toBeTruthy();
-    fireEvent.click(screen.getByText('Own Caller'));
-    await flush();
-    expect(screen.getByText('Personal summary')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/transcrib|analysis|personal summary/i);
   });
 
   it('ignores a focus refresh from the previous extension', async () => {

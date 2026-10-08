@@ -35,7 +35,7 @@ test("APNs entitlement is configuration-specific for device tests and TestFlight
   assert.doesNotMatch(entitlements, /com\.apple\.developer\.pushkit\.unrestricted-voip/);
   assert.match(project, /APS_ENVIRONMENT = development;[\s\S]*?name = Debug;/);
   assert.match(project, /APS_ENVIRONMENT = production;[\s\S]*?name = Release;/);
-  assert.match(project, /CURRENT_PROJECT_VERSION = 2;/);
+  assert.match(project, /CURRENT_PROJECT_VERSION = 3;/);
   assert.match(project, /MARKETING_VERSION = 1\.1;/);
   assert.match(project, /CODE_SIGN_IDENTITY = "Apple Distribution";[\s\S]*?name = Release;/);
   assert.match(project, /CODE_SIGN_STYLE = Manual;[\s\S]*?PROVISIONING_PROFILE_SPECIFIER = "\$\(LEMTEL_APP_STORE_PROFILE_UUID\)";[\s\S]*?name = Release;/);

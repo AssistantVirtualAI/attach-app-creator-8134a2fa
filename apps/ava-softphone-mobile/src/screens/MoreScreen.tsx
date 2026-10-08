@@ -17,7 +17,6 @@ import DataSafetyScreen from './DataSafetyScreen';
 import PermissionsScreen from './PermissionsScreen';
 import SupportScreen from './SupportScreen';
 // Heavy/rare subpages — lazy-loaded so they don't bloat the main bundle.
-const AIAuditScreen = lazy(() => import('./AIAuditScreen'));
 const QueuesScreen  = lazy(() => import('./QueuesScreen'));
 const FeaturesScreen = lazy(() => import('./FeaturesScreen'));
 const SipDebugScreen = lazy(() => import('./SipDebugScreen'));
@@ -25,7 +24,7 @@ import ScreenSkeleton from '../components/ScreenSkeleton';
 import { useTr, useT } from '../lib/i18n';
 
 
-type Sub = null | 'voicemail' | 'messages' | 'contacts' | 'settings' | 'delete' | 'privacy' | 'datasafety' | 'permissions' | 'support' | 'aiaudit' | 'queues' | 'features' | 'sipdebug';
+type Sub = null | 'voicemail' | 'messages' | 'contacts' | 'settings' | 'delete' | 'privacy' | 'datasafety' | 'permissions' | 'support' | 'queues' | 'features' | 'sipdebug';
 
 export default function MoreScreen({
   creds, sp, onSignOut, haptic, portalTelephonyPolicy = null, voicemailPolicy,
@@ -44,7 +43,6 @@ export default function MoreScreen({
   if (sub === 'datasafety')  return <SubPage onBack={() => setSub(null)} title={tr.more.dataSafety}><DataSafetyScreen /></SubPage>;
   if (sub === 'permissions') return <SubPage onBack={() => setSub(null)} title={tr.more.permissions}><PermissionsScreen /></SubPage>;
   if (sub === 'support')     return <SubPage onBack={() => setSub(null)} title={tr.more.support}><SupportScreen /></SubPage>;
-  if (sub === 'aiaudit')     return <SubPage onBack={() => setSub(null)} title={tr.more.aiAudit}><Suspense fallback={<ScreenSkeleton />}><AIAuditScreen /></Suspense></SubPage>;
   if (sub === 'queues')      return <SubPage onBack={() => setSub(null)} title={tr.more.queues}><Suspense fallback={<ScreenSkeleton />}><QueuesScreen /></Suspense></SubPage>;
   if (sub === 'features')    return <SubPage onBack={() => setSub(null)} title={tr.more.callingFeatures}><Suspense fallback={<ScreenSkeleton />}><FeaturesScreen sp={sp} /></Suspense></SubPage>;
   if (sub === 'sipdebug')    return <SubPage onBack={() => setSub(null)} title="SIP Debug"><Suspense fallback={<ScreenSkeleton />}><SipDebugScreen sp={sp} /></Suspense></SubPage>;
@@ -82,7 +80,6 @@ export default function MoreScreen({
         <SettingsRow label={tr.more.permissions} icon="🔐" value={tr.more.permissionsHint} onPress={() => setSub('permissions')} />
         <SettingsRow label={tr.more.privacy} icon="🛡" value={tr.more.privacyHint} onPress={() => setSub('privacy')} />
         <SettingsRow label={tr.more.dataSafety} icon="🗂" value={tr.more.dataSafetyHint} onPress={() => setSub('datasafety')} />
-        <SettingsRow label={tr.more.aiAudit} icon="✨" value={tr.more.aiAuditHint} onPress={() => setSub('aiaudit')} />
         <SettingsRow
           label="SIP Debug"
           icon="🛰"

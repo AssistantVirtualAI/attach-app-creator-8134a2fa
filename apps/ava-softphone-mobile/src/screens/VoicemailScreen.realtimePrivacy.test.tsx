@@ -31,7 +31,7 @@ vi.mock('../lib/mobileSupabase', () => ({
 }));
 const voicemails = vi.fn();
 vi.mock('../lib/mobileApi', () => ({
-  mobileApi: { voicemails: (...a: any[]) => voicemails(...a), analyzeCall: vi.fn(), voicemailAudio: vi.fn() },
+  mobileApi: { voicemails: (...a: any[]) => voicemails(...a), voicemailAudio: vi.fn() },
 }));
 vi.mock('../hooks/useMobileCredentials', () => ({ useMobileCredentials: () => creds.current }));
 vi.mock('../lib/audit', () => ({ audit: vi.fn() }));

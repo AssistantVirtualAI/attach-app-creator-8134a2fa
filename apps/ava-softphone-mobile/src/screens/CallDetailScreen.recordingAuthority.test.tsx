@@ -11,7 +11,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/mobileApi', () => ({
-  mobileApi: { callDetail: h.callDetail, transcribeCall: vi.fn(), analyzeCall: vi.fn() },
+  mobileApi: { callDetail: h.callDetail },
 }));
 vi.mock('../lib/mobileSupabase', () => ({ loadPbxRecordingAudioMobile: h.loadAudio }));
 vi.mock('../hooks/useMobileCredentials', () => ({

@@ -292,7 +292,6 @@ function CallRow({ c, onPress, onCall }: { c: CallRecord; onPress: () => void; o
           <span style={{ fontSize: font.xs, color: colors.mutedSilver }}>{new Date(c.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           <div style={{ display: 'flex', gap: 4 }}>
             {c.hasRecording && <Chip tone="gold" size="xs">REC</Chip>}
-            {c.hasTranscript && <Chip tone="violet" size="xs">AI</Chip>}
           </div>
         </div>
       </button>

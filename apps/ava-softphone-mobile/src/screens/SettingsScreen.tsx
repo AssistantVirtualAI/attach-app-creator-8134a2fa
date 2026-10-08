@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { colors, font, radius, gradients } from '../lib/theme';
 import type { Creds } from '../lib/creds';
 import { mobileApi, MeResponse } from '../lib/mobileApi';
-import { Card, Chip, SectionTitle, SettingsRow, StatusDot, AIPanel } from '../components/ui/Primitives';
+import { Card, Chip, SectionTitle, SettingsRow, StatusDot } from '../components/ui/Primitives';
 import { LemtelMark, LemtelBadge } from '../components/Brand';
 import { checkAllPermissions, openAppSettings, type AllPermissions, type PermissionStatus } from '../lib/permissions';
 import { getAnnounceConsent, setAnnounceConsent } from '../lib/recordingConsent';
@@ -71,8 +71,6 @@ export default function SettingsScreen({
   const [haptics, setHaptics] = useState<boolean>(() => localStorage.getItem('ava.haptics') !== 'off');
   const [autoAnswer, setAutoAnswer] = useState<boolean>(() => localStorage.getItem('ava.autoAnswer') === 'on');
   const [announceRec, setAnnounceRec] = useState<boolean>(() => getAnnounceConsent());
-  const [claudeFallback, setClaudeFallback] = useState<boolean>(() => localStorage.getItem('ava.claudeFallback') !== 'off');
-  const [lastTranscriber, setLastTranscriber] = useState<string>(() => localStorage.getItem('ava.lastTranscriber') || '—');
 
   const [ringtone, setRingtone] = useState<string>(() => {
     const stored = localStorage.getItem('ava.ringtone');
@@ -173,7 +171,7 @@ export default function SettingsScreen({
   };
   const doClearCache = () => {
     Object.keys(localStorage)
-      .filter((k) => k.startsWith('ava.aisummary.') || k.startsWith('ava.cache.'))
+      .filter((k) => k.startsWith('ava.cache.'))
       .forEach((k) => localStorage.removeItem(k));
     setSheet(null);
     console.info('[Settings] cache cleared');
@@ -430,39 +428,20 @@ export default function SettingsScreen({
         <SettingsRow label={t('settings.deleteAccount')} icon="⚠" onPress={() => openPortal('/account/delete')} />
       </Card>
 
-      {/* Transcription */}
-      <SectionTitle eyebrow="AI" title={lang === 'fr' ? 'Transcription' : 'Transcription'} />
-      <Card padded={false}>
-        <SettingsRow
-          label={lang === 'fr' ? 'Fournisseur actif (dernier appel)' : 'Active provider (last call)'}
-          icon="🧠"
-          value={lastTranscriber}
-          onPress={() => setLastTranscriber(localStorage.getItem('ava.lastTranscriber') || '—')}
-        />
-        <SettingsRow
-          label={lang === 'fr' ? 'Repli Claude (Anthropic)' : 'Claude fallback (Anthropic)'}
-          icon="🛟"
-          value={claudeFallback
-            ? (lang === 'fr' ? 'Activé — utilisé si Gemini & GPT échouent' : 'On — used if Gemini & GPT fail')
-            : (lang === 'fr' ? 'Désactivé' : 'Off')}
-          onPress={() => { const next = !claudeFallback; setClaudeFallback(next); localStorage.setItem('ava.claudeFallback', next ? 'on' : 'off'); }}
-        />
-      </Card>
-
       {/* Support & about */}
       <SectionTitle eyebrow={t('settings.about')} title={t('settings.helpSupport')} />
       <Card padded={false}>
         <SettingsRow label={t('settings.helpSupport')} icon="❓" onPress={() => window.open('mailto:support@lemtel.tel?subject=Lemtel%20support', '_blank')} />
-        <SettingsRow label={t('settings.about')} icon="ⓘ" value={`${t('settings.version')} 1.0.0`} onPress={() => alert('Lemtel v1.0.0\nLemtel Communications')} />
+        <SettingsRow label={t('settings.about')} icon="ⓘ" value={`${t('settings.version')} 1.1 (3)`} onPress={() => alert('Lemtel v1.0.0\nLemtel Communications')} />
       </Card>
 
-      <AIPanel title="Lemtel AI" accent={colors.avaCyan}>
+      <Card padded={true} accent="cyan">
         <p style={{ fontSize: font.sm, color: colors.textIce, margin: 0, lineHeight: 1.55 }}>
           {lang === 'fr'
             ? "Toutes les données téléphoniques sont limitées à l'organisation Lemtel authentifiée. Les utilisateurs standard accèdent uniquement à leur extension; les admins gèrent ce que leur rôle permet."
             : 'All telephony data is scoped by the authenticated Lemtel organization. Standard users access only their own extension; domain admins manage what their role allows.'}
         </p>
-      </AIPanel>
+      </Card>
 
       <button onClick={onSignOut} style={{
         marginTop: 16, width: '100%', height: 48, borderRadius: radius.md,

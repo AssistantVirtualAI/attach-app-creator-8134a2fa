@@ -1,7 +1,7 @@
 {
   "name": "lemtel-mobile",
-  "version": "2.1.2",
-  "description": "Lemtel Telecom — Mobile Softphone (iOS + Android)",
+  "version": "2.2.0",
+  "description": "Lemtel Telecom \u2014 Mobile Softphone (iOS + Android)",
   "private": true,
   "type": "module",
   "scripts": {

@@ -6,7 +6,7 @@ import { requestPermissionsAfterLogin, navLog, setPermissionLogContext } from '.
 // Re-use battle-tested SIP hook from the desktop app
 import { useSoftphone } from './hooks/useSoftphone';
 import AuthScreen from './screens/AuthScreen';
-import DashboardScreen from './screens/DashboardScreen';
+import HomeScreen from './screens/HomeScreen';
 import CallsScreen from './screens/CallsScreen';
 // Lazy-loaded screens: only fetched when the user navigates to the tab.
 // Keeps the initial bundle small for fast mobile boot.
@@ -103,7 +103,7 @@ export default function MobileApp() {
       const t = new URLSearchParams(window.location.search).get('tab') as Tab | null;
       if (t && ALL_TABS.includes(t)) return t;
     } catch {}
-    return 'keypad' as Tab;
+    return 'home' as Tab;
   })();
   const [tab, setTab] = useState<Tab>(initialTab);
   // Deep-link state for sub-routes inside CallsScreen (recordings | recents | voicemail | dial)
@@ -603,17 +603,17 @@ function AuthenticatedShell({
 
 
       <div key={tab} className="lemtel-page-enter" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', paddingBottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}>
-        <ScreenErrorBoundary screen={tab} onRecover={() => setTab('keypad')} onNavigate={setTab as any} haptic={haptic} onOpenProfile={() => setProfileOpen(true)}>
+        <ScreenErrorBoundary screen={tab} onRecover={() => setTab('home')} onNavigate={setTab as any} haptic={haptic} onOpenProfile={() => setProfileOpen(true)}>
           <Suspense fallback={<ScreenSkeleton />}>
             {tab === 'contacts'   && <ContactsScreen sp={sp} />}
-            {tab === 'chats'      && <MessagesHubScreen accessToken={creds.accessToken || null} userId={creds.userId} sp={sp} haptic={haptic} channelUnread={notif.channelUnread} />}
+            {tab === 'chats'      && <MessagesHubScreen accessToken={creds.accessToken || null} userId={creds.userId} organizationName={creds.organizationName} sp={sp} haptic={haptic} channelUnread={notif.channelUnread} />}
             {tab === 'calls'      && <CallsScreen sp={sp} haptic={haptic} creds={creds} initialSub={callsSub} initialFilter={callsFilter} voicemailPolicy={voicemailPolicy} />}
             {tab === 'keypad'     && <DialerScreen sp={sp} haptic={haptic} />}
             {tab === 'speeddial'  && <SpeedDialScreen sp={sp} preferClickToCall={preferClickToCall} />}
             {/* legacy deep-link routes */}
-            {tab === 'home'       && <DashboardScreen onNavigate={setTab as any} haptic={haptic} onOpenProfile={() => setProfileOpen(true)} />}
+            {tab === 'home'       && <HomeScreen onNavigate={setTab as any} haptic={haptic} onOpenProfile={() => setProfileOpen(true)} />}
             {tab === 'ava'        && <AVAChatScreen />}
-            {tab === 'messages'   && <MessagesHubScreen accessToken={creds.accessToken || null} userId={creds.userId} sp={sp} haptic={haptic} channelUnread={notif.channelUnread} />}
+            {tab === 'messages'   && <MessagesHubScreen accessToken={creds.accessToken || null} userId={creds.userId} organizationName={creds.organizationName} sp={sp} haptic={haptic} channelUnread={notif.channelUnread} />}
             {tab === 'settings'   && <SettingsScreen creds={creds} sp={sp} onSignOut={onSignOut} onNavigate={setTab as any} preferClickToCall={preferClickToCall} togglePreferC2C={onTogglePreferC2C} portalTelephonyPolicy={portalTelephonyPolicy} />}
             {tab === 'more'       && <MoreScreen creds={creds} sp={sp} onSignOut={onSignOut} haptic={haptic} portalTelephonyPolicy={portalTelephonyPolicy} voicemailPolicy={voicemailPolicy} />}
             {tab === 'voicemail'  && <VoicemailScreen haptic={haptic} voicemailPolicy={voicemailPolicy} />}
@@ -636,7 +636,7 @@ function AuthenticatedShell({
         }}
         badges={{
           calls: notif.missedCalls + notif.voicemails,
-          messages: notif.messages,
+          chats: notif.channelUnread ? Object.values(notif.channelUnread).reduce((sum: number, count: number) => sum + count, 0) : 0,
           voicemail: notif.voicemails,
         }}
       />
@@ -680,15 +680,6 @@ class ScreenErrorBoundary extends Component<
   }
   render() {
     if (!this.state.error) return this.props.children;
-    if (this.props.screen === 'home') {
-      return (
-        <DashboardScreen
-          onNavigate={this.props.onNavigate || (() => {})}
-          haptic={this.props.haptic || (async () => {})}
-          onOpenProfile={this.props.onOpenProfile}
-        />
-      );
-    }
     return (
       <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24, color: colors.textIce }}>
         <div style={{ maxWidth: 320, textAlign: 'center', padding: 18, borderRadius: 16, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -770,15 +761,15 @@ function TopHeader({
 
   const iconBtn: React.CSSProperties = {
     width: 36, height: 36, borderRadius: 10,
-    background: 'rgba(255,255,255,0.06)',
-    border: '1px solid rgba(255,255,255,0.10)',
+    background: colors.graphite,
+    border: `1px solid ${colors.border}`,
     display: 'grid', placeItems: 'center', cursor: 'pointer',
     color: colors.textIce, WebkitTapHighlightColor: 'transparent',
     padding: 0,
   };
 
   return (
-    <header style={{ position: 'relative', padding: '8px 12px 6px' }}>
+    <header style={{ position: 'relative', padding: '8px 12px 6px', background: colors.navSurface, borderBottom: `1px solid ${colors.border}`, boxShadow: `0 8px 26px -24px ${colors.midnight}` }}>
       {/* Centered logo at the very top of every page */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 36 }}>
         <img
@@ -801,8 +792,8 @@ function TopHeader({
           style={{
             position: 'relative',
             width: 44, height: 44, borderRadius: 12,
-            background: open ? 'rgba(255,255,255,0.10)' : 'transparent',
-            border: 'none', display: 'grid', placeItems: 'center',
+            background: open ? `${colors.lemtelBlue}22` : colors.graphite,
+            border: `1px solid ${colors.border}`, display: 'grid', placeItems: 'center',
             cursor: 'pointer', color: colors.textIce,
             WebkitTapHighlightColor: 'transparent', padding: 0,
           }}
@@ -820,7 +811,7 @@ function TopHeader({
 
         <span style={{
           flex: 1, marginLeft: 4,
-          fontSize: 22, fontWeight: 600, color: 'rgba(255,255,255,0.92)',
+          fontSize: 22, fontWeight: 700, color: colors.textIce,
           letterSpacing: 0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
           {titles[tab] || ''}
@@ -832,7 +823,7 @@ function TopHeader({
           title={`Profile · ${presence.status.replace('_', ' ')}`}
           style={{
             position: 'relative', width: 36, height: 36, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
+            background: colors.graphite, border: `1px solid ${colors.border}`,
             display: 'grid', placeItems: 'center', cursor: 'pointer',
             color: colors.textIce, WebkitTapHighlightColor: 'transparent', padding: 0,
             overflow: 'hidden',
@@ -846,7 +837,7 @@ function TopHeader({
           <span style={{
             position: 'absolute', right: -1, bottom: -1, width: 11, height: 11,
             borderRadius: '50%', background: presence.color,
-            boxShadow: '0 0 0 2px rgba(8,12,30,0.92)',
+            boxShadow: `0 0 0 2px ${colors.navSurface}`,
           }} />
         </button>
         <button
@@ -888,9 +879,9 @@ function TopHeader({
               position: 'absolute', top: 92, left: 12, zIndex: 71,
               minWidth: 220, padding: 6,
               borderRadius: 14,
-              background: 'rgba(20,28,52,0.96)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              boxShadow: '0 24px 60px -20px rgba(0,0,0,0.6)',
+              background: colors.navSurface,
+              border: `1px solid ${colors.border}`,
+              boxShadow: `0 24px 60px -20px ${colors.midnight}`,
               backdropFilter: 'blur(20px)',
             }}
           >
@@ -904,8 +895,8 @@ function TopHeader({
                     display: 'flex', alignItems: 'center', gap: 12,
                     width: '100%', padding: '10px 12px',
                     borderRadius: 10, border: 'none', cursor: 'pointer',
-                    background: active ? 'rgba(0,120,255,0.18)' : 'transparent',
-                    color: active ? '#7ab8ff' : colors.textIce,
+                    background: active ? `${colors.lemtelBlue}1f` : 'transparent',
+                    color: active ? colors.lemtelBlue : colors.textIce,
                     fontSize: 15, fontWeight: active ? 700 : 500,
                     textAlign: 'left',
                   }}

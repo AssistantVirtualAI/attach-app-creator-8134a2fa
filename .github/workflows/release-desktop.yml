@@ -240,6 +240,12 @@ jobs:
           The Windows x64 installer is intentionally unsigned by the owner’s release policy and may trigger Microsoft SmartScreen. A valid Authenticode certificate will be added in a later release; no signature is claimed for this installer.
           EOF
           fi
+          if [[ "$GITHUB_REF_NAME" == "v2.5.18" ]]; then
+            cat >> release-notes.md <<'EOF'
+
+          v2.5.18 fixes Desktop post-sign-in access: the authenticated Lemtel session bootstrap is now authoritative. When telephony is not provisioned, Desktop presents a clear waiting state instead of the unavailable-access error, and calling remains disabled.
+          EOF
+          fi
       - name: Verify platform-specific artifacts, manifests and SHA-512 hashes
         shell: bash
         run: |

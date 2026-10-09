@@ -472,6 +472,7 @@ Deno.serve(async (req) => {
     if (action === "pending") {
       const src = (await collectSources())[0];
       const raw: any[] = [];
+      let upstreamSummary: unknown = null;
       let page = 1, lastPage = 1;
       while (page <= SUMMARY_MAX_PAGES) {
         const qs = new URLSearchParams();
@@ -485,7 +486,7 @@ Deno.serve(async (req) => {
         qs.set("per_page", "200");
         const r = await commissionGet(`/api/main/commissions/reports/pending-commissions?${qs}`, src.token, cid);
         if (!r.ok) return upstream(r, cid);
-        log("pending shape", JSON.stringify(r.data?.summary ?? null).slice(0, 800), JSON.stringify(r.data?.meta ?? null), typeof r.data?.data, Array.isArray(r.data?.data) ? r.data.data.length : JSON.stringify(Object.keys(r.data?.data ?? {})));
+        if (page === 1) upstreamSummary = r.data?.summary ?? null;
         const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
         raw.push(...rows);
         lastPage = Number(r.data?.meta?.last_page ?? 1);
@@ -500,6 +501,7 @@ Deno.serve(async (req) => {
         ok: true,
         summary,
         rows: rows.slice(0, 500),
+        upstream_summary: upstreamSummary,
         total_available: rows.length,
         truncated,
         scope: { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode },

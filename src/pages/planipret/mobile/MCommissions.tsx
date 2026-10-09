@@ -119,7 +119,7 @@ export default function MCommissions() {
   const { profile } = useOutletContext<PlanipretMobileContext>();
   const role = String(profile?.role ?? "");
   const allowed = role === "broker" || role === "admin";
-  const [section, setSection] = useState<"pending" | "paid">("pending");
+  const [section, setSection] = useState<"pending" | "paid">("paid");
 
   // Deep-link AVA : /mplanipret/commissions?period=…&commission_type=…
   const [sp] = useSearchParams();
@@ -355,9 +355,6 @@ export default function MCommissions() {
       onBack={() => navigate(-1)}
       right={
         <div className="flex items-center gap-1">
-          <button onClick={() => navigate("tableaux")} aria-label={fr ? "Tableaux et graphiques" : "Charts"} className="p-2 rounded-lg text-xs font-semibold" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
-            {fr ? "Graphiques" : "Charts"}
-          </button>
           <button onClick={openFilters} aria-label={fr ? "Filtres" : "Filters"} className="p-2 rounded-lg" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
             <SlidersHorizontal className="w-4 h-4" />
           </button>

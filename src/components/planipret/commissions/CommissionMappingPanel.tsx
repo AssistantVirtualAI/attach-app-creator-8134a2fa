@@ -28,7 +28,7 @@ export default function CommissionMappingPanel({ isFr, call, analysis }: Props) 
       setColumns(res.columns ?? {});
       setTypes(res.commissionTypes ?? {});
     } catch (e: any) {
-      toast.error(e?.message ?? "Erreur");
+      toast.error(e?.message ?? (isFr ? "Erreur" : "Error"));
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export default function CommissionMappingPanel({ isFr, call, analysis }: Props) 
       const res = await call({ action: "mapping.upsert", items });
       toast.success(isFr ? `${res.saved} correspondances enregistrées` : `${res.saved} mappings saved`);
     } catch (e: any) {
-      toast.error(e?.message ?? "Erreur");
+      toast.error(e?.message ?? (isFr ? "Erreur" : "Error"));
     } finally {
       setBusy(false);
     }
@@ -69,7 +69,7 @@ export default function CommissionMappingPanel({ isFr, call, analysis }: Props) 
         ? `${res.updated} lignes recalculées (${res.unmapped} non mappées)`
         : `${res.updated} rows remapped (${res.unmapped} unmapped)`);
     } catch (e: any) {
-      toast.error(e?.message ?? "Erreur");
+      toast.error(e?.message ?? (isFr ? "Erreur" : "Error"));
     } finally {
       setBusy(false);
     }

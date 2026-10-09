@@ -119,7 +119,7 @@ export default function MCommissions() {
   const { profile } = useOutletContext<PlanipretMobileContext>();
   const role = String(profile?.role ?? "");
   const allowed = role === "broker" || role === "admin";
-  const [section, setSection] = useState<"pending" | "paid">("pending");
+  const [section, setSection] = useState<"pending" | "paid">("paid");
 
   // Deep-link AVA : /mplanipret/commissions?period=…&commission_type=…
   const [sp] = useSearchParams();

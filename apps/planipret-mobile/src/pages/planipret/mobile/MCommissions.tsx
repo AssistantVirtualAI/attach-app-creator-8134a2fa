@@ -18,6 +18,7 @@ import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 import { Button } from "@/components/ui/button";
 
 type Period = "month" | "quarter" | "year" | "ytd" | "custom";
+type Validation = { status: "MATCH" | "WARNING" | "BLOCKED"; checked_at: string; summary?: string };
 
 type Summary = {
   total_commission: number;
@@ -153,6 +154,7 @@ export default function MCommissions() {
   const [summary, setSummary] = useState<Summary | null>(null);
 
   const [paidSplit, setPaidSplit] = useState<any>(null);
+  const [paidValidation, setPaidValidation] = useState<Validation | null>(null);
   const [rows, setRows] = useState<DepositRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -216,6 +218,7 @@ export default function MCommissions() {
     const cached = readStatsCache(reportCacheKey);
     const cachedReport = cached?.value as { summary?: Summary; rows?: DepositRow[]; total?: number } | undefined;
     if (cachedReport) {
+      setPaidValidation((cachedReport as any).validation ?? null);
       setPaidSplit((cachedReport as any).paid_split ?? null);
       setSummary(cachedReport.summary ?? null);
       setRows(cachedReport.rows ?? []);
@@ -236,6 +239,7 @@ export default function MCommissions() {
         ? "Accès Maestro administrateur manquant : seules vos commissions personnelles sont affichées, pas celles de tous les courtiers."
         : null);
       setPaidSplit(s?.paid_split ?? null);
+      setPaidValidation(s?.validation ?? null);
       setSummary(s.summary);
       setRows(d.rows ?? []);
       setTotal(d.pagination?.total ?? 0);
@@ -243,6 +247,7 @@ export default function MCommissions() {
       writeStatsCache(reportCacheKey, {
         summary: s.summary ?? null,
         paid_split: s?.paid_split ?? null,
+        validation: s?.validation ?? null,
         rows: d.rows ?? [],
         total: d.pagination?.total ?? 0,
       });
@@ -422,6 +427,7 @@ export default function MCommissions() {
       ) : summary ? (
         <>
           <SectionTitle color="var(--pp-success, #34D399)" title={fr ? "Commissions déboursées" : "Paid commissions"} sub={fr ? "Déjà versées par Maestro" : "Already paid by Maestro"} />
+          {paidValidation && <ValidationPill validation={paidValidation} fr={fr} />}
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Kpi icon={<Wallet className="w-4 h-4" />} label={fr ? "Commissions" : "Commissions"} value={cad(summary.total_commission)} />
             <Kpi icon={<Receipt className="w-4 h-4" />} label={fr ? "Unités uniques" : "Unique units"} value={String(summary.deal_count)} />
@@ -673,6 +679,11 @@ export default function MCommissions() {
     </Shell>
 
   );
+}
+
+function ValidationPill({ validation, fr }: { validation: Validation; fr: boolean }) {
+  const warning = validation.status === "WARNING";
+  return <div title={validation.summary} className="inline-flex rounded-full px-2.5 py-1 mb-2 text-[10.5px] font-bold" style={{ color: warning ? "var(--pp-warning, #F0B429)" : "var(--pp-success, #34D399)", background: warning ? "rgba(240,180,41,.10)" : "rgba(52,211,153,.10)", border: `1px solid ${warning ? "rgba(240,180,41,.35)" : "rgba(52,211,153,.35)"}` }}>{warning ? (fr ? "Contrôlé avec réserve" : "Checked with warning") : (fr ? "Maestro contrôlé" : "Maestro checked")}</div>;
 }
 
 function Shell({ title, onBack, right, children }: { title: string; onBack: () => void; right?: React.ReactNode; children: React.ReactNode }) {

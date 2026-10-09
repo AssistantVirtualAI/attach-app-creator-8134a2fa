@@ -9,6 +9,7 @@ import {
   PAID_COMMISSION_PATH,
   PENDING_COMMISSION_PATH,
 } from "../../supabase/functions/_shared/commission-reports";
+import { deterministicPaidChecks, deterministicPendingChecks } from "../../supabase/functions/_shared/commission-validation";
 
 describe("commission report filters", () => {
   it("rejects non-numeric users_id and unknown commission types", () => {
@@ -138,5 +139,34 @@ describe("commission summary", () => {
     expect(s.adjustments).toBe(1);
     expect(s.top_institutions[0]).toEqual({ institution: "BNC", amount: 2000.5, count: 2 });
     expect(s.by_date.map((d) => d.date)).toEqual(["2026-01-05", "2026-02-01"]);
+  });
+});
+
+describe("commission output reconciliation", () => {
+  it("reconciles paid rows in cents and blocks a changed total", () => {
+    const rows = [
+      { number: "A", amount: "10.01", loan_amt: 100000, date_trans: "2026-10-09", commission_type: "base", institution: "BNC" },
+      { number: "B", amount: "20.02", loan_amt: 200000, date_trans: "2026-10-09", commission_type: "bonus", institution: "TD" },
+    ] as any;
+    const summary = summarize(rows);
+    expect(deterministicPaidChecks(rows, summary).filter((item) => item.key !== "paid_top_institutions_not_over_total").every((item) => item.ok)).toBe(true);
+    expect(deterministicPaidChecks(rows, { ...summary, total_commission: 30.04 }).find((item) => item.key === "paid_rows_vs_total")?.delta_cents).toBe(-1);
+  });
+
+  it("matches Sandra's official pending PDF totals without confusing file rows and official categories", () => {
+    const official = [
+      { type: "base", label: "Base", amount: 179887.26 },
+      { type: "bonus", label: "Bonus", amount: 84213.91 },
+      { type: "bonus2", label: "Bonus 2", amount: 31787.40 },
+      { type: "perform", label: "Performance", amount: 17037.38 },
+      { type: "override", label: "Override", amount: 15302.22 },
+      { type: "external", label: "External", amount: 2917.88 },
+    ];
+    const total = official.reduce((sum, item) => sum + item.amount, 0);
+    const rows = [{ number: "SANDRA", amount: 179887.26, commission_type: "base", date_trans: "2026-10-09" }] as any;
+    const checks = deterministicPendingChecks(rows, official, total);
+    expect(checks.find((item) => item.key === "pending_categories_vs_official_total")?.ok).toBe(true);
+    expect(checks.find((item) => item.key === "pending_base_rows_vs_official_base")?.ok).toBe(true);
+    expect(checks.find((item) => item.key === "pending_rows_vs_official_total")?.delta_cents).not.toBe(0);
   });
 });

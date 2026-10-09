@@ -2,7 +2,7 @@
 // Données financières sensibles : lecture seule, aucune donnée mise en cache
 // hors de la session, aucun jeton Maestro côté client.
 import PendingCommissionsCard, { TeamSplitPanel } from "@/components/planipret/commissions/PendingCommissionsCard";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, RefreshCw, SlidersHorizontal, TrendingUp, Wallet,
@@ -18,6 +18,7 @@ import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 import { Button } from "@/components/ui/button";
 
 type Period = "month" | "quarter" | "year" | "ytd" | "custom";
+type Validation = { status: "MATCH" | "WARNING" | "BLOCKED"; checked_at: string; summary?: string };
 
 type Summary = {
   total_commission: number;
@@ -153,6 +154,7 @@ export default function MCommissions() {
   const [summary, setSummary] = useState<Summary | null>(null);
 
   const [paidSplit, setPaidSplit] = useState<any>(null);
+  const [paidValidation, setPaidValidation] = useState<Validation | null>(null);
   const [rows, setRows] = useState<DepositRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -161,6 +163,9 @@ export default function MCommissions() {
   const [error, setError] = useState<string | null>(null);
   const [scopeNotice, setScopeNotice] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Sheet edits a draft; reports reload only on « Appliquer ».
+  type Draft = { commissionType: string; institutionId: string; agentId: string; splitType: string; numberPrefix: string; orderBy: string; sortDir: "asc" | "desc" };
+  const [draft, setDraft] = useState<Draft>({ commissionType: "", institutionId: "", agentId: "", splitType: "", numberPrefix: "", orderBy: "date_trans", sortDir: "desc" });
   const [avaPref, setAvaPref] = useState<boolean | null>(null);
   const [chartRefreshToken, setChartRefreshToken] = useState(0);
 
@@ -201,11 +206,19 @@ export default function MCommissions() {
     return data;
   }, []);
 
+  // Latest request wins: a response for an older filter key is never published.
+  const loadGen = useRef(0);
+  const moreInflight = useRef<string | null>(null);
+  useEffect(() => () => { loadGen.current += 1; }, []);
   const load = useCallback(async (force = false) => {
     if (!allowed || !rangeReady) return;
+    const gen = ++loadGen.current;
+    const stale = () => gen !== loadGen.current;
+    moreInflight.current = null; setLoadingMore(false);
     const cached = readStatsCache(reportCacheKey);
     const cachedReport = cached?.value as { summary?: Summary; rows?: DepositRow[]; total?: number } | undefined;
     if (cachedReport) {
+      setPaidValidation((cachedReport as any).validation ?? null);
       setPaidSplit((cachedReport as any).paid_split ?? null);
       setSummary(cachedReport.summary ?? null);
       setRows(cachedReport.rows ?? []);
@@ -221,10 +234,12 @@ export default function MCommissions() {
         call({ action: "summary", filters }),
         call({ action: "deposits", filters: { ...filters, page: 1, per_page: PER_PAGE } }),
       ]);
+      if (stale()) return;
       setScopeNotice(isAdmin && !agentId && s?.scope?.mode === "own"
         ? "Accès Maestro administrateur manquant : seules vos commissions personnelles sont affichées, pas celles de tous les courtiers."
         : null);
       setPaidSplit(s?.paid_split ?? null);
+      setPaidValidation(s?.validation ?? null);
       setSummary(s.summary);
       setRows(d.rows ?? []);
       setTotal(d.pagination?.total ?? 0);
@@ -232,17 +247,19 @@ export default function MCommissions() {
       writeStatsCache(reportCacheKey, {
         summary: s.summary ?? null,
         paid_split: s?.paid_split ?? null,
+        validation: s?.validation ?? null,
         rows: d.rows ?? [],
         total: d.pagination?.total ?? 0,
       });
       if (force) setChartRefreshToken((value) => value + 1);
     } catch (e) {
+      if (stale()) return;
       setError((e as Error).message);
       // Keep the last known report on screen. A temporary Maestro outage must
       // never turn a populated commissions page into an empty error screen.
       if (!cachedReport) { setSummary(null); setRows([]); setTotal(0); }
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   }, [allowed, rangeReady, filters, call, reportCacheKey, isAdmin, agentId]);
 
@@ -278,17 +295,32 @@ export default function MCommissions() {
   }, [allowed, call, metadataCacheKey]);
 
 
+  const openFilters = () => {
+    setDraft({ commissionType, institutionId, agentId, splitType, numberPrefix, orderBy, sortDir });
+    setFiltersOpen(true);
+  };
+  const applyDraft = () => {
+    setCommissionType(draft.commissionType); setInstitutionId(draft.institutionId); setAgentId(draft.agentId);
+    setSplitType(draft.splitType); setNumberPrefix(draft.numberPrefix); setOrderBy(draft.orderBy); setSortDir(draft.sortDir);
+    setFiltersOpen(false);
+  };
+
   const loadMore = async () => {
-    if (loadingMore || rows.length >= total) return;
+    const key = `${reportCacheKey}|${page + 1}`;
+    if (moreInflight.current === key || rows.length >= total) return;
+    moreInflight.current = key;
+    const gen = loadGen.current;
     setLoadingMore(true);
     try {
       const d = await call({ action: "deposits", filters: { ...filters, page: page + 1, per_page: PER_PAGE } });
+      if (gen !== loadGen.current) return;
       setRows((prev) => [...prev, ...(d.rows ?? [])]);
       setPage((p) => p + 1);
     } catch (e) {
-      setError((e as Error).message);
+      if (gen === loadGen.current) setError((e as Error).message);
     } finally {
-      setLoadingMore(false);
+      if (moreInflight.current === key) moreInflight.current = null;
+      if (gen === loadGen.current) setLoadingMore(false);
     }
   };
 
@@ -318,7 +350,7 @@ export default function MCommissions() {
       onBack={() => navigate(-1)}
       right={
         <div className="flex items-center gap-1">
-          <button onClick={() => setFiltersOpen(true)} aria-label={fr ? "Filtres" : "Filters"} className="p-2 rounded-lg" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
+          <button onClick={openFilters} aria-label={fr ? "Filtres" : "Filters"} className="p-2 rounded-lg" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
             <SlidersHorizontal className="w-4 h-4" />
           </button>
           <button onClick={() => load(true)} aria-label={fr ? "Rafraîchir" : "Refresh"} className="p-2 rounded-lg" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
@@ -395,6 +427,7 @@ export default function MCommissions() {
       ) : summary ? (
         <>
           <SectionTitle color="var(--pp-success, #34D399)" title={fr ? "Commissions déboursées" : "Paid commissions"} sub={fr ? "Déjà versées par Maestro" : "Already paid by Maestro"} />
+          {paidValidation && <ValidationPill validation={paidValidation} fr={fr} />}
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Kpi icon={<Wallet className="w-4 h-4" />} label={fr ? "Commissions" : "Commissions"} value={cad(summary.total_commission)} />
             <Kpi icon={<Receipt className="w-4 h-4" />} label={fr ? "Unités uniques" : "Unique units"} value={String(summary.deal_count)} />
@@ -515,8 +548,8 @@ export default function MCommissions() {
       {/* Filtres */}
       {filtersOpen && (
         <div className="fixed inset-0 z-[70] flex items-end" style={{ background: "rgba(4,11,22,0.7)" }} onClick={() => setFiltersOpen(false)}>
-          <div className="w-full rounded-t-2xl p-5 pb-8" onClick={(e) => e.stopPropagation()}
-            style={{ background: "var(--pp-bg-surface, #0A1628)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))" }}>
+          <div data-pp-sheet role="dialog" aria-modal="true" className="w-full rounded-t-2xl p-5 min-h-0 overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: "calc(100dvh - env(safe-area-inset-top, 0px) - 16px)", paddingBottom: "calc(2rem + env(safe-area-inset-bottom, 0px))", background: "var(--pp-bg-surface, #0A1628)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))" }}>
             <div className="flex justify-between items-center mb-4">
               <span className="text-[15px] font-bold" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>{fr ? "Filtres" : "Filters"}</span>
               <button onClick={() => setFiltersOpen(false)} aria-label={fr ? "Fermer" : "Close"}><X className="w-4 h-4" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }} /></button>
@@ -529,11 +562,11 @@ export default function MCommissions() {
                   {fr ? "Tous les types" : "All types"}
                 </Button>
                 {COMMISSION_TYPES.map((t) => (
-                  <button key={t} onClick={() => setCommissionType(t)}
+                  <button key={t} onClick={() => setDraft((d) => ({ ...d, commissionType: t }))}
                     className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
                     style={{
-                      background: commissionType === t ? "var(--pp-brand-accent, #9B7FE8)" : "transparent",
-                      color: commissionType === t ? "#0A1628" : "var(--pp-text-secondary, #B4C6D8)",
+                      background: draft.commissionType === t ? "var(--pp-brand-accent, #9B7FE8)" : "transparent",
+                      color: draft.commissionType === t ? "#0A1628" : "var(--pp-text-secondary, #B4C6D8)",
                       border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))",
                     }}>{t}</button>
                 ))}
@@ -542,7 +575,7 @@ export default function MCommissions() {
 
             <div className="mb-4">
               <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Institution" : "Lender"}</div>
-              <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)}
+              <select value={draft.institutionId} onChange={(e) => setDraft((d) => ({ ...d, institutionId: e.target.value }))}
                 className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
                 <option value="">{fr ? "Toutes" : "All"}</option>
                 {institutions.map((i) => <option key={i.id} value={String(i.id)}>{i.label}</option>)}
@@ -552,7 +585,7 @@ export default function MCommissions() {
             {agents.length > 1 && (
               <div className="mb-4">
                 <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Courtier" : "Broker"}</div>
-                <select value={agentId} onChange={(e) => setAgentId(e.target.value)}
+                <select value={draft.agentId} onChange={(e) => setDraft((d) => ({ ...d, agentId: e.target.value }))}
                   className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
                   <option value="">{fr ? "Tous les courtiers" : "All brokers"}</option>
                   {agents.map((a) => <option key={a.users_id} value={String(a.users_id)}>{a.name}</option>)}
@@ -562,7 +595,7 @@ export default function MCommissions() {
 
             <div className="mb-4">
               <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Type de partage" : "Split type"}</div>
-              <select value={splitType} onChange={(e) => setSplitType(e.target.value)}
+              <select value={draft.splitType} onChange={(e) => setDraft((d) => ({ ...d, splitType: e.target.value }))}
                 className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
                 <option value="">{fr ? "Tous" : "All"}</option>
                 {SPLIT_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -571,7 +604,7 @@ export default function MCommissions() {
 
             <div className="mb-4">
               <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Préfixe de contrat" : "Contract prefix"}</div>
-              <input value={numberPrefix} onChange={(e) => setNumberPrefix(e.target.value)} inputMode="text"
+              <input value={draft.numberPrefix} onChange={(e) => setDraft((d) => ({ ...d, numberPrefix: e.target.value }))} inputMode="text"
                 placeholder={fr ? "ex. 2026" : "e.g. 2026"}
                 className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle} />
             </div>
@@ -579,14 +612,14 @@ export default function MCommissions() {
             <div className="mb-5 flex gap-2">
               <div className="flex-1">
                 <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Trier par" : "Order by"}</div>
-                <select value={orderBy} onChange={(e) => setOrderBy(e.target.value)}
+                <select value={draft.orderBy} onChange={(e) => setDraft((d) => ({ ...d, orderBy: e.target.value }))}
                   className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
                   {ORDER_BY.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div style={{ width: 110 }}>
                 <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Sens" : "Sort"}</div>
-                <select value={sortDir} onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
+                <select value={draft.sortDir} onChange={(e) => setDraft((d) => ({ ...d, sortDir: e.target.value as "asc" | "desc" }))}
                   className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
                   <option value="desc">desc</option>
                   <option value="asc">asc</option>
@@ -594,7 +627,7 @@ export default function MCommissions() {
               </div>
             </div>
 
-            <button onClick={() => { setFiltersOpen(false); }}
+            <button onClick={applyDraft}
               className="w-full py-3 rounded-xl text-[14px] font-bold" style={{ minHeight: 44, background: "var(--pp-brand-accent, #9B7FE8)", color: "#0A1628" }}>
               {fr ? "Appliquer" : "Apply"}
             </button>
@@ -646,6 +679,11 @@ export default function MCommissions() {
     </Shell>
 
   );
+}
+
+function ValidationPill({ validation, fr }: { validation: Validation; fr: boolean }) {
+  const warning = validation.status === "WARNING";
+  return <div title={validation.summary} className="inline-flex rounded-full px-2.5 py-1 mb-2 text-[10.5px] font-bold" style={{ color: warning ? "var(--pp-warning, #F0B429)" : "var(--pp-success, #34D399)", background: warning ? "rgba(240,180,41,.10)" : "rgba(52,211,153,.10)", border: `1px solid ${warning ? "rgba(240,180,41,.35)" : "rgba(52,211,153,.35)"}` }}>{warning ? (fr ? "Contrôlé avec réserve" : "Checked with warning") : (fr ? "Maestro contrôlé" : "Maestro checked")}</div>;
 }
 
 function Shell({ title, onBack, right, children }: { title: string; onBack: () => void; right?: React.ReactNode; children: React.ReactNode }) {

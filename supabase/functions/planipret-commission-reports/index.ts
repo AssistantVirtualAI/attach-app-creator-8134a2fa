@@ -31,6 +31,7 @@ import {
 } from "../_shared/commission-reports.ts";
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
 import { resolveCommissionScope } from "../_shared/commission-scope.ts";
+import { validateCommissionOutput } from "../_shared/commission-validation.ts";
 
 const json = (body: unknown, status = 200, cid?: string) =>
   new Response(JSON.stringify(body), {
@@ -348,7 +349,11 @@ Deno.serve(async (req) => {
         if (!ownToken) return scopeError("maestro_not_connected");
         const res = await fetchPending(ownToken, resolvedUsersId);
         if (!res.ok) return upstream(res.r, cid);
-        return json({ ok: true, summary: pack(res.rows, res.official, res.truncated, resolvedUsersId ? String(resolvedUsersId) : null), scope: { role, users_id: resolvedUsersId, mode: "own" }, correlation_id: cid }, 200, cid);
+        const scope = { role, users_id: resolvedUsersId, mode: "own" };
+        const summary = pack(res.rows, res.official, res.truncated, resolvedUsersId ? String(resolvedUsersId) : null);
+        const validation = await validateCommissionOutput({ source: "pending_commissions", rows: res.rows, truncated: res.truncated, official: res.official, officialTotal: summary.official_total, scope });
+        if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions en attente n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
+        return json({ ok: true, summary, validation, source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: resolvedUsersId, generated_at: validation.checked_at }, scope, correlation_id: cid }, 200, cid);
       }
 
       // Admin : courtiers déjà authentifiés auprès de Maestro.
@@ -393,13 +398,19 @@ Deno.serve(async (req) => {
       await Promise.all(Array.from({ length: Math.min(5, brokers.length) }, worker));
       table.sort((a, b) => b.amount - a.amount);
       const official = officialAll.size ? [...officialAll.values()] : null;
+      const scope = { role, users_id: filters.users_id ?? null, mode: filters.users_id ? "selected_broker" : "all_brokers" };
+      const summary = pack(allRows, official, anyTrunc);
+      const validation = await validateCommissionOutput({ source: "pending_commissions", rows: allRows, truncated: anyTrunc, official, officialTotal: summary.official_total, scope });
+      if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions en attente n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
       log("pending admin brokers", table.length, "failed", failed.length);
       return json({
         ok: true,
-        summary: pack(allRows, official, anyTrunc),
+        summary,
+        validation,
+        source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: filters.users_id ?? null, generated_at: validation.checked_at },
         brokers: table,
         failed_brokers: failed.length,
-        scope: { role, users_id: filters.users_id ?? null, mode: filters.users_id ? "selected_broker" : "all_brokers" },
+        scope,
         correlation_id: cid,
       }, 200, cid);
     }
@@ -492,6 +503,10 @@ Deno.serve(async (req) => {
         merged.push(...res.rows);
         truncated = truncated || res.truncated;
       }
+      const validationScope = { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode };
+      const validationSummary = summarize(merged, truncated);
+      const validation = await validateCommissionOutput({ source: "paid_deposits", rows: merged, truncated, summary: validationSummary, scope: validationScope });
+      if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions déboursées n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
       merged.sort((a, b) => String(b.date_trans ?? "").localeCompare(String(a.date_trans ?? "")));
       const perPage = Number(filters.per_page ?? 50);
       const pageNo = Number(filters.page ?? 1);
@@ -507,6 +522,8 @@ Deno.serve(async (req) => {
           last_page: Math.max(1, Math.ceil(merged.length / perPage)),
         },
         truncated,
+        validation,
+        source_identity: { source: "paid_deposits", endpoint: "/api/main/commissions/reports/deposits", users_id: filters.users_id ?? null, generated_at: validation.checked_at },
         coverage,
         sources: { queried: sources.length, failed: failures.length, failures: failures.slice(0, 10) },
         scope: { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode },
@@ -583,7 +600,10 @@ Deno.serve(async (req) => {
       }
 
       const summary = summarize(all, truncated);
-      if (action === "analytics") return json({ ok: true, analytics: paidAnalytics(all), truncated, scope: { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode } }, 200, cid);
+      const validationScope = { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode };
+      const validation = await validateCommissionOutput({ source: "paid_deposits", rows: all, truncated, summary, scope: validationScope });
+      if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions déboursées n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
+      if (action === "analytics") return json({ ok: true, analytics: paidAnalytics(all), validation, source_identity: { source: "paid_deposits", endpoint: "/api/main/commissions/reports/deposits", users_id: filters.users_id ?? null, generated_at: validation.checked_at }, truncated, scope: validationScope }, 200, cid);
       // Paid split: Maestro's target_name is the broker who carried the file.
       let paid_split: unknown = null;
       try {
@@ -617,6 +637,8 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         summary,
+        validation,
+        source_identity: { source: "paid_deposits", endpoint: "/api/main/commissions/reports/deposits", users_id: filters.users_id ?? null, generated_at: validation.checked_at },
         analytics: paidAnalytics(all),
         paid_split,
         total_available: total,

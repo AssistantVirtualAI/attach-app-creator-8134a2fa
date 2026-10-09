@@ -24,8 +24,9 @@ import {
 } from "../_shared/commission-engine.ts";
 import { agentKey } from "../_shared/broker-identity.ts";
 import { fetchLiveRegisterRows, dedupeKey } from "../_shared/commission-live.ts";
-import { collectPaidDeposits } from "../_shared/commission-reports.ts";
+import { collectPaidDeposits, summarize, type CommissionDepositRow } from "../_shared/commission-reports.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
+import { validateCommissionOutput } from "../_shared/commission-validation.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -937,6 +938,17 @@ Deno.serve(async (req) => {
         broker: r.agent_name,
       }));
 
+    const validationRows = mine.map((row) => ({ ...row }) as unknown as CommissionDepositRow);
+    const validationSummary = summarize(validationRows);
+    const validation = await validateCommissionOutput({
+      source: "paid_deposits",
+      rows: validationRows,
+      truncated: false,
+      summary: validationSummary,
+      scope: { role: isAdmin ? "admin" : "broker", mode: isAdmin && scope === "all" ? (agent ? "selected_broker" : "all_brokers") : "own", users_id: myMaestroId },
+    });
+    if (!validation.validated) return json({ error: "Les commissions déboursées n'ont pas passé le contrôle final. La dernière version validée reste affichée.", validation }, 200);
+
     return json({
 
       ok: true,
@@ -993,6 +1005,8 @@ Deno.serve(async (req) => {
         failures: live.failures.slice(0, 10),
       },
       syncedAt: new Date().toISOString(),
+      validation,
+      sourceIdentity: { source: "paid_deposits", endpoint: "/api/main/commissions/reports/deposits", generatedAt: validation.checked_at },
 
 
     });

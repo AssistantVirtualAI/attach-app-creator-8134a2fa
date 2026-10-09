@@ -26,7 +26,7 @@ beforeEach(() => {
   invoke.mockResolvedValue({ data: { ok: true, summary: {
     total_commission: 233013.55, official_total: 331146.08,
     official_by_type: categories, deposit_count: 707, total_loan_volume: 38108465.17,
-  } }, error: null });
+  }, validation: { status: "MATCH", checked_at: "2026-10-09T18:00:00Z", summary: "Contrôlé" } }, error: null });
 });
 
 describe("Official pending commission totals", () => {
@@ -40,6 +40,7 @@ describe("Official pending commission totals", () => {
     expect(within(region).getByText("Outrepasser")).toBeInTheDocument();
     expect(within(region).getByText("Tiers")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("planipret-commission-reports", expect.objectContaining({ action: "pending", filters: expect.objectContaining({ users_id: "93135" }) }), expect.anything());
+    expect(screen.getByText("Maestro contrôlé")).toBeInTheDocument();
   });
 
   it("keeps official zero categories visible", async () => {

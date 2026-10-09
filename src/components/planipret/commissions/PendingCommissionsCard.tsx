@@ -24,6 +24,7 @@ type TeamMember = SplitPart & { id: string; name: string };
 type Split = { personal: SplitPart; team: SplitPart; team_members: TeamMember[] };
 type BrokerRow = { users_id: number; name: string; amount: number; files: number; volume: number; personal?: SplitPart; team?: SplitPart; team_members?: TeamMember[] };
 type SortKey = "amount" | "name" | "files" | "volume";
+type Validation = { status: "MATCH" | "WARNING" | "BLOCKED"; checked_at: string; summary?: string };
 
 type Summary = {
   total_commission: number;
@@ -107,12 +108,14 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
   const [summary, setSummary] = useState<Summary | null>(() => ((readStatsCache(key)?.value as any)?.summary as Summary) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [validation, setValidation] = useState<Validation | null>(() => ((readStatsCache(key)?.value as any)?.validation as Validation) ?? null);
 
   useEffect(() => {
     let cancelled = false;
     const cached = readStatsCache(key);
     if (cached?.value) {
       setSummary((cached.value as any).summary ?? null);
+      setValidation((cached.value as any).validation ?? null);
       if (!agent) setBrokers((cached.value as any).brokers ?? null);
     } else {
       // Never show the previous scope's numbers under another broker's name.
@@ -130,8 +133,9 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
         return;
       }
       setSummary(d.summary);
+      setValidation(d.validation ?? null);
       if (!agent) setBrokers(Array.isArray(d.brokers) ? d.brokers : null);
-      writeStatsCache(key, { summary: d.summary, brokers: d.brokers ?? null });
+      writeStatsCache(key, { summary: d.summary, brokers: d.brokers ?? null, validation: d.validation ?? null });
     })()
       .catch(() => { if (!cancelled) setError(fr ? "Commissions en attente indisponibles pour le moment." : "Pending commissions unavailable right now."); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -196,6 +200,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
               <p className="text-[11.5px] mt-0.5" style={{ color: "var(--pp-text-muted)" }}>
                 {selectedBroker ? (fr ? "Vue détaillée du courtier" : "Broker detail") : rangeLabel}
               </p>
+              {validation && <ValidationBadge validation={validation} fr={fr} />}
             </div>
           </div>
         </div>
@@ -354,6 +359,11 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
       )}
     </section>
   );
+}
+
+function ValidationBadge({ validation, fr }: { validation: Validation; fr: boolean }) {
+  const warning = validation.status === "WARNING";
+  return <span title={validation.summary} className="inline-flex items-center mt-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ color: warning ? "var(--pp-warning)" : "var(--pp-success)", background: `color-mix(in srgb, ${warning ? "var(--pp-warning)" : "var(--pp-success)"} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${warning ? "var(--pp-warning)" : "var(--pp-success)"} 28%, transparent)` }}>{warning ? (fr ? "Contrôlé avec réserve" : "Checked with warning") : (fr ? "Maestro contrôlé" : "Maestro checked")}</span>;
 }
 
 function Kpi({ icon, label, value, emphasized = false }: { icon: React.ReactNode; label: string; value: string; emphasized?: boolean }) {

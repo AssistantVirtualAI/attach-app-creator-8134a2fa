@@ -21,6 +21,7 @@ import {
   normalizeFilters,
   commissionGet,
   summarize,
+  paidAnalytics,
   normalizePendingRow,
   institutionLabel,
   collectPaidDeposits,
@@ -566,7 +567,7 @@ Deno.serve(async (req) => {
 
 
     // ---- Summary (agrégat serveur, multi-courtiers pour les admins) -------
-    if (action === "summary") {
+    if (action === "summary" || action === "analytics") {
       const sources = await collectSources();
       const single = sources.length === 1;
       const all: CommissionDepositRow[] = [];
@@ -579,6 +580,7 @@ Deno.serve(async (req) => {
       }
 
       const summary = summarize(all, truncated);
+      if (action === "analytics") return json({ ok: true, analytics: paidAnalytics(all), truncated, scope: { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode } }, 200, cid);
       // Paid split: Maestro's target_name is the broker who carried the file.
       let paid_split: unknown = null;
       try {

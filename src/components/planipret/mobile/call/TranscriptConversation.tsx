@@ -28,6 +28,10 @@ export function TranscriptConversation({ turns, english = false, query = "", ren
     if (/^(speaker|intervenant|locuteur)[ ]*\d+$/.test(key) || /^[ab]$/.test(key)) {
       return `${english ? "Speaker" : "Intervenant"} ${speakers.indexOf(key) + 1}`;
     }
+    // SIP URIs (e.g. "sip:113M@planipret.ca") show only their factual user
+    // part — never an inferred identity.
+    const sip = turn.speaker?.match(/^sip:([^@]+)@/i);
+    if (sip) return sip[1];
     return turn.speaker;
   };
   return (

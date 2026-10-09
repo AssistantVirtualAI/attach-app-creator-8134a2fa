@@ -120,6 +120,9 @@ describe("MCommissions (mobile)", () => {
       "planipret-commission-reports",
       expect.objectContaining({ body: expect.objectContaining({ action: "summary" }) }),
     );
+    const paidCall = invokeMock.mock.calls.find((c) => c[1]?.body?.action === "summary");
+    expect(paidCall?.[1].body.filters.commission_type).toBeUndefined();
+    expect(invokeMock.mock.calls.some((c) => c[1]?.body?.action === "pending")).toBe(true);
   });
 
   it("bloque l'accès pour un rôle non autorisé", async () => {
@@ -139,6 +142,9 @@ describe("MCommissions (mobile)", () => {
     );
     render(<MCommissions />);
     expect(await screen.findByText("maestro_not_configured")).toBeInTheDocument();
+    expect(screen.queryByText("Commissions déboursées")).not.toBeInTheDocument();
+    expect(screen.getByText("Commissions en attente")).toBeInTheDocument();
+    expect(invokeMock.mock.calls.some((c) => c[1]?.body?.action === "pending")).toBe(true);
   });
 
   it("recharge avec une nouvelle fenêtre quand la période change", async () => {

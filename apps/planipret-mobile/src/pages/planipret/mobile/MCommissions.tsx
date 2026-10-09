@@ -435,8 +435,6 @@ export default function MCommissions() {
           )}
 
           {paidSplit && <div className="mb-4"><TeamSplitPanel split={paidSplit} fr={fr} title={fr ? "Déboursé — moi et mon équipe" : "Paid — me and my team"} /></div>}
-          <SectionTitle color="var(--pp-warning, #F0B429)" title={fr ? "Commissions en attente" : "Pending commissions"} sub={fr ? "À recevoir" : "To be received"} />
-              <PendingCommissionsCard filters={filters} lang={lang === "en" ? "en" : "fr"} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
               <MCommissionCharts filters={filters} lang={lang} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
 
           {chartData.length > 0 && (
@@ -536,6 +534,9 @@ export default function MCommissions() {
       ) : !error ? (
         <Empty icon={<Receipt className="w-5 h-5" />} text={fr ? "Aucune donnée de commission." : "No commission data."} />
       ) : null}
+
+      <SectionTitle color="var(--pp-warning, #F0B429)" title={fr ? "Commissions en attente" : "Pending commissions"} sub={fr ? "À recevoir" : "To be received"} />
+      <PendingCommissionsCard filters={filters} lang={lang === "en" ? "en" : "fr"} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
 
       {/* Filtres */}
       {filtersOpen && (

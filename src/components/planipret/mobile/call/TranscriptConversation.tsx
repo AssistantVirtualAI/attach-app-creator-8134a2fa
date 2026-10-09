@@ -31,7 +31,7 @@ export function TranscriptConversation({ turns, english = false, query = "", ren
     // SIP URIs (e.g. "sip:113M@planipret.ca") show only their factual user
     // part — never an inferred identity.
     const sip = turn.speaker?.match(/^sip:([^@]+)@/i);
-    if (sip) return sip[1];
+    if (sip) return `${english ? "Speaker" : "Intervenant"} ${speakers.indexOf(key) + 1}`;
     return turn.speaker;
   };
   return (
@@ -44,11 +44,14 @@ export function TranscriptConversation({ turns, english = false, query = "", ren
           const key = speakerKey(turn.speaker);
           const index = key ? speakers.indexOf(key) : -1;
           const right = index >= 0 && index % 2 === 1;
+          const sourceUser = turn.speaker?.trim().match(/^sip:([^@]+)@/i)?.[1];
           const time = typeof turn.start === "number" && Number.isFinite(turn.start) && turn.start >= 0
             ? `${Math.floor(turn.start / 60)}:${String(Math.floor(turn.start % 60)).padStart(2, "0")}` : null;
           return <li key={i} className={`pp-transcript-message ${right ? "pp-transcript-message-right" : ""}`} data-speaker={key ?? "unknown"}>
             <div className="pp-transcript-speaker"><span className="pp-transcript-avatar" aria-hidden="true">{index < 0 ? "?" : index + 1}</span>
-              <span>{label(turn)}</span>{time && <time>{time}</time>}
+              <span className="pp-transcript-speaker-name">{label(turn)}</span>
+              {sourceUser && <span className="pp-transcript-source">{sourceUser}</span>}
+              {time && <time>{time}</time>}
             </div>
             <div className="pp-transcript-bubble">{renderText ? renderText(turn.text) : turn.text}</div>
           </li>;

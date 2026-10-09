@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Refine transcript speaker labels, message spacing and text readability; verify on a real transcript
+
 - [x] Make call details dismissible outside the panel without changing tabs
 - [x] Present verified transcript speakers as distinct message bubbles
 - [x] Verify authenticated outside-tap dismissal and speaker rendering regression tests (verified on a real call: 30 turns, distinct speakers)

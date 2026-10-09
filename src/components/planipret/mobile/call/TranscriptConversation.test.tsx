@@ -28,4 +28,16 @@ describe("TranscriptConversation", () => {
     expect(container.querySelectorAll(".pp-transcript-message-right")).toHaveLength(1);
     expect(screen.getByText("Intervenant 2")).toBeInTheDocument();
   });
+  it("presents explicit SIP speakers clearly without inferring their roles", () => {
+    const { container } = render(<TranscriptConversation turns={[
+      { speaker: "sip:113M@planipret.ca", text: "Bonjour, comment allez-vous ?" },
+      { speaker: "sip:1136M@planipret.ca", text: "Très bien, merci.\n\nJ’ai une question." },
+    ]} />);
+    expect(screen.getByText("Intervenant 1")).toBeInTheDocument();
+    expect(screen.getByText("Intervenant 2")).toBeInTheDocument();
+    expect(screen.getByText("113M")).toBeInTheDocument();
+    expect(screen.getByText("1136M")).toBeInTheDocument();
+    expect(container.querySelectorAll(".pp-transcript-bubble")[1]?.textContent).toBe("Très bien, merci.\n\nJ’ai une question.");
+    expect(screen.queryByText("Courtier")).not.toBeInTheDocument();
+  });
 });

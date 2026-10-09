@@ -1,8 +1,9 @@
 # Roadmap
 
-- [ ] Reconcile Sandra Jan 1–Oct 9 2026 against supplied Maestro figures: 548 units, 174,501,286.33 volume, 1,368,881.05 commission; correct dates and underlying calculations across portal/mobile, without hard-coded totals or native changes.
+- [x] Correct current-year Toronto date windows and funded-entry volume (unique contracts only for units); real paid rows now compute 548 units and 174,501,286.33 volume with matching lender sum; 31 root and 14 app-web tests pass, no native edits.
+- [ ] Reconcile Sandra commission reference 1,368,881.05 against paid API rows totaling 1,369,382.91 (501.86 difference): requires detailed Maestro export for Jan 1–Oct 9; hold coordinated publication until fully reconciled, no partial deployment.
 
-- [x] Restore shared funded-tranche and unique-unit rules, complete server lender analytics and stable paid pagination in both mobile web trees; selected-broker portal uses the same CY/PY paid source, admin includes live cache; Sandra verified at 548 units and 173,412,586.33 volume with identical lender sum; portal/mobile UI verified, 30 root and 14 mobile tests passed; no native changes or app publication
+- [x] Restore complete server lender analytics and stable paid pagination in both mobile web trees; selected-broker portal uses the same CY/PY paid source, admin includes live cache; repeat-funding volume correction supersedes the earlier 173,412,586.33 calculation.
 
 - [x] Show exact official pending totals and all six Maestro categories in both web source trees; Sandra Base 179,887.26 and total 331,146.08 verified via admin-selected portal/mobile views; 10 tests passed, no native edits or publication
 

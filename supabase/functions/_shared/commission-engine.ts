@@ -90,8 +90,6 @@ function matches(r: RegisterRow, c: Criteria): boolean {
 
 const normalizedKeyPart = (value: string | null | undefined) => (value ?? "").trim().toLocaleLowerCase("fr-CA");
 
-/** Volume uniqueness key: contract + lender + mortgage type + loan amount (absolute). */
-
 /**
  * A `base` row without a loan amount is never a mortgage file: Maestro uses it for
  * referral / partner payouts (insurers, "Elle Conseille", iA referrals, ...).

@@ -417,7 +417,25 @@ Deno.serve(async (req) => {
         .limit(1).maybeSingle();
       if (selected?.user_id) selectedToken = await getUserMaestroAccessToken(admin, String(selected.user_id));
     }
-    const reportScope = selectedToken && filters.users_id
+    const brokerSources: { token: string; label: string; user_id: string | null; usersId: string }[] = [];
+    if (role === "admin" && !filters.users_id && !firmToken.token) {
+      const { data: connected } = await admin.from("planipret_profiles")
+        .select("user_id, full_name, maestro_broker_id")
+        .eq("maestro_connected", true).not("maestro_broker_id", "is", null);
+      const seenIds = new Set<string>();
+      for (const broker of connected ?? []) {
+        const id = String(broker.maestro_broker_id);
+        if (!broker.user_id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        const token = await getUserMaestroAccessToken(admin, String(broker.user_id));
+        if (!token) return applicationError("maestro_not_connected", "Un compte courtier doit être reconnecté à Maestro. Le total du cabinet est indisponible; sélectionnez un courtier pour consulter ses déboursés.", cid);
+        brokerSources.push({ token, label: String(broker.full_name ?? id), user_id: String(broker.user_id), usersId: id });
+      }
+    }
+    const firstBroker = brokerSources[0];
+    const reportScope = firstBroker
+      ? { ok: true as const, token: firstBroker.token, usersId: null, mode: "all_brokers" as const }
+      : selectedToken && filters.users_id
       ? { ok: true as const, token: selectedToken, usersId: filters.users_id, mode: "selected_broker" as const }
       : resolveCommissionScope({
       role: role as "admin" | "broker",
@@ -430,11 +448,15 @@ Deno.serve(async (req) => {
     if (!reportScope.ok) return scopeError(reportScope.error);
     const activeReportScope: Extract<typeof reportScope, { ok: true }> = reportScope;
 
-    type Src = { token: string; label: string; user_id: string | null };
+    type Src = { token: string; label: string; user_id: string | null; usersId?: string };
     const failures: { broker: string; status: number; message: string }[] = [];
     let coverage = { connected: 1, total: 1 };
 
     async function collectSources(): Promise<Src[]> {
+      if (brokerSources.length) {
+        coverage = { connected: brokerSources.length, total: brokerSources.length };
+        return brokerSources;
+      }
       if (activeReportScope.usersId) filters.users_id = activeReportScope.usersId;
       else delete filters.users_id;
       return [{
@@ -446,7 +468,7 @@ Deno.serve(async (req) => {
 
     /** Parcourt toutes les pages de dépôts pour un jeton donné. */
     async function fetchAllDeposits(src: Src, _single: boolean) {
-      return collectPaidDeposits(src.token, filters, cid);
+      return collectPaidDeposits(src.token, { ...filters, ...(src.usersId ? { users_id: src.usersId } : {}) }, cid);
     }
 
     // ---- Deposits (agrégé pour les admins, passthrough sinon) -------------

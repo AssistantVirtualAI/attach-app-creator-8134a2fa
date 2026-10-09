@@ -148,7 +148,7 @@ describe("MCommissions (mobile)", () => {
     render(<MCommissions />);
     expect(await screen.findByText("maestro_not_configured")).toBeInTheDocument();
     expect(screen.queryByText("Commissions déboursées")).not.toBeInTheDocument();
-    expect(screen.getByText("Commissions en attente")).toBeInTheDocument();
+    expect(screen.getAllByText("Commissions en attente").length).toBeGreaterThan(0);
     await waitFor(() => expect(invokeMock.mock.calls.some((c) => c[1]?.body?.action === "pending")).toBe(true));
   });
 

@@ -21,10 +21,10 @@ The root-only read-only preflights confirmed that Hostinger has PostgreSQL 17.6,
 
 The private host-to-host path uses WireGuard `lemtel-ha0` over UDP port `51820`, with the fixed point-to-point range `10.253.47.0/30`:
 
-| Role | Tunnel address | Public database listener |
-| --- | --- | --- |
-| Hostinger primary | `10.253.47.1/30` | Not enabled |
-| DigitalOcean standby | `10.253.47.2/30` | Not enabled |
+| Role                 | Tunnel address   | Public database listener |
+| -------------------- | ---------------- | ------------------------ |
+| Hostinger primary    | `10.253.47.1/30` | Not enabled              |
+| DigitalOcean standby | `10.253.47.2/30` | Not enabled              |
 
 `lemtel-ha-wireguard-key-init.sh` is the first, deliberately narrow mutation. It installs only `wireguard-tools` when missing and generates a root-readable local keypair at `/etc/lemtel-ha/wireguard/`. It does **not** start an interface, open a firewall port, add a route, change DNS, touch PostgreSQL/Storage, or contact FusionPBX/SIP. It emits only the corresponding WireGuard public key.
 
@@ -32,12 +32,14 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 `lemtel-ha-standby-docker-bootstrap.sh` is the next isolated stage for a clean DigitalOcean host. It installs Docker plus its Compose plugin and the local `age` tool only if absent, starts the Docker daemon, prepares root-only standby directories, creates one root-readable local encryption identity, and pulls the exact PostgreSQL 17 Supabase image already verified on Hostinger. It emits only the matching public `age` recipient. It refuses to run if any container already exists. It does **not** create a database, restore a base backup, run Supabase, publish a port, copy Storage, transfer a secret, configure DNS, or touch telephony.
 
+`lemtel-ha-primary-postgres-streaming-prepare.sh` and `lemtel-ha-standby-postgres-basebackup.sh` are the controlled PostgreSQL stage. They are root-only and each requires an explicit, different execution token. The primary script verifies the WireGuard handshake, requires the exact PostgreSQL 17.6 Supabase image, adds a `pg_hba.conf` rule for the standby tunnel address only, creates a dedicated physical replication slot, and recreates only the database container with `5432` bound to `10.253.47.1` (the private WireGuard address). It creates the replication credential locally on Hostinger and encrypts one envelope to the DigitalOcean local `age` recipient; the credential is never printed or committed. The standby script can run only after the clean-host bootstrap and private envelope delivery; it initializes an empty, read-only PostgreSQL standby via `pg_basebackup`, never publishes `5432`, and verifies recovery plus the WAL receiver. **Neither script has been executed in production yet.**
+
 ## Controlled implementation after private connectivity
 
-1. Bind PostgreSQL only to the Hostinger WireGuard address, never to a public interface. This step requires a planned short database-container recreation and separate confirmation immediately before execution.
-2. Install matching PostgreSQL 17 images on DigitalOcean and bind the standby only to the private path.
+1. Run the clean-host standby Docker bootstrap on DigitalOcean, then retain only its emitted public `age` recipient as the input to the primary preparation. This does not start a database.
+2. Bind PostgreSQL only to the Hostinger WireGuard address, never to a public interface. This stage briefly recreates only the database container and must be scheduled in a maintenance window.
 3. Add a dedicated `LOGIN REPLICATION` role, a physical replication slot and a `pg_hba.conf` rule limited to the private standby address. The role password is created and transferred through root-only files; it is never committed, echoed or copied through GitHub artifacts.
-4. Create the standby using `pg_basebackup`, `standby.signal` and `primary_conninfo`. Confirm `pg_stat_replication`, `pg_stat_wal_receiver`, replay lag and WAL-retention bounds.
+4. Deliver the encrypted envelope over the private administrative path and create the standby using `pg_basebackup`, `standby.signal` and `primary_conninfo`. Confirm `pg_stat_replication`, `pg_stat_wal_receiver`, replay lag and WAL-retention bounds.
 5. Configure checksum-verified Storage replication according to the confirmed filesystem backend. PostgreSQL volume copying is prohibited because it is not a safe replication mechanism.
 6. Deploy the same immutable Lemtel artifact and separately managed encrypted runtime configuration to the standby. Plaintext `.env` files and private keys are never replicated.
 7. Add persistent health checks, replication/storage integrity alerts, fencing and an explicit promotion/failback runbook.

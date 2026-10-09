@@ -144,13 +144,13 @@ export default function RegisterFilters({
       )}
 
       {showAgent && (
-        <div className="inline-flex items-center gap-1.5">
+        <div className="inline-flex flex-wrap items-center gap-1.5">
           <Search className="w-3.5 h-3.5 text-muted-foreground" />
           <input aria-label={isFr ? "Rechercher un courtier déboursées" : "Search paid broker"} placeholder={isFr ? "Rechercher par nom" : "Search by name"} value={nameSearch} onChange={e => setNameSearch(e.target.value)} style={selStyle} className="w-44" />
           <Users className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
           <select aria-label={isFr ? "Courtier déboursées" : "Paid broker"} value={agent} onChange={(e) => onAgent(e.target.value)} style={{ ...selStyle, maxWidth: 280 }}>
             <option value="">
-              {isFr ? `Tous les courtiers (${agents.length})` : `All brokers (${agents.length})`}
+              {isFr ? `Vue globale — tous les courtiers (${agents.length})` : `Global view — all brokers (${agents.length})`}
             </option>
             {matchingAgents.map((a) => {
               const hasData = agentsWithData.length === 0 || agentsWithData.includes(a);

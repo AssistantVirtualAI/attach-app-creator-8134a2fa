@@ -85,6 +85,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
   const [reload, setReload] = useState(0);
   const [brokers, setBrokers] = useState<BrokerRow[] | null>(null);
   const [search, setSearch] = useState("");
+  const [brokerSearch, setBrokerSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("amount");
   const ownPeriod = !(filters?.date_from && filters?.date_to);
   const nowY = new Date().getFullYear();
@@ -198,7 +199,10 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
         </div>
       </header>
       <div className="pending-toolbar" aria-label={fr ? "Filtres commissions en attente" : "Pending commission filters"}>
-        {isAdminView && <label className="flex items-center gap-2 text-xs"><Users className="h-4 w-4" />{fr ? "Courtier" : "Broker"}<select aria-label={fr ? "Courtier en attente" : "Pending broker"} value={agent} onChange={e => { setAgent(e.target.value); setTab("overview"); }}><option value="">{fr ? "Tous les courtiers" : "All brokers"}</option>{brokers?.map(b => <option key={b.users_id} value={b.users_id}>{b.name}</option>)}</select></label>}
+        {isAdminView && <>
+          <label className="flex items-center gap-2"><Search className="h-4 w-4 text-muted-foreground" /><input aria-label={fr ? "Rechercher un courtier en attente" : "Search pending broker"} placeholder={fr ? "Rechercher par nom" : "Search by name"} value={brokerSearch} onChange={e => setBrokerSearch(e.target.value)} className="w-44" /></label>
+          <label className="flex flex-wrap items-center gap-2 text-xs"><Users className="h-4 w-4" />{fr ? "Courtier" : "Broker"}<select aria-label={fr ? "Courtier en attente" : "Pending broker"} value={agent} onChange={e => { setAgent(e.target.value); setTab("overview"); }}><option value="">{fr ? "Vue globale — tous les courtiers" : "Global view — all brokers"}</option>{brokers?.filter(b => String(b.users_id) === agent || b.name.toLocaleLowerCase().includes(brokerSearch.trim().toLocaleLowerCase())).map(b => <option key={b.users_id} value={b.users_id}>{b.name}</option>)}</select></label>
+        </>}
         {ownPeriod && <>
           <select aria-label={fr ? "Année en attente" : "Pending year"} value={pYear} onChange={e => setPYear(Number(e.target.value))}>{[nowY + 1, nowY, nowY - 1, nowY - 2].map(y => <option key={y} value={y}>{y}</option>)}</select>
           <div className="inline-flex gap-1">

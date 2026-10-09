@@ -1,3 +1,4 @@
+import { TranscriptConversation, normalizeTranscriptTurns } from "@/components/planipret/mobile/call/TranscriptConversation";
 import { tr } from "@/lib/i18n/tr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -890,11 +891,7 @@ function TranscriptSection({ call, onUpdated }: { call: RecordingCall; onUpdated
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const segments: Array<{ speaker?: string; text: string; start?: number }> = useMemo(() => {
-    if (Array.isArray(call.transcript_segments) && call.transcript_segments.length) return call.transcript_segments;
-    if (call.transcript) return [{ text: call.transcript }];
-    return [];
-  }, [call.transcript_segments, call.transcript]);
+  const segments = useMemo(() => normalizeTranscriptTurns(call.transcript_segments, call.transcript), [call.transcript_segments, call.transcript]);
 
   const run = async () => {
     setLoading(true);
@@ -966,23 +963,8 @@ function TranscriptSection({ call, onUpdated }: { call: RecordingCall; onUpdated
               {copied ? "Copié" : "Copier"}
             </button>
           </div>
-          <div className="space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-1">
-            {segments.filter((s) => !q || s.text.toLowerCase().includes(q.toLowerCase())).map((s, i) => {
-              const isAgent = (s.speaker || "").toLowerCase().includes("agent") || (s.speaker || "").toLowerCase().includes("courtier") || s.speaker === "A";
-              return (
-                <div key={i} className={`flex ${isAgent ? "justify-start" : "justify-end"}`}>
-                  <div className="max-w-[85%] px-2.5 py-1.5 rounded-xl text-xs"
-                       style={{
-                         background: isAgent ? "rgba(46,155,220,0.12)" : "var(--pp-bg-surface)",
-                         color: "var(--pp-text-primary)",
-                         border: "1px solid var(--pp-bg-border-2)",
-                       }}>
-                    {s.speaker && <div className="text-[9px] font-semibold mb-0.5" style={{ color: "var(--pp-text-muted)" }}>{s.speaker}</div>}
-                    <Highlight text={s.text} q={q} />
-                  </div>
-                </div>
-              );
-            })}
+          <div className="max-h-96 overflow-y-auto overscroll-contain pr-1">
+            <TranscriptConversation turns={segments} query={q} english={document.documentElement.lang === "en"} renderText={(text) => <Highlight text={text} q={q} />} />
           </div>
         </>
       )}

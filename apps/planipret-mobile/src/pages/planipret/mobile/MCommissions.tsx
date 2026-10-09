@@ -15,6 +15,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { tr } from "@/lib/i18n/tr";
 import { isStatsCacheFresh, readStatsCache, statsCacheKey, writeStatsCache } from "@/lib/planipret/commissionsCache";
 import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
+import { Button } from "@/components/ui/button";
 
 type Period = "month" | "quarter" | "year" | "ytd" | "custom";
 
@@ -126,7 +127,7 @@ export default function MCommissions() {
   const [customFrom, setCustomFrom] = useState(sp.get("date_from") ?? "");
   const [customTo, setCustomTo] = useState(sp.get("date_to") ?? "");
   const [commissionType, setCommissionType] = useState<string>(
-    (COMMISSION_TYPES as readonly string[]).includes(String(sp.get("commission_type"))) ? String(sp.get("commission_type")) : "base",
+    (COMMISSION_TYPES as readonly string[]).includes(String(sp.get("commission_type"))) ? String(sp.get("commission_type")) : "",
   );
   const [splitType, setSplitType] = useState<string>("");
   const [numberPrefix, setNumberPrefix] = useState<string>("");
@@ -171,7 +172,7 @@ export default function MCommissions() {
   const filters = useMemo(() => ({
     date_from: range.from,
     date_to: range.to,
-    commission_type: commissionType,
+    ...(commissionType ? { commission_type: commissionType } : {}),
     order_by: orderBy,
     sort: sortDir,
     ...(institutionId ? { financial_inst_id: institutionId } : {}),
@@ -184,7 +185,7 @@ export default function MCommissions() {
   // rows are never shared across brokers on a device.
   const cacheScope = String(profile?.user_id ?? profile?.id ?? "anonymous");
   const reportCacheKey = useMemo(
-    () => statsCacheKey(isAdmin ? "admin" : "broker", [cacheScope, "report", JSON.stringify(filters)]),
+    () => statsCacheKey(isAdmin ? "admin" : "broker", [cacheScope, "paid-deposits-v2", JSON.stringify(filters)]),
     [isAdmin, cacheScope, filters],
   );
   const metadataCacheKey = useMemo(
@@ -549,6 +550,9 @@ export default function MCommissions() {
             <div className="mb-4">
               <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Type de commission" : "Commission type"}</div>
               <div className="flex flex-wrap gap-2">
+                <Button variant={commissionType === "" ? "default" : "outline"} size="sm" onClick={() => setCommissionType("")}>
+                  {fr ? "Tous les types" : "All types"}
+                </Button>
                 {COMMISSION_TYPES.map((t) => (
                   <button key={t} onClick={() => setDraft((d) => ({ ...d, commissionType: t }))}
                     className="px-3 py-1.5 rounded-full text-[12px] font-semibold"

@@ -1,7 +1,8 @@
 # Roadmap
 
 - [x] Verify mplanipret access-check failures preserve the session and allow retry (network abort exercised, zero logout requests, real calls returned after retry)
-- [ ] Prepare safe cross-worker Apple provider-token reuse for alert, silent and VoIP pushes (approval needed)
+- [ ] Implement and verify approved cross-worker Apple provider-token reuse for alert, silent and VoIP pushes
+- [ ] Confirm incoming-call delivery on a real iPhone (requires an agreed live phone test)
 
 - [x] Refine transcript speaker labels, message spacing and text readability; verified on a real 30-turn transcript (28px message gaps, 15px text, no horizontal overflow) and 5 renderer tests; web presentation only, no native changes or publication
 

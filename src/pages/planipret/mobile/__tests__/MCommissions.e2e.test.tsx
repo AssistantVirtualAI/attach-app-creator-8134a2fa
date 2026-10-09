@@ -15,6 +15,10 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 const invokeMock = vi.fn();
 let outletProfile: any = { role: "broker" };
 
+vi.mock("@/lib/planipret/ppEdge", () => ({
+  ppEdgeInvoke: (fn: string, body: any) => invokeMock(fn, { body }),
+}));
+
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: (fn: string, opts: any) => invokeMock(fn, opts) },

@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Verify mplanipret access-check failures preserve the session and allow retry
+- [ ] Prepare safe cross-worker Apple provider-token reuse for alert, silent and VoIP pushes (approval needed)
+
 - [x] Refine transcript speaker labels, message spacing and text readability; verified on a real 30-turn transcript (28px message gaps, 15px text, no horizontal overflow) and 5 renderer tests; web presentation only, no native changes or publication
 
 - [x] Make call details dismissible outside the panel without changing tabs

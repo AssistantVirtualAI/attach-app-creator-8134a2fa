@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Restore current-year unique funded units and reconcile total/lender loan volumes across portal and both mobile web source trees; verify against real Maestro data without native changes or partial deployment
+- [x] Restore shared funded-tranche and unique-unit rules, complete server lender analytics and stable paid pagination in both mobile web trees; selected-broker portal uses the same CY/PY paid source, admin includes live cache; Sandra verified at 548 units and 173,412,586.33 volume with identical lender sum; portal/mobile UI verified, 30 root and 14 mobile tests passed; no native changes or app publication
 
 - [x] Show exact official pending totals and all six Maestro categories in both web source trees; Sandra Base 179,887.26 and total 331,146.08 verified via admin-selected portal/mobile views; 10 tests passed, no native edits or publication
 

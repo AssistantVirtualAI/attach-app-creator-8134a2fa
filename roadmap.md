@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Separate pending and paid portal commissions into status tabs, with independent broker/name/global and month/quarter/year filters; verify switching preserves scope and filters.
+
 - [x] Harmonize portal pending commissions with paid visual presentation: broker/period filters, colored charts, category and monthly tables; preserve official amounts and separate sources. Four presentation tests passed; Sandra categories and team/monthly controls verified in authenticated preview.
 
 - [x] Redesign the admin broker commissions page with portal colors, broker/team filters, visual charts, and richer comparison tables without changing commission calculations.

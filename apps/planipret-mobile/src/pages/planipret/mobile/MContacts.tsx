@@ -129,7 +129,7 @@ async function loadDeviceContactsCached(force: boolean): Promise<any[]> {
   if (!force && deviceContactsCache && Date.now() - deviceContactsCache.at < 5 * 60_000) return deviceContactsCache.rows;
   if (deviceContactsInflight) return deviceContactsInflight;
   deviceContactsInflight = listDeviceContacts()
-    .then((rows) => { deviceContactsCache = { at: Date.now(), rows }; return rows; })
+    .then((rows) => { if (rows.length) deviceContactsCache = { at: Date.now(), rows }; return rows; })
     .finally(() => { deviceContactsInflight = null; });
   return deviceContactsInflight;
 }
@@ -149,7 +149,8 @@ export default function MContacts() {
   const [q, setQ] = useState("");
   const [personal, setPersonal] = useState<any[]>(() => {
     const cached = peekPpContacts("list");
-    return cached ? (cached as any[]).map(normalizeContact) : [];
+    const ns = cached ? (cached as any[]).map(normalizeContact) : [];
+    return [...(deviceContactsCache?.rows ?? []), ...ns];
   });
   const [directory, setDirectory] = useState<any[]>(() => peekPpContacts("directory") ?? []);
   const [clients, setClients] = useState<any[]>(() =>
@@ -283,6 +284,10 @@ export default function MContacts() {
   // tab switches render from memory. The five-minute cache avoids an immediate
   // second Maestro request after every navigation.
   useEffect(() => {
+    void import("@/lib/ppContactsCache").then(({ peekPpContactsVerified }) =>
+      peekPpContactsVerified("maestro_clients").then((rows) => {
+        if (rows?.length) setClients((cur) => cur.length ? cur : rows.map((c: any) => ({ ...c, __maestro_kind: "client" })));
+      }));
     prefetchPpContacts(["list", "directory", "maestro_clients", "maestro_brokers"], 500);
     const quick = window.setTimeout(() => {
       void load("directory", { limit: 500, background: true });
@@ -301,7 +306,7 @@ export default function MContacts() {
       if (cancelled) return;
       setContactsPerm(status);
       // Reload only when access was just granted (not on every return to the app).
-      if (status === "granted" && prev !== null && prev !== "granted") {
+      if (status === "granted" && (prev !== "granted") && (prev !== null || !deviceContactsCache)) {
         loadedTabsRef.current.delete("personal");
         void load("personal", { force: true, background: true });
       }

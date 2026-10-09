@@ -4,6 +4,7 @@ import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import MaestroReconnectButton from "@/components/planipret/commissions/MaestroReconnectButton";
 import MaestroSyncDiagnostics from "@/components/planipret/commissions/MaestroSyncDiagnostics";
+import PendingCommissionsCard from "@/components/planipret/commissions/PendingCommissionsCard";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import { supabase } from "@/integrations/supabase/client";
@@ -68,6 +69,7 @@ export default function PBCommissions() {
       </div>
       <MaestroSyncDiagnostics lang={isFr ? "fr" : "en"} />
 
+      <PendingCommissionsCard lang={lang === "en" ? "en" : "fr"} cacheScope="broker" />
       <RegisterCommissions lang={isFr ? "fr" : "en"} />
     </PAPage>
   );

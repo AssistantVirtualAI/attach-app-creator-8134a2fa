@@ -246,6 +246,14 @@ jobs:
           v2.5.19 opens the full Lemtel Desktop workspace after a verified session bootstrap, including Dark/Daylight, English/French and workspace navigation. When telephony is not provisioned, the call action remains disabled and Desktop does not start SIP, load call data, or use telephony credentials.
           EOF
           fi
+          if [[ "$GITHUB_REF_NAME" == "v2.5.20" ]]; then
+            cat >> release-notes.md <<'EOF'
+
+          v2.5.20 makes every verified Desktop workspace page visible: Home, Phone, Calls, Chats, Contacts and Settings. It adds an organization-first Home aligned with the iOS and Android visual system plus safe Desktop preferences for theme, language, brightness, contrast and launch on startup.
+
+          Calling, call history, conversations and organization contacts remain protected until an administrator provisions telephony. This release does not start SIP, load protected organization data, store telephony credentials or change server telephony configuration.
+          EOF
+          fi
       - name: Verify platform-specific artifacts, manifests and SHA-512 hashes
         shell: bash
         run: |

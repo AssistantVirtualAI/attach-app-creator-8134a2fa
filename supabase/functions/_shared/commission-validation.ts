@@ -120,8 +120,9 @@ export async function validateCommissionOutput(input: {
     severity: (["info", "warning", "critical"].includes(String(item?.severity)) ? String(item.severity) : "warning") as "info" | "warning" | "critical",
     detail: String(item?.detail ?? "").slice(0, 300),
   })) : [];
-  const blocked = deterministicBlocked || aiStatus === "blocked" || aiStatus === "unavailable" || anomalies.some((item) => item.severity === "critical");
-  const warning = !blocked && (aiStatus === "warnings" || checks.some((item) => !item.ok) || anomalies.length > 0);
+  // Claude est consultatif : seul le rapprochement arithmétique déterministe bloque.
+  const blocked = deterministicBlocked;
+  const warning = !blocked && (aiStatus !== "ok" || checks.some((item) => !item.ok) || anomalies.length > 0);
   return {
     source: input.source,
     status: blocked ? "BLOCKED" : warning ? "WARNING" : "MATCH",

@@ -4,8 +4,7 @@ import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import MaestroReconnectButton from "@/components/planipret/commissions/MaestroReconnectButton";
 import MaestroSyncDiagnostics from "@/components/planipret/commissions/MaestroSyncDiagnostics";
-import PendingCommissionsCard from "@/components/planipret/commissions/PendingCommissionsCard";
-import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
+import CommissionSections from "@/components/planipret/commissions/CommissionSections";
 import { supabase } from "@/integrations/supabase/client";
 import paBanner from "@/assets/planipret/banner-commissions.jpg";
 
@@ -72,8 +71,7 @@ export default function PACommissions() {
       </div>
       <MaestroSyncDiagnostics lang={lang === "en" ? "en" : "fr"} canSync />
 
-      <PendingCommissionsCard lang={lang === "en" ? "en" : "fr"} cacheScope="admin" />
-      <RegisterCommissions lang={lang === "en" ? "en" : "fr"} scope="admin" />
+      <CommissionSections lang={lang === "en" ? "en" : "fr"} scope="admin" />
     </PAPage>
   );
 }

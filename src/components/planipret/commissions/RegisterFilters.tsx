@@ -1,5 +1,6 @@
-import { useEffect } from "react";
-import { Users, Landmark } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Users, Landmark, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { causeLabel, coverageFor, type CoverageMap } from "@/lib/planipret/brokerCoverage";
 
 export type Granularity = "week" | "month" | "quarter" | "year" | "ytd";
@@ -53,6 +54,8 @@ export default function RegisterFilters({
   onLender?: (l: string) => void;
 }) {
   const isFr = lang === "fr";
+  const [nameSearch, setNameSearch] = useState("");
+  const matchingAgents = agents.filter(a => a.toLocaleLowerCase().includes(nameSearch.trim().toLocaleLowerCase()) || a === agent);
   const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
 
   const grans: { key: Granularity; label: string }[] = [
@@ -98,28 +101,29 @@ export default function RegisterFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <select value={year} onChange={(e) => onYear(Number(e.target.value))} style={{ ...selStyle, fontWeight: 800 }}>
+      <select aria-label={isFr ? "Année déboursées" : "Paid year"} value={year} onChange={(e) => onYear(Number(e.target.value))} style={{ ...selStyle, fontWeight: 800 }}>
         {years.map((y) => <option key={y} value={y}>{y}</option>)}
       </select>
 
       <div className="inline-flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--pp-bg-border)" }}>
         {grans.map((g) => (
-          <button
+          <Button variant="ghost" size="sm"
             key={g.key}
+            aria-pressed={granularity === g.key}
             onClick={() => onGranularity(g.key)}
             style={{
               fontSize: 12, fontWeight: 700, padding: "6px 10px",
               background: granularity === g.key ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
-              color: granularity === g.key ? "#fff" : "var(--pp-text-secondary)",
+              color: granularity === g.key ? "hsl(var(--primary-foreground))" : "var(--pp-text-secondary)",
             }}
           >
             {g.label}
-          </button>
+          </Button>
         ))}
       </div>
 
       {options.length > 0 && (
-        <select value={periodIndex} onChange={(e) => onPeriodIndex(Number(e.target.value))} style={selStyle}>
+        <select aria-label={isFr ? "Période déboursées" : "Paid period"} value={periodIndex} onChange={(e) => onPeriodIndex(Number(e.target.value))} style={selStyle}>
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       )}
@@ -141,12 +145,14 @@ export default function RegisterFilters({
 
       {showAgent && (
         <div className="inline-flex items-center gap-1.5">
+          <Search className="w-3.5 h-3.5 text-muted-foreground" />
+          <input aria-label={isFr ? "Rechercher un courtier déboursées" : "Search paid broker"} placeholder={isFr ? "Rechercher par nom" : "Search by name"} value={nameSearch} onChange={e => setNameSearch(e.target.value)} style={selStyle} className="w-44" />
           <Users className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
-          <select value={agent} onChange={(e) => onAgent(e.target.value)} style={{ ...selStyle, maxWidth: 280 }}>
+          <select aria-label={isFr ? "Courtier déboursées" : "Paid broker"} value={agent} onChange={(e) => onAgent(e.target.value)} style={{ ...selStyle, maxWidth: 280 }}>
             <option value="">
               {isFr ? `Tous les courtiers (${agents.length})` : `All brokers (${agents.length})`}
             </option>
-            {agents.map((a) => {
+            {matchingAgents.map((a) => {
               const hasData = agentsWithData.length === 0 || agentsWithData.includes(a);
               const cause = coverage ? coverageFor(coverage, a).cause : null;
               const why = !hasData

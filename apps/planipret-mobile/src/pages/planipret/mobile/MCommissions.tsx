@@ -75,16 +75,16 @@ const numOf = (v: unknown) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-function commissionErrorMessage(error: unknown, payload?: any) {
+function commissionErrorMessage(error: unknown, payload: any, fr: boolean) {
   const code = String(payload?.error ?? error ?? "").trim();
   const message = String(payload?.message ?? error ?? "").trim();
   if (code === "admin_scope_unavailable") {
-    return "La vue « Tous les courtiers » requiert un accès Maestro administrateur. Vos commissions personnelles restent disponibles.";
+    return fr ? "La vue « Tous les courtiers » requiert un accès Maestro administrateur. Vos commissions personnelles restent disponibles." : "The All brokers view requires Maestro administrator access. Your personal commissions remain available.";
   }
   if (/failed to send|failed to fetch|networkerror|load failed/i.test(message)) {
-    return "La connexion aux commissions est temporairement indisponible. Réessayez dans un instant.";
+    return fr ? "La connexion aux commissions est temporairement indisponible. Réessayez dans un instant." : "The commission connection is temporarily unavailable. Try again shortly.";
   }
-  return message || "Les commissions sont temporairement indisponibles.";
+  return message || (fr ? "Les commissions sont temporairement indisponibles." : "Commissions are temporarily unavailable.");
 }
 /** Masque raisonnable des noms de clients dans les aperçus de liste. */
 const mask = (name: string | null | undefined) => {
@@ -119,6 +119,7 @@ export default function MCommissions() {
   const { profile } = useOutletContext<PlanipretMobileContext>();
   const role = String(profile?.role ?? "");
   const allowed = role === "broker" || role === "admin";
+  const [section, setSection] = useState<"pending" | "paid">("paid");
 
   // Deep-link AVA : /mplanipret/commissions?period=…&commission_type=…
   const [sp] = useSearchParams();
@@ -199,19 +200,19 @@ export default function MCommissions() {
 
   const call = useCallback(async (body: Record<string, unknown>) => {
     const { data, error: fnErr } = await ppEdgeInvoke<any>("planipret-commission-reports", body, { retries: 1 });
-    if (fnErr) throw new Error(commissionErrorMessage(fnErr.message, data));
+    if (fnErr) throw new Error(commissionErrorMessage(fnErr.message, data, fr));
     if (data?.error || data?.success === false || data?.ok === false) {
-      throw new Error(commissionErrorMessage(data?.error, data));
+      throw new Error(commissionErrorMessage(data?.error, data, fr));
     }
     return data;
-  }, []);
+  }, [fr]);
 
   // Latest request wins: a response for an older filter key is never published.
   const loadGen = useRef(0);
   const moreInflight = useRef<string | null>(null);
   useEffect(() => () => { loadGen.current += 1; }, []);
   const load = useCallback(async (force = false) => {
-    if (!allowed || !rangeReady) return;
+    if (!allowed || !rangeReady || section !== "paid") return;
     const gen = ++loadGen.current;
     const stale = () => gen !== loadGen.current;
     moreInflight.current = null; setLoadingMore(false);
@@ -261,7 +262,7 @@ export default function MCommissions() {
     } finally {
       if (!stale()) setLoading(false);
     }
-  }, [allowed, rangeReady, filters, call, reportCacheKey, isAdmin, agentId]);
+  }, [allowed, rangeReady, section, filters, call, reportCacheKey, isAdmin, agentId]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -270,7 +271,7 @@ export default function MCommissions() {
   }, [load]);
 
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed || section !== "paid") return;
     const cached = readStatsCache(metadataCacheKey);
     const cachedMetadata = cached?.value as { avaPref?: boolean | null; institutions?: { id: number; label: string }[]; agents?: { users_id: number; name: string }[] } | undefined;
     if (cachedMetadata) {
@@ -296,7 +297,7 @@ export default function MCommissions() {
     }).catch(() => {
       if (!cachedMetadata) { setAvaPref(null); setInstitutions([]); setAgents([]); }
     });
-  }, [allowed, call, metadataCacheKey]);
+  }, [allowed, section, call, metadataCacheKey]);
 
 
   const openFilters = () => {
@@ -363,6 +364,15 @@ export default function MCommissions() {
         </div>
       }
     >
+      <div role="tablist" aria-label={fr ? "Statut des commissions" : "Commission status"} className="grid grid-cols-2 gap-2 mb-3 sticky top-0 z-20 py-2" style={{ background: "var(--pp-bg-deep, #07111f)" }}>
+        <Button role="tab" aria-selected={section === "pending"} variant={section === "pending" ? "default" : "outline"} onClick={() => setSection("pending")} className="min-h-11">
+          {fr ? "En attente" : "Pending"}
+        </Button>
+        <Button role="tab" aria-selected={section === "paid"} variant={section === "paid" ? "default" : "outline"} onClick={() => setSection("paid")} className="min-h-11">
+          {fr ? "Déboursées" : "Paid"}
+        </Button>
+      </div>
+
       {/* Périodes */}
       <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
         {(["month", "quarter", "ytd", "year", "custom"] as Period[]).map((p) => (
@@ -412,19 +422,19 @@ export default function MCommissions() {
         </div>
       )}
 
-      {scopeNotice && !error && (
+      {section === "paid" && scopeNotice && !error && (
         <div role="status" className="rounded-xl px-3 py-3 mb-3 text-[13px]" style={{ background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.4)", color: "#FFD89A" }}>
           {scopeNotice}
         </div>
       )}
 
-      {error && (
+      {section === "paid" && error && (
         <div className="rounded-xl px-3 py-3 mb-3 text-[13px]" style={{ background: "rgba(232,76,76,0.12)", border: "1px solid rgba(232,76,76,0.4)", color: "#FFB4B4" }}>
           {error}
         </div>
       )}
 
-      {loading ? (
+      {section === "paid" && (loading ? (
         <div className="space-y-2">
           {[0, 1, 2].map((i) => <div key={i} className="h-20 rounded-xl animate-pulse" style={{ background: "var(--pp-bg-surface, #0A1628)" }} />)}
         </div>
@@ -544,10 +554,12 @@ export default function MCommissions() {
         </>
       ) : !error ? (
         <Empty icon={<Receipt className="w-5 h-5" />} text={fr ? "Aucune donnée de commission." : "No commission data."} />
-      ) : null}
+      ) : null)}
 
-      <SectionTitle color="var(--pp-warning, #F0B429)" title={fr ? "Commissions en attente" : "Pending commissions"} sub={fr ? "À recevoir" : "To be received"} />
-      <PendingCommissionsCard filters={filters} lang={lang === "en" ? "en" : "fr"} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
+      {section === "pending" && <>
+        <SectionTitle color="var(--pp-warning, #F0B429)" title={fr ? "Commissions en attente" : "Pending commissions"} sub={fr ? "À recevoir" : "To be received"} />
+        <PendingCommissionsCard filters={filters} lang={lang === "en" ? "en" : "fr"} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
+      </>}
 
       {/* Filtres */}
       {filtersOpen && (

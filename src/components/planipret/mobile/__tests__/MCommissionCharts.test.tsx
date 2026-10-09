@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 
 const invoke = vi.fn();
@@ -38,6 +38,10 @@ describe("MCommissionCharts", () => {
     const years = invoke.mock.calls.map((c) => c[1].filters.date_from);
     expect(years).toEqual(expect.arrayContaining(["2026-01-01", "2025-01-01"]));
     expect(screen.getAllByTestId("chart").length).toBeGreaterThan(3);
+    fireEvent.click(screen.getByRole("tab", { name: "Mensuel" }));
+    expect(screen.getByText("Rapport déboursé mensuel")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Trimestriel" }));
+    expect(screen.getByText("Rapport déboursé trimestriel")).toBeInTheDocument();
   });
 
   it("garde les totaux accessibles et explique l'indisponibilité des graphiques si l'API échoue", async () => {

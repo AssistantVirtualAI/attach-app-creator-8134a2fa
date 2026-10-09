@@ -151,9 +151,9 @@ export default function RegisterDealsTable({ deals, lang }: { deals: DealLine[];
               {th(isFr ? "Prêteur" : "Lender", "institution")}
               {th(isFr ? "Produit" : "Product")}
               {th(isFr ? "Terme" : "Term")}
-              {th("Type")}
+              {th(isFr ? "Type" : "Type")}
               {th(isFr ? "Montant prêt" : "Loan", "loanAmt", "right")}
-              {th("Commission", "amount", "right")}
+              {th(isFr ? "Commission" : "Commission", "amount", "right")}
               {th(isFr ? "Vol. unique (W)" : "Unique vol. (W)", undefined, "right")}
               {th(isFr ? "Doss. unique (X)" : "Unique deal (X)", undefined, "right")}
             </tr>

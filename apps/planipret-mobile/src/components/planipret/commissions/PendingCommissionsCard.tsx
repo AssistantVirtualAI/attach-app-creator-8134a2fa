@@ -179,10 +179,10 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
   const rangeLabel = `${new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "short", year: "numeric" }).format(new Date(`${f.date_from}T12:00:00`))} – ${new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "short", year: "numeric" }).format(new Date(`${f.date_to}T12:00:00`))}`;
 
   const exportCsv = () => {
-    const rows = tab === "brokers" ? [[fr ? "Courtier" : "Broker", "Commission", "Personnel", "Équipe", "Dossiers", "Volume"], ...filteredBrokers.map(b => [b.name, b.amount, b.personal?.amount ?? "", b.team?.amount ?? "", b.files, b.volume])] : tab === "types" ? [["Type", "Commission"], ...types.map(t => [t.label, t.amount])] : [["Mois", "Commission", "Dossiers"], ...months.map(m => [m.month, m.amount, m.files])];
+    const rows = tab === "brokers" ? [[fr ? "Courtier" : "Broker", "Commission", fr ? "Personnel" : "Personal", fr ? "Équipe" : "Team", fr ? "Dossiers" : "Files", "Volume"], ...filteredBrokers.map(b => [b.name, b.amount, b.personal?.amount ?? "", b.team?.amount ?? "", b.files, b.volume])] : tab === "types" ? [["Type", "Commission"], ...types.map(t => [t.label, t.amount])] : [[fr ? "Mois" : "Month", "Commission", fr ? "Dossiers" : "Files"], ...months.map(m => [m.month, m.amount, m.files])];
     const csv = rows.map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a"); link.href = url; link.download = `commissions-en-attente-${f.users_id ?? "tous"}-${f.date_from}.csv`; link.click(); URL.revokeObjectURL(url);
+    const link = document.createElement("a"); link.href = url; link.download = `${fr ? "commissions-en-attente" : "pending-commissions"}-${f.users_id ?? (fr ? "tous" : "all")}-${f.date_from}.csv`; link.click(); URL.revokeObjectURL(url);
   };
 
   return (

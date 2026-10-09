@@ -14,6 +14,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const invokeMock = vi.fn();
 let outletProfile: any = { role: "broker" };
+let currentLang: "fr" | "en" = "fr";
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -36,7 +37,7 @@ vi.mock("react-router-dom", async () => {
 });
 
 vi.mock("@/hooks/useMplanipretLang", () => ({
-  useMplanipretLang: () => ({ lang: "fr", t: (k: string) => k }),
+  useMplanipretLang: () => ({ lang: currentLang, t: (k: string) => k }),
 }));
 
 // Recharts ne se rend pas dans jsdom (pas de layout) — on neutralise le conteneur.
@@ -108,9 +109,28 @@ beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockImplementation(respond);
   outletProfile = { role: "broker" };
+  currentLang = "fr";
 });
 
 describe("MCommissions (mobile)", () => {
+  it("sépare les rapports déboursés et en attente", async () => {
+    render(<MCommissions />);
+    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: "Déboursées" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "En attente" }));
+    expect(screen.getByRole("tab", { name: "En attente" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText("Unités uniques")).not.toBeInTheDocument();
+  });
+
+  it("affiche les onglets et rapports en anglais", async () => {
+    currentLang = "en";
+    render(<MCommissions />);
+    await waitFor(() => expect(screen.getByText("Unique units")).toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: "Paid" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Pending" }));
+    expect(screen.getAllByText("Pending commissions").length).toBeGreaterThan(0);
+  });
+
   it("charge le résumé et affiche les KPIs", async () => {
     render(<MCommissions />);
     await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());

@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
         if (cached) return new Response(JSON.stringify({ success: true, cached: true, insights: cached, transcript_text: transcript }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const apiKey = (await getSecret(admin, "anthropic", "api_key")) ?? Deno.env.get("ANTHROPIC_API_KEY");
+      const apiKey = disableClaude ? null : ((await getSecret(admin, "anthropic", "api_key")) ?? Deno.env.get("ANTHROPIC_API_KEY"));
       const openaiKey = Deno.env.get("OPENAI_API_KEY");
       if (!apiKey && !openaiKey) {
         return new Response(JSON.stringify({ success: false, error: "Aucune clé IA configurée (ANTHROPIC_API_KEY ou OPENAI_API_KEY)" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: false, error: "missing transcript", message: "Transcription requise avant analyse." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const apiKey = (await getSecret(admin, "anthropic", "api_key")) ?? Deno.env.get("ANTHROPIC_API_KEY");
+    const apiKey = disableClaude ? null : ((await getSecret(admin, "anthropic", "api_key")) ?? Deno.env.get("ANTHROPIC_API_KEY"));
     const lovableKey = Deno.env.get("ANTHROPIC_API_KEY");
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
 

@@ -100,12 +100,15 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
     if (cached?.value) {
       setSummary((cached.value as any).summary ?? null);
       if (!agent) setBrokers((cached.value as any).brokers ?? null);
+    } else {
+      // Never show the previous scope's numbers under another broker's name.
+      setSummary(null);
     }
     if (refreshToken === 0 && isStatsCacheFresh(cached)) return;
     setLoading(!cached?.value);
     setError(null);
     (async () => {
-      const r = await ppEdgeInvoke("planipret-commission-reports", { action: "pending", filters: f }, { retries: 1, timeoutMs: 15_000 });
+      const r = await ppEdgeInvoke("planipret-commission-reports", { action: "pending", filters: f }, { retries: 1, timeoutMs: agent || filters?.users_id ? 30_000 : 60_000 });
       if (cancelled) return;
       const d = r.data as any;
       if (r.error || !d || d.success === false || d.ok !== true) {
@@ -255,7 +258,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
             </Panel>
           </div>
 
-          {(selectedBroker || !isAdminView) && summary.split && <TeamSplitPanel split={summary.split} fr={fr} />}
+          {(() => { const sp = selectedBroker?.personal && selectedBroker.team ? { personal: selectedBroker.personal, team: selectedBroker.team, team_members: selectedBroker.team_members ?? [] } : (!isAdminView || selectedBroker) ? summary.split : null; return sp ? <TeamSplitPanel split={sp} fr={fr} name={selectedBroker?.name} /> : null; })()}
 
           {!selectedBroker && brokers && brokers.length > 0 ? (
             <Panel title={fr ? "Commissions par courtier" : "Commissions by broker"} icon={<Users className="w-4 h-4" />}>
@@ -395,7 +398,7 @@ function BrokerMobileRow({ broker, rank, total, onSelect, fr }: { broker: Broker
 function Rank({ value }: { value: number }) {
   return <span className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[10.5px] font-bold shrink-0" style={{ background: value <= 3 ? "color-mix(in srgb, var(--pp-warning) 16%, transparent)" : "var(--pp-bg-elevated)", color: value <= 3 ? "var(--pp-warning)" : "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border-2)" }}>{value}</span>;
 }
-function TeamSplitPanel({ split, fr }: { split: Split; fr: boolean }) {
+function TeamSplitPanel({ split, fr, name }: { split: Split; fr: boolean; name?: string }) {
   const total = split.personal.amount + split.team.amount;
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
   const Box = ({ label, part, accent }: { label: string; part: SplitPart; accent: string }) => (
@@ -409,10 +412,10 @@ function TeamSplitPanel({ split, fr }: { split: Split; fr: boolean }) {
     </div>
   );
   return (
-    <Panel title={fr ? "Personnel et équipe" : "Personal and team"} icon={<Users className="w-4 h-4" />}>
+    <Panel title={name ? (fr ? `${name} — personnel et équipe` : `${name} — personal and team`) : (fr ? "Personnel et équipe" : "Personal and team")} icon={<Users className="w-4 h-4" />}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
-        <Box label={fr ? "Mes dossiers" : "My files"} part={split.personal} accent="var(--pp-warning)" />
-        <Box label={fr ? `Mon équipe (${split.team_members.length})` : `My team (${split.team_members.length})`} part={split.team} accent="var(--pp-brand-accent)" />
+        <Box label={name ? (fr ? "Dossiers du courtier" : "Broker files") : (fr ? "Mes dossiers" : "My files")} part={split.personal} accent="var(--pp-warning)" />
+        <Box label={name ? (fr ? `Son équipe (${split.team_members.length})` : `Team (${split.team_members.length})`) : (fr ? `Mon équipe (${split.team_members.length})` : `My team (${split.team_members.length})`)} part={split.team} accent="var(--pp-brand-accent)" />
       </div>
       <div className="h-2 rounded-full overflow-hidden flex mb-3" style={{ background: "var(--pp-bg-border)" }}>
         <div style={{ width: `${pct(split.personal.amount)}%`, background: "var(--pp-warning)" }} />

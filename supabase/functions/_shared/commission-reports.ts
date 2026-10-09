@@ -240,7 +240,7 @@ export async function collectPaidDeposits(token: string, filters: NormalizedFilt
   const types = filters.commission_type ? [filters.commission_type] : [...COMMISSION_TYPES];
   for (const type of types) {
     for (let page = 1; page <= 100; page++) {
-      const qs = buildDepositQuery({ ...filters, commission_type: type, page, per_page: 200 });
+      const qs = buildDepositQuery({ ...filters, order_by: "number", sort: "asc", commission_type: type, page, per_page: 200 });
       const result = await commissionGet(`${PAID_COMMISSION_PATH}?${qs}`, token, cid);
       if (!result.ok) return { rows: [], truncated: false, total: 0, fatal: result };
       if (!Array.isArray(result.data?.data)) {
@@ -279,7 +279,7 @@ export interface CommissionSummary {
   truncated: boolean;
 }
 
-const hasDate = (r: CommissionDepositRow) =>
+const hasDate = (r: { date_trans?: string | null }) =>
   /^\d{4}-\d{2}-\d{2}/.test(String((r as any).date_trans ?? "").trim());
 
 /** Same funded-tranche and calendar-period unit rules as the portal engine. */
@@ -295,7 +295,7 @@ export function paidAnalytics(allRows: CommissionDepositRow[]) {
   const lenders = new Map<string, { key: string; volume: number; deals: number }>();
   let volume = 0, deals = 0;
   for (const { row, unique_volume, unique_deal } of flags) {
-    if (!hasDate(row as CommissionDepositRow)) continue;
+    if (!hasDate(row)) continue;
     const key = String(row.date_trans).slice(0, 7);
     const m = months.get(key) ?? { key, volume: 0, commission: 0, deals: 0 };
     const loan = unique_volume ? num(row.loan_amt) : 0;

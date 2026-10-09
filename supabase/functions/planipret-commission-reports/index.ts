@@ -612,6 +612,7 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         summary,
+        analytics: paidAnalytics(all),
         paid_split,
         total_available: total,
         coverage,

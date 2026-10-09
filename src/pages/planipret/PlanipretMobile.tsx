@@ -945,9 +945,14 @@ export default function PlanipretMobile() {
       }
     } catch { /* réseau : la vérification serveur reste en place */ }
     // mplanipret web : administrateurs + exceptions seulement.
-    {
-      const { data: allowed, error: allowErr } = await supabase.rpc("planipret_mplanipret_allowed" as any, { _user_id: user.id });
-      if (allowErr || allowed !== true) {
+    try {
+      const allowed = await retryWithBackoff(async () => {
+        const { data, error } = await supabase.rpc("planipret_mplanipret_allowed" as any, { _user_id: user.id });
+        if (error) throw error;
+        if (typeof data !== "boolean") throw new Error("access_check_unavailable");
+        return data;
+      }, { attempts: 2, timeoutMs: adaptiveTimeout(8000), label: "mplanipret_access" });
+      if (allowed === false) {
         await supabase.auth.signOut();
         toast.error("Accès réservé aux administrateurs.");
         setProfile(null);
@@ -955,6 +960,11 @@ export default function PlanipretMobile() {
         setLoading(false);
         return;
       }
+    } catch {
+      // An unavailable access check must neither grant access nor destroy the session.
+      setAccessError("load_failed");
+      setLoading(false);
+      return;
     }
     // Capture Microsoft 365 tokens once after Azure SSO redirect.
     try {

@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/planipret/ppEdge", () => ({ ppEdgeInvoke: invoke }));
 vi.mock("recharts", () => ({
   ResponsiveContainer: () => null, BarChart: () => null, Bar: () => null,
   XAxis: () => null, YAxis: () => null, CartesianGrid: () => null, Tooltip: () => null,
+  PieChart: () => null, Pie: () => null, Cell: () => null, Legend: () => null,
+  ComposedChart: () => null, Line: () => null,
 }));
 import PendingCommissionsCard from "./PendingCommissionsCard";
 
@@ -48,5 +50,23 @@ describe("Official pending commission totals", () => {
     render(<PendingCommissionsCard cacheScope="broker-zero" />);
     const region = await screen.findByLabelText("Totaux officiels Maestro");
     expect(within(region).getAllByText((_, el) => el?.children.length === 0 && normalized(el.textContent ?? "") === normalized(money(0)))).toHaveLength(6);
+  });
+
+  it("opens the exact official category table without another API call", async () => {
+    render(<PendingCommissionsCard cacheScope="broker-category-table" />);
+    await screen.findByLabelText("Totaux officiels Maestro");
+    fireEvent.click(screen.getByRole("tab", { name: "Types de commissions" }));
+    expect(screen.getByRole("table")).toHaveTextContent("Total officiel Maestro");
+    expect(normalized(screen.getByRole("table").textContent ?? "")).toContain(normalized(money(331146.08)));
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows monthly table amounts with cents and keeps the official total separate", async () => {
+    invoke.mockResolvedValue({ data: { ok: true, summary: { total_commission: 100.12, official_total: 150.23, deposit_count: 1, total_loan_volume: 1000, by_date: [{date:"2026-10-09",amount:100.12,count:1}] } }, error: null });
+    render(<PendingCommissionsCard cacheScope="broker-month-table" />);
+    await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("tab", { name: "Détail mensuel" }));
+    expect(normalized(screen.getByRole("table").textContent ?? "")).toContain(normalized(money(100.12)));
+    expect(screen.getByRole("table")).toHaveTextContent("Total ventilé");
   });
 });

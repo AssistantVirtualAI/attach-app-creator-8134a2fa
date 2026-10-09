@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Refine transcript speaker labels, message spacing and text readability; verify on a real transcript
+- [x] Refine transcript speaker labels, message spacing and text readability; verified on a real 30-turn transcript (28px message gaps, 15px text, no horizontal overflow) and 5 renderer tests; web presentation only, no native changes or publication
 
 - [x] Make call details dismissible outside the panel without changing tabs
 - [x] Present verified transcript speakers as distinct message bubbles

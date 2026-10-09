@@ -1,34 +1,11 @@
+import { getApnsProviderToken } from "./apns-provider-token.ts";
 // Native alert pushes (APNs + FCM) for the Planiprêt mobile apps.
 // Web Push (VAPID) only reaches browsers; iOS/Android installs register their
 // device token in `mobile_push_tokens`, which is what this helper targets.
 
 import { parseServiceAccount, sendFcmNotification } from "./fcm.ts";
 
-function b64url(input: ArrayBuffer | string) {
-  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
 
-async function apnsJwt(teamId: string, keyId: string, privateKeyPem: string) {
-  const header = b64url(JSON.stringify({ alg: "ES256", kid: keyId }));
-  const claims = b64url(JSON.stringify({ iss: teamId, iat: Math.floor(Date.now() / 1000) }));
-  let normalized = String(privateKeyPem ?? "").trim();
-  if (normalized.startsWith('"') && normalized.endsWith('"')) {
-    try { normalized = JSON.parse(normalized); } catch { /* keep original */ }
-  }
-  normalized = normalized.replace(/\\r\\n|\\n|\\r/g, "\n");
-  const pem = normalized
-    .replace(/-----BEGIN (?:EC )?PRIVATE KEY-----/g, "")
-    .replace(/-----END (?:EC )?PRIVATE KEY-----/g, "")
-    .replace(/\s/g, "");
-  if (!pem || !/^[A-Za-z0-9+/]+={0,2}$/.test(pem)) throw new Error("APNS_PRIVATE_KEY is not a valid PKCS#8 .p8 key");
-  const raw = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
-  const key = await crypto.subtle.importKey("pkcs8", raw, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
-  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(`${header}.${claims}`));
-  return `${header}.${claims}.${b64url(sig)}`;
-}
 
 export type NativePushResult = { delivered: number; ios: number; android: number; reason?: string };
 
@@ -71,7 +48,7 @@ export async function sendNativeAlertPush(
       const bundleId = config.ios_bundle_id ?? Deno.env.get("PLANIPRET_IOS_BUNDLE_ID");
       if (keyId && teamId && privateKey && bundleId) {
         try {
-          const jwt = await apnsJwt(teamId, keyId, privateKey);
+          const jwt = await getApnsProviderToken(admin, teamId, keyId, privateKey);
           const payload = JSON.stringify({
             aps: {
               alert: { title: opts.title, body: opts.body ?? "" },

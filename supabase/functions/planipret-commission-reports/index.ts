@@ -502,6 +502,8 @@ Deno.serve(async (req) => {
         summary,
         rows: rows.slice(0, 500),
         upstream_summary: upstreamSummary,
+        by_type: rows.reduce((m: Record<string, number>, r: any) => { m[r.commission_type] = Math.round(((m[r.commission_type] ?? 0) + Number(r.amount || 0)) * 100) / 100; return m; }, {}),
+        last_page: lastPage,
         total_available: rows.length,
         truncated,
         scope: { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode },

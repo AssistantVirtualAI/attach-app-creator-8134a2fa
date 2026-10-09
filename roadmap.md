@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Harmonize portal pending commissions with paid visual presentation: broker/period filters, colored charts, category and monthly tables; preserve official amounts and separate sources.
+
 - [x] Redesign the admin broker commissions page with portal colors, broker/team filters, visual charts, and richer comparison tables without changing commission calculations.
 
 - [x] Correct current-year Toronto date windows and funded-entry volume (unique contracts only for units); real paid rows now compute 548 units and 174,501,286.33 volume with matching lender sum; 31 root and 14 app-web tests pass, no native edits.

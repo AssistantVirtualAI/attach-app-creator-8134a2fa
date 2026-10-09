@@ -144,7 +144,7 @@ jobs:
           issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
           api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-          release-notes: "${{ github.event_name == 'push' && 'Lemtel 1.1 (3): test the organization workspace, French/English, Dark/Daylight, readable navigation, and no call transcription in mobile.' || inputs.release_notes }}"
+          release-notes: "${{ github.event_name == 'push' && 'Lemtel 1.1 (4): test the organization Home, Desktop-aligned visual system, French/English, Dark/Daylight, readable navigation, and no call transcription in mobile.' || inputs.release_notes }}"
           wait-for-processing: "true"
 
       - name: Save signed IPA for the internal test record

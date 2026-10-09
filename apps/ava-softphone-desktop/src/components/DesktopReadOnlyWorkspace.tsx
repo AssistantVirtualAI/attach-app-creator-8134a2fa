@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Bell,
   ChevronRight,
+  Home,
   History,
   LayoutGrid,
   LockKeyhole,
@@ -18,8 +19,10 @@ import { useTranslation, type I18nKey } from '../lib/i18n';
 import LemtelLogo from './LemtelLogo';
 import LanguageSwitcher from './ui/LanguageSwitcher';
 import avaPoweredBy from '../assets/ava-powered-by.png';
+import DesktopWorkspaceHome from './DesktopWorkspaceHome';
+import DesktopWorkspacePreferences from './DesktopWorkspacePreferences';
 
-type WorkspaceTab = 'phone' | 'calls' | 'messages' | 'contacts' | 'more';
+type WorkspaceTab = 'home' | 'phone' | 'calls' | 'messages' | 'contacts' | 'more';
 
 type ReadOnlyWorkspaceProps = {
   email: string;
@@ -29,6 +32,7 @@ type ReadOnlyWorkspaceProps = {
 };
 
 const NAV: { id: WorkspaceTab; label: I18nKey; Icon: React.ComponentType<{ size?: number | string; strokeWidth?: number | string }> }[] = [
+  { id: 'home', label: 'workspace.home', Icon: Home },
   { id: 'phone', label: 'nav.dialer', Icon: Phone },
   { id: 'calls', label: 'workspace.calls', Icon: History },
   { id: 'messages', label: 'workspace.chats', Icon: MessageCircle },
@@ -51,7 +55,7 @@ function AppearanceControls() {
   );
 }
 
-const READ_ONLY_SECTIONS: Record<Exclude<WorkspaceTab, 'phone'>, {
+const READ_ONLY_SECTIONS: Record<Exclude<WorkspaceTab, 'phone' | 'home' | 'more'>, {
   testId: string;
   Icon: React.ComponentType<{ size?: number | string; strokeWidth?: number | string }>;
   title: I18nKey;
@@ -75,16 +79,10 @@ const READ_ONLY_SECTIONS: Record<Exclude<WorkspaceTab, 'phone'>, {
     title: 'workspace.contactsPendingTitle',
     body: 'workspace.contactsPendingBody',
   },
-  more: {
-    testId: 'lemtel-desktop-settings-page',
-    Icon: LayoutGrid,
-    title: 'workspace.preferencesTitle',
-    body: 'workspace.preferencesBody',
-  },
 };
 
 function ReadOnlySection({ tab, onReturnToPhone }: {
-  tab: Exclude<WorkspaceTab, 'phone'>;
+  tab: Exclude<WorkspaceTab, 'phone' | 'home' | 'more'>;
   onReturnToPhone: () => void;
 }) {
   const { t } = useTranslation();
@@ -114,9 +112,9 @@ function ReadOnlySection({ tab, onReturnToPhone }: {
  */
 export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetry, onSignOut }: ReadOnlyWorkspaceProps) {
   const { t } = useTranslation();
-  const [active, setActive] = useState<WorkspaceTab>('phone');
+  const [active, setActive] = useState<WorkspaceTab>('home');
   const [dial, setDial] = useState('');
-  const activeLabel = t(NAV.find((item) => item.id === active)?.label || 'nav.dialer');
+  const activeLabel = t(NAV.find((item) => item.id === active)?.label || 'workspace.home');
   const displayName = email.split('@')[0]?.replace(/[._-]+/g, ' ') || t('workspace.member');
   const append = (digit: string) => setDial((current) => current + digit);
 
@@ -191,8 +189,62 @@ export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetr
         .desktop-readonly-section-actions { display: flex; justify-content: center; gap: 10px; margin-top: 25px; }
         .desktop-readonly-section-actions button { min-height: 40px; padding: 0 14px; border: 1px solid var(--ava-border-strong, rgba(180,200,255,.28)); border-radius: 11px; background: var(--ava-surface-elev, rgba(255,255,255,.08)); color: var(--ava-text, #f6f9ff); font: 800 11px inherit; cursor: pointer; }
         .desktop-readonly-section-actions button:hover { border-color: var(--ava-accent, #6680ff); background: var(--ava-accent-soft, rgba(0,35,230,.22)); }
+        .desktop-workspace-home { max-width: 1120px; margin: 0 auto; }
+        .desktop-home-hero { position: relative; overflow: hidden; padding: clamp(24px, 4vw, 38px); border: 1px solid color-mix(in srgb, var(--ava-accent, #6680ff) 42%, transparent); border-radius: 26px; background: radial-gradient(circle at 96% 4%, rgba(33,212,253,.25) 0, transparent 31%), radial-gradient(circle at 9% 112%, rgba(0,35,230,.58) 0, transparent 55%), linear-gradient(145deg, #0f1938 0%, #07152d 100%); box-shadow: 0 26px 60px -35px rgba(0,35,230,.65); }
+        .desktop-home-orbit { position: absolute; right: -45px; bottom: -76px; width: 218px; height: 218px; border: 1px solid rgba(33,212,253,.26); border-radius: 50%; box-shadow: 0 0 0 22px rgba(33,212,253,.05), 0 0 0 48px rgba(33,212,253,.03); }
+        .desktop-home-hero-top { position: relative; display: flex; align-items: flex-start; gap: 14px; }
+        .desktop-home-hero-icon { display: grid; place-items: center; flex: 0 0 auto; width: 50px; height: 50px; border-radius: 16px; color: #fff; background: linear-gradient(135deg,#0023e6,#4d6dff 48%,#21d4fd); box-shadow: 0 16px 32px -16px rgba(0,35,230,.72); }
+        .desktop-home-hero p, .desktop-home-section-heading p, .desktop-home-overline, .desktop-preferences-heading p { margin: 0; color: #69e6ff; font-size: 10px; font-weight: 850; letter-spacing: .15em; text-transform: uppercase; }
+        .desktop-home-hero h2 { margin: 6px 0 0; max-width: 88%; color: #f7faff; font-size: clamp(26px, 3vw, 36px); letter-spacing: -.9px; line-height: 1.08; text-transform: capitalize; }
+        .desktop-home-verified { position: relative; display: inline-flex; align-items: center; gap: 7px; margin-top: 22px; padding: 8px 11px; border: 1px solid rgba(34,211,154,.35); border-radius: 999px; color: #d7ffef; background: rgba(34,211,154,.10); font-size: 11px; font-weight: 720; }
+        .desktop-home-verified span { width: 7px; height: 7px; border-radius: 50%; background: #22d39a; box-shadow: 0 0 10px #22d39a; }
+        .desktop-home-section { margin-top: 28px; }
+        .desktop-home-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 12px; padding: 0 3px; }
+        .desktop-home-section-heading h3 { margin: 5px 0 0; color: var(--ava-text, #f6f9ff); font-size: 22px; letter-spacing: -.45px; }
+        .desktop-home-section-heading button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid color-mix(in srgb, var(--ava-accent, #6680ff) 35%, transparent); border-radius: 13px; color: var(--ava-accent, #6680ff); background: var(--ava-accent-soft, rgba(0,35,230,.12)); cursor: pointer; }
+        .desktop-home-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        .desktop-home-actions button { min-height: 154px; padding: 17px; border: 1px solid color-mix(in srgb, var(--home-tone) 38%, transparent); border-radius: 19px; color: var(--ava-text, #f6f9ff); background: linear-gradient(145deg, color-mix(in srgb, var(--home-tone) 14%, transparent), var(--ava-surface, rgba(255,255,255,.05)) 82%); box-shadow: 0 16px 32px -24px color-mix(in srgb, var(--home-tone) 78%, transparent); text-align: left; cursor: pointer; transition: transform .16s ease, border-color .16s ease; }
+        .desktop-home-actions button:hover { transform: translateY(-2px); border-color: var(--home-tone); }
+        .desktop-home-actions button > span { display: grid; place-items: center; width: 39px; height: 39px; border: 1px solid color-mix(in srgb, var(--home-tone) 38%, transparent); border-radius: 12px; color: var(--home-tone); background: color-mix(in srgb, var(--home-tone) 12%, transparent); }
+        .desktop-home-actions strong { display: block; margin-top: 17px; font-size: 14px; }
+        .desktop-home-actions small { display: block; margin-top: 5px; color: var(--ava-text-muted, #b8c6e8); font-size: 11px; line-height: 1.35; }
+        .desktop-home-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 11px; }
+        .desktop-home-metrics > div { padding: 14px; border: 1px solid color-mix(in srgb, var(--metric-tone) 30%, transparent); border-radius: 17px; background: linear-gradient(145deg, color-mix(in srgb, var(--metric-tone) 10%, transparent), var(--ava-surface, rgba(255,255,255,.05))); }
+        .desktop-home-metrics span { display: block; overflow: hidden; color: var(--metric-tone); font-size: 10px; font-weight: 850; letter-spacing: .1em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+        .desktop-home-metrics strong { display: block; margin-top: 7px; color: var(--ava-text, #f6f9ff); font-family: 'JetBrains Mono', monospace; font-size: 25px; }
+        .desktop-home-pending { margin: 9px 2px 0; color: var(--ava-text-muted, #b8c6e8); font-size: 11px; }
+        .desktop-home-boundary { display: flex; gap: 11px; margin-top: 20px; padding: 15px 16px; border: 1px solid color-mix(in srgb, var(--ava-success, #22d39a) 34%, transparent); border-radius: 18px; color: var(--ava-success, #22d39a); background: color-mix(in srgb, var(--ava-success, #22d39a) 8%, transparent); }
+        .desktop-home-boundary strong { display: block; color: var(--ava-text, #f6f9ff); font-size: 13px; }
+        .desktop-home-boundary p { margin: 4px 0 0; color: var(--ava-text-muted, #b8c6e8); font-size: 11px; line-height: 1.45; }
+        .desktop-workspace-preferences { max-width: 1080px; margin: 0 auto; }
+        .desktop-preferences-heading { display: flex; align-items: center; gap: 14px; padding: 2px 2px 22px; }
+        .desktop-preferences-heading-icon { display: grid; place-items: center; flex: 0 0 auto; width: 48px; height: 48px; border: 1px solid color-mix(in srgb, var(--ava-accent, #6680ff) 42%, transparent); border-radius: 15px; color: var(--ava-accent, #6680ff); background: var(--ava-accent-soft, rgba(0,35,230,.12)); }
+        .desktop-preferences-heading h2 { margin: 4px 0 3px; color: var(--ava-text, #f6f9ff); font-size: 27px; letter-spacing: -.65px; }
+        .desktop-preferences-heading > div:nth-child(2) > span { color: var(--ava-text-muted, #b8c6e8); font-size: 12px; }
+        .desktop-preferences-heading em { margin-left: auto; padding: 7px 10px; border: 1px solid color-mix(in srgb, var(--ava-success, #22d39a) 42%, transparent); border-radius: 999px; color: var(--ava-success, #22d39a); background: color-mix(in srgb, var(--ava-success, #22d39a) 10%, transparent); font-size: 10px; font-style: normal; font-weight: 800; }
+        .desktop-preferences-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .desktop-preferences-card { min-height: 174px; padding: 19px; border: 1px solid var(--ava-border, rgba(180,200,255,.14)); border-radius: 20px; background: var(--ava-surface, rgba(255,255,255,.05)); box-shadow: var(--ava-shadow, 0 18px 60px -22px rgba(0,0,0,.6)); }
+        .desktop-preferences-card-title { display: flex; align-items: flex-start; gap: 10px; color: var(--ava-accent, #6680ff); }
+        .desktop-preferences-card-title strong { display: block; color: var(--ava-text, #f6f9ff); font-size: 13px; }
+        .desktop-preferences-card-title span { display: block; margin-top: 3px; color: var(--ava-text-muted, #b8c6e8); font-size: 10px; line-height: 1.35; }
+        .desktop-preferences-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; color: var(--ava-text, #f6f9ff); font-size: 12px; font-weight: 730; }
+        .desktop-preferences-choice-row { align-items: flex-start; }
+        .desktop-preferences-options { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+        .desktop-preferences-options button { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 8px; border: 1px solid var(--ava-border, rgba(180,200,255,.14)); border-radius: 9px; color: var(--ava-text-muted, #b8c6e8); background: var(--ava-overlay-04, rgba(255,255,255,.04)); font: 750 10px inherit; cursor: pointer; }
+        .desktop-preferences-options button[aria-pressed='true'] { border-color: var(--ava-accent, #6680ff); color: var(--ava-accent, #6680ff); background: var(--ava-accent-soft, rgba(0,35,230,.22)); }
+        .desktop-preferences-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 19px; padding: 12px; border: 1px solid var(--ava-border, rgba(180,200,255,.14)); border-radius: 13px; color: var(--ava-text, #f6f9ff); background: var(--ava-overlay-04, rgba(255,255,255,.04)); text-align: left; cursor: pointer; }
+        .desktop-preferences-toggle strong, .desktop-preferences-toggle small { display: block; }
+        .desktop-preferences-toggle small { margin-top: 3px; color: var(--ava-text-muted, #b8c6e8); font-size: 10px; }
+        .desktop-preferences-toggle i { position: relative; width: 38px; height: 22px; border: 1px solid var(--ava-border-strong, rgba(180,200,255,.28)); border-radius: 999px; background: var(--ava-overlay-08, rgba(255,255,255,.08)); }
+        .desktop-preferences-toggle i::after { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--ava-text-muted, #b8c6e8); content: ''; transition: transform .18s ease, background .18s ease; }
+        .desktop-preferences-toggle[aria-checked='true'] i { border-color: var(--ava-accent, #6680ff); background: var(--ava-accent-soft, rgba(0,35,230,.22)); }
+        .desktop-preferences-toggle[aria-checked='true'] i::after { transform: translateX(16px); background: var(--ava-accent, #6680ff); }
+        .desktop-preferences-card-boundary { background: linear-gradient(145deg, color-mix(in srgb, var(--ava-warning, #d4a73a) 8%, transparent), var(--ava-surface, rgba(255,255,255,.05))); }
+        .desktop-preferences-card-boundary > p { margin: 18px 0 10px; color: var(--ava-text-muted, #b8c6e8); font-size: 12px; line-height: 1.5; }
+        .desktop-preferences-card-boundary > div:last-child { display: inline-flex; align-items: center; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--ava-warning, #d4a73a) 38%, transparent); border-radius: 999px; color: var(--ava-warning, #d4a73a); font-size: 10px; font-weight: 800; }
         @media (max-width: 880px) { .desktop-readonly-shell { grid-template-columns: 1fr; } .desktop-readonly-rail { display: block; padding: 14px; border-right: 0; border-bottom: 1px solid rgba(150,185,255,.18); } .desktop-readonly-brand, .desktop-readonly-status, .desktop-readonly-powered { display: none; } .desktop-readonly-nav { display: flex; overflow-x: auto; } .desktop-readonly-nav button { min-width: max-content; } .desktop-readonly-content { padding: 18px; } }
-        @media (max-width: 660px) { .desktop-readonly-header { min-height: 62px; padding: 0 14px; } .desktop-readonly-header h1 { font-size: 16px; } .desktop-readonly-theme-switch button { padding: 5px 6px; font-size: 0; } .desktop-readonly-theme-switch button::first-letter { font-size: 12px; } .desktop-readonly-greeting { display: block; } .desktop-readonly-secure { margin-top: 12px; } .desktop-readonly-grid { grid-template-columns: 1fr; } .desktop-readonly-dialer { min-height: 0; padding: 18px; } }
+        @media (max-width: 760px) { .desktop-home-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } .desktop-preferences-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 660px) { .desktop-readonly-header { min-height: 62px; padding: 0 14px; } .desktop-readonly-header h1 { font-size: 16px; } .desktop-readonly-theme-switch button { padding: 5px 6px; font-size: 0; } .desktop-readonly-theme-switch button::first-letter { font-size: 12px; } .desktop-readonly-greeting { display: block; } .desktop-readonly-secure { margin-top: 12px; } .desktop-readonly-grid { grid-template-columns: 1fr; } .desktop-readonly-dialer { min-height: 0; padding: 18px; } .desktop-home-hero { padding: 22px 18px; } .desktop-home-hero h2 { font-size: 25px; } .desktop-home-metrics { gap: 7px; } .desktop-home-metrics > div { padding: 11px; } .desktop-preferences-heading { align-items: flex-start; } .desktop-preferences-heading em { display: none; } .desktop-preferences-row { display: block; } .desktop-preferences-options { justify-content: flex-start; margin-top: 8px; } }
       `}</style>
 
       <section className="desktop-readonly-shell">
@@ -232,7 +284,15 @@ export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetr
           </header>
 
           <div className="desktop-readonly-content">
-            {active === 'phone' ? (
+            {active === 'home' ? (
+              <DesktopWorkspaceHome
+                displayName={displayName}
+                organizationVerified={Boolean(organizationId)}
+                onNavigate={setActive}
+              />
+            ) : active === 'more' ? (
+              <DesktopWorkspacePreferences />
+            ) : active === 'phone' ? (
               <>
                 <div className="desktop-readonly-greeting">
                   <div>

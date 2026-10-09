@@ -25,9 +25,13 @@ describe('DesktopReadOnlyWorkspace navigation', () => {
 
   afterEach(() => cleanup());
 
-  it('renders a distinct safe page for every non-telephony navigation item', () => {
+  it('renders an organization home then a distinct safe page for every workspace navigation item', () => {
     renderWorkspace();
 
+    expect(screen.getByTestId('lemtel-desktop-home-page')).toBeTruthy();
+    expect(screen.getByText('Organization-secured workspace')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /New call/ }));
     expect(screen.getByTestId('lemtel-desktop-phone-page')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Calls' }));
@@ -43,8 +47,9 @@ describe('DesktopReadOnlyWorkspace navigation', () => {
     expect(screen.getByText('Organization contacts are waiting to be enabled')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    expect(screen.getByTestId('lemtel-desktop-settings-page')).toBeTruthy();
+    expect(screen.getByTestId('lemtel-desktop-preferences-page')).toBeTruthy();
     expect(screen.getByText('Desktop preferences')).toBeTruthy();
+    expect(screen.getByText('Call experience')).toBeTruthy();
   });
 
   it('returns to the phone page without enabling calls', () => {
@@ -56,6 +61,21 @@ describe('DesktopReadOnlyWorkspace navigation', () => {
 
     expect(screen.getByTestId('lemtel-desktop-phone-page')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Calling is disabled — not provisioned' })).toHaveProperty('disabled', true);
+  });
+
+  it('persists safe display and desktop-startup preferences without mounting telephony', () => {
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    const settings = screen.getByTestId('lemtel-desktop-preferences-page');
+
+    fireEvent.click(within(settings).getByRole('button', { name: 'Bright' }));
+    fireEvent.click(within(settings).getByRole('button', { name: 'High' }));
+    fireEvent.click(within(settings).getByRole('switch', { name: /Launch Lemtel on startup/ }));
+
+    expect(localStorage.getItem('lemtel.brightness')).toBe('bright');
+    expect(localStorage.getItem('lemtel.contrast')).toBe('high');
+    expect(localStorage.getItem('lemtel.launchOnStartup')).toBe('on');
   });
 
   it('does not mount a data-loading or SIP surface for these pages', () => {

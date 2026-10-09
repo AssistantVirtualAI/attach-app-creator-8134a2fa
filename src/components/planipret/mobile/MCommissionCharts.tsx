@@ -90,7 +90,7 @@ export default function MCommissionCharts({
   const from = String((filters as any).date_from ?? "");
   const to = String((filters as any).date_to ?? "");
   const key = JSON.stringify(filters);
-  const cacheKey = statsCacheKey("broker", [cacheScope, "charts-unique-v3", key]);
+  const cacheKey = statsCacheKey("broker", [cacheScope, "charts-fundings-v4", key]);
 
   useEffect(() => {
     if (!from || !to) return;

@@ -417,14 +417,6 @@ export default function SettingsScreen({
           value={lastTranscriber}
           onPress={() => setLastTranscriber(localStorage.getItem('ava.lastTranscriber') || '—')}
         />
-        <SettingsRow
-          label={lang === 'fr' ? 'Repli Claude (Anthropic)' : 'Claude fallback (Anthropic)'}
-          icon="🛟"
-          value={claudeFallback
-            ? (lang === 'fr' ? 'Activé — utilisé si Gemini & GPT échouent' : 'On — used if Gemini & GPT fail')
-            : (lang === 'fr' ? 'Désactivé' : 'Off')}
-          onPress={() => { const next = !claudeFallback; setClaudeFallback(next); localStorage.setItem('ava.claudeFallback', next ? 'on' : 'off'); }}
-        />
       </Card>
 
       {/* Support & about */}

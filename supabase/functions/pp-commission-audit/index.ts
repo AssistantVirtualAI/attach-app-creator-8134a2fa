@@ -201,6 +201,7 @@ Deno.serve(async (req) => {
           number: r.number,
           date_trans: r.date_trans,
           agent_name: r.agent_name,
+          target_name: r.target_name,
           broker_label: r.broker_label,
           broker_user_id: r.broker_user_id ?? null,
           institution: r.institution,

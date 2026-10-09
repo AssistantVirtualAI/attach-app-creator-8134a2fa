@@ -80,14 +80,25 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
   const [brokers, setBrokers] = useState<BrokerRow[] | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("amount");
+  const ownPeriod = !(filters?.date_from && filters?.date_to);
+  const nowY = new Date().getFullYear();
+  const [pYear, setPYear] = useState(nowY);
+  const [pGran, setPGran] = useState<"year" | "quarter" | "month">("year");
+  const [pIdx, setPIdx] = useState(1);
+  const [view, setView] = useState<"all" | "personal" | "team">("all");
   const f = useMemo(() => {
-    const base = filters?.date_from && filters?.date_to ? { date_from: filters.date_from, date_to: filters.date_to } : yearRange();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const last = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const own = pGran === "year" ? { date_from: `${pYear}-01-01`, date_to: `${pYear}-12-31` }
+      : pGran === "quarter" ? { date_from: `${pYear}-${pad((pIdx - 1) * 3 + 1)}-01`, date_to: `${pYear}-${pad(pIdx * 3)}-${last(pYear, pIdx * 3)}` }
+      : { date_from: `${pYear}-${pad(pIdx)}-01`, date_to: `${pYear}-${pad(pIdx)}-${last(pYear, pIdx)}` };
+    const base = !ownPeriod ? { date_from: filters!.date_from!, date_to: filters!.date_to! } : own;
     return {
       ...base,
       ...((agent || filters?.users_id) ? { users_id: agent || filters?.users_id } : {}),
       ...(filters?.financial_inst_id ? { financial_inst_id: filters.financial_inst_id } : {}),
     };
-  }, [filters?.date_from, filters?.date_to, filters?.users_id, filters?.financial_inst_id, agent]);
+  }, [filters?.date_from, filters?.date_to, filters?.users_id, filters?.financial_inst_id, agent, ownPeriod, pYear, pGran, pIdx]);
   const cacheRole = cacheScope === "admin" || cacheScope === "default" ? "admin" : "broker";
   const key = statsCacheKey(cacheRole, ["pending", cacheScope, f.date_from, f.date_to, f.users_id ?? "", f.financial_inst_id ?? ""]);
   const [summary, setSummary] = useState<Summary | null>(() => ((readStatsCache(key)?.value as any)?.summary as Summary) ?? null);
@@ -144,12 +155,15 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
   const isAdminView = Boolean(brokers?.length);
   const filteredBrokers = useMemo(() => {
     const query = search.trim().toLocaleLowerCase(fr ? "fr-CA" : "en-CA");
+    const pick = (b: BrokerRow) => view === "personal" ? (b.personal?.amount ?? 0) : view === "team" ? (b.team?.amount ?? 0) : b.amount;
     return [...(brokers ?? [])]
+      .map((b) => ({ ...b, amount: pick(b) }))
+      .filter((b) => view !== "team" || (b.team_members?.length ?? 0) > 0)
       .filter((broker) => !query || broker.name.toLocaleLowerCase(fr ? "fr-CA" : "en-CA").includes(query))
       .sort((a, b) => sort === "name"
         ? a.name.localeCompare(b.name, fr ? "fr" : "en")
         : Number(b[sort] ?? 0) - Number(a[sort] ?? 0));
-  }, [brokers, search, sort, fr]);
+  }, [brokers, search, sort, fr, view]);
 
   const rangeLabel = `${new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "short", year: "numeric" }).format(new Date(`${f.date_from}T12:00:00`))} – ${new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "short", year: "numeric" }).format(new Date(`${f.date_to}T12:00:00`))}`;
 
@@ -189,6 +203,26 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
           </Button>
         )}
       </header>
+
+      {ownPeriod && (
+        <div className="px-4 sm:px-5 pt-3 flex flex-wrap items-center gap-2" aria-label={fr ? "Période" : "Period"}>
+          <select value={pYear} onChange={(e) => setPYear(Number(e.target.value))} className="h-9 px-2 rounded-lg text-[12.5px] font-bold" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }}>
+            {[nowY + 1, nowY, nowY - 1, nowY - 2].map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <div className="inline-flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
+            {([["year", fr ? "Année" : "Year"], ["quarter", fr ? "Trimestre" : "Quarter"], ["month", fr ? "Mois" : "Month"]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => { setPGran(k); setPIdx(k === "month" ? new Date().getMonth() + 1 : k === "quarter" ? Math.floor(new Date().getMonth() / 3) + 1 : 1); }} className="h-9 px-3 text-[12px] font-semibold" style={{ background: pGran === k ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)", color: pGran === k ? "var(--pp-text-on-accent, #fff)" : "var(--pp-text-secondary)" }}>{l}</button>
+            ))}
+          </div>
+          {pGran !== "year" && (
+            <select value={pIdx} onChange={(e) => setPIdx(Number(e.target.value))} className="h-9 px-2 rounded-lg text-[12.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }}>
+              {(pGran === "quarter" ? [1, 2, 3, 4] : Array.from({ length: 12 }, (_, i) => i + 1)).map((i) => (
+                <option key={i} value={i}>{pGran === "quarter" ? `T${i}` : new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "long" }).format(new Date(Date.UTC(2026, i - 1, 15)))}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       {error && (
         <div role="status" className="mx-4 mt-4 rounded-lg px-3 py-2 text-[12px]" style={{ color: "var(--pp-warning)", background: "color-mix(in srgb, var(--pp-warning) 9%, transparent)", border: "1px solid color-mix(in srgb, var(--pp-warning) 28%, transparent)" }}>
@@ -262,6 +296,11 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
 
           {!selectedBroker && brokers && brokers.length > 0 ? (
             <Panel title={fr ? "Commissions par courtier" : "Commissions by broker"} icon={<Users className="w-4 h-4" />}>
+              <div className="inline-flex rounded-lg overflow-hidden mb-2" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
+                {([["all", fr ? "Total" : "Total"], ["personal", fr ? "Personnel" : "Personal"], ["team", fr ? "Équipe" : "Team"]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setView(k)} className="h-8 px-3 text-[12px] font-semibold" style={{ background: view === k ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: view === k ? "var(--pp-text-on-accent, #fff)" : "var(--pp-text-secondary)" }}>{l}</button>
+                ))}
+              </div>
               <div className="flex flex-col sm:flex-row gap-2 mb-3">
                 <label className="relative flex-1">
                   <span className="sr-only">{fr ? "Rechercher un courtier" : "Search for a broker"}</span>

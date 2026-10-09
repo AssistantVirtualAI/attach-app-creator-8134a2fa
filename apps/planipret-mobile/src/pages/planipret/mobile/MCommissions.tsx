@@ -1,7 +1,7 @@
 // MCommissions — rapports de commissions Planiprêt (API officielle Maestro).
 // Données financières sensibles : lecture seule, aucune donnée mise en cache
 // hors de la session, aucun jeton Maestro côté client.
-import PendingCommissionsCard from "@/components/planipret/commissions/PendingCommissionsCard";
+import PendingCommissionsCard, { TeamSplitPanel } from "@/components/planipret/commissions/PendingCommissionsCard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -149,6 +149,8 @@ export default function MCommissions() {
   const [detail, setDetail] = useState<DepositRow | null>(null);
 
   const [summary, setSummary] = useState<Summary | null>(null);
+
+  const [paidSplit, setPaidSplit] = useState<any>(null);
   const [rows, setRows] = useState<DepositRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -212,6 +214,7 @@ export default function MCommissions() {
     const cached = readStatsCache(reportCacheKey);
     const cachedReport = cached?.value as { summary?: Summary; rows?: DepositRow[]; total?: number } | undefined;
     if (cachedReport) {
+      setPaidSplit((cachedReport as any).paid_split ?? null);
       setSummary(cachedReport.summary ?? null);
       setRows(cachedReport.rows ?? []);
       setTotal(cachedReport.total ?? 0);
@@ -230,12 +233,14 @@ export default function MCommissions() {
       setScopeNotice(isAdmin && !agentId && s?.scope?.mode === "own"
         ? "Accès Maestro administrateur manquant : seules vos commissions personnelles sont affichées, pas celles de tous les courtiers."
         : null);
+      setPaidSplit(s?.paid_split ?? null);
       setSummary(s.summary);
       setRows(d.rows ?? []);
       setTotal(d.pagination?.total ?? 0);
       setPage(1);
       writeStatsCache(reportCacheKey, {
         summary: s.summary ?? null,
+        paid_split: s?.paid_split ?? null,
         rows: d.rows ?? [],
         total: d.pagination?.total ?? 0,
       });
@@ -414,6 +419,7 @@ export default function MCommissions() {
         </div>
       ) : summary ? (
         <>
+          <SectionTitle color="var(--pp-success, #34D399)" title={fr ? "Commissions déboursées" : "Paid commissions"} sub={fr ? "Déjà versées par Maestro" : "Already paid by Maestro"} />
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Kpi icon={<Wallet className="w-4 h-4" />} label={fr ? "Commissions" : "Commissions"} value={cad(summary.total_commission)} />
             <Kpi icon={<Receipt className="w-4 h-4" />} label={fr ? "Dépôts" : "Deposits"} value={String(summary.deposit_count)} />
@@ -427,6 +433,8 @@ export default function MCommissions() {
             </p>
           )}
 
+          {paidSplit && <div className="mb-4"><TeamSplitPanel split={paidSplit} fr={fr} title={fr ? "Déboursé — moi et mon équipe" : "Paid — me and my team"} /></div>}
+          <SectionTitle color="var(--pp-warning, #F0B429)" title={fr ? "Commissions en attente" : "Pending commissions"} sub={fr ? "À recevoir" : "To be received"} />
               <PendingCommissionsCard filters={filters} lang={lang === "en" ? "en" : "fr"} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
               <MCommissionCharts filters={filters} lang={lang} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
 
@@ -712,6 +720,18 @@ function Empty({ icon, text }: { icon: React.ReactNode; text: string }) {
     <div className="rounded-2xl p-6 text-center" style={{ background: "var(--pp-bg-surface, #0A1628)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.22))" }}>
       <div className="flex justify-center mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{icon}</div>
       <p className="text-[13px]" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{text}</p>
+    </div>
+  );
+}
+
+function SectionTitle({ title, sub, color }: { title: string; sub: string; color: string }) {
+  return (
+    <div className="flex items-center gap-2 mt-2 mb-2.5">
+      <span className="w-1.5 h-6 rounded-full" style={{ background: color }} />
+      <div className="min-w-0">
+        <div className="text-[15px] font-bold leading-tight" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>{title}</div>
+        <div className="text-[11px]" style={{ color: "var(--pp-text-muted, #8597AD)" }}>{sub}</div>
+      </div>
     </div>
   );
 }

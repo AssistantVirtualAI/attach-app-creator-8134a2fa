@@ -483,7 +483,7 @@ export const mobileApi = {
     },
     { jobId: 'job-' + Date.now() },
   ),
-  transcribeCall: async (callId: string, meta?: { recording_path?: string | null; recording_name?: string | null; domain_uuid?: string | null; xml_cdr_uuid?: string | null; organization_id?: string | null; vm_id?: string | null; force?: boolean; disableClaude?: boolean }) => {
+  transcribeCall: async (callId: string, meta?: { recording_path?: string | null; recording_name?: string | null; domain_uuid?: string | null; xml_cdr_uuid?: string | null; organization_id?: string | null; vm_id?: string | null; force?: boolean }) => {
     const cid = String(callId);
     const xmlCdrUuid = meta?.xml_cdr_uuid || (meta?.recording_name ? String(meta.recording_name).replace(/\.(mp3|wav|ogg|m4a|webm)$/i, '') : '') || callId;
     const vm = meta?.vm_id ? ` vm_id=${meta.vm_id}` : '';

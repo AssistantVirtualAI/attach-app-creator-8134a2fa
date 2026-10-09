@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser();
     const body = await req.json().catch(() => ({}));
     let { call_id, call_record_id, transcript, transcript_text, action, organization_id, force } = body ?? {};
+    const disableClaude = body?.disable_claude === true;
     call_id = call_id || call_record_id || body?.callId;
     transcript = transcript || transcript_text;
     if (action === "test" || call_id === "test") {

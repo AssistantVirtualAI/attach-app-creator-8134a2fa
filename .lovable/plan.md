@@ -15,13 +15,14 @@ Donner aux courtiers une page Commissions mobile clairement divisée entre **En 
 2. **Aligner les rapports mobiles sur le portail**
    - En attente : indicateurs officiels, catégories, répartition personnel/équipe, tendance mensuelle, graphiques colorés et tableaux adaptés au petit écran.
    - Déboursées : vue d’ensemble, prêteurs, dépôts, tendance mensuelle et trimestrielle, comparaison avec l’année précédente et tableaux colorés.
-   - Réutiliser les mêmes périodes et filtres utiles : mois, trimestre, cumul annuel, année et période personnalisée.
+   - Ajouter les vues détaillées utiles déjà offertes au portail : courtiers/équipe selon l’accès, prêteurs, types, périodes, dossiers et contrôle des écarts.
+   - Réutiliser la même palette et les mêmes périodes et filtres : mois, trimestre, cumul annuel, année et période personnalisée.
    - Préserver les dernières données visibles lorsqu’une source Maestro est temporairement indisponible; ne jamais transformer une erreur en total nul.
 
 3. **Compléter le bilinguisme**
    - Traduire les onglets, filtres, erreurs, états vides, titres, légendes, tableaux, détails et messages administrateurs dans les deux langues.
    - Corriger les messages mobiles encore uniquement en français.
-   - Corriger aussi les libellés et exports encore figés dans les sous-rapports du portail : dossiers, matrice annuelle, classement, détail courtier, rapprochement et validation.
+   - Corriger aussi les libellés et exports encore figés dans les sous-rapports du portail : dossiers, matrice annuelle, classement, détail courtier, rapprochement, validation et vue mobile détaillée.
    - Vérifier toute la page Commissions du portail — administrateur et courtier — en français et en anglais, incluant les rapports mensuels et trimestriels.
 
 4. **Maintenir la parité des deux versions web mobiles**

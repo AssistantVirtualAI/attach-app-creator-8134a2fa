@@ -18,3 +18,5 @@
 - [x] Improve recording availability states and restore eligible hidden records
 - [x] Add a reliable return-to-app action in the mobile-opened portal
 - [x] Add regression tests and verify the central flows
+
+- [ ] Admin pending commissions: filtres courtier / équipe / mois / trimestre / année (portail Gilles & Marc), commissions par broker poussées au portail + app

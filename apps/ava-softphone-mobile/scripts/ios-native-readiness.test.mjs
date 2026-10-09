@@ -64,6 +64,7 @@ test("TestFlight delivery is signed, internal, Hostinger-bound, and Lemtel-tag c
   assert.match(workflow, /steps\.app_store_profile\.outputs\.profiles/);
   assert.match(workflow, /LEMTEL_APP_STORE_PROFILE_UUID/);
   assert.match(workflow, /signingStyle<\/key><string>manual<\/string>/);
+  assert.match(workflow, /Lemtel 1\.1 \(4\): test the organization Home, Desktop-aligned visual system/);
   assert.doesNotMatch(workflow, /uses-non-exempt-encryption:/);
   assert.doesNotMatch(workflow, /apps\/planipret-mobile/);
   assert.doesNotMatch(workflow, /branches:\s*\n\s+- "Planipret"/);

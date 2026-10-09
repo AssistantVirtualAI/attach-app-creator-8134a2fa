@@ -19,7 +19,10 @@ import { readStatsCache, statsCacheKey, writeStatsCache, isStatsCacheFresh } fro
 import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 
 type CommissionType = { type: string; label: string; amount: number };
-type BrokerRow = { users_id: number; name: string; amount: number; files: number; volume: number };
+type SplitPart = { amount: number; files: number; volume: number };
+type TeamMember = SplitPart & { id: string; name: string };
+type Split = { personal: SplitPart; team: SplitPart; team_members: TeamMember[] };
+type BrokerRow = { users_id: number; name: string; amount: number; files: number; volume: number; personal?: SplitPart; team?: SplitPart; team_members?: TeamMember[] };
 type SortKey = "amount" | "name" | "files" | "volume";
 
 type Summary = {
@@ -31,6 +34,7 @@ type Summary = {
   truncated?: boolean;
   official_total?: number | null;
   official_by_type?: CommissionType[] | null;
+  split?: Split | null;
 };
 
 const cad = (n: number) =>
@@ -251,6 +255,8 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
             </Panel>
           </div>
 
+          {(selectedBroker || !isAdminView) && summary.split && <TeamSplitPanel split={summary.split} fr={fr} />}
+
           {!selectedBroker && brokers && brokers.length > 0 ? (
             <Panel title={fr ? "Commissions par courtier" : "Commissions by broker"} icon={<Users className="w-4 h-4" />}>
               <div className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -272,12 +278,14 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
               </div>
 
               <div className="hidden md:block overflow-x-auto rounded-lg" style={{ border: "1px solid var(--pp-bg-border)" }}>
-                <table className="w-full min-w-[680px] text-[12px]">
+                <table className="w-full min-w-[860px] text-[12px]">
                   <thead style={{ background: "var(--pp-bg-deep)", color: "var(--pp-text-muted)" }}>
                     <tr>
                       <th className="w-12 text-center py-3 font-semibold">#</th>
                       <th className="text-left py-3 font-semibold">{fr ? "Courtier" : "Broker"}</th>
                       <th className="text-right py-3 font-semibold">{fr ? "En attente" : "Pending"}</th>
+                      <th className="text-right py-3 font-semibold">{fr ? "Personnel" : "Personal"}</th>
+                      <th className="text-right py-3 font-semibold">{fr ? "Équipe" : "Team"}</th>
                       <th className="text-right py-3 font-semibold">{fr ? "Dossiers" : "Files"}</th>
                       <th className="text-right py-3 font-semibold">Volume</th>
                       <th className="text-right py-3 pr-4 font-semibold">{fr ? "Part" : "Share"}</th>
@@ -350,6 +358,8 @@ function BrokerTableRow({ broker, rank, total, onSelect }: { broker: BrokerRow; 
       <td className="py-3 text-center"><Rank value={rank} /></td>
       <td className="py-3 font-semibold" style={{ color: "var(--pp-text-primary)" }}>{broker.name}</td>
       <td className="py-3 text-right font-bold" style={{ color: "var(--pp-warning)" }}>{cad(broker.amount)}</td>
+      <td className="py-3 text-right">{broker.personal ? cad(broker.personal.amount) : "—"}</td>
+      <td className="py-3 text-right">{broker.team && broker.team.amount > 0 ? <span>{cad(broker.team.amount)} <span style={{ color: "var(--pp-text-muted)" }}>({broker.team_members?.length ?? 0})</span></span> : "—"}</td>
       <td className="py-3 text-right">{broker.files}</td>
       <td className="py-3 text-right">{cad(broker.volume)}</td>
       <td className="py-3 pr-4">
@@ -371,6 +381,10 @@ function BrokerMobileRow({ broker, rank, total, onSelect, fr }: { broker: Broker
         </div>
         <div className="flex items-center justify-between mt-1 text-[10.5px]" style={{ color: "var(--pp-text-muted)" }}>
           <span>{broker.files} {fr ? "dossiers" : "files"} · {compactCad(broker.volume)}</span>
+        </div>
+        <div className="flex items-center justify-between mt-0.5 text-[10.5px]" style={{ color: "var(--pp-text-secondary)" }}>
+          <span>{fr ? "Perso" : "Own"} {compactCad(broker.personal?.amount ?? 0)}</span>
+          <span>{fr ? "Équipe" : "Team"} {compactCad(broker.team?.amount ?? 0)}{broker.team_members?.length ? ` (${broker.team_members.length})` : ""}</span>
           <span>{share}% <ChevronRight className="inline w-3 h-3" /></span>
         </div>
       </div>
@@ -380,4 +394,46 @@ function BrokerMobileRow({ broker, rank, total, onSelect, fr }: { broker: Broker
 
 function Rank({ value }: { value: number }) {
   return <span className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[10.5px] font-bold shrink-0" style={{ background: value <= 3 ? "color-mix(in srgb, var(--pp-warning) 16%, transparent)" : "var(--pp-bg-elevated)", color: value <= 3 ? "var(--pp-warning)" : "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border-2)" }}>{value}</span>;
+}
+function TeamSplitPanel({ split, fr }: { split: Split; fr: boolean }) {
+  const total = split.personal.amount + split.team.amount;
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const Box = ({ label, part, accent }: { label: string; part: SplitPart; accent: string }) => (
+    <div className="rounded-lg p-3 min-w-0" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)" }}>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="text-[11px] font-semibold uppercase" style={{ color: accent }}>{label}</span>
+        <span className="text-[10.5px]" style={{ color: "var(--pp-text-muted)" }}>{pct(part.amount)}%</span>
+      </div>
+      <div className="text-[18px] sm:text-[20px] font-bold truncate" style={{ color: "var(--pp-text-primary)" }}>{cad(part.amount)}</div>
+      <div className="text-[10.5px] mt-0.5" style={{ color: "var(--pp-text-muted)" }}>{part.files} {fr ? "dossiers" : "files"} · {compactCad(part.volume)}</div>
+    </div>
+  );
+  return (
+    <Panel title={fr ? "Personnel et équipe" : "Personal and team"} icon={<Users className="w-4 h-4" />}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+        <Box label={fr ? "Mes dossiers" : "My files"} part={split.personal} accent="var(--pp-warning)" />
+        <Box label={fr ? `Mon équipe (${split.team_members.length})` : `My team (${split.team_members.length})`} part={split.team} accent="var(--pp-brand-accent)" />
+      </div>
+      <div className="h-2 rounded-full overflow-hidden flex mb-3" style={{ background: "var(--pp-bg-border)" }}>
+        <div style={{ width: `${pct(split.personal.amount)}%`, background: "var(--pp-warning)" }} />
+        <div style={{ width: `${pct(split.team.amount)}%`, background: "var(--pp-brand-accent)" }} />
+      </div>
+      {split.team_members.length > 0 ? (
+        <div className="divide-y" style={{ borderColor: "var(--pp-bg-border)" }}>
+          {split.team_members.map((m) => (
+            <div key={m.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-2 text-[12px]" style={{ borderColor: "var(--pp-bg-border)" }}>
+              <span className="font-medium truncate" style={{ color: "var(--pp-text-secondary)" }}>{m.name}</span>
+              <span style={{ color: "var(--pp-text-muted)" }}>{m.files} {fr ? "dossiers" : "files"}</span>
+              <span className="font-bold text-right" style={{ color: "var(--pp-text-primary)" }}>{cad(m.amount)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11.5px]" style={{ color: "var(--pp-text-muted)" }}>{fr ? "Aucune commission d'équipe pour cette période." : "No team commissions for this period."}</p>
+      )}
+      <p className="text-[10.5px] mt-2" style={{ color: "var(--pp-text-faint)" }}>
+        {fr ? "Séparation selon le courtier principal de chaque dossier dans Maestro. Les montants hors lignes (ex. Override) restent dans le total officiel." : "Split by each file's primary broker in Maestro. Amounts without file lines (e.g. Override) stay in the official total."}
+      </p>
+    </Panel>
+  );
 }

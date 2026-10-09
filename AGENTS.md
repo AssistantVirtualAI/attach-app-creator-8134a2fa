@@ -3,6 +3,7 @@
 - Planipret APNs alert, background and VoIP pushes use one server-only persisted provider-token cache with atomic renewal and local single-flight reuse; independent worker signing triggers Apple's refresh limits.
 
 - Planipret call and recording transcripts share the speaker-message renderer in both web source trees; speaker identity comes only from explicit source labels, never inferred dialogue turns.
+- Planipret pending-commission presentation stays byte-identical in both web source trees so portal and mobile expose the same scoped financial view.
 
 - Maestro task completion uses the documented soft-delete endpoint and a complete GET read-back; never invent a status option ID or trust mutation success alone.
 - AVA customer lookup is profile-first: show verified Maestro details before contact actions, and offer calls, SMS, or email only when explicitly requested.

@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Restore current-year unique funded units and reconcile total/lender loan volumes across portal and both mobile web source trees; verify against real Maestro data without native changes or partial deployment
+
 - [x] Show exact official pending totals and all six Maestro categories in both web source trees; Sandra Base 179,887.26 and total 331,146.08 verified via admin-selected portal/mobile views; 10 tests passed, no native edits or publication
 
 - [x] Restore separate Maestro paid deposits and pending endpoints; verify Francis and Sandra through authenticated admin-selected views, both sections rendered, 23 tests passed; no native edits or app publication

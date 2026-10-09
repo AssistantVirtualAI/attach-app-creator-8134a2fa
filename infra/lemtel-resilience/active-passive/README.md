@@ -1,51 +1,53 @@
 # Lemtel — Hostinger primary / DigitalOcean warm standby
 
-This package implements the **controlled foundation** for the approved Lemtel active–passive architecture. It does not start a service, expose a database, change DNS, copy a secret, activate FusionPBX/SIP, or change an installed client.
+This package tracks the approved **availability-first** foundation for the Lemtel active–passive architecture. Hostinger is the only writer. DigitalOcean will become a warm, read-only PostgreSQL standby after the preflight evidence is complete.
 
-## Target state
+The owner selected **availability-first** on 2026-10-09. PostgreSQL commits on Hostinger must not wait for DigitalOcean. Replication lag will be measured and alerted, and no numeric RPO is promised until the controlled failover drill records actual recovery point and recovery time.
 
-Hostinger remains the only writer. DigitalOcean is a warm, read-only PostgreSQL standby and receives the same immutable Lemtel release artifact. A health-checked external routing provider may direct traffic to DigitalOcean only after its private readiness, fencing, replication lag, storage integrity, and failover drill evidence are verified.
+## Confirmed facts
 
-The database replication mechanism is PostgreSQL physical streaming replication using a dedicated `LOGIN REPLICATION` account, a physical replication slot, `standby.signal`, and `primary_conninfo`. The database listener must be reachable only over a private encrypted path between the two hosts; it must never be opened to the public internet. PostgreSQL's official guidance requires `wal_level=replica`, sufficient `max_wal_senders` and `max_replication_slots`, trusted replication authentication, and a base backup to initialize the standby. [PostgreSQL warm standby](https://www.postgresql.org/docs/current/warm-standby.html)
+- Restricted non-root administration access is verified on both Hostinger and DigitalOcean.
+- Hostinger runs a self-hosted Supabase stack with PostgreSQL 17 and local Storage mounted in the Storage container.
+- DigitalOcean is intentionally clean before standby provisioning. Docker, PostgreSQL, Storage and a public application listener are not yet started there.
+- Lemtel source artifacts already arrive with one immutable digest on both hosts. That delivery does not deploy or start a runtime.
+- Lemtel DNS uses an external `ui-dns` nameserver set. Its account/API access and health-routing capability are not yet verified.
 
-Physical replication carries Lemtel database state, including Auth records and storage metadata. It does **not** copy storage objects or Edge Functions by itself. Supabase documents those as separate operational components, so the storage backend must be inventoried before choosing the correct replication mechanism. [Supabase self-hosted restore](https://supabase.com/docs/guides/self-hosting/restore-from-platform)
+## Preflight evidence required now
 
-## Required facts before a live configuration
-
-Run the redacted inventory on each host. It prints only container names, image names, states, mount destinations, and environment-variable names. It never prints secret values or connects to telephony.
+Run the two root-only **read-only** scripts. They do not install packages, create users, start containers, copy secrets, change DNS, modify firewall rules, or contact FusionPBX/SIP.
 
 ```bash
-LEMTEL_HA_ROLE=primary \
-LEMTEL_DB_CONTAINER=<actual-postgres-container> \
-LEMTEL_STORAGE_CONTAINER=<actual-storage-container> \
-bash lemtel-ha-inventory.sh
+# Hostinger primary
+LEMTEL_HA_ROLE=hostinger_primary \
+LEMTEL_DB_CONTAINER=supabase-db \
+LEMTEL_STORAGE_CONTAINER=supabase-storage \
+bash lemtel-ha-primary-replication-inventory.sh
+
+# DigitalOcean standby
+LEMTEL_HA_ROLE=digitalocean_standby \
+bash lemtel-ha-standby-preflight.sh
 ```
 
-The matching DigitalOcean command uses `LEMTEL_HA_ROLE=standby`. The actual output is required to verify the PostgreSQL major version, image compatibility, storage backend, correct data directories, and which configuration files are safe to modify.
+The primary inventory identifies the actual PostgreSQL files, runtime settings, container mount sources, published database ports, active replication slots and the Storage backend class without printing passwords, JWTs, API keys or other credentials. The standby preflight records disk, memory, existing listeners and required tools without changing them.
 
-Before any write, the rollout needs a working restricted administrator identity for both hosts, the actual storage backend, a routing provider that supports health checks, and the owner’s choice for the acknowledgement policy:
+## Controlled implementation after preflight
 
-- **Availability-first**: asynchronous streaming replication with measured replication-lag alerts. This keeps Hostinger writable when the standby is unavailable, but the accepted recovery point objective must be defined.
-- **Durability-first**: synchronous acknowledgement from the standby. This minimizes data loss for acknowledged writes, but Hostinger can block writes while DigitalOcean is unavailable.
+1. Build a private encrypted host-to-host path. PostgreSQL port 5432 remains unavailable to the public internet.
+2. Install matching PostgreSQL 17 images on DigitalOcean and bind the standby only to the private path.
+3. Add a dedicated `LOGIN REPLICATION` role, a physical replication slot and a `pg_hba.conf` rule limited to the private standby address. The role password is created and transferred through root-only files; it is never committed, echoed or copied through GitHub artifacts.
+4. Create the standby using `pg_basebackup`, `standby.signal` and `primary_conninfo`. Confirm `pg_stat_replication`, `pg_stat_wal_receiver`, replay lag and WAL-retention bounds.
+5. Configure checksum-verified Storage replication according to the confirmed backend. PostgreSQL volume copying is prohibited because it is not a safe replication mechanism.
+6. Deploy the same immutable Lemtel artifact and separately managed encrypted runtime configuration to the standby. Plaintext `.env` files and private keys are never replicated.
+7. Add persistent health checks, replication/storage integrity alerts, fencing and an explicit promotion/failback runbook.
+8. Configure controlled external routing only after private readiness and a maintenance-window drill have passed. The standby will not auto-promote until fencing prevents split brain.
 
-No default is assumed because that choice changes production behavior.
-
-## Required implementation sequence
-
-1. Verify two non-root, restricted administration identities and the exact current Docker/Supabase inventory.
-2. Build a private encrypted host-to-host replication path; PostgreSQL port 5432 remains unavailable to the public internet.
-3. Match PostgreSQL major versions and image digests. Configure WAL, replication role, `pg_hba.conf`, replication slot, and a base backup only from the actual inventory.
-4. Configure the DigitalOcean database with `standby.signal`, `primary_conninfo`, and the primary slot. Confirm `pg_stat_replication`, `pg_stat_wal_receiver`, replay lag, and disk/WAL retention monitoring.
-5. Configure storage-object replication based on the discovered backend. The process must provide versioning, checksums, retry behavior, and an integrity alert; copying PostgreSQL volumes is prohibited.
-6. Install the same immutable application artifact and separately managed encrypted secrets on both hosts. Plaintext `.env` files and private keys are never replicated.
-7. Add private readiness checks, fencing, alerting, and a documented failback path. The standby cannot automatically promote unless fencing proves the Hostinger writer is inactive.
-8. Configure external active–passive health-checked routing only after both private endpoints are healthy. The DNS/routing provider has not yet been identified in the current environment.
-9. Run a scheduled maintenance-window failover drill, capture recovery point/time measurements, validate Auth, storage and Lemtel-only application paths, then test failback.
+PostgreSQL documents streaming replication as asynchronous by default and recommends a dedicated replication account, `wal_level=replica`, adequate sender/slot settings, a base backup and a replication slot or WAL retention policy. [PostgreSQL warm standby](https://www.postgresql.org/docs/current/warm-standby.html)
+Supabase documents database state and Storage objects as separate operational components, so Storage requires its own replication procedure. [Supabase self-hosted restore](https://supabase.com/docs/guides/self-hosting/restore-from-platform)
 
 ## Boundaries
 
-- No Planiprêt data is copied, queried, or used as a replication source.
-- No FusionPBX, SIP, WSS, TURN, call routing, or incoming-call configuration is changed.
-- No automatic promotion runs without a fencing mechanism and separate health evidence.
-- No public DigitalOcean listener or DNS change is enabled before the standby has passed the controlled test.
-- A live call cannot be guaranteed to survive a primary failure; the failover objective is safe recovery for new requests and persisted application data.
+- No Planiprêt data is queried, copied or used as a replication source.
+- No FusionPBX, SIP, WSS, TURN, call routing or incoming-call configuration is changed.
+- No public DigitalOcean application or database listener is enabled during preflight.
+- No automatic promotion, DNS switch or client cutover happens before fencing, health evidence and a documented drill.
+- A call in progress cannot be guaranteed to survive primary loss. This architecture protects persisted Lemtel data and enables recovery for new requests after a controlled cutover.

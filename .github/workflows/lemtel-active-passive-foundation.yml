@@ -5,12 +5,14 @@ on:
     paths:
       - 'infra/lemtel-resilience/active-passive/**'
       - 'scripts/lemtel-active-passive-foundation*'
+      - 'scripts/lemtel-ha-preflight-scripts.test.mjs'
       - '.github/workflows/lemtel-active-passive-foundation.yml'
   push:
     branches: [lemtel/integration]
     paths:
       - 'infra/lemtel-resilience/active-passive/**'
       - 'scripts/lemtel-active-passive-foundation*'
+      - 'scripts/lemtel-ha-preflight-scripts.test.mjs'
       - '.github/workflows/lemtel-active-passive-foundation.yml'
 
 permissions:
@@ -27,12 +29,16 @@ jobs:
           node-version: '22'
       - name: Validate approved foundation and its safety boundaries
         run: |
-          node --test scripts/lemtel-active-passive-foundation.test.mjs
-          node scripts/lemtel-active-passive-foundation.mjs | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x = JSON.parse(s); if (x.status !== "active_passive_foundation_authorized_pending_evidence" || !x.implementation_authorized || x.automatic_failover_enabled || x.fusionpbx_or_sip_change_authorized) process.exit(1) })'
+          node --test scripts/lemtel-active-passive-foundation.test.mjs scripts/lemtel-ha-preflight-scripts.test.mjs
+          node scripts/lemtel-active-passive-foundation.mjs | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x = JSON.parse(s); if (x.status !== "active_passive_availability_first_preflight_authorized" || !x.implementation_authorized || x.commit_acknowledgement_policy !== "availability_first_async_streaming_with_measured_lag" || x.automatic_failover_enabled || x.fusionpbx_or_sip_change_authorized) process.exit(1) })'
       - name: Confirm inventory helper is read-only and redacted
         run: |
           test -x infra/lemtel-resilience/active-passive/lemtel-ha-inventory.sh
           bash -n infra/lemtel-resilience/active-passive/lemtel-ha-inventory.sh
+          test -x infra/lemtel-resilience/active-passive/lemtel-ha-primary-replication-inventory.sh
+          bash -n infra/lemtel-resilience/active-passive/lemtel-ha-primary-replication-inventory.sh
+          test -x infra/lemtel-resilience/active-passive/lemtel-ha-standby-preflight.sh
+          bash -n infra/lemtel-resilience/active-passive/lemtel-ha-standby-preflight.sh
           if grep -Eq '(^|[^[:alnum:]_])(curl|wget|ssh|rsync|scp|restic|pg_basebackup|pg_ctl|docker[[:space:]]+compose[[:space:]]+up|systemctl[[:space:]]+(start|restart)|iptables)([^[:alnum:]_]|$)' infra/lemtel-resilience/active-passive/lemtel-ha-inventory.sh; then
             echo 'inventory helper is not read-only' >&2
             exit 1

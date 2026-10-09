@@ -457,7 +457,7 @@ Deno.serve(async (req) => {
         transcript_segments: segments,
         transcript_source: "netsapiens",
         transcript_fetched_at: new Date().toISOString(),
-      }).eq("id", call_db_id);
+      }).eq("id", row?.id ?? call_db_id);
     } catch { /* best-effort cache */ }
   }
   return json({ success: true, available: true, reason: "fresh", ns_callid, domain, segments, raw: transcript });

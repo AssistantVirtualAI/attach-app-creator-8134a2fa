@@ -6,6 +6,7 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authorizeCallAccess, allowCallViewing } from "../_shared/planipret-call-access.ts";
+import { resolveCallRow } from "../_shared/resolve-call-row.ts";
 // @ts-ignore npm package has no bundled TS declarations.
 import GSMDecoder from "https://esm.sh/gsm-decoder@1.0.0";
 
@@ -425,12 +426,8 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   if ((!ns_callid || !ns_extension || preferUrl) && call_db_id) {
-    const { data } = await admin
-      .from("planipret_phone_calls")
-      .select("id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, recording_storage_path, started_at, duration_seconds, from_number, to_number, save_consent, deleted_at")
-      .eq("id", call_db_id)
-      .maybeSingle();
-    row = data;
+    row = await resolveCallRow(admin, call_db_id,
+      "id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, recording_storage_path, started_at, duration_seconds, from_number, to_number, save_consent, deleted_at");
     if (!row) return json({ success: false, error: "call_not_found" }, 404);
     const access = await authorizeCallAccess(req, admin, row);
     if (!access.ok) return json({ success: false, error: access.error }, access.status);

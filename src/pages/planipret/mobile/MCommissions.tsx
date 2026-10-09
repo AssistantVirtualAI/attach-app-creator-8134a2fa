@@ -99,7 +99,7 @@ function rangeFor(period: Period, customFrom: string, customTo: string) {
   const iso = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   if (period === "custom") return { from: customFrom, to: customTo };
-  if (period === "year") return { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` };
+  if (period === "year") return { from: `${now.getFullYear()}-01-01`, to: iso(now) };
   if (period === "ytd") return { from: `${now.getFullYear()}-01-01`, to: iso(now) };
   if (period === "quarter") {
     const q = Math.floor(now.getMonth() / 3);
@@ -183,7 +183,7 @@ export default function MCommissions() {
   // rows are never shared across brokers on a device.
   const cacheScope = String(profile?.user_id ?? profile?.id ?? "anonymous");
   const reportCacheKey = useMemo(
-    () => statsCacheKey(isAdmin ? "admin" : "broker", [cacheScope, "paid-unique-v3", JSON.stringify(filters)]),
+    () => statsCacheKey(isAdmin ? "admin" : "broker", [cacheScope, "paid-fundings-v4", JSON.stringify(filters)]),
     [isAdmin, cacheScope, filters],
   );
   const metadataCacheKey = useMemo(

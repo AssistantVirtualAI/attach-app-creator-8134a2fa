@@ -90,15 +90,6 @@ function matches(r: RegisterRow, c: Criteria): boolean {
 
 const normalizedKeyPart = (value: string | null | undefined) => (value ?? "").trim().toLocaleLowerCase("fr-CA");
 
-/** Volume uniqueness key: contract + lender + mortgage type + loan amount (absolute). */
-const volumeKey = (r: RegisterRow) =>
-  [
-    normalizedKeyPart(r.number),
-    normalizedKeyPart(r.institution),
-    normalizedKeyPart(r.mortgage_type),
-    Math.abs(n(r.loan_amt)).toFixed(2),
-  ].join("|");
-
 /**
  * A `base` row without a loan amount is never a mortgage file: Maestro uses it for
  * referral / partner payouts (insurers, "Elle Conseille", iA referrals, ...).
@@ -107,7 +98,7 @@ const volumeKey = (r: RegisterRow) =>
 const isReferralPayout = (r: RegisterRow) => isBase(r) && n(r.loan_amt) === 0;
 
 /** Per-row classification memo (regex + string work done once per row, not per period). */
-interface RowFlags { base: boolean; adjustment: boolean; insurance: boolean; referral: boolean; loan: number; vKey: string; dKey: string }
+interface RowFlags { base: boolean; adjustment: boolean; insurance: boolean; referral: boolean; loan: number; dKey: string }
 const flagCache = new WeakMap<RegisterRow, RowFlags>();
 function flags(r: RegisterRow): RowFlags {
   let f = flagCache.get(r);
@@ -118,7 +109,6 @@ function flags(r: RegisterRow): RowFlags {
       insurance: isInsurance(r),
       referral: isReferralPayout(r),
       loan: n(r.loan_amt),
-      vKey: volumeKey(r),
       dKey: normalizedKeyPart(r.number),
     };
     flagCache.set(r, f);
@@ -179,13 +169,12 @@ function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
 
   // Negative base rows are commission clawbacks: they never remove the funded
   // volume of their positive twin, they simply do not add volume themselves.
-  const seen = new Set<string>();
   const volume: RegisterRow[] = [];
   for (const r of candidates) {
     const f = flags(r);
     if (f.loan < 0) { excluded.push({ row: r, reason: "reversal_row" }); continue; }
-    if (seen.has(f.vKey)) { excluded.push({ row: r, reason: "duplicate_amount" }); continue; }
-    seen.add(f.vKey);
+    // Separate dated paid base entries are separate funding tranches even when
+    // contract, lender, product and loan amount match. Only units are unique.
     volume.push(r);
   }
 
@@ -209,9 +198,9 @@ function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
 
 /**
  * VOLUME rows = base rows, in window, no adjustments, no insurance, positive loan amounts.
- * Uniqueness = contract + lender + mortgage type + loan amount:
- *   - exact repeated amounts count once,
- *   - a negative reversal cancels its matching positive row.
+ * Each positive, non-adjustment base entry contributes its funded amount.
+ * Repeated loan amounts are not duplicate fundings; contract uniqueness applies
+ * only to units. Negative clawbacks never subtract funded volume.
  */
 export function volumeTranches(rows: RegisterRow[], w: Window): RegisterRow[] {
   return computeWindow(rows, w).volume;
@@ -250,9 +239,8 @@ export function helperFlags(
 
 /**
  * DEALS = count of base rows flagged unique_deal = 1, keyed on the contract number only.
- * Base rows in window (no adjustments, no insurance); rows cancelled by a negative
- * reversal or exact repeats never create a deal. Zero-amount base rows still count
- * as a contract, per the workbook definition (deals key = contract number only).
+ * Positive base rows in window (no adjustments, insurance or referral payouts);
+ * repeated fundings of the same contract never create a second unit.
  */
 export function dealContracts(rows: RegisterRow[], w: Window): RegisterRow[] {
   return computeWindow(rows, w).deals;
@@ -385,14 +373,14 @@ export function resolveWindow(
       // "Same period last year": for the year in progress, the prior-year twin stops
       // at the same calendar day, otherwise the comparison mixes a partial year with
       // a full one (that is what produced the wrong negative deltas).
-      const today = new Date();
-      const cy = today.getUTCFullYear();
+      const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Toronto" }));
+      const cy = today.getFullYear();
       const priorEnd = year === cy
-        ? dstr(year - 1, today.getUTCMonth() + 1, monthEndDay(year - 1, today.getUTCMonth() + 1))
+        ? dstr(year - 1, today.getMonth() + 1, Math.min(today.getDate(), monthEndDay(year - 1, today.getMonth() + 1)))
         : dstr(year - 1, 12, 31);
       return {
         window: year === cy
-          ? { start: dstr(year, 1, 1), end: dstr(year, today.getUTCMonth() + 1, monthEndDay(year, today.getUTCMonth() + 1)) }
+          ? { start: dstr(year, 1, 1), end: dstr(year, today.getMonth() + 1, today.getDate()) }
           : yearWindow(year),
         priorWindow: { start: dstr(year - 1, 1, 1), end: priorEnd },
         label: String(year),
@@ -402,11 +390,16 @@ export function resolveWindow(
     default: {
       // For the year in progress, YTD never runs past the current month: comparing
       // Jan→Dec of a partial year with a full prior year produced wrong PY figures.
-      const today = new Date();
-      const cap = year === today.getUTCFullYear() ? today.getUTCMonth() + 1 : 12;
+      const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Toronto" }));
+      const cap = year === today.getFullYear() ? today.getMonth() + 1 : 12;
       const m = Math.min(cap, Math.max(1, index || cap));
       // Same period last year, month-end aligned: 2026-01-01→2026-08-31 vs 2025-01-01→2025-08-31.
-      return { window: ytdWindow(year, m), priorWindow: ytdWindow(year - 1, m), label: `YTD ${m}` };
+      const currentMonth = year === today.getFullYear() && m === cap;
+      return {
+        window: currentMonth ? { start: dstr(year, 1, 1), end: dstr(year, m, today.getDate()) } : ytdWindow(year, m),
+        priorWindow: currentMonth ? { start: dstr(year - 1, 1, 1), end: dstr(year - 1, m, Math.min(today.getDate(), monthEndDay(year - 1, m))) } : ytdWindow(year - 1, m),
+        label: `YTD ${m}`,
+      };
     }
   }
 }

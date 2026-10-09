@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   periodVolume,
   periodDeals,
@@ -76,15 +76,15 @@ describe("commission volume rules", () => {
     expect(periodVolume(rows, window)).toBe(700_000);
   });
 
-  it("counts exact repeated amounts once and keeps funded volume of clawed-back rows", () => {
+  it("counts separate funding entries with matching amounts and keeps funded volume of clawed-back rows", () => {
     const rows = [
       row({ source_row: 1, loan_amt: 300_000, amount: 1_000 }),
-      row({ source_row: 2, loan_amt: 300_000, amount: 0 }), // exact repeat -> ignored
+      row({ source_row: 2, date_trans: "2026-06-02", loan_amt: 300_000, amount: 0 }),
       row({ source_row: 3, number: "PLPR-9", loan_amt: 250_000, amount: 500 }),
       row({ source_row: 4, number: "PLPR-9", loan_amt: -250_000, amount: 0 }), // commission clawback only
     ];
 
-    expect(periodVolume(rows, window)).toBe(550_000);
+    expect(periodVolume(rows, window)).toBe(850_000);
     expect(periodDeals(rows, window)).toBe(2);
     expect(periodCommission(rows, window)).toBe(1_500);
   });
@@ -92,6 +92,17 @@ describe("commission volume rules", () => {
 });
 
 describe("workbook spec conformance", () => {
+  it("stops the current year and YTD on today's Toronto date, with the same prior-year day", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-10T01:00:00Z"));
+    try {
+      for (const granularity of ["year", "ytd"] as const) {
+        const result = resolveWindow(granularity, 2026, 10);
+        expect(result.window).toEqual({ start: "2026-01-01", end: "2026-10-09" });
+        expect(result.priorWindow).toEqual({ start: "2025-01-01", end: "2025-10-09" });
+      }
+    } finally { vi.useRealTimers(); }
+  });
   it("uses a calendar fiscal year (Jan 1 - Dec 31) with CY/PY twins", () => {
     expect(yearWindow(2026)).toEqual({ start: "2026-01-01", end: "2026-12-31" });
     const r = resolveWindow("ytd", 2026, 7);

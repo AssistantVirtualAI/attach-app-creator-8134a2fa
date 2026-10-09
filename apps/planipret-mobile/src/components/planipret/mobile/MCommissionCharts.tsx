@@ -1,5 +1,5 @@
 // Graphiques de commissions mobiles — parité avec le portail (RegisterCommissions).
-// Les données proviennent uniquement de l'action `deposits` de
+// Les données proviennent uniquement de l'action `analytics` de
 // `planipret-commission-reports` (année courante + même fenêtre l'an dernier).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isStatsCacheFresh, readStatsCache, statsCacheKey, writeStatsCache } from "@/lib/planipret/commissionsCache";
@@ -8,8 +8,6 @@ import {
   BarChart, Bar, ComposedChart, Line, AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-
-const CHART_ROWS = 250;
 
 const COLORS = ["#5B8FF9", "#9B7FE8", "#2E9BDC", "#F0B429", "#70AD47", "#ED7D31", "#A5A5A5", "#8B5CF6"];
 
@@ -113,8 +111,8 @@ export default function MCommissionCharts({
     const call = (f: Record<string, unknown>) =>
       ppEdgeInvoke("planipret-commission-reports", {
         action: "analytics",
-        filters: { ...f, page: 1, per_page: CHART_ROWS },
-      }, { retries: 1, timeoutMs: 12_000 });
+        filters: f,
+      }, { retries: 1, timeoutMs: 30_000 });
 
     (async () => {
       const [a, b] = await Promise.all([
@@ -122,7 +120,7 @@ export default function MCommissionCharts({
         call({ ...filters, date_from: shiftYear(from, -1), date_to: shiftYear(to, -1) }),
       ]);
       if (cancelled) return;
-      if (a.error || b.error || (a.data as any)?.error || (b.data as any)?.error || (a.data as any)?.truncated || (b.data as any)?.truncated) { setFailed(true); return; }
+      if (a.error || b.error || (a.data as any)?.error || (b.data as any)?.error || (a.data as any)?.success === false || (b.data as any)?.success === false || (a.data as any)?.truncated || (b.data as any)?.truncated) { setFailed(true); return; }
       const expand = (data: any): Row[] => data?.analytics ? [
         ...data.analytics.months.map((m: any) => ({ date_trans: `${m.key}-01`, loan_amt: m.volume, amount: m.commission, deals: m.deals, kind: "month" })),
         ...data.analytics.lenders.map((l: any) => ({ institution: l.key, loan_amt: l.volume, kind: "lender" })),
@@ -232,17 +230,8 @@ export default function MCommissionCharts({
 
   if (months.length === 0) return null;
 
-  const truncated = false;
-
   return (
     <div data-testid="commission-charts">
-      {truncated && (
-        <p className="text-[11px] mb-2" style={{ color: "#F0B429" }}>
-          {fr
-            ? `Graphiques basés sur les ${CHART_ROWS} dépôts les plus récents de la période.`
-            : `Charts based on the ${CHART_ROWS} most recent deposits of the period.`}
-        </p>
-      )}
 
       <ChartCard title={fr ? "Volume mensuel — année courante vs précédente" : "Monthly volume — CY vs PY"} height={210}>
         <BarChart data={months} margin={{ top: 4, right: 4, left: -14, bottom: 0 }}>

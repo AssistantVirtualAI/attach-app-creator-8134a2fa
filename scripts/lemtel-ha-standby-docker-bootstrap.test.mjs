@@ -21,6 +21,7 @@ test('standby Docker bootstrap prepares only a matching PostgreSQL image and ine
   assert.match(source, /systemctl enable --now docker/u);
   assert.match(source, /docker pull/u);
   assert.match(source, /docker run --rm --entrypoint postgres/u);
+  assert.ok(source.includes('if ! [[ "$postgres_version" =~ ^postgres\\ \\(PostgreSQL\\)\\ 17\\.[0-9]+$ ]]; then'));
   assert.match(source, /postgres_image_major=17/u);
   assert.match(source, /containers_started=false/u);
   assert.match(source, /standby_directories_prepared=true/u);

@@ -99,13 +99,10 @@ fi
 
 docker pull "$image"
 postgres_version="$(docker run --rm --entrypoint postgres "$image" --version)"
-case "$postgres_version" in
-  *'PostgreSQL 17.'*) ;;
-  *)
-    printf 'standby_docker_bootstrap_status=unexpected_postgres_major\n' >&2
-    exit 1
-    ;;
-esac
+if ! [[ "$postgres_version" =~ ^postgres\ \(PostgreSQL\)\ 17\.[0-9]+$ ]]; then
+  printf 'standby_docker_bootstrap_status=unexpected_postgres_major\n' >&2
+  exit 1
+fi
 
 printf 'standby_docker_bootstrap_format=lemtel_standby_docker_bootstrap_v1\n'
 printf 'declared_role=%s\n' "$role"

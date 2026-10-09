@@ -5,6 +5,9 @@
 .pending-commissions .pending-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px; border: 1px solid var(--pp-bg-border-2); background: var(--pp-bg-surface); border-radius: 8px; }
 .pending-commissions select, .pending-commissions input { min-width: 0; height: 36px; border-radius: 6px; background: var(--pp-bg-elevated); color: var(--pp-text-primary); border: 1px solid var(--pp-bg-border-2); padding: 0 10px; font-size: 12px; }
 .pending-commissions .pending-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--pp-bg-border-2); padding: 14px 0 10px; }
+.pending-commissions .pending-tab, .pending-commissions .pending-toolbar button { color: var(--pp-text-secondary); }
+.pending-commissions .pending-toolbar button[aria-pressed="true"] { background: var(--pp-brand-accent-2); color: white; }
+.pending-commissions .pending-header button { background: var(--pp-bg-surface); color: var(--pp-text-primary); border-color: var(--pp-bg-border-2); }
 .pending-commissions .pending-tab[aria-selected="true"] { color: var(--pp-brand-accent-2); background: color-mix(in srgb, var(--pp-brand-accent-2) 12%, transparent); }
 .pending-commissions .pending-panel { min-width: 0; padding: 18px 0; border-top: 1px solid var(--pp-bg-border); }
 .pending-commissions .pending-panel h4 { font-size: 14px; font-weight: 700; display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }

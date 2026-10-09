@@ -479,11 +479,13 @@ export const mobileApi = {
         transcript: meta?.transcript || meta?.transcript_text || undefined,
         organization_id: meta?.organization_id || undefined,
         force: meta?.force || undefined,
+        // Lemtel: Claude est définitivement déconnecté — ne jamais l'utiliser.
+        disable_claude: true,
       }),
     },
     { jobId: 'job-' + Date.now() },
   ),
-  transcribeCall: async (callId: string, meta?: { recording_path?: string | null; recording_name?: string | null; domain_uuid?: string | null; xml_cdr_uuid?: string | null; organization_id?: string | null; vm_id?: string | null; force?: boolean; disableClaude?: boolean }) => {
+  transcribeCall: async (callId: string, meta?: { recording_path?: string | null; recording_name?: string | null; domain_uuid?: string | null; xml_cdr_uuid?: string | null; organization_id?: string | null; vm_id?: string | null; force?: boolean }) => {
     const cid = String(callId);
     const xmlCdrUuid = meta?.xml_cdr_uuid || (meta?.recording_name ? String(meta.recording_name).replace(/\.(mp3|wav|ogg|m4a|webm)$/i, '') : '') || callId;
     const vm = meta?.vm_id ? ` vm_id=${meta.vm_id}` : '';
@@ -500,7 +502,8 @@ export const mobileApi = {
       organization_id: meta?.organization_id || '71755d33-ed64-4ad5-a828-61c9d2029eb7',
       vm_id: meta?.vm_id || undefined,
       force: meta?.force || undefined,
-      disable_claude: meta?.disableClaude || undefined,
+      // Lemtel: Claude est définitivement déconnecté — ne jamais l'utiliser.
+      disable_claude: true,
     };
     console.log(`${tag} action=invoke`, {
       has_recording_path: !!payload.recording_path,

@@ -10,6 +10,7 @@ import { PAPage, PAPageHeader, PACard, PATable, PAToolbar, PAStats, PAStat } fro
 type Month = { month: number; volume: number; deals: number; commission: number };
 type Broker = { id: string; name: string };
 type ViewMode = "broker" | "team";
+type AuditLine = { date_trans?: string | null; target_name?: string | null; loan_amt: number; amount: number; in_volume: boolean; in_deals: boolean; in_commission: boolean };
 
 const MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
@@ -35,9 +36,11 @@ export default function PABrokerCommissions() {
   const [brokers, setBrokers] = useState<Broker[]>([]);
   const [broker, setBroker] = useState<string>("");
   const [viewMode, setViewMode] = useState<ViewMode>("broker");
-  const [teamMembers, setTeamMembers] = useState<string[]>([]);
+  const [teamMember, setTeamMember] = useState("");
   const [monthly, setMonthly] = useState<Month[]>([]);
   const [monthlyPy, setMonthlyPy] = useState<Month[]>([]);
+  const [auditRows, setAuditRows] = useState<AuditLine[]>([]);
+  const [auditRowsPy, setAuditRowsPy] = useState<AuditLine[]>([]);
   const [totals, setTotals] = useState<{ volume: number; deals: number; commission: number } | null>(null);
   const [totalsPy, setTotalsPy] = useState<{ volume: number; deals: number; commission: number } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -73,9 +76,11 @@ export default function PABrokerCommissions() {
     } else {
       setMonthly((cur.data as any).monthly ?? []);
       setTotals((cur.data as any).totals ?? null);
+      setAuditRows((cur.data as any).rows ?? []);
       const pyOk = !py.error && (py.data as any)?.ok;
       setMonthlyPy(pyOk ? ((py.data as any).monthly ?? []) : []);
       setTotalsPy(pyOk ? ((py.data as any).totals ?? null) : null);
+      setAuditRowsPy(pyOk ? ((py.data as any).rows ?? []) : []);
     }
     setLoading(false);
   }, [broker, year]);
@@ -84,8 +89,43 @@ export default function PABrokerCommissions() {
 
   const brokerName = useMemo(() => brokers.find((b) => b.id === broker)?.name ?? "", [brokers, broker]);
 
-  const chartData = useMemo(() => monthly.map((m) => {
-    const prev = monthlyPy.find((x) => x.month === m.month);
+  const normalizeName = (value: string | null | undefined) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  const teamOptions = useMemo(() => Array.from(new Set([...auditRows, ...auditRowsPy]
+    .map((row) => String(row.target_name ?? "").trim())
+    .filter((name) => name && normalizeName(name) !== normalizeName(brokerName))))
+    .sort((a, b) => a.localeCompare(b, "fr")), [auditRows, auditRowsPy, brokerName]);
+
+  const aggregateRows = (rows: AuditLine[]) => {
+    const selected = rows.filter((row) => {
+      const target = normalizeName(row.target_name);
+      const owner = normalizeName(brokerName);
+      if (viewMode === "broker") return !target || target === owner;
+      return target && target !== owner && (!teamMember || target === normalizeName(teamMember));
+    });
+    const months = Array.from({ length: 12 }, (_, index) => ({ month: index + 1, volume: 0, deals: 0, commission: 0 }));
+    for (const row of selected) {
+      const month = Number(String(row.date_trans ?? "").slice(5, 7));
+      const bucket = months[month - 1];
+      if (!bucket) continue;
+      if (row.in_volume) bucket.volume += Number(row.loan_amt) || 0;
+      if (row.in_deals) bucket.deals += 1;
+      if (row.in_commission) bucket.commission += Number(row.amount) || 0;
+    }
+    return {
+      monthly: months,
+      totals: months.reduce((sum, item) => ({ volume: sum.volume + item.volume, deals: sum.deals + item.deals, commission: sum.commission + item.commission }), { volume: 0, deals: 0, commission: 0 }),
+    };
+  };
+
+  const scopedCurrent = useMemo(() => auditRows.length ? aggregateRows(auditRows) : { monthly, totals }, [auditRows, monthly, totals, viewMode, teamMember, brokerName]);
+  const scopedPrior = useMemo(() => auditRowsPy.length ? aggregateRows(auditRowsPy) : { monthly: monthlyPy, totals: totalsPy }, [auditRowsPy, monthlyPy, totalsPy, viewMode, teamMember, brokerName]);
+  const visibleMonthly = scopedCurrent.monthly;
+  const visibleMonthlyPy = scopedPrior.monthly;
+  const visibleTotals = scopedCurrent.totals;
+  const visibleTotalsPy = scopedPrior.totals;
+
+  const chartData = useMemo(() => visibleMonthly.map((m) => {
+    const prev = visibleMonthlyPy.find((x) => x.month === m.month);
     return {
       name: MONTHS[m.month - 1].slice(0, 3),
       commission: m.commission,
@@ -95,11 +135,11 @@ export default function PABrokerCommissions() {
       deals: m.deals,
       dealsPy: prev?.deals ?? 0,
     };
-  }), [monthly, monthlyPy]);
+  }), [visibleMonthly, visibleMonthlyPy]);
 
-  const averageCommission = totals?.deals ? totals.commission / totals.deals : 0;
+  const averageCommission = visibleTotals?.deals ? visibleTotals.commission / visibleTotals.deals : 0;
 
-  const pyOf = (month: number) => monthlyPy.find((x) => x.month === month) ?? null;
+  const pyOf = (month: number) => visibleMonthlyPy.find((x) => x.month === month) ?? null;
 
   const exportCsv = () => {
     const head = [
@@ -108,7 +148,7 @@ export default function PABrokerCommissions() {
       `Volume ${year}`, `Volume ${year - 1}`,
       `Dossiers ${year}`, `Dossiers ${year - 1}`,
     ];
-    const body = monthly.map((m) => {
+    const body = visibleMonthly.map((m) => {
       const prev = pyOf(m.month);
       const pct = prev && prev.commission ? ((m.commission - prev.commission) / Math.abs(prev.commission)) * 100 : "";
       return [
@@ -156,9 +196,9 @@ export default function PABrokerCommissions() {
           ))}
         </div>
         {viewMode === "team" && (
-          <select aria-label="Membre de l’équipe" value={teamMembers[0] ?? ""} onChange={(e) => setTeamMembers(e.target.value ? [e.target.value] : [])}>
+          <select aria-label="Membre de l’équipe" value={teamMember} onChange={(e) => setTeamMember(e.target.value)}>
             <option value="">Toute l’équipe</option>
-            {brokers.filter((b) => b.id !== broker).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {teamOptions.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         )}
         <div className="ml-auto flex gap-2">
@@ -177,16 +217,16 @@ export default function PABrokerCommissions() {
         </div></PACard>
       )}
 
-      {totals && (
+      {visibleTotals && (
         <PAStats>
-          <PAStat icon={<WalletCards className="h-4 w-4" />} label={`Chiffre d'affaires ${year}`} value={cad(totals.commission)} hint={<>{year - 1} : {cad(totalsPy?.commission ?? 0)} · <Delta cur={totals.commission} prev={totalsPy?.commission ?? 0} /></>} />
-          <PAStat icon={<Landmark className="h-4 w-4" />} label="Volume de prêts" value={cad(totals.volume)} hint={<>{year - 1} : {cad(totalsPy?.volume ?? 0)} · <Delta cur={totals.volume} prev={totalsPy?.volume ?? 0} /></>} />
-          <PAStat icon={<BriefcaseBusiness className="h-4 w-4" />} label="Dossiers financés" value={totals.deals.toLocaleString("fr-CA")} hint={<>{year - 1} : {totalsPy?.deals ?? 0} · <Delta cur={totals.deals} prev={totalsPy?.deals ?? 0} /></>} />
+          <PAStat icon={<WalletCards className="h-4 w-4" />} label={`Chiffre d'affaires ${year}`} value={cad(visibleTotals.commission)} hint={<>{year - 1} : {cad(visibleTotalsPy?.commission ?? 0)} · <Delta cur={visibleTotals.commission} prev={visibleTotalsPy?.commission ?? 0} /></>} />
+          <PAStat icon={<Landmark className="h-4 w-4" />} label="Volume de prêts" value={cad(visibleTotals.volume)} hint={<>{year - 1} : {cad(visibleTotalsPy?.volume ?? 0)} · <Delta cur={visibleTotals.volume} prev={visibleTotalsPy?.volume ?? 0} /></>} />
+          <PAStat icon={<BriefcaseBusiness className="h-4 w-4" />} label="Dossiers financés" value={visibleTotals.deals.toLocaleString("fr-CA")} hint={<>{year - 1} : {visibleTotalsPy?.deals ?? 0} · <Delta cur={visibleTotals.deals} prev={visibleTotalsPy?.deals ?? 0} /></>} />
           <PAStat icon={<TrendingUp className="h-4 w-4" />} label="Commission moyenne" value={cad(averageCommission)} hint="Par dossier financé" />
         </PAStats>
       )}
 
-      {totals && chartData.length > 0 && (
+      {visibleTotals && chartData.length > 0 && (
         <div className="grid gap-4 xl:grid-cols-2">
           <PACard title="Commissions mensuelles" subtitle={`${brokerName} · ${year} comparé à ${year - 1}`} icon={<WalletCards className="h-4 w-4" />}>
             <ResponsiveContainer width="100%" height={285}>
@@ -235,7 +275,7 @@ export default function PABrokerCommissions() {
               </tr>
             </thead>
             <tbody>
-              {monthly.map((m) => {
+              {visibleMonthly.map((m) => {
                 const prev = pyOf(m.month);
                 return (
                   <tr key={m.month} className="border-b last:border-0">
@@ -254,7 +294,7 @@ export default function PABrokerCommissions() {
               })}
             </tbody>
           </PATable>
-          {!loading && !monthly.length && <p className="text-sm text-muted-foreground pt-3">Aucune donnée pour ce courtier.</p>}
+          {!loading && !visibleMonthly.some((m) => m.volume || m.deals || m.commission) && <p className="text-sm text-muted-foreground p-4">Aucune donnée pour cette sélection.</p>}
       </PACard>
     </PAPage>
   );

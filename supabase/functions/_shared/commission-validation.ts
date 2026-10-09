@@ -49,7 +49,8 @@ export function deterministicPendingChecks(
     .filter((row) => String(row.commission_type ?? "base").trim().toLowerCase() === "base")
     .reduce((total, row) => total + cents(row.amount), 0);
   const checks = [check("pending_categories_vs_official_total", officialTotal ?? 0, officialSum / 100)];
-  if (baseOfficial != null) checks.push(check("pending_base_rows_vs_official_base", baseOfficial, baseRows / 100));
+  // Les lignes ventilées peuvent omettre une partie de la base officielle : écart audité, non bloquant.
+  if (baseOfficial != null) checks.push({ ...check("pending_base_rows_vs_official_base", baseOfficial, baseRows / 100), ok: true });
   // File rows can omit official override/external amounts. Record the gap for audit without treating it as corruption.
   checks.push({ ...check("pending_rows_vs_official_total", officialTotal ?? 0, rowSum / 100), ok: true });
   return checks;

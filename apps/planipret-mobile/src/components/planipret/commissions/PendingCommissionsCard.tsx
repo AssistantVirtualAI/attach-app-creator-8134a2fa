@@ -97,7 +97,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
         <>
           <div className="grid grid-cols-3 gap-2 mb-3">
             {kpi(fr ? "Montant" : "Amount", cad(summary.official_total ?? summary.total_commission))}
-            {kpi(fr ? "Dossiers" : "Files", String(summary.deposit_count))}
+            {kpi(fr ? "Dossiers" : "Files", String((summary as any).deal_count || summary.deposit_count))}
             {kpi("Volume", cad(summary.total_loan_volume))}
           </div>
           {!!summary.official_by_type?.length && (

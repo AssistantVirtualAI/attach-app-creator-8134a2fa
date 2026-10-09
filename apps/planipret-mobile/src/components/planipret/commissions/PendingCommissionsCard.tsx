@@ -439,6 +439,8 @@ function Rank({ value }: { value: number }) {
 }
 export function TeamSplitPanel({ split, fr, name, title }: { split: Split; fr: boolean; name?: string; title?: string }) {
   const hasTeam = split.team_members.length > 0 && split.team.amount !== 0;
+  // Without a team the KPIs above already show the broker's own commissions.
+  if (!hasTeam) return null;
   const total = split.personal.amount + split.team.amount;
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
   const Box = ({ label, part, accent }: { label: string; part: SplitPart; accent: string }) => (

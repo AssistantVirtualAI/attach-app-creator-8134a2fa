@@ -583,10 +583,38 @@ Deno.serve(async (req) => {
       }
 
       const summary = summarize(all, truncated);
+      // Paid split: Maestro's target_name is the broker who carried the file.
+      let paid_split: unknown = null;
+      try {
+        let owner: string | null = activeReportScope.mode === "own" ? String(profile.full_name ?? "") : null;
+        if (!owner && filters.users_id) {
+          const { data: op } = await admin.from("planipret_profiles").select("full_name").eq("maestro_broker_id", String(filters.users_id)).limit(1).maybeSingle();
+          owner = (op as any)?.full_name ?? null;
+        }
+        const norm = (v: unknown) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+        if (owner) {
+          const o = norm(owner);
+          const mk = () => ({ amount: 0, files: new Set<string>(), volume: 0 });
+          const own = mk(), team = mk();
+          const mem = new Map<string, { name: string; b: ReturnType<typeof mk> }>();
+          for (const r of all as any[]) {
+            const t = norm(r.target_name);
+            const b = !t || t === o ? own : team;
+            const amt = num(r.amount); const n = String(r.number ?? "");
+            const vol = String(r.commission_type ?? "base") === "base" ? num(r.loan_amt) : 0;
+            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n) x.files.add(n); x.volume += vol; };
+            apply(b);
+            if (b === team) { const m = mem.get(t) ?? { name: String(r.target_name).trim(), b: mk() }; apply(m.b); mem.set(t, m); }
+          }
+          const out = (x: ReturnType<typeof mk>) => ({ amount: Math.round(x.amount * 100) / 100, files: x.files.size, volume: Math.round(x.volume * 100) / 100 });
+          paid_split = { personal: out(own), team: out(team), team_members: [...mem.entries()].map(([id, m]) => ({ id, name: m.name, ...out(m.b) })).sort((a, b) => b.amount - a.amount) };
+        }
+      } catch { paid_split = null; }
       log("summary rows", all.length, "total", summary.total_commission, "from", sources.length, "tokens");
       return json({
         ok: true,
         summary,
+        paid_split,
         total_available: total,
         coverage,
         sources: { queried: sources.length, failed: failures.length, failures: failures.slice(0, 10) },

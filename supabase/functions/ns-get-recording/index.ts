@@ -464,7 +464,7 @@ Deno.serve(async (req) => {
 
     // If DB already has a fully-resolved http recording_url, short-circuit.
     if (row?.recording_url && String(row.recording_url).startsWith("http")) {
-      const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts, { callDbId: call_db_id, preferUrl });
+      const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts, { callDbId: row?.id ?? call_db_id, preferUrl });
       if (direct) return direct;
     }
   } else if (!call_db_id) {
@@ -518,7 +518,7 @@ Deno.serve(async (req) => {
 
       if (r.ok && (ct.startsWith("audio") || ct.includes("octet-stream"))) {
         if (!r.body) continue;
-        return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, { callDbId: call_db_id, preferUrl });
+        return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, { callDbId: row?.id ?? call_db_id, preferUrl });
       }
       if (r.ok) {
         const rawText = await r.text();
@@ -533,7 +533,7 @@ Deno.serve(async (req) => {
         const audioUrl = pickAudioUrl(recording);
         attempt.audio_url_extracted = audioUrl;
         if (audioUrl) {
-          const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts, { callDbId: call_db_id, preferUrl });
+          const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts, { callDbId: row?.id ?? call_db_id, preferUrl });
           if (streamed) return streamed;
         }
       }

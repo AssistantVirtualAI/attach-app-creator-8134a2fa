@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Restore and verify separate Maestro sources for paid deposits and pending commissions, including Francis; no native changes or partial deployment
+
 - [x] Redesign pending commissions for admins and brokers across portal and mobile (summary, monthly trend, type breakdown, searchable broker ranking and personal monthly detail)
 
 - [x] Verify mplanipret access-check failures preserve the session and allow retry (network abort exercised, zero logout requests, real calls returned after retry)

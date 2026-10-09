@@ -51,6 +51,61 @@ function AppearanceControls() {
   );
 }
 
+const READ_ONLY_SECTIONS: Record<Exclude<WorkspaceTab, 'phone'>, {
+  testId: string;
+  Icon: React.ComponentType<{ size?: number | string; strokeWidth?: number | string }>;
+  title: I18nKey;
+  body: I18nKey;
+}> = {
+  calls: {
+    testId: 'lemtel-desktop-calls-page',
+    Icon: History,
+    title: 'workspace.callsPendingTitle',
+    body: 'workspace.callsPendingBody',
+  },
+  messages: {
+    testId: 'lemtel-desktop-messages-page',
+    Icon: MessageCircle,
+    title: 'workspace.chatPendingTitle',
+    body: 'workspace.chatPendingBody',
+  },
+  contacts: {
+    testId: 'lemtel-desktop-contacts-page',
+    Icon: Users,
+    title: 'workspace.contactsPendingTitle',
+    body: 'workspace.contactsPendingBody',
+  },
+  more: {
+    testId: 'lemtel-desktop-settings-page',
+    Icon: LayoutGrid,
+    title: 'workspace.preferencesTitle',
+    body: 'workspace.preferencesBody',
+  },
+};
+
+function ReadOnlySection({ tab, onReturnToPhone }: {
+  tab: Exclude<WorkspaceTab, 'phone'>;
+  onReturnToPhone: () => void;
+}) {
+  const { t } = useTranslation();
+  const { Icon, title, body, testId } = READ_ONLY_SECTIONS[tab];
+
+  return (
+    <section className="desktop-readonly-section" data-testid={testId} aria-live="polite">
+      <div className="desktop-readonly-card desktop-readonly-section-card">
+        <div className="desktop-readonly-section-icon"><Icon size={27} strokeWidth={2.2} /></div>
+        <p className="desktop-readonly-section-eyebrow">{t('workspace.readOnlyWorkspace')}</p>
+        <h2>{t(title)}</h2>
+        <p>{t(body)}</p>
+        <div className="desktop-readonly-section-note"><LockKeyhole size={15} />{t('workspace.noProtectedData')}</div>
+        <div className="desktop-readonly-section-actions">
+          <button type="button" onClick={onReturnToPhone}><Phone size={14} /> {t('workspace.returnToPhone')}</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /**
  * Safe authenticated workspace for the current server contract.
  * It deliberately uses no SIP, CDR, realtime, contact, or credential-loading
@@ -126,6 +181,16 @@ export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetr
         .desktop-readonly-activity-sub { margin-top: 2px; color: var(--ava-text-muted, #b8c6e8); font-size: 10px; }
         .desktop-readonly-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; color: var(--ava-text-muted, #b8c6e8); font-size: 10px; }
         .desktop-readonly-footer button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--ava-accent, #6680ff); font: 800 10px inherit; cursor: pointer; }
+        .desktop-readonly-section { display: grid; place-items: center; min-height: min(520px, calc(100vh - 215px)); }
+        .desktop-readonly-section-card { width: min(100%, 720px); padding: clamp(24px, 4vw, 42px); text-align: center; }
+        .desktop-readonly-section-icon { display: grid; place-items: center; width: 58px; height: 58px; margin: 0 auto 18px; border: 1px solid color-mix(in srgb, var(--ava-accent, #6680ff) 48%, transparent); border-radius: 19px; color: var(--ava-accent, #6680ff); background: linear-gradient(135deg, var(--ava-accent-soft, rgba(0,35,230,.22)), var(--ava-overlay-02, rgba(255,255,255,.02))); box-shadow: var(--ava-accent-glow, 0 10px 36px -10px rgba(0,35,230,.60)); }
+        .desktop-readonly-section-eyebrow { margin: 0; color: var(--ava-text-subtle, #8a9bc4); font-size: 10px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
+        .desktop-readonly-section h2 { margin: 9px 0 10px; color: var(--ava-text, #f6f9ff); font-size: clamp(22px, 3vw, 30px); letter-spacing: -.75px; }
+        .desktop-readonly-section p { max-width: 530px; margin: 0 auto; color: var(--ava-text-muted, #b8c6e8); font-size: 13px; line-height: 1.55; }
+        .desktop-readonly-section-note { display: inline-flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; margin-top: 22px; padding: 10px 13px; border: 1px solid color-mix(in srgb, var(--ava-success, #22d39a) 36%, transparent); border-radius: 12px; color: var(--ava-success, #22d39a); background: color-mix(in srgb, var(--ava-success, #22d39a) 10%, transparent); font-size: 11px; font-weight: 760; }
+        .desktop-readonly-section-actions { display: flex; justify-content: center; gap: 10px; margin-top: 25px; }
+        .desktop-readonly-section-actions button { min-height: 40px; padding: 0 14px; border: 1px solid var(--ava-border-strong, rgba(180,200,255,.28)); border-radius: 11px; background: var(--ava-surface-elev, rgba(255,255,255,.08)); color: var(--ava-text, #f6f9ff); font: 800 11px inherit; cursor: pointer; }
+        .desktop-readonly-section-actions button:hover { border-color: var(--ava-accent, #6680ff); background: var(--ava-accent-soft, rgba(0,35,230,.22)); }
         @media (max-width: 880px) { .desktop-readonly-shell { grid-template-columns: 1fr; } .desktop-readonly-rail { display: block; padding: 14px; border-right: 0; border-bottom: 1px solid rgba(150,185,255,.18); } .desktop-readonly-brand, .desktop-readonly-status, .desktop-readonly-powered { display: none; } .desktop-readonly-nav { display: flex; overflow-x: auto; } .desktop-readonly-nav button { min-width: max-content; } .desktop-readonly-content { padding: 18px; } }
         @media (max-width: 660px) { .desktop-readonly-header { min-height: 62px; padding: 0 14px; } .desktop-readonly-header h1 { font-size: 16px; } .desktop-readonly-theme-switch button { padding: 5px 6px; font-size: 0; } .desktop-readonly-theme-switch button::first-letter { font-size: 12px; } .desktop-readonly-greeting { display: block; } .desktop-readonly-secure { margin-top: 12px; } .desktop-readonly-grid { grid-template-columns: 1fr; } .desktop-readonly-dialer { min-height: 0; padding: 18px; } }
       `}</style>
@@ -167,47 +232,53 @@ export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetr
           </header>
 
           <div className="desktop-readonly-content">
-            <div className="desktop-readonly-greeting">
-              <div>
-                <h2>{t('workspace.desktopReadyTitle')}</h2>
-                <p>{t('workspace.readOnlyWorkspaceExplanation')}</p>
-              </div>
-              <div className="desktop-readonly-secure"><ShieldCheck size={14} />{t('workspace.secureSession')}</div>
-            </div>
-
-            <div className="desktop-readonly-grid">
-              <section className="desktop-readonly-card desktop-readonly-dialer">
-                <div className="desktop-readonly-card-title"><span>{t('preview.yourLine')}</span><span className="desktop-readonly-chip">{t('workspace.callingDisabled')}</span></div>
-                <div className="desktop-readonly-number" data-empty={!dial}>{dial || t('workspace.enterNumber')}</div>
-                <div className="desktop-readonly-pad">
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].map((digit) => <button key={digit} type="button" onClick={() => append(digit)}>{digit}</button>)}
-                </div>
-                <div className="desktop-readonly-call-row">
-                  <button type="button" onClick={() => setDial('')}>{t('workspace.clear')}</button>
-                  <button type="button" className="desktop-readonly-call" disabled aria-label={t('workspace.callingDisabled')} title={t('workspace.telephonyNotProvisioned')}><PhoneOff size={26} /></button>
-                  <button type="button" onClick={() => setDial((current) => current.slice(0, -1))} aria-label={t('workspace.backspace')}>⌫</button>
-                </div>
-              </section>
-
-              <div className="desktop-readonly-side">
-                <section className="desktop-readonly-card desktop-readonly-quick">
-                  <div className="desktop-readonly-card-title"><span>{t('workspace.readOnlyWorkspace')}</span><LockKeyhole size={16} color="var(--ava-accent, #6680ff)" /></div>
-                  <div className="desktop-readonly-quick-list">
-                    <button className="desktop-readonly-action" type="button" onClick={() => setActive('messages')}><span><MessageCircle size={16} /></span>{t('workspace.teamChat')}<ChevronRight size={15} style={{ marginLeft: 'auto' }} /></button>
-                    <button className="desktop-readonly-action" type="button" onClick={() => setActive('calls')}><span><History size={16} /></span>{t('preview.reviewRecent')}<ChevronRight size={15} style={{ marginLeft: 'auto' }} /></button>
-                    <button className="desktop-readonly-action" type="button" onClick={() => setActive('contacts')}><span><Users size={16} /></span>{t('nav.contacts')}<ChevronRight size={15} style={{ marginLeft: 'auto' }} /></button>
+            {active === 'phone' ? (
+              <>
+                <div className="desktop-readonly-greeting">
+                  <div>
+                    <h2>{t('workspace.desktopReadyTitle')}</h2>
+                    <p>{t('workspace.readOnlyWorkspaceExplanation')}</p>
                   </div>
-                </section>
+                  <div className="desktop-readonly-secure"><ShieldCheck size={14} />{t('workspace.secureSession')}</div>
+                </div>
 
-                <section className="desktop-readonly-card desktop-readonly-activity">
-                  <div className="desktop-readonly-card-title"><span>{t('workspace.workspaceStatus')}</span><Bell size={16} color="var(--ava-text-subtle, #8a9bc4)" /></div>
-                  <div className="desktop-readonly-activity-row"><div className="desktop-readonly-avatar"><ShieldCheck size={16} /></div><div><div className="desktop-readonly-activity-title">{t('workspace.desktopReadyEyebrow')}</div><div className="desktop-readonly-activity-sub">{email}</div></div></div>
-                  <div className="desktop-readonly-activity-row"><div className="desktop-readonly-avatar"><Users size={16} /></div><div><div className="desktop-readonly-activity-title">{t('workspace.organization')}</div><div className="desktop-readonly-activity-sub">{organizationId ? t('workspace.verified') : t('workspace.secureSession')}</div></div></div>
-                  <div className="desktop-readonly-activity-row"><div className="desktop-readonly-avatar"><PhoneOff size={16} /></div><div><div className="desktop-readonly-activity-title">{t('workspace.telephonyPending')}</div><div className="desktop-readonly-activity-sub">{t('workspace.callingDisabled')}</div></div></div>
-                  <div className="desktop-readonly-footer"><span>{t('workspace.desktopClient')}</span><button type="button" onClick={onRetry}><RefreshCw size={13} />{t('workspace.retrySessionCheck')}</button></div>
-                </section>
-              </div>
-            </div>
+                <div className="desktop-readonly-grid" data-testid="lemtel-desktop-phone-page">
+                  <section className="desktop-readonly-card desktop-readonly-dialer">
+                    <div className="desktop-readonly-card-title"><span>{t('preview.yourLine')}</span><span className="desktop-readonly-chip">{t('workspace.callingDisabled')}</span></div>
+                    <div className="desktop-readonly-number" data-empty={!dial}>{dial || t('workspace.enterNumber')}</div>
+                    <div className="desktop-readonly-pad">
+                      {['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].map((digit) => <button key={digit} type="button" onClick={() => append(digit)}>{digit}</button>)}
+                    </div>
+                    <div className="desktop-readonly-call-row">
+                      <button type="button" onClick={() => setDial('')}>{t('workspace.clear')}</button>
+                      <button type="button" className="desktop-readonly-call" disabled aria-label={t('workspace.callingDisabled')} title={t('workspace.telephonyNotProvisioned')}><PhoneOff size={26} /></button>
+                      <button type="button" onClick={() => setDial((current) => current.slice(0, -1))} aria-label={t('workspace.backspace')}>⌫</button>
+                    </div>
+                  </section>
+
+                  <div className="desktop-readonly-side">
+                    <section className="desktop-readonly-card desktop-readonly-quick">
+                      <div className="desktop-readonly-card-title"><span>{t('workspace.readOnlyWorkspace')}</span><LockKeyhole size={16} color="var(--ava-accent, #6680ff)" /></div>
+                      <div className="desktop-readonly-quick-list">
+                        <button className="desktop-readonly-action" type="button" onClick={() => setActive('messages')}><span><MessageCircle size={16} /></span>{t('workspace.teamChat')}<ChevronRight size={15} style={{ marginLeft: 'auto' }} /></button>
+                        <button className="desktop-readonly-action" type="button" onClick={() => setActive('calls')}><span><History size={16} /></span>{t('preview.reviewRecent')}<ChevronRight size={15} style={{ marginLeft: 'auto' }} /></button>
+                        <button className="desktop-readonly-action" type="button" onClick={() => setActive('contacts')}><span><Users size={16} /></span>{t('nav.contacts')}<ChevronRight size={15} style={{ marginLeft: 'auto' }} /></button>
+                      </div>
+                    </section>
+
+                    <section className="desktop-readonly-card desktop-readonly-activity">
+                      <div className="desktop-readonly-card-title"><span>{t('workspace.workspaceStatus')}</span><Bell size={16} color="var(--ava-text-subtle, #8a9bc4)" /></div>
+                      <div className="desktop-readonly-activity-row"><div className="desktop-readonly-avatar"><ShieldCheck size={16} /></div><div><div className="desktop-readonly-activity-title">{t('workspace.desktopReadyEyebrow')}</div><div className="desktop-readonly-activity-sub">{email}</div></div></div>
+                      <div className="desktop-readonly-activity-row"><div className="desktop-readonly-avatar"><Users size={16} /></div><div><div className="desktop-readonly-activity-title">{t('workspace.organization')}</div><div className="desktop-readonly-activity-sub">{organizationId ? t('workspace.verified') : t('workspace.secureSession')}</div></div></div>
+                      <div className="desktop-readonly-activity-row"><div className="desktop-readonly-avatar"><PhoneOff size={16} /></div><div><div className="desktop-readonly-activity-title">{t('workspace.telephonyPending')}</div><div className="desktop-readonly-activity-sub">{t('workspace.callingDisabled')}</div></div></div>
+                      <div className="desktop-readonly-footer"><span>{t('workspace.desktopClient')}</span><button type="button" onClick={onRetry}><RefreshCw size={13} />{t('workspace.retrySessionCheck')}</button></div>
+                    </section>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <ReadOnlySection tab={active} onReturnToPhone={() => setActive('phone')} />
+            )}
 
             <div className="desktop-readonly-footer" style={{ marginTop: 24 }}>
               <span>{t('workspace.readOnlyWorkspaceExplanation')}</span>

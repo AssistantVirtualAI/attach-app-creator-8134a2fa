@@ -305,16 +305,44 @@ Deno.serve(async (req) => {
         return { ok: true as const, rows, official, truncated: lastPage > 25 };
       };
       const r2 = (n: number) => Math.round(n * 100) / 100;
-      const pack = (rows: CommissionDepositRow[], official: { type: string; label: string; amount: number }[] | null, truncated: boolean) => {
+      // Personal vs team split: a row belongs to the broker's own production when
+      // Maestro's primary_broker_id equals the receiving broker; otherwise it is
+      // an override earned on a team member's file (explicit field, never inferred).
+      const split = (rows: CommissionDepositRow[], ownId: string | null) => {
+        const mk = () => ({ amount: 0, contracts: new Map<string, number>() });
+        const own = mk(); const teamAll = mk();
+        const members = new Map<string, { id: string; name: string; amount: number; contracts: Map<string, number> }>();
+        const add = (b: ReturnType<typeof mk>, r: any) => {
+          b.amount += num(r.commission_amount ?? r.amount);
+          const c = String(r.contract_id ?? r.number ?? "");
+          if (c) b.contracts.set(c, Math.max(b.contracts.get(c) ?? 0, num(r.loan_amount ?? r.loan_amt ?? 0)));
+        };
+        for (const r of rows as any[]) {
+          const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null;
+          const receiver = ownId ?? (r.user_id != null ? String(r.user_id) : null);
+          if (!pid || pid === receiver) { add(own, r); continue; }
+          add(teamAll, r);
+          const name = `${r.primary_broker_first_name ?? ""} ${r.primary_broker_last_name ?? ""}`.trim() || pid;
+          const m = members.get(pid) ?? { id: pid, name, ...mk() };
+          add(m as any, r); members.set(pid, m);
+        }
+        const out = (b: { amount: number; contracts: Map<string, number> }) => ({ amount: r2(b.amount), files: b.contracts.size, volume: r2([...b.contracts.values()].reduce((t, v) => t + v, 0)) });
+        return {
+          personal: out(own),
+          team: out(teamAll),
+          team_members: [...members.values()].map((m) => ({ id: m.id, name: m.name, ...out(m) })).sort((a, b) => b.amount - a.amount),
+        };
+      };
+      const pack = (rows: CommissionDepositRow[], official: { type: string; label: string; amount: number }[] | null, truncated: boolean, ownId: string | null = null) => {
         const summary = summarize(rows, truncated);
-        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null };
+        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId) };
       };
 
       if (role === "broker") {
         if (!ownToken) return scopeError("maestro_not_connected");
         const res = await fetchPending(ownToken, resolvedUsersId);
         if (!res.ok) return upstream(res.r, cid);
-        return json({ ok: true, summary: pack(res.rows, res.official, res.truncated), scope: { role, users_id: resolvedUsersId, mode: "own" }, correlation_id: cid }, 200, cid);
+        return json({ ok: true, summary: pack(res.rows, res.official, res.truncated, resolvedUsersId ? String(resolvedUsersId) : null), scope: { role, users_id: resolvedUsersId, mode: "own" }, correlation_id: cid }, 200, cid);
       }
 
       // Admin : courtiers déjà authentifiés auprès de Maestro.
@@ -345,14 +373,14 @@ Deno.serve(async (req) => {
             if (!token) { failed.push(name); continue; }
             const res = await fetchPending(token, String(p.maestro_broker_id));
             if (!res.ok) { failed.push(name); continue; }
-            const s = pack(res.rows, res.official, res.truncated);
+            const s = pack(res.rows, res.official, res.truncated, String(p.maestro_broker_id));
             anyTrunc ||= res.truncated;
             allRows.push(...res.rows);
             for (const o of res.official ?? []) {
               const e = officialAll.get(o.type) ?? { ...o, amount: 0 };
               e.amount = r2(e.amount + o.amount); officialAll.set(o.type, e);
             }
-            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume });
+            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume, personal: s.split.personal, team: s.split.team, team_members: s.split.team_members });
           } catch { failed.push(name); }
         }
       };

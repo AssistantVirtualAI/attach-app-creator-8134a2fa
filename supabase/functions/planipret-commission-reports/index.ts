@@ -467,6 +467,45 @@ Deno.serve(async (req) => {
     }
 
 
+    // ---- Pending commissions (même portée, mêmes filtres, lecture seule) ---
+    if (action === "pending") {
+      const src = (await collectSources())[0];
+      const raw: any[] = [];
+      let page = 1, lastPage = 1;
+      while (page <= SUMMARY_MAX_PAGES) {
+        const qs = new URLSearchParams();
+        if (filters.users_id) qs.set("users_id", filters.users_id);
+        if (filters.financial_inst_id) qs.set("financial_inst_id", filters.financial_inst_id);
+        if (filters.date_from && filters.date_to) {
+          qs.set("date_from", filters.date_from.slice(0, 10));
+          qs.set("date_to", filters.date_to.slice(0, 10));
+        }
+        qs.set("page", String(page));
+        qs.set("per_page", "200");
+        const r = await commissionGet(`/api/main/commissions/reports/pending-commissions?${qs}`, src.token, cid);
+        if (!r.ok) return upstream(r, cid);
+        const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
+        raw.push(...rows);
+        lastPage = Number(r.data?.meta?.last_page ?? 1);
+        if (page >= lastPage || rows.length === 0) break;
+        page += 1;
+      }
+      const truncated = lastPage > SUMMARY_MAX_PAGES;
+      const rows = raw.map(normalizePendingRow);
+      const summary = summarize(rows, truncated);
+      log("pending rows", rows.length, "total", summary.total_commission);
+      return json({
+        ok: true,
+        summary,
+        rows: rows.slice(0, 500),
+        total_available: rows.length,
+        truncated,
+        scope: { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode },
+        filters,
+        correlation_id: cid,
+      }, 200, cid);
+    }
+
     return applicationError("unknown_action", `Action inconnue: ${action}`, cid);
   } catch (e) {
     console.error(`[commission-reports][${cid}] fatal`, e);

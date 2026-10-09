@@ -305,3 +305,17 @@ export function summarize(allRows: CommissionDepositRow[], truncated = false): C
 export function institutionLabel(i: any): string {
   return String(i?.company_fr ?? i?.company ?? i?.name ?? "—").trim() || "—";
 }
+
+/** Pending-commission rows mapped onto the deposit shape (tolerant field names). */
+export function normalizePendingRow(r: any): CommissionDepositRow {
+  const pick = (...k: string[]) => { for (const x of k) if (r?.[x] != null && r[x] !== "") return r[x]; return null; };
+  return {
+    ...r,
+    amount: pick("amount", "pending_amount", "commission", "commission_amount", "expected_amount"),
+    loan_amt: pick("loan_amt", "loan_amount", "amount_loan"),
+    institution: pick("institution", "financial_institution", "lender"),
+    date_trans: pick("date_trans", "date", "closing_date", "funding_date", "expected_date", "created_at"),
+    commission_type: "base",
+    number: pick("number", "file_number", "contract_number"),
+  } as CommissionDepositRow;
+}

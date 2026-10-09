@@ -40,6 +40,9 @@ type Summary = {
 const cad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);
 
+const exactCad = (n: number) =>
+  new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
 const compactCad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", notation: "compact", maximumFractionDigits: 1 }).format(n || 0);
 
@@ -100,7 +103,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
     };
   }, [filters?.date_from, filters?.date_to, filters?.users_id, filters?.financial_inst_id, agent, ownPeriod, pYear, pGran, pIdx]);
   const cacheRole = cacheScope === "admin" || cacheScope === "default" ? "admin" : "broker";
-  const key = statsCacheKey(cacheRole, ["pending", cacheScope, f.date_from, f.date_to, f.users_id ?? "", f.financial_inst_id ?? ""]);
+  const key = statsCacheKey(cacheRole, ["pending-official-v2", cacheScope, f.date_from, f.date_to, f.users_id ?? "", f.financial_inst_id ?? ""]);
   const [summary, setSummary] = useState<Summary | null>(() => ((readStatsCache(key)?.value as any)?.summary as Summary) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -148,7 +151,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
       .map(([month, values]) => ({ month, label: monthLabel(month, fr), amount: Math.round(values.amount), files: values.files }));
   }, [summary, fr]);
 
-  const types = useMemo(() => (summary?.official_by_type ?? []).filter((item) => Number(item.amount) > 0), [summary]);
+  const types = useMemo(() => summary?.official_by_type ?? [], [summary]);
   const officialTotal = Number(summary?.official_total ?? summary?.total_commission ?? 0);
   const dealCount = Number(summary?.deal_count ?? summary?.deposit_count ?? 0);
   const selectedBroker = brokers?.find((broker) => String(broker.users_id) === agent) ?? null;
@@ -233,13 +236,22 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
       {summary ? (
         <div className="p-4 sm:p-5 space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-            <Kpi icon={<WalletCards className="w-4 h-4" />} label={fr ? "Montant en attente" : "Pending amount"} value={cad(officialTotal)} emphasized />
+            <Kpi icon={<WalletCards className="w-4 h-4" />} label={fr ? "Total en attente" : "Pending total"} value={exactCad(officialTotal)} emphasized />
             <Kpi icon={<BriefcaseBusiness className="w-4 h-4" />} label={fr ? "Dossiers" : "Files"} value={String(dealCount)} />
             <Kpi icon={<Landmark className="w-4 h-4" />} label={fr ? "Volume hypothécaire" : "Mortgage volume"} value={cad(summary.total_loan_volume)} />
             <Kpi icon={<Users className="w-4 h-4" />} label={isAdminView && !selectedBroker ? (fr ? "Courtiers" : "Brokers") : (fr ? "Moyenne par dossier" : "Average per file")} value={isAdminView && !selectedBroker ? String(brokers?.length ?? 0) : cad(dealCount ? officialTotal / dealCount : 0)} />
           </div>
 
-          <div className="grid lg:grid-cols-[minmax(0,1.55fr)_minmax(260px,0.85fr)] gap-3">
+          {types.length > 0 && (
+            <div aria-label={fr ? "Totaux officiels Maestro" : "Official Maestro totals"}>
+              <h4 className="text-[13px] font-bold mb-3" style={{ color: "var(--pp-text-primary)" }}>{fr ? "Totaux officiels Maestro" : "Official Maestro totals"}</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                {types.map((item) => <Kpi key={item.type} icon={<WalletCards className="w-4 h-4" />} label={item.type === "override" ? (fr ? "Outrepasser" : "Override") : item.type === "external" ? (fr ? "Tiers" : "External") : item.label} value={exactCad(item.amount)} />)}
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-3">
             <Panel title={fr ? "Évolution mensuelle" : "Monthly trend"} icon={<CalendarDays className="w-4 h-4" />}>
               {months.length > 0 ? (
                 <>
@@ -267,29 +279,6 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
               ) : <EmptyMessage fr={fr} />}
             </Panel>
 
-            <Panel title={fr ? "Répartition" : "Breakdown"} icon={<WalletCards className="w-4 h-4" />}>
-              {types.length > 0 ? (
-                <div className="space-y-3">
-                  {types.map((item) => {
-                    const percent = officialTotal > 0 ? Math.round((Number(item.amount) / officialTotal) * 100) : 0;
-                    return (
-                      <div key={item.type}>
-                        <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                          <span className="text-[12px] font-medium truncate" style={{ color: "var(--pp-text-secondary)" }}>{item.label}</span>
-                          <span className="text-[12px] font-bold shrink-0" style={{ color: "var(--pp-text-primary)" }}>{cad(item.amount)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 flex-1 rounded-full overflow-hidden" style={{ background: "var(--pp-bg-border)" }}>
-                            <div className="h-full rounded-full" style={{ width: `${Math.max(2, percent)}%`, background: "var(--pp-warning)" }} />
-                          </div>
-                          <span className="text-[10.5px] w-8 text-right" style={{ color: "var(--pp-text-muted)" }}>{percent}%</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : <EmptyMessage fr={fr} />}
-            </Panel>
           </div>
 
           {(() => { const sp = selectedBroker?.personal && selectedBroker.team ? { personal: selectedBroker.personal, team: selectedBroker.team, team_members: selectedBroker.team_members ?? [] } : (!isAdminView || selectedBroker) ? summary.split : null; return sp ? <TeamSplitPanel split={sp} fr={fr} name={selectedBroker?.name} /> : null; })()}
@@ -373,7 +362,7 @@ function Kpi({ icon, label, value, emphasized = false }: { icon: React.ReactNode
       <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-semibold uppercase mb-1.5" style={{ color: emphasized ? "var(--pp-warning)" : "var(--pp-text-muted)" }}>
         {icon}<span className="truncate">{label}</span>
       </div>
-      <div className="text-[17px] sm:text-[21px] font-bold leading-tight truncate" title={value} style={{ color: "var(--pp-text-primary)" }}>{value}</div>
+      <div className="text-[16px] sm:text-[18px] font-bold leading-tight break-words" title={value} style={{ color: "var(--pp-text-primary)" }}>{value}</div>
     </div>
   );
 }

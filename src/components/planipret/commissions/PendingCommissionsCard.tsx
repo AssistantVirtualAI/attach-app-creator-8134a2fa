@@ -8,13 +8,17 @@ import {
   CalendarDays,
   ChevronRight,
   Hourglass,
+  BarChart3,
+  Download,
+  RefreshCw,
   Landmark,
   Search,
   Users,
   WalletCards,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ComposedChart, Line } from "recharts";
 import { Button } from "@/components/ui/button";
+import "./pendingCommissions.css";
 import { readStatsCache, statsCacheKey, writeStatsCache, isStatsCacheFresh } from "@/lib/planipret/commissionsCache";
 import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 
@@ -47,10 +51,7 @@ const exactCad = (n: number) =>
 const compactCad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", notation: "compact", maximumFractionDigits: 1 }).format(n || 0);
 
-const yearRange = () => {
-  const y = new Date().getFullYear();
-  return { date_from: `${y}-01-01`, date_to: `${y}-12-31` };
-};
+const TONES = ["var(--pp-brand-accent-2)", "var(--pp-success)", "var(--pp-warning)", "var(--pp-agent)", "var(--pp-brand-accent)", "var(--pp-danger)"];
 
 function monthLabel(value: string, fr: boolean) {
   const [year, month] = value.split("-").map(Number);
@@ -81,6 +82,8 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
 }) {
   const fr = lang !== "en";
   const [agent, setAgent] = useState("");
+  const [tab, setTab] = useState<"overview" | "brokers" | "monthly" | "types">("overview");
+  const [reload, setReload] = useState(0);
   const [brokers, setBrokers] = useState<BrokerRow[] | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("amount");
@@ -96,7 +99,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
     const own = pGran === "year" ? { date_from: `${pYear}-01-01`, date_to: `${pYear}-12-31` }
       : pGran === "quarter" ? { date_from: `${pYear}-${pad((pIdx - 1) * 3 + 1)}-01`, date_to: `${pYear}-${pad(pIdx * 3)}-${last(pYear, pIdx * 3)}` }
       : { date_from: `${pYear}-${pad(pIdx)}-01`, date_to: `${pYear}-${pad(pIdx)}-${last(pYear, pIdx)}` };
-    const base = !ownPeriod ? { date_from: filters!.date_from!, date_to: filters!.date_to! } : own;
+    const base = filters?.date_from && filters?.date_to ? { date_from: filters.date_from, date_to: filters.date_to } : own;
     return {
       ...base,
       ...((agent || filters?.users_id) ? { users_id: agent || filters?.users_id } : {}),
@@ -120,8 +123,9 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
     } else {
       // Never show the previous scope's numbers under another broker's name.
       setSummary(null);
+      setValidation(null);
     }
-    if (refreshToken === 0 && isStatsCacheFresh(cached)) return;
+    if (refreshToken === 0 && reload === 0 && isStatsCacheFresh(cached)) return;
     setLoading(!cached?.value);
     setError(null);
     (async () => {
@@ -141,7 +145,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, refreshToken]);
+  }, [key, refreshToken, reload]);
 
   const months = useMemo(() => {
     const values = new Map<string, { amount: number; files: number }>();
@@ -152,7 +156,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
     }
     return [...values.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, values]) => ({ month, label: monthLabel(month, fr), amount: Math.round(values.amount), files: values.files }));
+      .map(([month, values]) => ({ month, label: monthLabel(month, fr), amount: Math.round(values.amount * 100) / 100, files: values.files }));
   }, [summary, fr]);
 
   const types = useMemo(() => summary?.official_by_type ?? [], [summary]);
@@ -174,7 +178,14 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
 
   const rangeLabel = `${new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "short", year: "numeric" }).format(new Date(`${f.date_from}T12:00:00`))} – ${new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "short", year: "numeric" }).format(new Date(`${f.date_to}T12:00:00`))}`;
 
-  if (loading && !summary) {
+  const exportCsv = () => {
+    const rows = tab === "brokers" ? [[fr ? "Courtier" : "Broker", "Commission", "Personnel", "Équipe", "Dossiers", "Volume"], ...filteredBrokers.map(b => [b.name, b.amount, b.personal?.amount ?? "", b.team?.amount ?? "", b.files, b.volume])] : tab === "types" ? [["Type", "Commission"], ...types.map(t => [t.label, t.amount])] : [["Mois", "Commission", "Dossiers"], ...months.map(m => [m.month, m.amount, m.files])];
+    const csv = rows.map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = `commissions-en-attente-${f.users_id ?? "tous"}-${f.date_from}.csv`; link.click(); URL.revokeObjectURL(url);
+  };
+
+  if (false && loading && !summary) {
     return (
       <section className="rounded-lg p-4 mb-3" aria-busy="true" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)" }}>
         <div className="h-5 w-52 rounded animate-pulse mb-4" style={{ background: "var(--pp-bg-elevated)" }} />
@@ -186,51 +197,31 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
   }
 
   return (
-    <section className="rounded-lg mb-4 overflow-hidden" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
-      <header className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-8 h-8 rounded-lg inline-flex items-center justify-center shrink-0" style={{ color: "var(--pp-warning)", background: "color-mix(in srgb, var(--pp-warning) 12%, transparent)" }}>
-              <Hourglass className="w-4 h-4" />
-            </span>
-            <div className="min-w-0">
-              <h3 className="text-[15px] sm:text-[17px] font-bold leading-tight truncate" style={{ color: "var(--pp-text-primary)" }}>
-                {selectedBroker?.name ?? (fr ? "Commissions en attente" : "Pending commissions")}
-              </h3>
-              <p className="text-[11.5px] mt-0.5" style={{ color: "var(--pp-text-muted)" }}>
-                {selectedBroker ? (fr ? "Vue détaillée du courtier" : "Broker detail") : rangeLabel}
-              </p>
-              {validation && <ValidationBadge validation={validation} fr={fr} />}
-            </div>
-          </div>
+    <section className="pending-commissions" aria-label={fr ? "Commissions en attente" : "Pending commissions"} aria-busy={loading}>
+      <header className="pending-header">
+        <div>
+          <h3 className="pending-heading"><Hourglass className="h-5 w-5" />{fr ? "Commissions en attente" : "Pending commissions"}</h3>
+          <p className="text-xs mt-1 text-muted-foreground">{selectedBroker?.name ?? (fr ? "Tous les courtiers" : "All brokers")} · {rangeLabel}</p>
+          {validation && <ValidationBadge validation={validation} fr={fr} />}
         </div>
-        {selectedBroker && (
-          <Button variant="outline" size="sm" onClick={() => setAgent("")} className="h-9 self-start gap-1.5" style={{ borderColor: "var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", background: "var(--pp-bg-elevated)" }}>
-            <ArrowLeft className="w-3.5 h-3.5" />
-            {fr ? "Tous les courtiers" : "All brokers"}
-          </Button>
-        )}
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => setReload(n => n + 1)}><RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />{fr ? "Rafraîchir" : "Refresh"}</Button>
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!summary}><Download className="h-4 w-4 mr-2" />CSV</Button>
+        </div>
       </header>
-
-      {ownPeriod && (
-        <div className="px-4 sm:px-5 pt-3 flex flex-wrap items-center gap-2" aria-label={fr ? "Période" : "Period"}>
-          <select value={pYear} onChange={(e) => setPYear(Number(e.target.value))} className="h-9 px-2 rounded-lg text-[12.5px] font-bold" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }}>
-            {[nowY + 1, nowY, nowY - 1, nowY - 2].map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <div className="inline-flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
-            {([["year", fr ? "Année" : "Year"], ["quarter", fr ? "Trimestre" : "Quarter"], ["month", fr ? "Mois" : "Month"]] as const).map(([k, l]) => (
-              <button key={k} onClick={() => { setPGran(k); setPIdx(k === "month" ? new Date().getMonth() + 1 : k === "quarter" ? Math.floor(new Date().getMonth() / 3) + 1 : 1); }} className="h-9 px-3 text-[12px] font-semibold" style={{ background: pGran === k ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)", color: pGran === k ? "var(--pp-text-on-accent, #fff)" : "var(--pp-text-secondary)" }}>{l}</button>
-            ))}
+      <div className="pending-toolbar" aria-label={fr ? "Filtres commissions en attente" : "Pending commission filters"}>
+        {isAdminView && <label className="flex items-center gap-2 text-xs"><Users className="h-4 w-4" />{fr ? "Courtier" : "Broker"}<select aria-label={fr ? "Courtier en attente" : "Pending broker"} value={agent} onChange={e => { setAgent(e.target.value); setTab("overview"); }}><option value="">{fr ? "Tous les courtiers" : "All brokers"}</option>{brokers?.map(b => <option key={b.users_id} value={b.users_id}>{b.name}</option>)}</select></label>}
+        {ownPeriod && <>
+          <select aria-label={fr ? "Année en attente" : "Pending year"} value={pYear} onChange={e => setPYear(Number(e.target.value))}>{[nowY + 1, nowY, nowY - 1, nowY - 2].map(y => <option key={y} value={y}>{y}</option>)}</select>
+          <div className="inline-flex gap-1">
+            {([["year", fr ? "Année" : "Year"], ["quarter", fr ? "Trimestre" : "Quarter"], ["month", fr ? "Mois" : "Month"]] as const).map(([k,l]) => <Button key={k} variant={pGran === k ? "secondary" : "ghost"} size="sm" aria-pressed={pGran === k} onClick={() => { setPGran(k); setPIdx(k === "month" ? new Date().getMonth() + 1 : k === "quarter" ? Math.floor(new Date().getMonth() / 3) + 1 : 1); }}>{l}</Button>)}
           </div>
-          {pGran !== "year" && (
-            <select value={pIdx} onChange={(e) => setPIdx(Number(e.target.value))} className="h-9 px-2 rounded-lg text-[12.5px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }}>
-              {(pGran === "quarter" ? [1, 2, 3, 4] : Array.from({ length: 12 }, (_, i) => i + 1)).map((i) => (
-                <option key={i} value={i}>{pGran === "quarter" ? `T${i}` : new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "long" }).format(new Date(Date.UTC(2026, i - 1, 15)))}</option>
-              ))}
-            </select>
-          )}
-        </div>
-      )}
+          {pGran !== "year" && <select aria-label={fr ? "Période en attente" : "Pending period"} value={pIdx} onChange={e => setPIdx(Number(e.target.value))}>{(pGran === "quarter" ? [1,2,3,4] : Array.from({length:12},(_,i)=>i+1)).map(i => <option key={i} value={i}>{pGran === "quarter" ? `T${i}` : new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA",{month:"long"}).format(new Date(2026,i-1,15))}</option>)}</select>}
+        </>}
+      </div>
+      <div className="pending-tabs" role="tablist" aria-label={fr ? "Vues en attente" : "Pending views"}>
+        {([["overview", fr ? "Vue d’ensemble" : "Overview", BarChart3], ...(isAdminView && !selectedBroker ? [["brokers", fr ? "Courtiers et équipes" : "Brokers and teams", Users]] : []), ["monthly", fr ? "Détail mensuel" : "Monthly detail", CalendarDays], ["types", fr ? "Types de commissions" : "Commission types", WalletCards]] as const).map(([k,label,Icon]) => <Button key={k} role="tab" aria-selected={tab === k} className="pending-tab" variant="ghost" size="sm" onClick={() => setTab(k as typeof tab)}><Icon className="h-4 w-4 mr-2" />{label}</Button>)}
+      </div>
 
       {error && (
         <div role="status" className="mx-4 mt-4 rounded-lg px-3 py-2 text-[12px]" style={{ color: "var(--pp-warning)", background: "color-mix(in srgb, var(--pp-warning) 9%, transparent)", border: "1px solid color-mix(in srgb, var(--pp-warning) 28%, transparent)" }}>
@@ -239,25 +230,25 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
       )}
 
       {summary ? (
-        <div className="p-4 sm:p-5 space-y-5">
+        <div className="py-5 space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
             <Kpi icon={<WalletCards className="w-4 h-4" />} label={fr ? "Total en attente" : "Pending total"} value={exactCad(officialTotal)} emphasized />
-            <Kpi icon={<BriefcaseBusiness className="w-4 h-4" />} label={fr ? "Dossiers" : "Files"} value={String(dealCount)} />
-            <Kpi icon={<Landmark className="w-4 h-4" />} label={fr ? "Volume hypothécaire" : "Mortgage volume"} value={cad(summary.total_loan_volume)} />
+            <Kpi icon={<BriefcaseBusiness className="w-4 h-4" />} label={fr ? "Dossiers" : "Files"} value={String(dealCount)} tone={TONES[1]} />
+            <Kpi icon={<Landmark className="w-4 h-4" />} label={fr ? "Volume hypothécaire" : "Mortgage volume"} value={cad(summary.total_loan_volume)} tone={TONES[0]} />
             <Kpi icon={<Users className="w-4 h-4" />} label={isAdminView && !selectedBroker ? (fr ? "Courtiers" : "Brokers") : (fr ? "Moyenne par dossier" : "Average per file")} value={isAdminView && !selectedBroker ? String(brokers?.length ?? 0) : cad(dealCount ? officialTotal / dealCount : 0)} />
           </div>
 
-          {types.length > 0 && (
+          {(tab === "overview" || tab === "types") && types.length > 0 && (
             <div aria-label={fr ? "Totaux officiels Maestro" : "Official Maestro totals"}>
               <h4 className="text-[13px] font-bold mb-3" style={{ color: "var(--pp-text-primary)" }}>{fr ? "Totaux officiels Maestro" : "Official Maestro totals"}</h4>
               <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,140px),1fr))] gap-2.5">
-                {types.map((item) => <Kpi key={item.type} icon={<WalletCards className="w-4 h-4" />} label={item.type === "override" ? (fr ? "Outrepasser" : "Override") : item.type === "external" ? (fr ? "Tiers" : "External") : item.label} value={exactCad(item.amount)} />)}
+                {types.map((item, index) => <Kpi tone={TONES[index % TONES.length]} key={item.type} icon={<WalletCards className="w-4 h-4" />} label={item.type === "override" ? (fr ? "Outrepasser" : "Override") : item.type === "external" ? (fr ? "Tiers" : "External") : item.label} value={exactCad(item.amount)} />)}
               </div>
             </div>
           )}
 
-          <div className="grid gap-3">
-            <Panel title={fr ? "Évolution mensuelle" : "Monthly trend"} icon={<CalendarDays className="w-4 h-4" />}>
+          {tab === "overview" && <div className="grid gap-5 xl:grid-cols-2">
+            <Panel title={fr ? "Commissions mensuelles" : "Monthly commissions"} icon={<CalendarDays className="w-4 h-4" />}>
               {months.length > 0 ? (
                 <>
                   <div className="h-[210px] sm:h-[250px] min-w-0">
@@ -273,7 +264,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
                         <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} axisLine={false} tickLine={false} width={52} tickFormatter={(value) => compactCad(Number(value)).replace("$", "")} />
                         <Tooltip cursor={{ fill: "var(--pp-bg-elevated)", opacity: 0.45 }} content={<PendingTooltip fr={fr} />} />
-                        <Bar dataKey="amount" name={fr ? "En attente" : "Pending"} fill="url(#pendingCommissionBars)" radius={[5, 5, 0, 0]} maxBarSize={42} />
+                        <Bar dataKey="amount" name={fr ? "En attente" : "Pending"} fill="var(--pp-brand-accent-2)" radius={[5, 5, 0, 0]} maxBarSize={42} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -284,15 +275,22 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
               ) : <EmptyMessage fr={fr} />}
             </Panel>
 
-          </div>
+            <Panel title={fr ? "Commission par type" : "Commission by type"} icon={<WalletCards className="h-4 w-4" />}>
+              {types.some(t => t.amount > 0) ? <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={types.map(t => ({...t, label: t.type === "override" ? (fr ? "Outrepasser" : "Override") : t.type === "external" ? (fr ? "Tiers" : "External") : t.label}))} dataKey="amount" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={3}>{types.map((t,i) => <Cell key={t.type} fill={TONES[i % TONES.length]} />)}</Pie><Tooltip formatter={v => exactCad(Number(v))} contentStyle={{background:"var(--pp-bg-elevated)",border:"1px solid var(--pp-bg-border)"}} /><Legend wrapperStyle={{fontSize:11}} /></PieChart></ResponsiveContainer></div> : <EmptyMessage fr={fr} />}
+            </Panel>
+            <Panel title={fr ? "Dossiers et commissions" : "Files and commissions"} icon={<BriefcaseBusiness className="h-4 w-4" />}>
+              {months.length ? <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={months}><CartesianGrid stroke="var(--pp-bg-border)" vertical={false} /><XAxis dataKey="label" tick={{fill:"var(--pp-text-muted)",fontSize:11}} /><YAxis yAxisId="files" allowDecimals={false} tick={{fill:"var(--pp-text-muted)",fontSize:11}} width={35} /><YAxis yAxisId="amount" orientation="right" tickFormatter={v => compactCad(Number(v))} tick={{fill:"var(--pp-text-muted)",fontSize:11}} width={65} /><Tooltip formatter={(v,n) => n === (fr ? "Dossiers" : "Files") ? Number(v) : exactCad(Number(v))} contentStyle={{background:"var(--pp-bg-elevated)",border:"1px solid var(--pp-bg-border)"}} /><Legend wrapperStyle={{fontSize:11}} /><Bar yAxisId="files" dataKey="files" name={fr ? "Dossiers" : "Files"} fill="var(--pp-success)" radius={[4,4,0,0]} /><Line yAxisId="amount" dataKey="amount" name={fr ? "Commissions ventilées" : "Allocated commissions"} stroke="var(--pp-warning)" strokeWidth={3} dot={{r:3}} /></ComposedChart></ResponsiveContainer></div> : <EmptyMessage fr={fr} />}
+            </Panel>
+          </div>}
 
-          {(() => { const sp = selectedBroker?.personal && selectedBroker.team ? { personal: selectedBroker.personal, team: selectedBroker.team, team_members: selectedBroker.team_members ?? [] } : (!isAdminView || selectedBroker) ? summary.split : null; return sp ? <TeamSplitPanel split={sp} fr={fr} name={selectedBroker?.name} /> : null; })()}
 
-          {!selectedBroker && brokers && brokers.length > 0 ? (
+          {tab === "overview" && (() => { const sp = selectedBroker?.personal && selectedBroker.team ? { personal: selectedBroker.personal, team: selectedBroker.team, team_members: selectedBroker.team_members ?? [] } : (!isAdminView || selectedBroker) ? summary.split : null; return sp ? <TeamSplitPanel split={sp} fr={fr} name={selectedBroker?.name} /> : null; })()}
+
+          {(tab === "brokers" || tab === "overview") && !selectedBroker && brokers && brokers.length > 0 ? (
             <Panel title={fr ? "Commissions par courtier" : "Commissions by broker"} icon={<Users className="w-4 h-4" />}>
               <div className="inline-flex rounded-lg overflow-hidden mb-2" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
                 {([["all", fr ? "Total" : "Total"], ["personal", fr ? "Personnel" : "Personal"], ["team", fr ? "Équipe" : "Team"]] as const).map(([k, l]) => (
-                  <button key={k} onClick={() => setView(k)} className="h-8 px-3 text-[12px] font-semibold" style={{ background: view === k ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: view === k ? "var(--pp-text-on-accent, #fff)" : "var(--pp-text-secondary)" }}>{l}</button>
+                  <Button variant="ghost" size="sm" aria-pressed={view === k} key={k} onClick={() => setView(k)} className="h-8 px-3 text-[12px] font-semibold" style={{ background: view === k ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: view === k ? "var(--primary-foreground)" : "var(--pp-text-secondary)" }}>{l}</Button>
                 ))}
               </div>
               <div className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -338,24 +336,16 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
               </div>
               {filteredBrokers.length === 0 && <p className="py-6 text-center text-[12px]" style={{ color: "var(--pp-text-muted)" }}>{fr ? "Aucun courtier trouvé." : "No brokers found."}</p>}
             </Panel>
-          ) : months.length > 0 ? (
-            <Panel title={fr ? "Détail mensuel" : "Monthly detail"} icon={<CalendarDays className="w-4 h-4" />}>
-              <div className="divide-y" style={{ borderColor: "var(--pp-bg-border)" }}>
-                {months.map((month) => (
-                  <div key={month.month} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-2.5 text-[12px]" style={{ borderColor: "var(--pp-bg-border)" }}>
-                    <span className="font-medium capitalize" style={{ color: "var(--pp-text-secondary)" }}>{monthLabel(month.month, fr)} {month.month.slice(0, 4)}</span>
-                    <span style={{ color: "var(--pp-text-muted)" }}>{month.files} {fr ? "dossiers" : "files"}</span>
-                    <span className="font-bold text-right" style={{ color: "var(--pp-text-primary)" }}>{cad(month.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </Panel>
           ) : null}
+          {(tab === "monthly" || tab === "overview") && months.length > 0 && <Panel title={fr ? "Détail mensuel" : "Monthly detail"} icon={<CalendarDays className="h-4 w-4" />}>
+            <div className="pending-scroll"><table className="pending-table"><thead><tr><th>{fr ? "Mois de clôture" : "Closing month"}</th><th>{fr ? "Commissions ventilées" : "Allocated commissions"}</th><th>{fr ? "Dossiers" : "Files"}</th><th>{fr ? "Commission moyenne" : "Average commission"}</th></tr></thead><tbody>{months.map(m => <tr key={m.month}><td className="capitalize">{monthLabel(m.month,fr)} {m.month.slice(0,4)}</td><td>{exactCad(m.amount)}</td><td>{m.files}</td><td>{m.files ? exactCad(m.amount/m.files) : "—"}</td></tr>)}</tbody><tfoot><tr><td>{fr ? "Total ventilé" : "Allocated total"}</td><td>{exactCad(months.reduce((sum,m)=>sum+m.amount,0))}</td><td>{months.reduce((sum,m)=>sum+m.files,0)}</td><td>—</td></tr></tfoot></table></div>
+          </Panel>}
+          {tab === "types" && types.length > 0 && <Panel title={fr ? "Répartition officielle Maestro" : "Official Maestro breakdown"} icon={<WalletCards className="h-4 w-4" />}><div className="pending-scroll"><table className="pending-table"><thead><tr><th>{fr ? "Catégorie" : "Category"}</th><th>{fr ? "En attente" : "Pending"}</th><th>{fr ? "Part du total" : "Share of total"}</th></tr></thead><tbody>{types.map((t,i)=><tr key={t.type}><td><span style={{color:TONES[i % TONES.length]}}>● </span>{t.type === "override" ? (fr ? "Outrepasser" : "Override") : t.type === "external" ? (fr ? "Tiers" : "External") : t.label}</td><td>{exactCad(t.amount)}</td><td>{officialTotal ? (100*t.amount/officialTotal).toFixed(1) : "0.0"} %</td></tr>)}</tbody><tfoot><tr><td>{fr ? "Total officiel Maestro" : "Official Maestro total"}</td><td>{exactCad(officialTotal)}</td><td>100 %</td></tr></tfoot></table></div></Panel>}
 
           {summary.truncated && <p className="text-[11px]" style={{ color: "var(--pp-warning)" }}>{fr ? "Résultats partiels : réduisez la période pour obtenir tous les dossiers." : "Partial results: narrow the period to include every file."}</p>}
         </div>
       ) : (
-        <div className="p-8"><EmptyMessage fr={fr} /></div>
+        <div className="p-8">{loading ? <div role="status" className="text-sm text-muted-foreground">{fr ? "Chargement des commissions…" : "Loading commissions…"}</div> : !error ? <EmptyMessage fr={fr} /> : null}</div>
       )}
     </section>
   );
@@ -366,26 +356,12 @@ function ValidationBadge({ validation, fr }: { validation: Validation; fr: boole
   return <span title={validation.summary} className="inline-flex items-center mt-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ color: warning ? "var(--pp-warning)" : "var(--pp-success)", background: `color-mix(in srgb, ${warning ? "var(--pp-warning)" : "var(--pp-success)"} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${warning ? "var(--pp-warning)" : "var(--pp-success)"} 28%, transparent)` }}>{warning ? (fr ? "Contrôlé avec réserve" : "Checked with warning") : (fr ? "Maestro contrôlé" : "Maestro checked")}</span>;
 }
 
-function Kpi({ icon, label, value, emphasized = false }: { icon: React.ReactNode; label: string; value: string; emphasized?: boolean }) {
-  return (
-    <div className="rounded-lg p-3 min-w-0" style={{ background: emphasized ? "color-mix(in srgb, var(--pp-warning) 9%, var(--pp-bg-elevated))" : "var(--pp-bg-elevated)", border: `1px solid ${emphasized ? "color-mix(in srgb, var(--pp-warning) 30%, var(--pp-bg-border))" : "var(--pp-bg-border)"}` }}>
-      <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-semibold uppercase mb-1.5" style={{ color: emphasized ? "var(--pp-warning)" : "var(--pp-text-muted)" }}>
-        {icon}<span className="truncate">{label}</span>
-      </div>
-      <div className="text-[16px] sm:text-[18px] font-bold leading-tight break-words" title={value} style={{ color: "var(--pp-text-primary)" }}>{value}</div>
-    </div>
-  );
+function Kpi({ icon, label, value, emphasized = false, tone }: { icon: React.ReactNode; label: string; value: string; emphasized?: boolean; tone?: string }) {
+  return <div className="pending-kpi" style={{ "--pending-tone": tone ?? (emphasized ? TONES[2] : TONES[0]) } as React.CSSProperties}><div className="pending-kpi-label">{icon}<span>{label}</span></div><div className="pending-kpi-value" title={value}>{value}</div></div>;
 }
 
 function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg p-3.5 sm:p-4 min-w-0" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
-      <h4 className="flex items-center gap-2 text-[13px] font-bold mb-3" style={{ color: "var(--pp-text-primary)" }}>
-        <span style={{ color: "var(--pp-brand-accent)" }}>{icon}</span>{title}
-      </h4>
-      {children}
-    </div>
-  );
+  return <div className="pending-panel"><h4><span>{icon}</span>{title}</h4>{children}</div>;
 }
 
 function EmptyMessage({ fr }: { fr: boolean }) {

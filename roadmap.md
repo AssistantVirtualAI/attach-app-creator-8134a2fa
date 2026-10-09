@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Redesign the admin broker commissions page with portal colors, broker/team filters, visual charts, and richer comparison tables without changing commission calculations.
+
 - [x] Correct current-year Toronto date windows and funded-entry volume (unique contracts only for units); real paid rows now compute 548 units and 174,501,286.33 volume with matching lender sum; 31 root and 14 app-web tests pass, no native edits.
 - [ ] Reconcile Sandra commission reference 1,368,881.05 against paid API rows totaling 1,369,382.91 (501.86 difference): requires detailed Maestro export for Jan 1–Oct 9; hold coordinated publication until fully reconciled, no partial deployment.
 

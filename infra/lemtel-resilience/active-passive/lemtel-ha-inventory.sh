@@ -12,13 +12,24 @@ printf 'declared_role=%s\n' "$role"
 printf 'hostname=%s\n' "$(hostname -s)"
 printf 'os=%s\n' "$(. /etc/os-release && printf '%s %s' "$ID" "$VERSION_ID")"
 printf 'docker_available=%s\n' "$(command -v docker >/dev/null 2>&1 && printf true || printf false)"
-printf 'docker_compose_available=%s\n' "$(docker compose version >/dev/null 2>&1 && printf true || printf false)"
 
 if ! command -v docker >/dev/null 2>&1; then
+  printf 'docker_compose_available=false\n'
   printf 'inventory_status=docker_unavailable\n'
   exit 0
 fi
 
+printf 'docker_compose_available=%s\n' "$(docker compose version >/dev/null 2>&1 && printf true || printf false)"
+
+# A non-root operator must never infer an empty runtime from a denied Docker socket.
+# The caller must use a separately approved root-side read-only inventory if this guard reports false.
+if ! docker ps --format '{{.Names}}' >/dev/null 2>&1; then
+  printf 'docker_daemon_access=false\n'
+  printf 'inventory_status=docker_access_denied_or_daemon_unavailable\n'
+  exit 0
+fi
+
+printf 'docker_daemon_access=true\n'
 printf 'container_count=%s\n' "$(docker ps --format '{{.Names}}' | wc -l | tr -d ' ')"
 while IFS='|' read -r name image; do
   [ -n "$name" ] || continue

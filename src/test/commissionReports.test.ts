@@ -4,6 +4,7 @@ import {
   buildDepositQuery,
   commissionGet,
   summarize,
+  paidAnalytics,
   collectPaidDeposits,
   PAID_COMMISSION_PATH,
   PENDING_COMMISSION_PATH,
@@ -114,7 +115,7 @@ describe("commission summary", () => {
     ] as any);
     expect(s.total_commission).toBe(3000.5);
     expect(s.deposit_count).toBe(3);
-    expect(s.total_loan_volume).toBe(650000);
+    expect(s.total_loan_volume).toBe(550000);
     expect(s.adjustments).toBe(1);
     expect(s.top_institutions[0]).toEqual({ institution: "BNC", amount: 2000.5, count: 2 });
     expect(s.by_date.map((d) => d.date)).toEqual(["2026-01-05", "2026-02-01"]);

@@ -22,6 +22,7 @@ type Period = "month" | "quarter" | "year" | "ytd" | "custom";
 type Summary = {
   total_commission: number;
   deposit_count: number;
+  deal_count: number;
   average_commission: number;
   total_loan_volume: number;
   adjustments: number;
@@ -185,7 +186,7 @@ export default function MCommissions() {
   // rows are never shared across brokers on a device.
   const cacheScope = String(profile?.user_id ?? profile?.id ?? "anonymous");
   const reportCacheKey = useMemo(
-    () => statsCacheKey(isAdmin ? "admin" : "broker", [cacheScope, "paid-deposits-v2", JSON.stringify(filters)]),
+    () => statsCacheKey(isAdmin ? "admin" : "broker", [cacheScope, "paid-unique-v3", JSON.stringify(filters)]),
     [isAdmin, cacheScope, filters],
   );
   const metadataCacheKey = useMemo(
@@ -423,7 +424,7 @@ export default function MCommissions() {
           <SectionTitle color="var(--pp-success, #34D399)" title={fr ? "Commissions déboursées" : "Paid commissions"} sub={fr ? "Déjà versées par Maestro" : "Already paid by Maestro"} />
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Kpi icon={<Wallet className="w-4 h-4" />} label={fr ? "Commissions" : "Commissions"} value={cad(summary.total_commission)} />
-            <Kpi icon={<Receipt className="w-4 h-4" />} label={fr ? "Dépôts" : "Deposits"} value={String(summary.deposit_count)} />
+            <Kpi icon={<Receipt className="w-4 h-4" />} label={fr ? "Unités uniques" : "Unique units"} value={String(summary.deal_count)} />
             <Kpi icon={<TrendingUp className="w-4 h-4" />} label={fr ? "Moyenne" : "Average"} value={cad(summary.average_commission)} />
             <Kpi icon={<Building2 className="w-4 h-4" />} label={fr ? "Volume de prêts" : "Loan volume"} value={cad(summary.total_loan_volume)} />
           </div>

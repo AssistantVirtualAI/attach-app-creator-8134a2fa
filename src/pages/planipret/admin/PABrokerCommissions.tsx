@@ -30,7 +30,7 @@ function Delta({ cur, prev }: { cur: number; prev: number }) {
   );
 }
 
-export default function PABrokerCommissions() {
+export default function PABrokerCommissions({ selfOnly = false }: { selfOnly?: boolean } = {}) {
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
   const [brokers, setBrokers] = useState<Broker[]>([]);
@@ -48,6 +48,15 @@ export default function PABrokerCommissions() {
 
   useEffect(() => {
     void (async () => {
+      if (selfOnly) {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) return;
+        const { data: me } = await supabase.from("planipret_profiles").select("full_name").eq("user_id", uid).maybeSingle();
+        setBrokers([{ id: uid, name: (me as any)?.full_name ?? "" }]);
+        setBroker(uid);
+        return;
+      }
       const { data } = await supabase
         .from("planipret_profiles")
         .select("user_id, full_name")
@@ -86,6 +95,11 @@ export default function PABrokerCommissions() {
   }, [broker, year]);
 
   useEffect(() => { void load(); }, [load]);
+  // Actualisation automatique depuis Maestro, sans publication.
+  useEffect(() => {
+    const id = setInterval(() => { if (document.visibilityState === "visible") void load(); }, 15 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [load]);
 
   const brokerName = useMemo(() => brokers.find((b) => b.id === broker)?.name ?? "", [brokers, broker]);
 
@@ -174,12 +188,14 @@ export default function PABrokerCommissions() {
       />
 
       <PAToolbar>
+        {!selfOnly && (
         <label className="inline-flex items-center gap-2 text-xs font-semibold" style={{ color: "var(--pp-text-secondary)" }}>
           <Users className="h-4 w-4" /> Courtier
           <select aria-label="Courtier" value={broker} onChange={(e) => setBroker(e.target.value)}>
             {brokers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </label>
+        )}
         <label className="inline-flex items-center gap-2 text-xs font-semibold" style={{ color: "var(--pp-text-secondary)" }}>
           <CalendarDays className="h-4 w-4" /> Année
           <select aria-label="Année" value={year} onChange={(e) => setYear(Number(e.target.value))}>

@@ -264,6 +264,10 @@ export default function MCommissions() {
   }, [allowed, rangeReady, filters, call, reportCacheKey, isAdmin, agentId]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const id = setInterval(() => { if (document.visibilityState === "visible") void load(true); }, 15 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [load]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -350,6 +354,9 @@ export default function MCommissions() {
       onBack={() => navigate(-1)}
       right={
         <div className="flex items-center gap-1">
+          <button onClick={() => navigate("tableaux")} aria-label={fr ? "Tableaux et graphiques" : "Charts"} className="p-2 rounded-lg text-xs font-semibold" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
+            {fr ? "Graphiques" : "Charts"}
+          </button>
           <button onClick={openFilters} aria-label={fr ? "Filtres" : "Filters"} className="p-2 rounded-lg" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
             <SlidersHorizontal className="w-4 h-4" />
           </button>

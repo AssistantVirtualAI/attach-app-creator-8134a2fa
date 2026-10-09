@@ -40,6 +40,7 @@ const MPipeline = lazyWithRetry(() => import("./pages/planipret/mobile/MPipeline
 const MSearch = lazyWithRetry(() => import("./pages/planipret/mobile/MSearch"));
 const MStats = lazyWithRetry(() => import("./pages/planipret/mobile/MStats"));
 const MCommissions = lazyWithRetry(() => import("./pages/planipret/mobile/MCommissions"));
+const MBrokerCommissionCharts = lazyWithRetry(() => import("./pages/planipret/mobile/MBrokerCommissionCharts"));
 
 const MTasks = lazyWithRetry(() => import("./pages/planipret/mobile/MTasks"));
 const MClients360 = lazyWithRetry(() => import("./pages/planipret/mobile/MClients360"));
@@ -673,6 +674,7 @@ const App = () => (
                   <Route path="search" element={<Suspense fallback={<MobilePageSkeleton />}><MSearch /></Suspense>} />
                   <Route path="stats" element={<Suspense fallback={<MobilePageSkeleton />}><MStats /></Suspense>} />
                   <Route path="commissions" element={<Suspense fallback={<MobilePageSkeleton />}><MCommissions /></Suspense>} />
+                  <Route path="commissions/tableaux" element={<Suspense fallback={<MobilePageSkeleton />}><MBrokerCommissionCharts /></Suspense>} />
 
                   <Route path="tasks" element={<Suspense fallback={<MobilePageSkeleton />}><MTasks /></Suspense>} />
                   <Route path="clients-360" element={<Suspense fallback={<MobilePageSkeleton />}><MClients360 /></Suspense>} />

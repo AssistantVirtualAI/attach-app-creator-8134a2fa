@@ -19,7 +19,6 @@ import {
 } from "../_shared/maestro-oauth.ts";
 import {
   normalizeFilters,
-  buildDepositQuery,
   commissionGet,
   summarize,
   normalizePendingRow,

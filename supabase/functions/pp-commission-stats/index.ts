@@ -4,6 +4,7 @@ import {
   type RegisterRow,
   type Window,
   metrics,
+  brokerMetrics,
   periodVolume,
   periodDeals,
   periodCommission,
@@ -229,6 +230,9 @@ Deno.serve(async (req) => {
     const scopedAll = agent ? scopedBase.filter(matchesAgent) : scopedBase;
     const mine = scopedAll;
 
+    const firstRowByAgent = new Map<string, RegisterRow>();
+    for (const r of scopedAll) if (r.agent_name != null && !firstRowByAgent.has(r.agent_name)) firstRowByAgent.set(r.agent_name, r);
+
     const resolved = resolveWindow(granularity, year, periodIndex);
     const cyYtd = resolved.window;
     const pyYtd = resolved.priorWindow;
@@ -272,9 +276,9 @@ Deno.serve(async (req) => {
     const brokerTotalVolume = periodVolume(scopedAll, cyYtd);
     const brokers = brokerKeys
       .map((name) => {
-        const c = metrics(scopedAll, cyYtd, { broker: name });
-        const p = metrics(scopedAll, pyYtd, { broker: name });
-        const idRow = scopedAll.find((x) => x.agent_name === name) as any;
+        const c = brokerMetrics(scopedAll, cyYtd, name);
+        const p = brokerMetrics(scopedAll, pyYtd, name);
+        const idRow = firstRowByAgent.get(name) as any;
         return {
           broker: name,
           firstName: idRow?.first_name ?? null,
@@ -359,7 +363,7 @@ Deno.serve(async (req) => {
       const bRows = byBroker.get(name) ?? [];
       const idRow = bRows[0] as any;
       const cells = yearsWithData.map((y) => {
-        const m = metrics(scopedAll, yearWindow(y), { broker: name });
+        const m = brokerMetrics(scopedAll, yearWindow(y), name);
         return { year: y, volume: m.volume, deals: m.deals, commission: m.commission, bps: m.bps, avgDeal: m.avgDeal };
       });
       return {
@@ -453,9 +457,9 @@ Deno.serve(async (req) => {
     const brokerNames = uniq(volumeTranches(allRows, seasonCur).map((r) => r.agent_name));
     const clubFull = brokerNames
       .map((name) => {
-        const c = metrics(allRows, seasonCur, { broker: name });
-        const p = metrics(allRows, seasonPrev, { broker: name });
-        const idRow = scopedAll.find((x) => x.agent_name === name) as any;
+        const c = brokerMetrics(allRows, seasonCur, name);
+        const p = brokerMetrics(allRows, seasonPrev, name);
+        const idRow = firstRowByAgent.get(name) as any;
         return {
           broker: name,
           firstName: idRow?.first_name ?? null,

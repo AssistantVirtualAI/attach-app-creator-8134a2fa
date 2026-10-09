@@ -315,7 +315,7 @@ Deno.serve(async (req) => {
         const add = (b: ReturnType<typeof mk>, r: any) => {
           b.amount += num(r.commission_amount ?? r.amount);
           const c = String(r.contract_id ?? r.number ?? "");
-          if (c) b.contracts.set(c, Math.max(b.contracts.get(c) ?? 0, num(r.loan_amount ?? r.loan_amt ?? 0) || num((r as any).loan_amt_raw)));
+          if (c) b.contracts.set(c, Math.max(b.contracts.get(c) ?? 0, num(r.loan_amount ?? r.loan_amt ?? 0)));
         };
         for (const r of rows as any[]) {
           const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null;
@@ -373,14 +373,14 @@ Deno.serve(async (req) => {
             if (!token) { failed.push(name); continue; }
             const res = await fetchPending(token, String(p.maestro_broker_id));
             if (!res.ok) { failed.push(name); continue; }
-            const s = pack(res.rows, res.official, res.truncated);
+            const s = pack(res.rows, res.official, res.truncated, String(p.maestro_broker_id));
             anyTrunc ||= res.truncated;
             allRows.push(...res.rows);
             for (const o of res.official ?? []) {
               const e = officialAll.get(o.type) ?? { ...o, amount: 0 };
               e.amount = r2(e.amount + o.amount); officialAll.set(o.type, e);
             }
-            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume });
+            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume, personal: s.split.personal, team: s.split.team, team_members: s.split.team_members });
           } catch { failed.push(name); }
         }
       };

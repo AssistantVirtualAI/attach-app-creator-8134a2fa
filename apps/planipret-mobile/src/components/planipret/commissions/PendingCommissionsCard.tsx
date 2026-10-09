@@ -31,23 +31,25 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
   refreshToken?: number;
 }) {
   const fr = lang !== "en";
+  const [agent, setAgent] = useState("");
+  const [brokers, setBrokers] = useState<{ users_id: number; name: string; amount: number; files: number; volume: number }[] | null>(null);
   const f = useMemo(() => {
     const base = filters?.date_from && filters?.date_to ? { date_from: filters.date_from, date_to: filters.date_to } : yearRange();
     return {
       ...base,
-      ...(filters?.users_id ? { users_id: filters.users_id } : {}),
+      ...((agent || filters?.users_id) ? { users_id: agent || filters?.users_id } : {}),
       ...(filters?.financial_inst_id ? { financial_inst_id: filters.financial_inst_id } : {}),
     };
-  }, [filters?.date_from, filters?.date_to, filters?.users_id, filters?.financial_inst_id]);
+  }, [filters?.date_from, filters?.date_to, filters?.users_id, filters?.financial_inst_id, agent]);
   const key = statsCacheKey("broker", ["pending", cacheScope, f.date_from, f.date_to, f.users_id ?? "", f.financial_inst_id ?? ""]);
-  const [summary, setSummary] = useState<Summary | null>(() => (readStatsCache(key)?.value as Summary) ?? null);
+  const [summary, setSummary] = useState<Summary | null>(() => ((readStatsCache(key)?.value as any)?.summary as Summary) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const cached = readStatsCache(key);
-    if (cached?.value) setSummary(cached.value as Summary);
+    if (cached?.value) { setSummary((cached.value as any).summary ?? null); if (!agent) setBrokers((cached.value as any).brokers ?? null); }
     if (refreshToken === 0 && isStatsCacheFresh(cached)) return;
     setLoading(!cached?.value);
     setError(null);
@@ -60,7 +62,8 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
         return;
       }
       setSummary(d.summary);
-      writeStatsCache(key, d.summary);
+      if (!agent) setBrokers(Array.isArray(d.brokers) ? d.brokers : null);
+      writeStatsCache(key, { summary: d.summary, brokers: d.brokers ?? null });
     })()
       .catch(() => { if (!cancelled) setError(fr ? "Commissions en attente indisponibles pour le moment." : "Pending commissions unavailable right now."); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -90,6 +93,15 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
         <Hourglass className="w-4 h-4" style={{ color: "#F0B429" }} />
         {fr ? "Commissions en attente" : "Pending commissions"}
       </h3>
+      {brokers && brokers.length > 0 && (
+        <select value={agent} onChange={(e) => setAgent(e.target.value)} className="mb-2 w-full rounded-lg px-2 py-1.5 text-[12px]"
+          style={{ background: "var(--pp-bg-elevated, #0F1E35)", color: "var(--pp-text-primary, #E8EDF5)", border: "1px solid rgba(240,180,41,0.3)" }}>
+          <option value="">{fr ? `Tous les courtiers (${brokers.length})` : `All brokers (${brokers.length})`}</option>
+          {[...brokers].sort((a, b) => a.name.localeCompare(b.name, "fr")).map((b) => (
+            <option key={b.users_id} value={String(b.users_id)}>{b.name}</option>
+          ))}
+        </select>
+      )}
       {error && <p className="text-[11.5px] mb-2" style={{ color: "#F0B429" }}>{error}</p>}
       {loading && !summary ? (
         <p className="text-[12px]" style={{ color: "var(--pp-text-muted, #94A3B8)" }}>…</p>
@@ -125,6 +137,28 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
             <p className="text-[12px]" style={{ color: "var(--pp-text-muted, #94A3B8)" }}>
               {fr ? "Aucune commission en attente pour cette période." : "No pending commissions for this period."}
             </p>
+          )}
+          {!agent && brokers && brokers.length > 0 && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-[11.5px]" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>
+                <thead><tr style={{ color: "var(--pp-text-muted, #94A3B8)" }}>
+                  <th className="text-left py-1">{fr ? "Courtier" : "Broker"}</th>
+                  <th className="text-right py-1">{fr ? "En attente" : "Pending"}</th>
+                  <th className="text-right py-1">{fr ? "Dossiers" : "Files"}</th>
+                  <th className="text-right py-1">Volume</th>
+                </tr></thead>
+                <tbody>
+                  {brokers.map((b) => (
+                    <tr key={b.users_id} className="cursor-pointer" style={{ borderTop: "1px solid rgba(148,163,184,0.12)" }} onClick={() => setAgent(String(b.users_id))}>
+                      <td className="py-1.5">{b.name}</td>
+                      <td className="py-1.5 text-right font-semibold">{cad(b.amount)}</td>
+                      <td className="py-1.5 text-right">{b.files}</td>
+                      <td className="py-1.5 text-right">{cad(b.volume)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
           {summary.truncated && (
             <p className="text-[11px] mt-2" style={{ color: "#F0B429" }}>{fr ? "Résultats partiels." : "Partial results."}</p>

@@ -269,6 +269,107 @@ Deno.serve(async (req) => {
     }
 
 
+
+    // ---- Pending commissions -------------------------------------------
+    // Courtier : son propre jeton. Admin : chaque courtier déjà connecté à
+    // Maestro, lu côté serveur avec son propre jeton (lecture seule, jamais
+    // renvoyé au client), avec tableau par courtier et filtre par agent.
+    if (action === "pending") {
+      const fetchPending = async (token: string, usersId: string | null) => {
+        const raw: any[] = [];
+        let upstreamSummary: unknown = null;
+        let page = 1, lastPage = 1;
+        while (page <= 25) {
+          const qs = new URLSearchParams();
+          if (usersId) qs.set("users_id", usersId);
+          if (filters.financial_inst_id) qs.set("financial_inst_id", filters.financial_inst_id);
+          if (filters.date_from && filters.date_to) {
+            qs.set("date_from", filters.date_from.slice(0, 10));
+            qs.set("date_to", filters.date_to.slice(0, 10));
+          }
+          qs.set("page", String(page));
+          qs.set("per_page", "200");
+          const r = await commissionGet(`/api/main/commissions/reports/pending-commissions?${qs}`, token, cid);
+          if (!r.ok) return { ok: false as const, r };
+          if (page === 1) upstreamSummary = r.data?.summary ?? null;
+          const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
+          raw.push(...rows);
+          lastPage = Number(r.data?.meta?.last_page ?? 1);
+          if (page >= lastPage || rows.length === 0) break;
+          page += 1;
+        }
+        const rows = raw.map(normalizePendingRow);
+        const official = Array.isArray(upstreamSummary)
+          ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
+          : null;
+        return { ok: true as const, rows, official, truncated: lastPage > 25 };
+      };
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      const pack = (rows: CommissionDepositRow[], official: { type: string; label: string; amount: number }[] | null, truncated: boolean) => {
+        const summary = summarize(rows, truncated);
+        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null };
+      };
+
+      if (role === "broker") {
+        if (!ownToken) return scopeError("maestro_not_connected");
+        const res = await fetchPending(ownToken, resolvedUsersId);
+        if (!res.ok) return upstream(res.r, cid);
+        return json({ ok: true, summary: pack(res.rows, res.official, res.truncated), scope: { role, users_id: resolvedUsersId, mode: "own" }, correlation_id: cid }, 200, cid);
+      }
+
+      // Admin : courtiers déjà authentifiés auprès de Maestro.
+      let q = admin.from("planipret_profiles")
+        .select("user_id, full_name, email, maestro_broker_id")
+        .eq("maestro_connected", true)
+        .not("maestro_broker_id", "is", null);
+      if (filters.users_id) q = q.eq("maestro_broker_id", filters.users_id);
+      const { data: profs } = await q;
+      const seen = new Set<string>();
+      const brokers = (profs ?? []).filter((p: any) => {
+        const id = String(p.maestro_broker_id);
+        if (seen.has(id) || !p.user_id) return false;
+        seen.add(id); return true;
+      });
+      const table: any[] = [];
+      const failed: string[] = [];
+      const allRows: CommissionDepositRow[] = [];
+      const officialAll = new Map<string, { type: string; label: string; amount: number }>();
+      let anyTrunc = false;
+      let idx = 0;
+      const worker = async () => {
+        while (idx < brokers.length) {
+          const p: any = brokers[idx++];
+          const name = String(p.full_name ?? p.email ?? p.maestro_broker_id);
+          try {
+            const token = await getUserMaestroAccessToken(admin, String(p.user_id));
+            if (!token) { failed.push(name); continue; }
+            const res = await fetchPending(token, String(p.maestro_broker_id));
+            if (!res.ok) { failed.push(name); continue; }
+            const s = pack(res.rows, res.official, res.truncated);
+            anyTrunc ||= res.truncated;
+            allRows.push(...res.rows);
+            for (const o of res.official ?? []) {
+              const e = officialAll.get(o.type) ?? { ...o, amount: 0 };
+              e.amount = r2(e.amount + o.amount); officialAll.set(o.type, e);
+            }
+            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume });
+          } catch { failed.push(name); }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(5, brokers.length) }, worker));
+      table.sort((a, b) => b.amount - a.amount);
+      const official = officialAll.size ? [...officialAll.values()] : null;
+      log("pending admin brokers", table.length, "failed", failed.length);
+      return json({
+        ok: true,
+        summary: pack(allRows, official, anyTrunc),
+        brokers: table,
+        failed_brokers: failed.length,
+        scope: { role, users_id: filters.users_id ?? null, mode: filters.users_id ? "selected_broker" : "all_brokers" },
+        correlation_id: cid,
+      }, 200, cid);
+    }
+
     // ---- Source unique (aucun fan-out ni jeton d'un autre courtier) -------
     // La portée est strictement celle du jeton appelant, ou celle du jeton
     // administrateur Maestro explicitement configuré pour « Tous les courtiers ».
@@ -467,53 +568,6 @@ Deno.serve(async (req) => {
       }, 200, cid);
     }
 
-
-    // ---- Pending commissions (même portée, mêmes filtres, lecture seule) ---
-    if (action === "pending") {
-      const src = (await collectSources())[0];
-      const raw: any[] = [];
-      let upstreamSummary: unknown = null;
-      let page = 1, lastPage = 1;
-      while (page <= 25) {
-        const qs = new URLSearchParams();
-        if (filters.users_id) qs.set("users_id", filters.users_id);
-        if (filters.financial_inst_id) qs.set("financial_inst_id", filters.financial_inst_id);
-        if (filters.date_from && filters.date_to) {
-          qs.set("date_from", filters.date_from.slice(0, 10));
-          qs.set("date_to", filters.date_to.slice(0, 10));
-        }
-        qs.set("page", String(page));
-        qs.set("per_page", "200");
-        const r = await commissionGet(`/api/main/commissions/reports/pending-commissions?${qs}`, src.token, cid);
-        if (!r.ok) return upstream(r, cid);
-        if (page === 1) upstreamSummary = r.data?.summary ?? null;
-        const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
-        raw.push(...rows);
-        lastPage = Number(r.data?.meta?.last_page ?? 1);
-        if (page >= lastPage || rows.length === 0) break;
-        page += 1;
-      }
-      const truncated = lastPage > 25;
-      const rows = raw.map(normalizePendingRow);
-      const summary = summarize(rows, truncated);
-      log("pending rows", rows.length, "total", summary.total_commission);
-      const official = Array.isArray(upstreamSummary)
-        ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
-        : null;
-      return json({
-        ok: true,
-        summary: { ...summary, official_by_type: official, official_total: official ? Math.round(official.reduce((t, x) => t + x.amount, 0) * 100) / 100 : null },
-        rows: rows.slice(0, 500),
-        upstream_summary: upstreamSummary,
-        by_type: rows.reduce((m: Record<string, number>, r: any) => { m[r.commission_type] = Math.round(((m[r.commission_type] ?? 0) + Number(r.amount || 0)) * 100) / 100; return m; }, {}),
-        last_page: lastPage,
-        total_available: rows.length,
-        truncated,
-        scope: { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode },
-        filters,
-        correlation_id: cid,
-      }, 200, cid);
-    }
 
     return applicationError("unknown_action", `Action inconnue: ${action}`, cid);
   } catch (e) {

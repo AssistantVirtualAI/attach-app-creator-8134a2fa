@@ -8,6 +8,7 @@ on:
       - 'apps/ava-softphone-desktop/**'
       - 'infra/lemtel-self-hosted/**'
       - 'infra/lemtel-client-config/**'
+      - 'infra/lemtel-resilience/**'
       - 'infra/lemtel-delivery/**'
       - 'scripts/lemtel-*.mjs'
       - '.github/workflows/lemtel-github-artifact-sync.yml'
@@ -46,6 +47,7 @@ jobs:
             apps/ava-softphone-desktop \
             infra/lemtel-self-hosted \
             infra/lemtel-client-config \
+            infra/lemtel-resilience \
             infra/lemtel-delivery \
             scripts \
             .github/workflows \

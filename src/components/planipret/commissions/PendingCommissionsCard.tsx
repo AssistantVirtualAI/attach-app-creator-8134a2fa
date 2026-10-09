@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownAZ,
-  ArrowLeft,
   BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
@@ -185,23 +184,12 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
     const link = document.createElement("a"); link.href = url; link.download = `commissions-en-attente-${f.users_id ?? "tous"}-${f.date_from}.csv`; link.click(); URL.revokeObjectURL(url);
   };
 
-  if (false && loading && !summary) {
-    return (
-      <section className="rounded-lg p-4 mb-3" aria-busy="true" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)" }}>
-        <div className="h-5 w-52 rounded animate-pulse mb-4" style={{ background: "var(--pp-bg-elevated)" }} />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          {[0, 1, 2, 3].map((item) => <div key={item} className="h-20 rounded-lg animate-pulse" style={{ background: "var(--pp-bg-elevated)" }} />)}
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section className="pending-commissions" aria-label={fr ? "Commissions en attente" : "Pending commissions"} aria-busy={loading}>
       <header className="pending-header">
         <div>
           <h3 className="pending-heading"><Hourglass className="h-5 w-5" />{fr ? "Commissions en attente" : "Pending commissions"}</h3>
-          <p className="text-xs mt-1 text-muted-foreground">{selectedBroker?.name ?? (fr ? "Tous les courtiers" : "All brokers")} · {rangeLabel}</p>
+          <p className="text-xs mt-1 text-muted-foreground">{selectedBroker?.name ?? (isAdminView ? (fr ? "Tous les courtiers" : "All brokers") : (fr ? "Mes commissions" : "My commissions"))} · {rangeLabel}</p>
           {validation && <ValidationBadge validation={validation} fr={fr} />}
         </div>
         <div className="flex gap-2">
@@ -220,7 +208,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
         </>}
       </div>
       <div className="pending-tabs" role="tablist" aria-label={fr ? "Vues en attente" : "Pending views"}>
-        {([["overview", fr ? "Vue d’ensemble" : "Overview", BarChart3], ...(isAdminView && !selectedBroker ? [["brokers", fr ? "Courtiers et équipes" : "Brokers and teams", Users]] : []), ["monthly", fr ? "Détail mensuel" : "Monthly detail", CalendarDays], ["types", fr ? "Types de commissions" : "Commission types", WalletCards]] as const).map(([k,label,Icon]) => <Button key={k} role="tab" aria-selected={tab === k} className="pending-tab" variant="ghost" size="sm" onClick={() => setTab(k as typeof tab)}><Icon className="h-4 w-4 mr-2" />{label}</Button>)}
+        {([["overview", fr ? "Vue d’ensemble" : "Overview", BarChart3], ...(isAdminView && !selectedBroker ? [["brokers", fr ? "Courtiers et équipes" : "Brokers and teams", Users] as const] : []), ["monthly", fr ? "Détail mensuel" : "Monthly detail", CalendarDays], ["types", fr ? "Types de commissions" : "Commission types", WalletCards]] as const).map(([k,label,Icon]) => <Button key={k} role="tab" aria-selected={tab === k} className="pending-tab" variant="ghost" size="sm" onClick={() => setTab(k as typeof tab)}><Icon className="h-4 w-4 mr-2" />{label}</Button>)}
       </div>
 
       {error && (

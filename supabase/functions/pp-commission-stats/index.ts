@@ -24,6 +24,8 @@ import {
 } from "../_shared/commission-engine.ts";
 import { agentKey } from "../_shared/broker-identity.ts";
 import { fetchLiveRegisterRows, dedupeKey } from "../_shared/commission-live.ts";
+import { collectPaidDeposits } from "../_shared/commission-reports.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -141,10 +143,10 @@ Deno.serve(async (req) => {
     let live: Awaited<ReturnType<typeof fetchLiveRegisterRows>> = {
       rows: [], coverage: { connected: 0, total: 0 }, failures: [], brokers: [],
     };
-    // Firm-wide view: broker tokens are owner-scoped (0 deposits) and 26 live
-    // calls push the worker over its CPU budget. The register is the source.
-    if (!(isAdmin && scope === "all")) try {
-      live = await fetchLiveRegisterRows(admin, user.id, false, years, cid);
+    // This reads the persisted cache, not broker API fan-out. Admin views must
+    // include it too, otherwise current-year updates never reach the portal.
+    try {
+      live = await fetchLiveRegisterRows(admin, user.id, isAdmin && scope === "all", years, cid, agent);
     } catch (e) {
       console.warn("[pp-commission-stats] live merge failed", e);
     }
@@ -156,7 +158,36 @@ Deno.serve(async (req) => {
       seenDeals.add(k);
       return true;
     });
-    const allRows = [...registerRows, ...(liveMerged as unknown as RegisterRow[])];
+    let allRows = [...registerRows, ...(liveMerged as unknown as RegisterRow[])];
+    // A selected broker's CY/PY view must use the same complete paid source
+    // as mobile, not mix an older workbook with a more recent cache.
+    const selectedQuery = admin.from("planipret_profiles")
+      .select("user_id,full_name,maestro_broker_id");
+    const { data: selectedProfile } = isAdmin && scope === "all" && agent
+      ? await selectedQuery.ilike("full_name", agent).limit(1).maybeSingle()
+      : scope === "self" ? await selectedQuery.eq("user_id", user.id).maybeSingle() : { data: null };
+    if (selectedProfile?.user_id && selectedProfile?.maestro_broker_id) {
+      const brokerToken = await getUserMaestroAccessToken(admin, String(selectedProfile.user_id));
+      if (!brokerToken) return json({ error: "Votre compte Maestro doit être reconnecté pour consulter les chiffres actuels." }, 200);
+      const paid = await collectPaidDeposits(brokerToken, {
+        users_id: String(selectedProfile.maestro_broker_id),
+        date_from: `${year - 1}-01-01 00:00:00`, date_to: `${year}-12-31 23:59:59`,
+      }, cid);
+      if (paid.fatal || paid.truncated) return json({ error: "Les commissions Maestro sont temporairement indisponibles. Réessayez." }, 200);
+      const target = agentKey(selectedProfile.full_name);
+      allRows = allRows.filter((r) => {
+        const y = Number(r.date_trans?.slice(0, 4));
+        const selected = agentKey(r.agent_name) === target || r.broker_user_id === selectedProfile.user_id;
+        return !selected || (y !== year && y !== year - 1);
+      });
+      allRows.push(...paid.rows.map((r, i) => ({
+        ...r, loan_amt: Number(r.loan_amt ?? 0), amount: Number(r.amount ?? 0),
+        term: r.term == null ? null : String(r.term), date_trans: r.date_trans?.slice(0, 10) ?? null,
+        agent_name: r.agent_name ?? selectedProfile.full_name,
+        broker_user_id: selectedProfile.user_id, source_row: -1000000 - i,
+        fiscal_year: Number(r.date_trans?.slice(0, 4)),
+      })));
+    }
 
     const { data: prof } = await admin
       .from("planipret_profiles")

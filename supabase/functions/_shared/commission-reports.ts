@@ -4,6 +4,7 @@
 //   GET /api/main/financial-institutions
 //
 // Read-only. Never mutates a commission. The Bearer token stays server-side.
+import { helperFlags, type RegisterRow } from "./commission-engine.ts";
 
 export const COMMISSION_API_BASE = (
   (globalThis as any).Deno?.env?.get("PLANIPRET_API_BASE_URL") ?? "https://client.planipret.com"
@@ -239,7 +240,7 @@ export async function collectPaidDeposits(token: string, filters: NormalizedFilt
   const types = filters.commission_type ? [filters.commission_type] : [...COMMISSION_TYPES];
   for (const type of types) {
     for (let page = 1; page <= 100; page++) {
-      const qs = buildDepositQuery({ ...filters, commission_type: type, page, per_page: 200 });
+      const qs = buildDepositQuery({ ...filters, order_by: "number", sort: "asc", commission_type: type, page, per_page: 200 });
       const result = await commissionGet(`${PAID_COMMISSION_PATH}?${qs}`, token, cid);
       if (!result.ok) return { rows: [], truncated: false, total: 0, fatal: result };
       if (!Array.isArray(result.data?.data)) {
@@ -248,7 +249,6 @@ export async function collectPaidDeposits(token: string, filters: NormalizedFilt
       const batch: CommissionDepositRow[] = result.data.data;
       rows.push(...batch.map((row) => ({
         ...row, commission_type: row.commission_type ?? type,
-        loan_amt: type === "base" || filters.commission_type ? row.loan_amt : 0,
       })));
       const lastPage = Number(result.data?.meta?.last_page ?? 1);
       if (page >= lastPage || batch.length === 0) break;
@@ -279,8 +279,47 @@ export interface CommissionSummary {
   truncated: boolean;
 }
 
-const hasDate = (r: CommissionDepositRow) =>
+const hasDate = (r: { date_trans?: string | null }) =>
   /^\d{4}-\d{2}-\d{2}/.test(String((r as any).date_trans ?? "").trim());
+
+/** Same funded-tranche and calendar-period unit rules as the portal engine. */
+export function paidFlags(allRows: CommissionDepositRow[]) {
+  const rows: RegisterRow[] = allRows.map((r, source_row) => ({
+    ...r, loan_amt: num(r.loan_amt), amount: num(r.amount),
+    term: r.term == null ? null : String(r.term),
+    date_trans: r.date_trans?.trim().slice(0, 10) ?? null,
+    commission_type: r.commission_type ?? "base", source_row,
+  }));
+  return helperFlags(rows, { start: "0000-01-01", end: "9999-12-31" });
+}
+
+export function paidAnalytics(allRows: CommissionDepositRow[]) {
+  const flags = paidFlags(allRows);
+  const months = new Map<string, { key: string; volume: number; commission: number; deals: number }>();
+  const lenders = new Map<string, { key: string; volume: number; deals: number }>();
+  let volume = 0, deals = 0;
+  for (const { row, unique_volume, unique_deal } of flags) {
+    if (!hasDate(row)) continue;
+    const key = String(row.date_trans).slice(0, 7);
+    const m = months.get(key) ?? { key, volume: 0, commission: 0, deals: 0 };
+    const loan = unique_volume ? num(row.loan_amt) : 0;
+    m.volume += loan; m.commission += num(row.amount); m.deals += unique_deal;
+    months.set(key, m); volume += loan; deals += unique_deal;
+    if (unique_volume) {
+      const name = row.institution?.trim() || "—";
+      const lender = lenders.get(name) ?? { key: name, volume: 0, deals: 0 };
+      lender.volume += loan; lender.deals += unique_deal; lenders.set(name, lender);
+    }
+  }
+  const types = new Map<string, number>();
+  for (const r of allRows.filter(hasDate)) {
+    const type = r.commission_type ?? "base";
+    types.set(type, (types.get(type) ?? 0) + num(r.amount));
+  }
+  return { volume, deals, months: [...months.values()].sort((a, b) => a.key.localeCompare(b.key)),
+    lenders: [...lenders.values()].sort((a, b) => b.volume - a.volume),
+    types: [...types].map(([type, amount]) => ({ type, amount })) };
+}
 
 export function summarize(allRows: CommissionDepositRow[], truncated = false): CommissionSummary {
   // Undated rows are excluded from every metric and reported separately.
@@ -291,16 +330,13 @@ export function summarize(allRows: CommissionDepositRow[], truncated = false): C
     amount: Math.round(undatedRows.reduce((s, r) => s + num(r.amount), 0) * 100) / 100,
     loan_amt: Math.round(undatedRows.reduce((s, r) => s + num(r.loan_amt), 0) * 100) / 100,
   };
-  let total = 0, volume = 0, adjustments = 0;
-  const deals = new Set<string>();
+  let total = 0, adjustments = 0;
+  const analytics = paidAnalytics(rows);
   const inst = new Map<string, { amount: number; count: number }>();
   const byDate = new Map<string, { amount: number; count: number }>();
   for (const r of rows) {
     const amt = num(r.amount);
     total += amt;
-    volume += num(r.loan_amt);
-    const ctype = String((r as any).commission_type ?? "base").trim().toLowerCase() || "base";
-    if (ctype === "base" && (r as any).number) deals.add(String((r as any).number));
     if (Number(r.is_adjustment) === 1) adjustments += 1;
     const key = String(r.institution ?? "—").trim() || "—";
     const i = inst.get(key) ?? { amount: 0, count: 0 };
@@ -313,8 +349,8 @@ export function summarize(allRows: CommissionDepositRow[], truncated = false): C
     total_commission: Math.round(total * 100) / 100,
     deposit_count: rows.length,
     average_commission: rows.length ? Math.round((total / rows.length) * 100) / 100 : 0,
-    total_loan_volume: Math.round(volume * 100) / 100,
-    deal_count: deals.size,
+    total_loan_volume: Math.round(analytics.volume * 100) / 100,
+    deal_count: analytics.deals,
     adjustments,
     undated,
     top_institutions: [...inst.entries()]

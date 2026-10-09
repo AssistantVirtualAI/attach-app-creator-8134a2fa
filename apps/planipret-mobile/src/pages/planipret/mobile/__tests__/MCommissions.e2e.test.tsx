@@ -57,6 +57,7 @@ import MCommissions from "../MCommissions";
 const SUMMARY = {
   total_commission: 156282.05,
   deposit_count: 75,
+  deal_count: 30,
   average_commission: 2083.76,
   total_loan_volume: 19277881,
   adjustments: 0,
@@ -113,8 +114,8 @@ describe("MCommissions (mobile)", () => {
   it("charge le résumé et affiche les KPIs", async () => {
     render(<MCommissions />);
     await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    expect(screen.getByText("Dépôts")).toBeInTheDocument();
-    expect(screen.getByText("75")).toBeInTheDocument();
+    expect(screen.getByText("Unités uniques")).toBeInTheDocument();
+    expect(screen.getByText("30")).toBeInTheDocument();
     expect(money("19 277 881 $")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith(
       "planipret-commission-reports",

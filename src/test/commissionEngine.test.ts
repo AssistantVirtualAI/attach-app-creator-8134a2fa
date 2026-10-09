@@ -30,6 +30,9 @@ const row = (overrides: Partial<RegisterRow>): RegisterRow => ({
 });
 
 describe("commission volume rules", () => {
+  it("includes a transaction timestamp on the final calendar day", () => {
+    expect(periodVolume([row({ date_trans: "2026-12-31 23:59:59" })], window)).toBe(300000);
+  });
   it("counts every funding row, including two products on the same contract", () => {
     const rows = [
       row({ source_row: 1, loan_amt: 200_000 }),

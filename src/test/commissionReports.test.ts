@@ -4,6 +4,7 @@ import {
   buildDepositQuery,
   commissionGet,
   summarize,
+  paidAnalytics,
   collectPaidDeposits,
   PAID_COMMISSION_PATH,
   PENDING_COMMISSION_PATH,
@@ -106,6 +107,25 @@ describe("commission upstream responses", () => {
 });
 
 describe("commission summary", () => {
+  it("uses portal rules for unique yearly units, tranches and lender totals", () => {
+    const base = { number: "C1", loan_amt: 300000, amount: 1000, institution: "BNC", mortgage_type: "Fixe", commission_type: "base", date_trans: "2026-01-05", is_adjustment: 0 };
+    const rows = [base, { ...base, date_trans: "2026-02-05" },
+      { ...base, amount: 200, commission_type: "bonus" },
+      { ...base, loan_amt: 100000, mortgage_type: "Marge", date_trans: "2026-03-05" },
+      { ...base, number: "C2", loan_amt: 500000, is_adjustment: 1 },
+      { ...base, loan_amt: -300000 },
+      { ...base, number: "C3", loan_amt: 200000, institution: "TD", date_trans: "2026-12-31 23:59:59" },
+    ] as any;
+    const report = summarize(rows);
+    const analytics = paidAnalytics(rows);
+    expect(report.deal_count).toBe(2);
+    expect(report.total_loan_volume).toBe(600000);
+    expect(analytics.months.reduce((s, m) => s + m.volume, 0)).toBe(600000);
+    expect(analytics.months.reduce((s, m) => s + m.deals, 0)).toBe(2);
+    expect(analytics.lenders).toEqual([{ key: "BNC", volume: 400000, deals: 1 }, { key: "TD", volume: 200000, deals: 1 }]);
+    expect(analytics.lenders.reduce((s, l) => s + l.volume, 0)).toBe(report.total_loan_volume);
+    expect(report.total_commission).toBe(6200);
+  });
   it("aggregates totals, institutions and dates", () => {
     const s = summarize([
       { amount: "1500.50", loan_amt: "300000", institution: "BNC", date_trans: "2026-01-05", is_adjustment: 0 },
@@ -114,7 +134,7 @@ describe("commission summary", () => {
     ] as any);
     expect(s.total_commission).toBe(3000.5);
     expect(s.deposit_count).toBe(3);
-    expect(s.total_loan_volume).toBe(650000);
+    expect(s.total_loan_volume).toBe(550000);
     expect(s.adjustments).toBe(1);
     expect(s.top_institutions[0]).toEqual({ institution: "BNC", amount: 2000.5, count: 2 });
     expect(s.by_date.map((d) => d.date)).toEqual(["2026-01-05", "2026-02-01"]);

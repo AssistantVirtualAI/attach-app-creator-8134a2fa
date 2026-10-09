@@ -58,7 +58,8 @@ export function inWindow(r: RegisterRow, w: Window): boolean {
   if (!hasTransactionDate(r)) return false;
   const d = r.date_trans;
   if (!d) return false;
-  return d >= w.start && d <= w.end;
+  const day = d.trim().slice(0, 10);
+  return day >= w.start && day <= w.end;
 }
 
 export function sortSource<T extends { source_row: number }>(rows: T[]): T[] {

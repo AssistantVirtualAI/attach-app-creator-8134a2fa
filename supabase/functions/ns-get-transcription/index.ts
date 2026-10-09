@@ -399,7 +399,7 @@ Deno.serve(async (req) => {
           Authorization: `Bearer ${SERVICE_ROLE}`,
           apikey: SERVICE_ROLE,
         },
-        body: JSON.stringify({ call_id: call_db_id, source: "ns_get_transcription_fallback" }),
+        body: JSON.stringify({ call_id: row?.id ?? call_db_id, source: "ns_get_transcription_fallback" }),
       });
       const fallback = await fallbackResponse.json().catch(() => ({} as any));
       const fallbackText = String(fallback?.transcript ?? "").trim();

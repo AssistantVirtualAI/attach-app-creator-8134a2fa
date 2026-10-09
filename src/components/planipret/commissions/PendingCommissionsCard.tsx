@@ -12,6 +12,8 @@ type Summary = {
   total_loan_volume: number;
   by_date?: { date: string; amount: number; count: number }[];
   truncated?: boolean;
+  official_total?: number | null;
+  official_by_type?: { type: string; label: string; amount: number }[] | null;
 };
 
 const cad = (n: number) =>
@@ -94,10 +96,19 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
       ) : summary ? (
         <>
           <div className="grid grid-cols-3 gap-2 mb-3">
-            {kpi(fr ? "Montant" : "Amount", cad(summary.total_commission))}
-            {kpi(fr ? "Dossiers" : "Files", String(summary.deposit_count))}
+            {kpi(fr ? "Montant" : "Amount", cad(summary.official_total ?? summary.total_commission))}
+            {kpi(fr ? "Dossiers" : "Files", String((summary as any).deal_count || summary.deposit_count))}
             {kpi("Volume", cad(summary.total_loan_volume))}
           </div>
+          {!!summary.official_by_type?.length && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {summary.official_by_type.filter((t) => t.amount).map((t) => (
+                <span key={t.type} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "rgba(240,180,41,0.12)", color: "var(--pp-text-primary, #E8EDF5)" }}>
+                  {t.label} · {cad(t.amount)}
+                </span>
+              ))}
+            </div>
+          )}
           {months.length > 0 ? (
             <div style={{ height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">

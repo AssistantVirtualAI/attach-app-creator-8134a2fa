@@ -311,11 +311,12 @@ export function normalizePendingRow(r: any): CommissionDepositRow {
   const pick = (...k: string[]) => { for (const x of k) if (r?.[x] != null && r[x] !== "") return r[x]; return null; };
   return {
     ...r,
-    amount: pick("amount", "pending_amount", "commission", "commission_amount", "expected_amount"),
-    loan_amt: pick("loan_amt", "loan_amount", "amount_loan"),
     institution: pick("institution", "financial_institution", "lender"),
-    date_trans: pick("date_trans", "date", "closing_date", "funding_date", "expected_date", "created_at"),
-    commission_type: "base",
-    number: pick("number", "file_number", "contract_number"),
+    amount: pick("commission_amount", "amount", "pending_amount", "commission"),
+    date_trans: pick("date_trans", "date_closing", "closing_date", "date", "funding_date", "created_at"),
+    commission_type: String(pick("commission_type") ?? "base").toLowerCase(),
+    // Volume counted once per contract (base row only) to avoid 4x duplication.
+    loan_amt: String(pick("commission_type") ?? "base").toLowerCase() === "base" ? pick("loan_amt", "loan_amount") : 0,
+    number: pick("number", "filogix", "contract_id", "file_number"),
   } as CommissionDepositRow;
 }

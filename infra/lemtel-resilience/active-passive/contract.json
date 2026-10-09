@@ -1,0 +1,46 @@
+{
+  "contract_version": "lemtel_active_passive_foundation_v1",
+  "scope": "verified_active_passive_rollout_without_telephony",
+  "source_branch": "lemtel/integration",
+  "authorization": {
+    "active_passive_implementation_authorized": true,
+    "fusionpbx_or_sip_activation_authorized": false,
+    "planipret_data_in_scope": false,
+    "client_cutover_authorized": false
+  },
+  "topology": {
+    "primary": "hostinger_primary",
+    "standby": "digitalocean_warm_standby",
+    "writer_policy": "single_writer_hostinger",
+    "database_replication": "postgres_physical_streaming_with_replication_slot",
+    "storage_replication": "inventory_required_before_backend_specific_replication",
+    "runtime_delivery": "immutable_artifact_same_digest_on_both_hosts",
+    "traffic_routing": "external_health_checked_active_passive",
+    "commit_acknowledgement_policy": "pending_owner_rpo_availability_choice"
+  },
+  "required_evidence": {
+    "hostinger_admin_ssh_verified": false,
+    "digitalocean_admin_ssh_verified": false,
+    "matching_postgres_major_version_verified": false,
+    "storage_layout_inventory_verified": false,
+    "standby_basebackup_verified": false,
+    "replication_lag_monitoring_verified": false,
+    "storage_integrity_monitoring_verified": false,
+    "external_health_routing_verified": false,
+    "fencing_verified": false,
+    "failover_drill_verified": false,
+    "failback_drill_verified": false
+  },
+  "safety_boundaries": {
+    "standby_database_publicly_exposed": false,
+    "plaintext_secret_replication": false,
+    "raw_postgres_volume_copy": false,
+    "automatic_promotion_without_fencing": false,
+    "fusionpbx_or_sip_change": false
+  },
+  "implementation_state": {
+    "remote_runtime_enabled": false,
+    "dns_failover_enabled": false,
+    "automatic_failover_enabled": false
+  }
+}

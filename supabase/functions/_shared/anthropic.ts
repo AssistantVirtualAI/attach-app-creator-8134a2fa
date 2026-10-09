@@ -23,6 +23,14 @@
 export const ANTHROPIC_VERSION = "2023-06-01";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
+/** Read server-only environment values without requiring Deno globals in web typechecks. */
+function serverEnv(name: string): string | undefined {
+  const runtime = globalThis as typeof globalThis & {
+    Deno?: { env?: { get?: (key: string) => string | undefined } };
+  };
+  return runtime.Deno?.env?.get?.(name);
+}
+
 /** ~3.5 chars per token is a safe conservative estimate for FR/EN prose. */
 const CHARS_PER_TOKEN = 3.5;
 
@@ -116,7 +124,7 @@ export function withPromptCache(
 
 /** Calls the Anthropic Messages API with prompt caching on the static prefix. */
 export async function callAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResult> {
-  const key = opts.apiKey ?? Deno.env.get("ANTHROPIC_API_KEY");
+  const key = opts.apiKey ?? serverEnv("ANTHROPIC_API_KEY");
   if (!key) return { ok: false, status: 0, text: "", toolInput: null, data: null, error: "missing_anthropic_key" };
 
   let body: Record<string, any> = {
@@ -130,7 +138,7 @@ export async function callAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResu
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
 
   // Global kill-switch: set ANTHROPIC_PROMPT_CACHE=off to fall back to plain calls.
-  const cacheDisabled = (Deno.env.get("ANTHROPIC_PROMPT_CACHE") ?? "").toLowerCase() === "off";
+  const cacheDisabled = (serverEnv("ANTHROPIC_PROMPT_CACHE") ?? "").toLowerCase() === "off";
   if (opts.cache !== false && !cacheDisabled) body = withPromptCache(body, opts.model, opts.cacheTtl ?? "5m");
 
   let r: Response;

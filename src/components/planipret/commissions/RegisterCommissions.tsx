@@ -563,6 +563,8 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
         </div>
       )}
 
+      {data?.validation && <div title={data.validation.summary} className="pp-hide-export inline-flex rounded-full px-2.5 py-1 mb-2 text-[10.5px] font-bold" style={{ color: data.validation.status === "WARNING" ? "var(--pp-warning)" : "var(--pp-success)", background: `color-mix(in srgb, ${data.validation.status === "WARNING" ? "var(--pp-warning)" : "var(--pp-success)"} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${data.validation.status === "WARNING" ? "var(--pp-warning)" : "var(--pp-success)"} 30%, transparent)` }}>{data.validation.status === "WARNING" ? (isFr ? "Contrôlé avec réserve" : "Checked with warning") : (isFr ? "Maestro contrôlé" : "Maestro checked")}</div>}
+
       {/* Filters — collapsible on mobile */}
       <div className="pp-filters-sticky">
         <div className="flex items-center gap-2 md:hidden mb-2">

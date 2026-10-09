@@ -12,6 +12,20 @@ export default function PBCommissions() {
   const { lang } = useMplanipretLang();
   const isFr = lang !== "en";
   const [maestroConnected, setMaestroConnected] = useState<boolean | null>(null);
+  // Les administrateurs n'ont pas de dossiers personnels : ils voient la vue
+  // globale (le serveur valide le rôle à chaque appel).
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { if (!cancelled) setIsAdmin(false); return; }
+      const { data } = await supabase.rpc("is_planipret_admin", { _user_id: user.id });
+      if (!cancelled) setIsAdmin(data === true);
+    })().catch(() => { if (!cancelled) setIsAdmin(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +82,9 @@ export default function PBCommissions() {
       </div>
       <MaestroSyncDiagnostics lang={isFr ? "fr" : "en"} />
 
-      <CommissionSections lang={isFr ? "fr" : "en"} scope="broker" />
+      {isAdmin !== null && (
+        <CommissionSections lang={isFr ? "fr" : "en"} scope={isAdmin ? "admin" : "broker"} />
+      )}
     </PAPage>
   );
 }

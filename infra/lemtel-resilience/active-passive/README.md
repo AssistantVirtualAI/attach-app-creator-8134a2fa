@@ -11,32 +11,32 @@ The owner selected **availability-first** on 2026-10-09. PostgreSQL commits on H
 - DigitalOcean is intentionally clean before standby provisioning. Docker, PostgreSQL, Storage and a public application listener are not yet started there.
 - Lemtel source artifacts already arrive with one immutable digest on both hosts. That delivery does not deploy or start a runtime.
 - Lemtel DNS uses an external `ui-dns` nameserver set. Its account/API access and health-routing capability are not yet verified.
+- The two public server endpoints can reach each other over SSH. They do not share a private provider network, so the replication path must use an authenticated encrypted tunnel.
 
-## Preflight evidence required now
+## Preflight evidence completed
 
-Run the two root-only **read-only** scripts. They do not install packages, create users, start containers, copy secrets, change DNS, modify firewall rules, or contact FusionPBX/SIP.
+The root-only read-only preflights confirmed that Hostinger has PostgreSQL 17.6, an unexposed database container and filesystem Storage. DigitalOcean has 2 vCPU, approximately 3.9 GiB memory and approximately 75 GiB free root storage, but no Docker, PostgreSQL, Storage, WireGuard service or public listener. The primary database data footprint is approximately 68 MiB and Storage approximately 1 MiB at the time of inventory. These measurements are sizing evidence, not an RPO or capacity guarantee.
 
-```bash
-# Hostinger primary
-LEMTEL_HA_ROLE=hostinger_primary \
-LEMTEL_DB_CONTAINER=supabase-db \
-LEMTEL_STORAGE_CONTAINER=supabase-storage \
-bash lemtel-ha-primary-replication-inventory.sh
+## Private tunnel stage
 
-# DigitalOcean standby
-LEMTEL_HA_ROLE=digitalocean_standby \
-bash lemtel-ha-standby-preflight.sh
-```
+The private host-to-host path uses WireGuard `lemtel-ha0` over UDP port `51820`, with the fixed point-to-point range `10.253.47.0/30`:
 
-The primary inventory identifies the actual PostgreSQL files, runtime settings, container mount sources, published database ports, active replication slots and the Storage backend class without printing passwords, JWTs, API keys or other credentials. The standby preflight records disk, memory, existing listeners and required tools without changing them.
+| Role | Tunnel address | Public database listener |
+| --- | --- | --- |
+| Hostinger primary | `10.253.47.1/30` | Not enabled |
+| DigitalOcean standby | `10.253.47.2/30` | Not enabled |
 
-## Controlled implementation after preflight
+`lemtel-ha-wireguard-key-init.sh` is the first, deliberately narrow mutation. It installs only `wireguard-tools` when missing and generates a root-readable local keypair at `/etc/lemtel-ha/wireguard/`. It does **not** start an interface, open a firewall port, add a route, change DNS, touch PostgreSQL/Storage, or contact FusionPBX/SIP. It emits only the corresponding WireGuard public key.
 
-1. Build a private encrypted host-to-host path. PostgreSQL port 5432 remains unavailable to the public internet.
+After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a one-time interface configuration, starts `wg-quick@lemtel-ha0`, and adds a UFW rule restricted to the peer’s public IPv4 address **only when UFW is active**. The script refuses to overwrite an active interface or pre-existing configuration. It does not bind PostgreSQL, configure Docker, copy Storage, transfer runtime secrets, change DNS, promote the standby, or alter telephony.
+
+## Controlled implementation after private connectivity
+
+1. Bind PostgreSQL only to the Hostinger WireGuard address, never to a public interface. This step requires a planned short database-container recreation and separate confirmation immediately before execution.
 2. Install matching PostgreSQL 17 images on DigitalOcean and bind the standby only to the private path.
 3. Add a dedicated `LOGIN REPLICATION` role, a physical replication slot and a `pg_hba.conf` rule limited to the private standby address. The role password is created and transferred through root-only files; it is never committed, echoed or copied through GitHub artifacts.
 4. Create the standby using `pg_basebackup`, `standby.signal` and `primary_conninfo`. Confirm `pg_stat_replication`, `pg_stat_wal_receiver`, replay lag and WAL-retention bounds.
-5. Configure checksum-verified Storage replication according to the confirmed backend. PostgreSQL volume copying is prohibited because it is not a safe replication mechanism.
+5. Configure checksum-verified Storage replication according to the confirmed filesystem backend. PostgreSQL volume copying is prohibited because it is not a safe replication mechanism.
 6. Deploy the same immutable Lemtel artifact and separately managed encrypted runtime configuration to the standby. Plaintext `.env` files and private keys are never replicated.
 7. Add persistent health checks, replication/storage integrity alerts, fencing and an explicit promotion/failback runbook.
 8. Configure controlled external routing only after private readiness and a maintenance-window drill have passed. The standby will not auto-promote until fencing prevents split brain.
@@ -48,6 +48,6 @@ Supabase documents database state and Storage objects as separate operational co
 
 - No Planiprêt data is queried, copied or used as a replication source.
 - No FusionPBX, SIP, WSS, TURN, call routing or incoming-call configuration is changed.
-- No public DigitalOcean application or database listener is enabled during preflight.
+- No public DigitalOcean application or database listener is enabled during preflight or tunnel creation.
 - No automatic promotion, DNS switch or client cutover happens before fencing, health evidence and a documented drill.
 - A call in progress cannot be guaranteed to survive primary loss. This architecture protects persisted Lemtel data and enables recovery for new requests after a controlled cutover.

@@ -34,6 +34,7 @@ describe("MCommissionCharts", () => {
 
     await waitFor(() => expect(screen.getByTestId("commission-charts")).toBeInTheDocument());
     expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke.mock.calls.every((c) => c[1].action === "analytics")).toBe(true);
     const years = invoke.mock.calls.map((c) => c[1].filters.date_from);
     expect(years).toEqual(expect.arrayContaining(["2026-01-01", "2025-01-01"]));
     expect(screen.getAllByTestId("chart").length).toBeGreaterThan(3);

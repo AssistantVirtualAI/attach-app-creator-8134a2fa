@@ -24,6 +24,7 @@ const numOf = (v: unknown) => {
 };
 
 type Row = {
+  number?: string | null;
   amount?: string | number | null;
   loan_amt?: string | number | null;
   date_trans?: string | null;
@@ -91,7 +92,7 @@ export default function MCommissionCharts({
   const from = String((filters as any).date_from ?? "");
   const to = String((filters as any).date_to ?? "");
   const key = JSON.stringify(filters);
-  const cacheKey = statsCacheKey("broker", [cacheScope, "charts", key]);
+  const cacheKey = statsCacheKey("broker", [cacheScope, "charts-unique-v3", key]);
 
   useEffect(() => {
     if (!from || !to) return;
@@ -111,7 +112,7 @@ export default function MCommissionCharts({
 
     const call = (f: Record<string, unknown>) =>
       ppEdgeInvoke("planipret-commission-reports", {
-        action: "deposits",
+        action: "analytics",
         filters: { ...f, page: 1, per_page: CHART_ROWS },
       }, { retries: 1, timeoutMs: 12_000 });
 
@@ -121,10 +122,15 @@ export default function MCommissionCharts({
         call({ ...filters, date_from: shiftYear(from, -1), date_to: shiftYear(to, -1) }),
       ]);
       if (cancelled) return;
-      if (a.error || (a.data as any)?.error || (a.data as any)?.success === false) { setFailed(true); return; }
+      if (a.error || b.error || (a.data as any)?.error || (b.data as any)?.error || (a.data as any)?.truncated || (b.data as any)?.truncated) { setFailed(true); return; }
+      const expand = (data: any): Row[] => data?.analytics ? [
+        ...data.analytics.months.map((m: any) => ({ date_trans: `${m.key}-01`, loan_amt: m.volume, amount: m.commission, deals: m.deals, kind: "month" })),
+        ...data.analytics.lenders.map((l: any) => ({ institution: l.key, loan_amt: l.volume, kind: "lender" })),
+        ...data.analytics.types.map((t: any) => ({ commission_type: t.type, amount: t.amount, kind: "type" })),
+      ] : data?.rows ?? [];
       const next = {
-        cy: ((a.data as any)?.rows ?? []) as Row[],
-        py: ((!b.error && !(b.data as any)?.error && ((b.data as any)?.rows ?? [])) || []) as Row[],
+        cy: expand(a.data),
+        py: expand(b.data),
       };
       setCy(next.cy);
       setPy(next.py);
@@ -159,7 +165,7 @@ export default function MCommissionCharts({
       const r = touch(k);
       r.cyVolume += numOf(row.loan_amt);
       r.cyCommission += numOf(row.amount);
-      r.deals += 1;
+      r.deals += Number((row as any).deals ?? 0);
     }
     for (const row of py) {
       const raw = String(row.date_trans ?? "").slice(0, 7);
@@ -190,8 +196,8 @@ export default function MCommissionCharts({
       const r = map.get(k) ?? { key: k, cyVolume: 0, pyVolume: 0 };
       r[field] += v; map.set(k, r);
     };
-    for (const r of cy) bump(String(r.institution ?? ""), "cyVolume", numOf(r.loan_amt));
-    for (const r of py) bump(String(r.institution ?? ""), "pyVolume", numOf(r.loan_amt));
+    for (const r of cy) if ((r as any).kind === "lender") bump(String(r.institution ?? ""), "cyVolume", numOf(r.loan_amt));
+    for (const r of py) if ((r as any).kind === "lender") bump(String(r.institution ?? ""), "pyVolume", numOf(r.loan_amt));
     return [...map.values()].sort((a, b) => b.cyVolume - a.cyVolume).slice(0, 8);
   }, [cy, py]);
 
@@ -199,6 +205,7 @@ export default function MCommissionCharts({
     if (!cy) return [];
     const map = new Map<string, number>();
     for (const r of cy) {
+      if ((r as any).kind !== "type") continue;
       const k = String(r.commission_type ?? "base");
       map.set(k, (map.get(k) ?? 0) + numOf(r.amount));
     }
@@ -225,7 +232,7 @@ export default function MCommissionCharts({
 
   if (months.length === 0) return null;
 
-  const truncated = cy.length >= CHART_ROWS;
+  const truncated = false;
 
   return (
     <div data-testid="commission-charts">

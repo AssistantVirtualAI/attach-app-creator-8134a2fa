@@ -18,8 +18,10 @@ export default function PortalReturnButton() {
 
   const returnToApp = () => {
     setFallback(false);
-    const isApple = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    window.location.href = isApple ? "planipret-portal-done://close" : "planipret://auth/portal/close";
+    // Seul le schéma « planipret:// » est enregistré dans l'app iOS/Android ;
+    // « planipret-portal-done » n'est valide que dans la fenêtre de connexion
+    // intégrée, et Safari affiche « adresse non valide » si on l'y ouvre.
+    window.location.href = "planipret://auth/portal/close";
     window.setTimeout(() => setFallback(true), 1200);
   };
 

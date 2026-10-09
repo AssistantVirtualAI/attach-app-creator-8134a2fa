@@ -10,7 +10,7 @@ describe("Commission status sections", () => {
     render(<CommissionSections lang="fr" scope="admin" />);
     expect(screen.getByText("pending-admin")).toBeVisible();
     expect(screen.getByText("paid-admin")).not.toBeVisible();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Déboursées" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("tab", { name: "Déboursées" }));
     expect(screen.getByText("paid-admin")).toBeVisible();
     expect(screen.getByText("pending-admin")).not.toBeVisible();
   });

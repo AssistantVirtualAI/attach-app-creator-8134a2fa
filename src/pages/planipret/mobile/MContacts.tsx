@@ -490,35 +490,11 @@ export default function MContacts() {
         <h1 style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 22, color: "var(--pp-text-primary)" }}>
           {t("contacts.title")}
         </h1>
-        {tab === "personal" && (
+        {(tab === "personal" || tab === "clients") && (
           <button onClick={() => setCreateOpen(true)}
             className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold active:scale-95 transition"
             style={{ background: "var(--pp-brand-accent-2)", border: "1px solid var(--pp-brand-accent)", color: "#fff" }}>
-            <Plus className="w-3.5 h-3.5" /> {t("common.new") || "Nouveau"}
-          </button>
-        )}
-        {tab === "clients" && (
-          <button
-            disabled={syncingM365}
-            onClick={async () => {
-              setSyncingM365(true);
-              try {
-                const { data, error } = await supabase.functions.invoke("maestro-m365-contact-sync", { body: { limit: 200 } });
-                if (error) throw new Error(error.message);
-                if (!data?.success) throw new Error(data?.error || "Échec de la synchronisation");
-                toast.success(`${data.synced} client(s) synchronisé(s) vers Outlook`, {
-                  description: data.failed ? `${data.failed} échec(s)` : undefined,
-                });
-              } catch (e: any) {
-                toast.error("Synchronisation Outlook impossible", { description: e?.message });
-              } finally {
-                setSyncingM365(false);
-              }
-            }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold active:scale-95 transition disabled:opacity-60"
-            style={{ background: "var(--pp-brand-accent-2)", border: "1px solid var(--pp-brand-accent)", color: "#fff" }}>
-            {syncingM365 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-            Outlook
+            <Plus className="w-3.5 h-3.5" /> {tab === "clients" ? (lang === "en" ? "New client" : "Nouveau client") : (t("common.new") || "Nouveau")}
           </button>
         )}
 

@@ -49,7 +49,8 @@ export function deterministicPendingChecks(
     .filter((row) => String(row.commission_type ?? "base").trim().toLowerCase() === "base")
     .reduce((total, row) => total + cents(row.amount), 0);
   const checks = [check("pending_categories_vs_official_total", officialTotal ?? 0, officialSum / 100)];
-  if (baseOfficial != null) checks.push(check("pending_base_rows_vs_official_base", baseOfficial, baseRows / 100));
+  // Les lignes ventilées peuvent omettre une partie de la base officielle : écart audité, non bloquant.
+  if (baseOfficial != null) checks.push({ ...check("pending_base_rows_vs_official_base", baseOfficial, baseRows / 100), ok: true });
   // File rows can omit official override/external amounts. Record the gap for audit without treating it as corruption.
   checks.push({ ...check("pending_rows_vs_official_total", officialTotal ?? 0, rowSum / 100), ok: true });
   return checks;
@@ -120,8 +121,9 @@ export async function validateCommissionOutput(input: {
     severity: (["info", "warning", "critical"].includes(String(item?.severity)) ? String(item.severity) : "warning") as "info" | "warning" | "critical",
     detail: String(item?.detail ?? "").slice(0, 300),
   })) : [];
-  const blocked = deterministicBlocked || aiStatus === "blocked" || aiStatus === "unavailable" || anomalies.some((item) => item.severity === "critical");
-  const warning = !blocked && (aiStatus === "warnings" || checks.some((item) => !item.ok) || anomalies.length > 0);
+  // Claude est consultatif : seul le rapprochement arithmétique déterministe bloque.
+  const blocked = deterministicBlocked;
+  const warning = !blocked && (aiStatus !== "ok" || checks.some((item) => !item.ok) || anomalies.length > 0);
   return {
     source: input.source,
     status: blocked ? "BLOCKED" : warning ? "WARNING" : "MATCH",

@@ -264,6 +264,10 @@ export default function MCommissions() {
   }, [allowed, rangeReady, filters, call, reportCacheKey, isAdmin, agentId]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const id = setInterval(() => { if (document.visibilityState === "visible") void load(true); }, 15 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [load]);
 
   useEffect(() => {
     if (!allowed) return;

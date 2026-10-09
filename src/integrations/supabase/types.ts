@@ -9139,6 +9139,30 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_apns_provider_tokens: {
+        Row: {
+          cache_key: string
+          issued_at: number | null
+          lease_owner: string | null
+          lease_until: string | null
+          provider_token: string | null
+        }
+        Insert: {
+          cache_key: string
+          issued_at?: number | null
+          lease_owner?: string | null
+          lease_until?: string | null
+          provider_token?: string | null
+        }
+        Update: {
+          cache_key?: string
+          issued_at?: number | null
+          lease_owner?: string | null
+          lease_until?: string | null
+          provider_token?: string | null
+        }
+        Relationships: []
+      }
       planipret_audit_log: {
         Row: {
           action: string
@@ -18184,6 +18208,19 @@ export type Database = {
       }
       planipret_signin_eligible: {
         Args: { _user_id: string }
+        Returns: boolean
+      }
+      pp_apns_claim_token: {
+        Args: { _cache_key: string; _owner: string }
+        Returns: Json
+      }
+      pp_apns_publish_token: {
+        Args: {
+          _cache_key: string
+          _issued_at: number
+          _owner: string
+          _token: string
+        }
         Returns: boolean
       }
       pp_audit_realtime_check: { Args: never; Returns: Json }

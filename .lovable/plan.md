@@ -21,7 +21,8 @@ Donner aux courtiers une page Commissions mobile clairement divisée entre **En 
 3. **Compléter le bilinguisme**
    - Traduire les onglets, filtres, erreurs, états vides, titres, légendes, tableaux, détails et messages administrateurs dans les deux langues.
    - Corriger les messages mobiles encore uniquement en français.
-   - Vérifier également toute la page Commissions du portail — administrateur et courtier — en français et en anglais, incluant les rapports mensuels et trimestriels.
+   - Corriger aussi les libellés et exports encore figés dans les sous-rapports du portail : dossiers, matrice annuelle, classement, détail courtier, rapprochement et validation.
+   - Vérifier toute la page Commissions du portail — administrateur et courtier — en français et en anglais, incluant les rapports mensuels et trimestriels.
 
 4. **Maintenir la parité des deux versions web mobiles**
    - Appliquer la même présentation et les mêmes libellés dans le portail mobile et dans le code web embarqué par l’application Planiprêt.

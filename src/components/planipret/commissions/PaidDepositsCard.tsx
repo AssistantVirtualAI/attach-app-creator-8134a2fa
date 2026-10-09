@@ -3,7 +3,7 @@
 // présentation que les commissions en attente; jamais mélangé avec `pending`.
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, BriefcaseBusiness, CalendarDays, ChevronRight, Landmark, RefreshCw, Search, Users, WalletCards } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
 import "./pendingCommissions.css";
 import { readStatsCache, statsCacheKey, writeStatsCache, isStatsCacheFresh } from "@/lib/planipret/commissionsCache";
@@ -31,7 +31,7 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
   const [idx, setIdx] = useState(1);
   const [agent, setAgent] = useState("");
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<"overview" | "brokers" | "monthly">("overview");
+  const [tab, setTab] = useState<"overview" | "brokers" | "monthly" | "quarterly">("overview");
   const [reload, setReload] = useState(0);
 
   const range = useMemo(() => {
@@ -99,6 +99,26 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
     }));
   }, [summary, fr]);
   const showBrokers = isAdmin && !agent;
+  const monthRows = useMemo(() => {
+    let cum = 0;
+    return months.map((m, i) => {
+      cum += m.amount;
+      const prev = i > 0 ? months[i - 1].amount : 0;
+      return { ...m, cumulative: cum, avg: m.count ? m.amount / m.count : 0, change: prev ? (m.amount - prev) / prev : null };
+    });
+  }, [months]);
+  const quarters = useMemo(() => {
+    const q = new Map<string, { amount: number; count: number }>();
+    for (const m of months) {
+      const k = `${m.month.slice(0, 4)}-T${Math.floor((Number(m.month.slice(5, 7)) - 1) / 3) + 1}`;
+      const cur = q.get(k) ?? { amount: 0, count: 0 };
+      cur.amount += m.amount; cur.count += m.count; q.set(k, cur);
+    }
+    const arr = [...q.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => ({ key: k, label: k.slice(5), ...v }));
+    return arr.map((x, i) => ({ ...x, avg: x.count ? x.amount / x.count : 0, change: i > 0 && arr[i - 1].amount ? (x.amount - arr[i - 1].amount) / arr[i - 1].amount : null }));
+  }, [months]);
+  const pct = (v: number | null) => v == null ? "—" : `${v >= 0 ? "▲" : "▼"} ${(Math.abs(v) * 100).toFixed(1)} %`;
+  const pctColor = (v: number | null) => v == null ? "var(--pp-text-muted)" : v >= 0 ? "var(--pp-success)" : "var(--pp-danger,#ef4444)";
 
   return (
     <section className="pending-commissions" aria-label={fr ? "Commissions déboursées" : "Paid commissions"} aria-busy={loading}>
@@ -134,7 +154,7 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
       </div>
 
       <div className="pending-tabs" role="tablist" aria-label={fr ? "Vues déboursées" : "Paid views"}>
-        {([["overview", fr ? "Vue d’ensemble" : "Overview", BarChart3], ...(showBrokers ? [["brokers", fr ? "Courtiers" : "Brokers", Users] as const] : []), ["monthly", fr ? "Détail mensuel" : "Monthly detail", CalendarDays]] as const).map(([k, label, Icon]) => (
+        {([["overview", fr ? "Vue d’ensemble" : "Overview", BarChart3], ...(showBrokers ? [["brokers", fr ? "Courtiers" : "Brokers", Users] as const] : []), ["monthly", fr ? "Rapport mensuel" : "Monthly report", CalendarDays], ["quarterly", fr ? "Rapport trimestriel" : "Quarterly report", BarChart3]] as const).map(([k, label, Icon]) => (
           <Button key={k} role="tab" aria-selected={tab === k} className="pending-tab" variant="ghost" size="sm" onClick={() => setTab(k as typeof tab)}><Icon className="h-4 w-4 mr-2" />{label}</Button>
         ))}
       </div>
@@ -214,10 +234,44 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
           )}
 
           {tab === "monthly" && (
-            <Panel title={fr ? "Détail mensuel" : "Monthly detail"} icon={<CalendarDays className="h-4 w-4" />}>
-              <div className="pending-scroll"><table className="pending-table"><thead><tr><th>{fr ? "Mois" : "Month"}</th><th>{fr ? "Déboursé" : "Paid"}</th><th>{fr ? "Dépôts" : "Deposits"}</th></tr></thead>
-                <tbody>{months.map((m) => <tr key={m.month}><td className="capitalize">{m.label} {m.month.slice(0, 4)}</td><td>{exactCad(m.amount)}</td><td>{m.count}</td></tr>)}</tbody>
-                <tfoot><tr><td>Total</td><td>{exactCad(months.reduce((s, m) => s + m.amount, 0))}</td><td>{months.reduce((s, m) => s + m.count, 0)}</td></tr></tfoot></table></div>
+            <Panel title={fr ? "Rapport déboursé mensuel — tendance" : "Monthly paid report — trend"} icon={<CalendarDays className="h-4 w-4" />}>
+              <div style={{ height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={monthRows}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--pp-bg-border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} />
+                    <YAxis yAxisId="l" tickFormatter={compact} tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} />
+                    <YAxis yAxisId="r" orientation="right" tickFormatter={compact} tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} />
+                    <Tooltip formatter={(v: number) => exactCad(v)} />
+                    <Legend />
+                    <Bar yAxisId="l" dataKey="amount" name={fr ? "Déboursé du mois" : "Paid in month"} fill={TONES[2]} isAnimationActive={false} radius={[6, 6, 0, 0]} />
+                    <Line yAxisId="r" dataKey="cumulative" name={fr ? "Cumul" : "Cumulative"} stroke={TONES[1]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="pending-scroll"><table className="pending-table"><thead><tr><th>{fr ? "Mois" : "Month"}</th><th>{fr ? "Déboursé" : "Paid"}</th><th>{fr ? "Dépôts" : "Deposits"}</th><th>{fr ? "Moyenne" : "Average"}</th><th>{fr ? "Variation" : "Change"}</th><th>{fr ? "Cumul" : "Cumulative"}</th></tr></thead>
+                <tbody>{monthRows.map((m) => <tr key={m.month}><td className="capitalize">{m.label} {m.month.slice(0, 4)}</td><td>{exactCad(m.amount)}</td><td>{m.count}</td><td>{exactCad(m.avg)}</td><td style={{ color: pctColor(m.change) }}>{pct(m.change)}</td><td>{exactCad(m.cumulative)}</td></tr>)}</tbody>
+                <tfoot><tr><td>Total</td><td>{exactCad(months.reduce((s, m) => s + m.amount, 0))}</td><td>{months.reduce((s, m) => s + m.count, 0)}</td><td>—</td><td>—</td><td>—</td></tr></tfoot></table></div>
+            </Panel>
+          )}
+          {tab === "quarterly" && (
+            <Panel title={fr ? "Rapport déboursé trimestriel — tendance" : "Quarterly paid report — trend"} icon={<BarChart3 className="h-4 w-4" />}>
+              <div style={{ height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={quarters}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--pp-bg-border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
+                    <YAxis tickFormatter={compact} tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} />
+                    <Tooltip formatter={(v: number) => exactCad(v)} />
+                    <Bar dataKey="amount" name={fr ? "Déboursé" : "Paid"} isAnimationActive={false} radius={[6, 6, 0, 0]}>
+                      {quarters.map((_, i) => <Cell key={i} fill={TONES[i % TONES.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="pending-scroll"><table className="pending-table"><thead><tr><th>{fr ? "Trimestre" : "Quarter"}</th><th>{fr ? "Déboursé" : "Paid"}</th><th>{fr ? "Dépôts" : "Deposits"}</th><th>{fr ? "Moyenne" : "Average"}</th><th>{fr ? "Variation" : "Change"}</th><th>{fr ? "Part" : "Share"}</th></tr></thead>
+                <tbody>{quarters.map((q) => <tr key={q.key}><td>{q.label} {q.key.slice(0, 4)}</td><td>{exactCad(q.amount)}</td><td>{q.count}</td><td>{exactCad(q.avg)}</td><td style={{ color: pctColor(q.change) }}>{pct(q.change)}</td><td>{total ? (100 * q.amount / total).toFixed(1) : "0.0"} %</td></tr>)}</tbody>
+                <tfoot><tr><td>Total</td><td>{exactCad(quarters.reduce((s, q) => s + q.amount, 0))}</td><td>{quarters.reduce((s, q) => s + q.count, 0)}</td><td>—</td><td>—</td><td>100 %</td></tr></tfoot></table></div>
             </Panel>
           )}
           {summary.truncated && <p className="text-[11px]" style={{ color: "var(--pp-warning)" }}>{fr ? "Résultats partiels : réduisez la période." : "Partial results: narrow the period."}</p>}

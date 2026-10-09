@@ -296,6 +296,49 @@ export function metrics(rows: RegisterRow[], w: Window, c: Criteria = {}): Metri
   };
 }
 
+/**
+ * Same result as `metrics(rows, w, { broker })` for every broker, in one pass.
+ * Avoids O(brokers × rows) scans that exhaust the server CPU budget.
+ */
+const brokerMetricsCache = new WeakMap<RegisterRow[], Map<string, Map<string, Metrics>>>();
+export function metricsByBroker(rows: RegisterRow[], w: Window): Map<string, Metrics> {
+  let byWindow = brokerMetricsCache.get(rows);
+  if (!byWindow) { byWindow = new Map(); brokerMetricsCache.set(rows, byWindow); }
+  const wk = `${w.start}..${w.end}`;
+  const hit = byWindow.get(wk);
+  if (hit) return hit;
+  const acc = new Map<string, { volume: number; deals: number; commission: number }>();
+  const get = (r: RegisterRow) => {
+    const k = r.agent_name ?? "";
+    let a = acc.get(k);
+    if (!a) { a = { volume: 0, deals: 0, commission: 0 }; acc.set(k, a); }
+    return a;
+  };
+  for (const r of volumeTranches(rows, w)) get(r).volume += flags(r).loan;
+  for (const r of dealContracts(rows, w)) get(r).deals += 1;
+  for (const r of windowRows(rows, w)) {
+    const f = flags(r);
+    if (f.insurance || f.referral) continue;
+    get(r).commission += n(r.amount);
+  }
+  const out = new Map<string, Metrics>();
+  for (const [k, { volume, deals, commission }] of acc) {
+    out.set(k, {
+      volume, deals, commission,
+      avgDeal: deals ? volume / deals : 0,
+      bps: volume ? (commission / volume) * 10000 : 0,
+      commissionPerDeal: deals ? commission / deals : 0,
+    });
+  }
+  byWindow.set(wk, out);
+  return out;
+}
+
+const EMPTY_METRICS: Metrics = { volume: 0, deals: 0, commission: 0, avgDeal: 0, bps: 0, commissionPerDeal: 0 };
+export function brokerMetrics(rows: RegisterRow[], w: Window, broker: string): Metrics {
+  return metricsByBroker(rows, w).get(broker) ?? EMPTY_METRICS;
+}
+
 export function yoy(cy: number, py: number): number | "—" | "New" {
   if (!py) return cy ? "New" : "—";
   return (cy - py) / py;

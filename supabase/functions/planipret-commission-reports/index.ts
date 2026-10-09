@@ -485,6 +485,7 @@ Deno.serve(async (req) => {
         qs.set("per_page", "200");
         const r = await commissionGet(`/api/main/commissions/reports/pending-commissions?${qs}`, src.token, cid);
         if (!r.ok) return upstream(r, cid);
+        log("pending shape", JSON.stringify(Object.keys(r.data ?? {})), JSON.stringify(r.data?.meta ?? null), typeof r.data?.data, Array.isArray(r.data?.data) ? r.data.data.length : JSON.stringify(Object.keys(r.data?.data ?? {})));
         const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
         raw.push(...rows);
         lastPage = Number(r.data?.meta?.last_page ?? 1);

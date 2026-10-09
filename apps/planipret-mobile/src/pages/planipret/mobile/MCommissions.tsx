@@ -1,6 +1,7 @@
 // MCommissions — rapports de commissions Planiprêt (API officielle Maestro).
 // Données financières sensibles : lecture seule, aucune donnée mise en cache
 // hors de la session, aucun jeton Maestro côté client.
+import PendingCommissionsCard from "@/components/planipret/commissions/PendingCommissionsCard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -426,6 +427,7 @@ export default function MCommissions() {
             </p>
           )}
 
+              <PendingCommissionsCard filters={filters} lang={lang === "en" ? "en" : "fr"} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
               <MCommissionCharts filters={filters} lang={lang} cacheScope={cacheScope} refreshToken={chartRefreshToken} />
 
           {chartData.length > 0 && (

@@ -6,6 +6,7 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authorizeCallAccess, allowCallViewing } from "../_shared/planipret-call-access.ts";
+import { resolveCallRow } from "../_shared/resolve-call-row.ts";
 // @ts-ignore npm package has no bundled TS declarations.
 import GSMDecoder from "https://esm.sh/gsm-decoder@1.0.0";
 
@@ -425,12 +426,8 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   if ((!ns_callid || !ns_extension || preferUrl) && call_db_id) {
-    const { data } = await admin
-      .from("planipret_phone_calls")
-      .select("id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, recording_storage_path, started_at, duration_seconds, from_number, to_number, save_consent, deleted_at")
-      .eq("id", call_db_id)
-      .maybeSingle();
-    row = data;
+    row = await resolveCallRow(admin, call_db_id,
+      "id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, recording_storage_path, started_at, duration_seconds, from_number, to_number, save_consent, deleted_at");
     if (!row) return json({ success: false, error: "call_not_found" }, 404);
     const access = await authorizeCallAccess(req, admin, row);
     if (!access.ok) return json({ success: false, error: access.error }, access.status);
@@ -467,7 +464,7 @@ Deno.serve(async (req) => {
 
     // If DB already has a fully-resolved http recording_url, short-circuit.
     if (row?.recording_url && String(row.recording_url).startsWith("http")) {
-      const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts, { callDbId: call_db_id, preferUrl });
+      const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts, { callDbId: row?.id ?? call_db_id, preferUrl });
       if (direct) return direct;
     }
   } else if (!call_db_id) {
@@ -521,7 +518,7 @@ Deno.serve(async (req) => {
 
       if (r.ok && (ct.startsWith("audio") || ct.includes("octet-stream"))) {
         if (!r.body) continue;
-        return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, { callDbId: call_db_id, preferUrl });
+        return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, { callDbId: row?.id ?? call_db_id, preferUrl });
       }
       if (r.ok) {
         const rawText = await r.text();
@@ -536,7 +533,7 @@ Deno.serve(async (req) => {
         const audioUrl = pickAudioUrl(recording);
         attempt.audio_url_extracted = audioUrl;
         if (audioUrl) {
-          const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts, { callDbId: call_db_id, preferUrl });
+          const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts, { callDbId: row?.id ?? call_db_id, preferUrl });
           if (streamed) return streamed;
         }
       }

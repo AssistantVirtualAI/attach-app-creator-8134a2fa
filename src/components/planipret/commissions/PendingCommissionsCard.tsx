@@ -245,7 +245,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
           {types.length > 0 && (
             <div aria-label={fr ? "Totaux officiels Maestro" : "Official Maestro totals"}>
               <h4 className="text-[13px] font-bold mb-3" style={{ color: "var(--pp-text-primary)" }}>{fr ? "Totaux officiels Maestro" : "Official Maestro totals"}</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,140px),1fr))] gap-2.5">
                 {types.map((item) => <Kpi key={item.type} icon={<WalletCards className="w-4 h-4" />} label={item.type === "override" ? (fr ? "Outrepasser" : "Override") : item.type === "external" ? (fr ? "Tiers" : "External") : item.label} value={exactCad(item.amount)} />)}
               </div>
             </div>

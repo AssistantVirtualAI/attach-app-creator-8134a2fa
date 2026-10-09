@@ -19,11 +19,12 @@ import {
 } from "../_shared/maestro-oauth.ts";
 import {
   normalizeFilters,
-  buildDepositQuery,
   commissionGet,
   summarize,
   normalizePendingRow,
   institutionLabel,
+  collectPaidDeposits,
+  PENDING_COMMISSION_PATH,
   type CommissionDepositRow,
 } from "../_shared/commission-reports.ts";
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
@@ -89,7 +90,6 @@ function applicationError(error: string, message: string, cid: string, extra: Re
   return json({ success: false, error, message, retryable: error === "maestro_error" || error === "internal_error", correlation_id: cid, ...extra }, 200, cid);
 }
 
-const SUMMARY_MAX_PAGES = 10; // 10 × 200 = 2000 rows max per summary
 
 const num = (v: unknown) => {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[^0-9.-]/g, ""));
@@ -125,6 +125,10 @@ Deno.serve(async (req) => {
     const role = String(profile.role ?? "");
     if (role !== "admin" && role !== "broker") {
       return applicationError("forbidden", "Accès aux commissions réservé aux courtiers et administrateurs.", cid);
+    }
+    if (role === "admin") {
+      const { data: allowedAdmin } = await admin.rpc("is_planipret_admin", { _user_id: authenticatedUser.id });
+      if (allowedAdmin !== true) return applicationError("forbidden", "Accès administrateur aux commissions non autorisé.", cid);
     }
 
     const body = await req.json().catch(() => ({}));
@@ -289,7 +293,7 @@ Deno.serve(async (req) => {
           }
           qs.set("page", String(page));
           qs.set("per_page", "200");
-          const r = await commissionGet(`/api/main/commissions/reports/pending-commissions?${qs}`, token, cid);
+          const r = await commissionGet(`${PENDING_COMMISSION_PATH}?${qs}`, token, cid);
           if (!r.ok) return { ok: false as const, r };
           if (page === 1) upstreamSummary = r.data?.summary ?? null;
           const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
@@ -401,7 +405,39 @@ Deno.serve(async (req) => {
     // ---- Source unique (aucun fan-out ni jeton d'un autre courtier) -------
     // La portée est strictement celle du jeton appelant, ou celle du jeton
     // administrateur Maestro explicitement configuré pour « Tous les courtiers ».
-    const reportScope = resolveCommissionScope({
+    // An authenticated Planiprêt administrator can read a selected connected
+    // broker using that broker's server-only token, just like pending reports.
+    // Maestro personal tokens must never be paired with a peer's users_id.
+    let selectedToken: string | null = null;
+    if (role === "admin" && filters.users_id) {
+      const { data: selected } = await admin.from("planipret_profiles")
+        .select("user_id")
+        .eq("maestro_broker_id", filters.users_id)
+        .eq("maestro_connected", true)
+        .limit(1).maybeSingle();
+      if (selected?.user_id) selectedToken = await getUserMaestroAccessToken(admin, String(selected.user_id));
+    }
+    const brokerSources: { token: string; label: string; user_id: string | null; usersId: string }[] = [];
+    if (role === "admin" && !filters.users_id && !firmToken.token) {
+      const { data: connected } = await admin.from("planipret_profiles")
+        .select("user_id, full_name, maestro_broker_id")
+        .eq("maestro_connected", true).not("maestro_broker_id", "is", null);
+      const seenIds = new Set<string>();
+      for (const broker of connected ?? []) {
+        const id = String(broker.maestro_broker_id);
+        if (!broker.user_id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        const token = await getUserMaestroAccessToken(admin, String(broker.user_id));
+        if (!token) return applicationError("maestro_not_connected", "Un compte courtier doit être reconnecté à Maestro. Le total du cabinet est indisponible; sélectionnez un courtier pour consulter ses déboursés.", cid);
+        brokerSources.push({ token, label: String(broker.full_name ?? id), user_id: String(broker.user_id), usersId: id });
+      }
+    }
+    const firstBroker = brokerSources[0];
+    const reportScope = firstBroker
+      ? { ok: true as const, token: firstBroker.token, usersId: null, mode: "all_brokers" as const }
+      : selectedToken && filters.users_id
+      ? { ok: true as const, token: selectedToken, usersId: filters.users_id, mode: "selected_broker" as const }
+      : resolveCommissionScope({
       role: role as "admin" | "broker",
       action,
       requestedUsersId: filters.users_id,
@@ -412,11 +448,15 @@ Deno.serve(async (req) => {
     if (!reportScope.ok) return scopeError(reportScope.error);
     const activeReportScope: Extract<typeof reportScope, { ok: true }> = reportScope;
 
-    type Src = { token: string; label: string; user_id: string | null };
+    type Src = { token: string; label: string; user_id: string | null; usersId?: string };
     const failures: { broker: string; status: number; message: string }[] = [];
     let coverage = { connected: 1, total: 1 };
 
     async function collectSources(): Promise<Src[]> {
+      if (brokerSources.length) {
+        coverage = { connected: brokerSources.length, total: brokerSources.length };
+        return brokerSources;
+      }
       if (activeReportScope.usersId) filters.users_id = activeReportScope.usersId;
       else delete filters.users_id;
       return [{
@@ -427,43 +467,16 @@ Deno.serve(async (req) => {
     }
 
     /** Parcourt toutes les pages de dépôts pour un jeton donné. */
-    async function fetchAllDeposits(src: Src, single: boolean) {
-      const out: CommissionDepositRow[] = [];
-      let page = 1, lastPage = 1, truncated = false, total = 0;
-      // Maestro ne renvoie qu'un seul bucket par appel ("base" par défaut).
-      // La commission brute = base + bonus + bonus2 + perform, donc on parcourt
-      // les quatre buckets quand aucun type précis n'est demandé. Le volume de
-      // prêt n'est conservé que sur la ligne "base" pour ne pas le compter 4x.
-      const types = filters.commission_type ? [filters.commission_type] : ["base", "bonus", "bonus2", "perform"];
-      for (const ctype of types) {
-        page = 1;
-        while (page <= SUMMARY_MAX_PAGES) {
-          const qs = buildDepositQuery({ ...filters, commission_type: ctype, page, per_page: 200 });
-          const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, src.token, cid);
-          if (!r.ok) {
-            if (single && ctype === "base") return { rows: out, truncated, total, fatal: r };
-            if (ctype === "base") failures.push({ broker: src.label, status: r.status, message: String(r.data?.message ?? `HTTP ${r.status}`) });
-            break;
-          }
-          const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
-          for (const row of rows) {
-            out.push({
-              ...row,
-              commission_type: (row as any).commission_type ?? ctype,
-              loan_amt: ctype === "base" ? (row as any).loan_amt : 0,
-              agent_name: (row as any).agent_name ?? src.label,
-            } as CommissionDepositRow);
-          }
-          const meta = r.data?.meta ?? {};
-          lastPage = Number(meta.last_page ?? 1);
-          total += Number(meta.total ?? rows.length);
-          if (page >= lastPage || rows.length === 0) break;
-          page += 1;
-        }
-        if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
+    async function fetchAllDeposits(src: Src, _single: boolean) {
+      return collectPaidDeposits(src.token, { ...filters, ...(src.usersId ? { users_id: src.usersId } : {}) }, cid);
+    }
+
+    async function collectPaidSources(sources: Src[]) {
+      const results: Awaited<ReturnType<typeof fetchAllDeposits>>[] = [];
+      for (let start = 0; start < sources.length; start += 5) {
+        results.push(...await Promise.all(sources.slice(start, start + 5).map((src) => fetchAllDeposits(src, true))));
       }
-      if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
-      return { rows: out, truncated, total, fatal: null as any };
+      return results;
     }
 
     // ---- Deposits (agrégé pour les admins, passthrough sinon) -------------
@@ -472,8 +485,7 @@ Deno.serve(async (req) => {
       const single = sources.length === 1;
       const merged: CommissionDepositRow[] = [];
       let truncated = false;
-      for (const src of sources) {
-        const res = await fetchAllDeposits(src, single);
+      for (const res of await collectPaidSources(sources)) {
         if (res.fatal) return upstream(res.fatal, cid);
         merged.push(...res.rows);
         truncated = truncated || res.truncated;
@@ -511,21 +523,12 @@ Deno.serve(async (req) => {
       const sources = await collectSources();
 
 
-      for (const src of sources) {
-        let page = 1, lastPage = 1;
-        while (page <= SUMMARY_MAX_PAGES) {
-          const qs = buildDepositQuery({ ...filters, page, per_page: 200 });
-          const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, src.token, cid);
-          if (!r.ok) {
-            // Un courtier en échec ne doit pas casser l'agrégat global.
-            if (sources.length === 1) return upstream(r, cid);
-            failures.push({ broker: src.label, status: r.status, message: String(r.data?.message ?? `HTTP ${r.status}`) });
-            break;
-          }
-          const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
-          for (const row of rows) {
+      for (const result of await collectPaidSources(sources)) {
+        if (result.fatal) return upstream(result.fatal, cid);
+        truncated ||= result.truncated;
+          for (const row of result.rows) {
             const id = row.agent_name_id ?? null;
-            const name = String(row.agent_name ?? row.target_name ?? src.label ?? "—").trim() || "—";
+            const name = String(row.agent_name ?? row.target_name ?? "—").trim() || "—";
             const key = id != null ? `id:${id}` : `n:${name.toLowerCase()}`;
             const b = buckets.get(key) ?? { users_id: id, name, total: 0, count: 0, loan_volume: 0 };
             b.total += num(row.amount);
@@ -533,13 +536,7 @@ Deno.serve(async (req) => {
             b.count += 1;
             buckets.set(key, b);
           }
-          scanned += rows.length;
-          const meta = r.data?.meta ?? {};
-          lastPage = Number(meta.last_page ?? 1);
-          if (page >= lastPage || rows.length === 0) break;
-          page += 1;
-        }
-        if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
+          scanned += result.rows.length;
       }
 
       const agents = Array.from(buckets.values())
@@ -574,8 +571,7 @@ Deno.serve(async (req) => {
       const single = sources.length === 1;
       const all: CommissionDepositRow[] = [];
       let truncated = false, total = 0;
-      for (const src of sources) {
-        const res = await fetchAllDeposits(src, single);
+      for (const res of await collectPaidSources(sources)) {
         if (res.fatal) return upstream(res.fatal, cid);
         all.push(...res.rows);
         truncated = truncated || res.truncated;

@@ -67,10 +67,6 @@ export function resolveCommissionScope(input: CommissionScopeInput): CommissionS
     if (input.action === "agents") {
       return { ok: true, usersId: null, token: ownToken, mode: "metadata" };
     }
-    if (requestedUsersId === null) {
-      if (!ownUsersId) return { ok: false, error: "admin_scope_unavailable" };
-      return { ok: true, usersId: ownUsersId, token: ownToken, mode: "own" };
-    }
     return { ok: false, error: "admin_scope_unavailable" };
   }
   return {

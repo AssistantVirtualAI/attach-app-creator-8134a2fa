@@ -4,6 +4,9 @@ import {
   buildDepositQuery,
   commissionGet,
   summarize,
+  collectPaidDeposits,
+  PAID_COMMISSION_PATH,
+  PENDING_COMMISSION_PATH,
 } from "../../supabase/functions/_shared/commission-reports";
 
 describe("commission report filters", () => {
@@ -38,6 +41,53 @@ describe("commission report filters", () => {
 });
 
 describe("commission upstream responses", () => {
+  it("keeps paid and pending endpoints distinct and sums every paid bucket", async () => {
+    const originalFetch = globalThis.fetch;
+    const paths: string[] = [];
+    globalThis.fetch = (async (input: any) => {
+      const url = new URL(String(input));
+      paths.push(url.pathname);
+      return new Response(JSON.stringify({ data: [{ number: "C1", amount: 100, loan_amt: 300000, date_trans: "2026-10-01" }], meta: { last_page: 1 } }));
+    }) as typeof fetch;
+    try {
+      const result = await collectPaidDeposits("test", { users_id: "313846" }, "cid");
+      expect(result.fatal).toBeNull();
+      expect(paths).toEqual(Array(4).fill(PAID_COMMISSION_PATH));
+      expect(paths).not.toContain(PENDING_COMMISSION_PATH);
+      expect(summarize(result.rows).total_commission).toBe(400);
+      expect(summarize(result.rows).total_loan_volume).toBe(300000);
+      expect(result.total).toBe(4);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+
+  it("does not treat a failed bonus bucket as zero or publish partial paid totals", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: any) => new URL(String(input)).searchParams.get("commission_type") === "base"
+      ? new Response(JSON.stringify({ data: [{ amount: 500 }], meta: { last_page: 1 } }))
+      : new Response(JSON.stringify({ message: "refused" }), { status: 403 })) as typeof fetch;
+    try {
+      const result = await collectPaidDeposits("test", {}, "cid");
+      expect(result.fatal?.status).toBe(403);
+      expect(result.rows).toEqual([]);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+
+  it("reads every paid page and rejects malformed lists", async () => {
+    const originalFetch = globalThis.fetch;
+    let pages = 0;
+    globalThis.fetch = (async () => {
+      pages++;
+      return new Response(JSON.stringify({ data: [{ amount: 10 }], meta: { last_page: 12 } }));
+    }) as typeof fetch;
+    try {
+      const result = await collectPaidDeposits("test", { commission_type: "base" }, "cid");
+      expect(pages).toBe(12);
+      expect(result.rows).toHaveLength(12);
+      expect(result.truncated).toBe(false);
+      globalThis.fetch = (async () => new Response(JSON.stringify({ data: {} }))) as typeof fetch;
+      expect((await collectPaidDeposits("test", {}, "cid")).fatal?.status).toBe(502);
+    } finally { globalThis.fetch = originalFetch; }
+  });
   it("does not expose an HTML 502 page as a broker diagnostic", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => new Response("<html><title>502 Bad Gateway</title></html>", {

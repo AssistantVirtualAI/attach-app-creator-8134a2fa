@@ -11,6 +11,8 @@ export const COMMISSION_API_BASE = (
 
 
 export const COMMISSION_TYPES = ["base", "bonus", "bonus2", "perform"] as const;
+export const PAID_COMMISSION_PATH = "/api/main/commissions/reports/deposits";
+export const PENDING_COMMISSION_PATH = "/api/main/commissions/reports/pending-commissions";
 export const SPLIT_TYPES = ["planipret", "planipret_override", "planipret_external"] as const;
 export const ORDER_BY = [
   "number", "loan_amt", "institution", "points", "amount", "date_trans",
@@ -227,7 +229,33 @@ export async function commissionGet(path: string, token: string, correlationId: 
     }
     if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
   }
-  return last!;
+  return last ?? { ok: false, status: 502, data: { message: "network_error" }, durationMs: Date.now() - started };
+}
+
+/** Paid deposits only: never substitutes pending rows or treats a failed bucket as zero. */
+export async function collectPaidDeposits(token: string, filters: NormalizedFilters, cid: string) {
+  const rows: CommissionDepositRow[] = [];
+  let truncated = false;
+  const types = filters.commission_type ? [filters.commission_type] : [...COMMISSION_TYPES];
+  for (const type of types) {
+    for (let page = 1; page <= 100; page++) {
+      const qs = buildDepositQuery({ ...filters, commission_type: type, page, per_page: 200 });
+      const result = await commissionGet(`${PAID_COMMISSION_PATH}?${qs}`, token, cid);
+      if (!result.ok) return { rows: [], truncated: false, total: 0, fatal: result };
+      if (!Array.isArray(result.data?.data)) {
+        return { rows: [], truncated: false, total: 0, fatal: { ...result, ok: false, status: 502, data: { message: "maestro_contract_error" } } };
+      }
+      const batch: CommissionDepositRow[] = result.data.data;
+      rows.push(...batch.map((row) => ({
+        ...row, commission_type: row.commission_type ?? type,
+        loan_amt: type === "base" || filters.commission_type ? row.loan_amt : 0,
+      })));
+      const lastPage = Number(result.data?.meta?.last_page ?? 1);
+      if (page >= lastPage || batch.length === 0) break;
+      if (page === 100) truncated = true;
+    }
+  }
+  return { rows, truncated, total: rows.length, fatal: null };
 }
 
 export const num = (v: unknown): number => {

@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Restore and verify separate Maestro sources for paid deposits and pending commissions, including Francis; no native changes or partial deployment
+- [x] Restore separate Maestro paid deposits and pending endpoints; verify Francis and Sandra through authenticated admin-selected views, both sections rendered, 23 tests passed; no native edits or app publication
+- [ ] Verify commissions inside Francis's own mobile session (minted session redirects to mobile sign-in; requires Francis to sign in through Microsoft)
 
 - [x] Redesign pending commissions for admins and brokers across portal and mobile (summary, monthly trend, type breakdown, searchable broker ranking and personal monthly detail)
 

@@ -47,30 +47,34 @@ function breakdown(
   wPy: Window,
   field: "institution" | "mortgage_type" | "term",
 ) {
-  const keys = uniq([
-    ...volumeTranches(rows, w).map((r) => r[field]),
-    ...volumeTranches(rows, wPy).map((r) => r[field]),
-    ...dealContracts(rows, w).map((r) => r[field]),
-  ]);
+  const cyVol = volumeTranches(rows, w);
+  const pyVol = volumeTranches(rows, wPy);
+  const cyDl = dealContracts(rows, w);
+  const pyDl = dealContracts(rows, wPy);
+  const keys = uniq([...cyVol.map((r) => r[field]), ...pyVol.map((r) => r[field]), ...cyDl.map((r) => r[field])]);
+  const keyOf = (r: RegisterRow) => ((r as any)[field] ?? "") as string;
+  const sumBy = (list: RegisterRow[], val: (r: RegisterRow) => number) => {
+    const m = new Map<string, number>();
+    for (const r of list) { const k = keyOf(r); m.set(k, (m.get(k) ?? 0) + val(r)); }
+    return m;
+  };
+  const loan = (r: RegisterRow) => Number(r.loan_amt ?? 0) || 0;
+  const one = () => 1;
+  const commissionIn = (win: Window) => sumBy(
+    rows.filter((r) => r.date_trans && r.date_trans >= win.start && r.date_trans <= win.end && !isInsurance(r)),
+    (r) => Number(r.amount ?? 0),
+  );
+  const cyVolM = sumBy(cyVol, loan), pyVolM = sumBy(pyVol, loan);
+  const cyDlM = sumBy(cyDl, one), pyDlM = sumBy(pyDl, one);
+  const cyComM = commissionIn(w), pyComM = commissionIn(wPy);
   const totalVolume = periodVolume(rows, w);
-  const grouped = new Map<string, any[]>();
-  for (const r of rows) {
-    const g = (r as any)[field] ?? "";
-    const arr = grouped.get(g); if (arr) arr.push(r); else grouped.set(g, [r]);
-  }
   const list = keys.map((k) => {
-    const c = { [field]: k } as Record<string, string>;
-    const kr = (grouped.get(k) ?? []) as typeof rows;
-    const cyVolume = periodVolume(rows, w, c);
-    const cyDeals = periodDeals(rows, w, c);
-    const cyCommission = kr
-      .filter((r) => r.date_trans && r.date_trans >= w.start && r.date_trans <= w.end && !isInsurance(r) && (r[field] ?? "") === k)
-      .reduce((s, r) => s + Number(r.amount ?? 0), 0);
-    const pyVolume = periodVolume(rows, wPy, c);
-    const pyDeals = periodDeals(rows, wPy, c);
-    const pyCommission = kr
-      .filter((r) => r.date_trans && r.date_trans >= wPy.start && r.date_trans <= wPy.end && !isInsurance(r) && (r[field] ?? "") === k)
-      .reduce((s, r) => s + Number(r.amount ?? 0), 0);
+    const cyVolume = cyVolM.get(k) ?? 0;
+    const cyDeals = cyDlM.get(k) ?? 0;
+    const cyCommission = cyComM.get(k) ?? 0;
+    const pyVolume = pyVolM.get(k) ?? 0;
+    const pyDeals = pyDlM.get(k) ?? 0;
+    const pyCommission = pyComM.get(k) ?? 0;
     return {
       key: k,
       cyVolume,
@@ -552,9 +556,9 @@ Deno.serve(async (req) => {
     const brokerScope = agent ? mine : scopedAll;
     const brokerBreak = uniq(brokerScope.map((r) => r.agent_name)).map((name) => ({
       broker: name,
-      volume: periodVolume(brokerScope, cyYtd, { broker: name }),
-      deals: periodDeals(brokerScope, cyYtd, { broker: name }),
-      commission: periodCommission(brokerScope, cyYtd, { broker: name }),
+      volume: brokerMetrics(brokerScope, cyYtd, name).volume,
+      deals: brokerMetrics(brokerScope, cyYtd, name).deals,
+      commission: brokerMetrics(brokerScope, cyYtd, name).commission,
     }));
     const brokerVolume = brokerBreak.reduce((s2, b) => s2 + b.volume, 0);
     const brokerDeals = brokerBreak.reduce((s2, b) => s2 + b.deals, 0);

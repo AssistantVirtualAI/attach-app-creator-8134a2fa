@@ -471,14 +471,21 @@ Deno.serve(async (req) => {
       return collectPaidDeposits(src.token, { ...filters, ...(src.usersId ? { users_id: src.usersId } : {}) }, cid);
     }
 
+    async function collectPaidSources(sources: Src[]) {
+      const results: Awaited<ReturnType<typeof fetchAllDeposits>>[] = [];
+      for (let start = 0; start < sources.length; start += 5) {
+        results.push(...await Promise.all(sources.slice(start, start + 5).map((src) => fetchAllDeposits(src, true))));
+      }
+      return results;
+    }
+
     // ---- Deposits (agrégé pour les admins, passthrough sinon) -------------
     if (action === "deposits") {
       const sources = await collectSources();
       const single = sources.length === 1;
       const merged: CommissionDepositRow[] = [];
       let truncated = false;
-      for (const src of sources) {
-        const res = await fetchAllDeposits(src, single);
+      for (const res of await collectPaidSources(sources)) {
         if (res.fatal) return upstream(res.fatal, cid);
         merged.push(...res.rows);
         truncated = truncated || res.truncated;
@@ -516,13 +523,12 @@ Deno.serve(async (req) => {
       const sources = await collectSources();
 
 
-      for (const src of sources) {
-        const result = await fetchAllDeposits(src, true);
+      for (const result of await collectPaidSources(sources)) {
         if (result.fatal) return upstream(result.fatal, cid);
         truncated ||= result.truncated;
           for (const row of result.rows) {
             const id = row.agent_name_id ?? null;
-            const name = String(row.agent_name ?? row.target_name ?? src.label ?? "—").trim() || "—";
+            const name = String(row.agent_name ?? row.target_name ?? "—").trim() || "—";
             const key = id != null ? `id:${id}` : `n:${name.toLowerCase()}`;
             const b = buckets.get(key) ?? { users_id: id, name, total: 0, count: 0, loan_volume: 0 };
             b.total += num(row.amount);
@@ -565,8 +571,7 @@ Deno.serve(async (req) => {
       const single = sources.length === 1;
       const all: CommissionDepositRow[] = [];
       let truncated = false, total = 0;
-      for (const src of sources) {
-        const res = await fetchAllDeposits(src, single);
+      for (const res of await collectPaidSources(sources)) {
         if (res.fatal) return upstream(res.fatal, cid);
         all.push(...res.rows);
         truncated = truncated || res.truncated;

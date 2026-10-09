@@ -84,7 +84,7 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
       ...(filters?.financial_inst_id ? { financial_inst_id: filters.financial_inst_id } : {}),
     };
   }, [filters?.date_from, filters?.date_to, filters?.users_id, filters?.financial_inst_id, agent]);
-  const cacheRole = cacheScope === "admin" ? "admin" : "broker";
+  const cacheRole = cacheScope === "admin" || cacheScope === "default" ? "admin" : "broker";
   const key = statsCacheKey(cacheRole, ["pending", cacheScope, f.date_from, f.date_to, f.users_id ?? "", f.financial_inst_id ?? ""]);
   const [summary, setSummary] = useState<Summary | null>(() => ((readStatsCache(key)?.value as any)?.summary as Summary) ?? null);
   const [error, setError] = useState<string | null>(null);

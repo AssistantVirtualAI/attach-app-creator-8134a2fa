@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Show exact official pending totals and all six Maestro categories for Sandra in portal and mobile; reconcile Base with 179,887.26 without hardcoded financial data
+- [x] Show exact official pending totals and all six Maestro categories in both web source trees; Sandra Base 179,887.26 and total 331,146.08 verified via admin-selected portal/mobile views; 10 tests passed, no native edits or publication
 
 - [x] Restore separate Maestro paid deposits and pending endpoints; verify Francis and Sandra through authenticated admin-selected views, both sections rendered, 23 tests passed; no native edits or app publication
 - [ ] Verify commissions inside Francis's own mobile session (minted session redirects to mobile sign-in; requires Francis to sign in through Microsoft)

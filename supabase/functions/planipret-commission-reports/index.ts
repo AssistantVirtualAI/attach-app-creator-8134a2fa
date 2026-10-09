@@ -22,6 +22,7 @@ import {
   commissionGet,
   summarize,
   paidAnalytics,
+  paidFlags,
   normalizePendingRow,
   institutionLabel,
   collectPaidDeposits,
@@ -527,13 +528,15 @@ Deno.serve(async (req) => {
       for (const result of await collectPaidSources(sources)) {
         if (result.fatal) return upstream(result.fatal, cid);
         truncated ||= result.truncated;
-          for (const row of result.rows) {
-            const id = row.agent_name_id ?? null;
-            const name = String(row.agent_name ?? row.target_name ?? "—").trim() || "—";
+          for (const { row, unique_volume } of paidFlags(result.rows)) {
+            if (!row.date_trans) continue;
+            const deposit = row as unknown as CommissionDepositRow;
+            const id = deposit.agent_name_id ?? null;
+            const name = String(row.agent_name ?? deposit.target_name ?? "—").trim() || "—";
             const key = id != null ? `id:${id}` : `n:${name.toLowerCase()}`;
             const b = buckets.get(key) ?? { users_id: id, name, total: 0, count: 0, loan_volume: 0 };
             b.total += num(row.amount);
-            b.loan_volume += num(row.loan_amt);
+            b.loan_volume += unique_volume ? num(row.loan_amt) : 0;
             b.count += 1;
             buckets.set(key, b);
           }
@@ -595,14 +598,16 @@ Deno.serve(async (req) => {
           const mk = () => ({ amount: 0, files: new Set<string>(), volume: 0 });
           const own = mk(), team = mk();
           const mem = new Map<string, { name: string; b: ReturnType<typeof mk> }>();
-          for (const r of all as any[]) {
-            const t = norm(r.target_name);
+          for (const { row: r, unique_volume, unique_deal } of paidFlags(all)) {
+            if (!r.date_trans) continue;
+            const target = (r as unknown as CommissionDepositRow).target_name;
+            const t = norm(target);
             const b = !t || t === o ? own : team;
             const amt = num(r.amount); const n = String(r.number ?? "");
-            const vol = String(r.commission_type ?? "base") === "base" ? num(r.loan_amt) : 0;
-            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n) x.files.add(n); x.volume += vol; };
+            const vol = unique_volume ? num(r.loan_amt) : 0;
+            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && unique_deal) x.files.add(n); x.volume += vol; };
             apply(b);
-            if (b === team) { const m = mem.get(t) ?? { name: String(r.target_name).trim(), b: mk() }; apply(m.b); mem.set(t, m); }
+            if (b === team) { const m = mem.get(t) ?? { name: String(target).trim(), b: mk() }; apply(m.b); mem.set(t, m); }
           }
           const out = (x: ReturnType<typeof mk>) => ({ amount: Math.round(x.amount * 100) / 100, files: x.files.size, volume: Math.round(x.volume * 100) / 100 });
           paid_split = { personal: out(own), team: out(team), team_members: [...mem.entries()].map(([id, m]) => ({ id, name: m.name, ...out(m.b) })).sort((a, b) => b.amount - a.amount) };

@@ -283,14 +283,18 @@ const hasDate = (r: { date_trans?: string | null }) =>
   /^\d{4}-\d{2}-\d{2}/.test(String((r as any).date_trans ?? "").trim());
 
 /** Same funded-tranche and calendar-period unit rules as the portal engine. */
-export function paidAnalytics(allRows: CommissionDepositRow[]) {
+export function paidFlags(allRows: CommissionDepositRow[]) {
   const rows: RegisterRow[] = allRows.map((r, source_row) => ({
     ...r, loan_amt: num(r.loan_amt), amount: num(r.amount),
     term: r.term == null ? null : String(r.term),
     date_trans: r.date_trans?.trim().slice(0, 10) ?? null,
     commission_type: r.commission_type ?? "base", source_row,
   }));
-  const flags = helperFlags(rows, { start: "0000-01-01", end: "9999-12-31" });
+  return helperFlags(rows, { start: "0000-01-01", end: "9999-12-31" });
+}
+
+export function paidAnalytics(allRows: CommissionDepositRow[]) {
+  const flags = paidFlags(allRows);
   const months = new Map<string, { key: string; volume: number; commission: number; deals: number }>();
   const lenders = new Map<string, { key: string; volume: number; deals: number }>();
   let volume = 0, deals = 0;

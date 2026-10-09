@@ -4,6 +4,7 @@
 
 - Planipret call and recording transcripts share the speaker-message renderer in both web source trees; speaker identity comes only from explicit source labels, never inferred dialogue turns.
 - Planipret pending-commission presentation and its scoped stylesheet stay byte-identical in both web source trees so portal and mobile expose the same scoped financial view; category totals remain official while monthly tables are labeled as allocated amounts.
+- Portal paid and pending commissions use separate status panels with independent retained filters; switching panels must never merge their financial sources or widen broker access.
 - Paid commission summaries, deposits and broker charts share the complete paid-deposit collector, while pending uses its own endpoint; failures never become zero totals and selected-broker admin reads use a server-validated broker-owned credential.
 - Funded units are distinct contracts, while volume sums each positive non-adjustment base funding entry even when loan amounts repeat; portal/mobile use the shared engine and complete server analytics, with current-year windows ending today in Toronto, to match Maestro without dropping legitimate repeat fundings.
 

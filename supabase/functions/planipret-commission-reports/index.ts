@@ -474,7 +474,7 @@ Deno.serve(async (req) => {
       const raw: any[] = [];
       let upstreamSummary: unknown = null;
       let page = 1, lastPage = 1;
-      while (page <= SUMMARY_MAX_PAGES) {
+      while (page <= 25) {
         const qs = new URLSearchParams();
         if (filters.users_id) qs.set("users_id", filters.users_id);
         if (filters.financial_inst_id) qs.set("financial_inst_id", filters.financial_inst_id);
@@ -493,13 +493,16 @@ Deno.serve(async (req) => {
         if (page >= lastPage || rows.length === 0) break;
         page += 1;
       }
-      const truncated = lastPage > SUMMARY_MAX_PAGES;
+      const truncated = lastPage > 25;
       const rows = raw.map(normalizePendingRow);
       const summary = summarize(rows, truncated);
       log("pending rows", rows.length, "total", summary.total_commission);
+      const official = Array.isArray(upstreamSummary)
+        ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
+        : null;
       return json({
         ok: true,
-        summary,
+        summary: { ...summary, official_by_type: official, official_total: official ? Math.round(official.reduce((t, x) => t + x.amount, 0) * 100) / 100 : null },
         rows: rows.slice(0, 500),
         upstream_summary: upstreamSummary,
         by_type: rows.reduce((m: Record<string, number>, r: any) => { m[r.commission_type] = Math.round(((m[r.commission_type] ?? 0) + Number(r.amount || 0)) * 100) / 100; return m; }, {}),

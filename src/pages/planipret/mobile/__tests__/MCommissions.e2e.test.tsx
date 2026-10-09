@@ -148,7 +148,7 @@ describe("MCommissions (mobile)", () => {
     );
     const paidCall = invokeMock.mock.calls.find((c) => c[1]?.body?.action === "summary");
     expect(paidCall?.[1].body.filters.commission_type).toBeUndefined();
-    await waitFor(() => expect(invokeMock.mock.calls.some((c) => c[1]?.body?.action === "pending")).toBe(true));
+    expect(invokeMock.mock.calls.some((c) => c[1]?.body?.action === "pending")).toBe(false);
   });
 
   it("bloque l'accès pour un rôle non autorisé", async () => {
@@ -169,6 +169,7 @@ describe("MCommissions (mobile)", () => {
     render(<MCommissions />);
     expect(await screen.findByText("maestro_not_configured")).toBeInTheDocument();
     expect(screen.queryByText("Commissions déboursées")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "En attente" }));
     expect(screen.getAllByText("Commissions en attente").length).toBeGreaterThan(0);
     await waitFor(() => expect(invokeMock.mock.calls.some((c) => c[1]?.body?.action === "pending")).toBe(true));
   });

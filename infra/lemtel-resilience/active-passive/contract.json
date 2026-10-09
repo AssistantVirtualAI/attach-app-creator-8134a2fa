@@ -1,5 +1,5 @@
 {
-  "contract_version": "lemtel_active_passive_foundation_v1",
+  "contract_version": "lemtel_active_passive_foundation_v2",
   "scope": "verified_active_passive_rollout_without_telephony",
   "source_branch": "lemtel/integration",
   "authorization": {
@@ -16,11 +16,12 @@
     "storage_replication": "inventory_required_before_backend_specific_replication",
     "runtime_delivery": "immutable_artifact_same_digest_on_both_hosts",
     "traffic_routing": "external_health_checked_active_passive",
-    "commit_acknowledgement_policy": "pending_owner_rpo_availability_choice"
+    "commit_acknowledgement_policy": "availability_first_async_streaming_with_measured_lag",
+    "recovery_point_policy": "no_fixed_rpo_until_controlled_drill_measures_lag_and_recovery"
   },
   "required_evidence": {
-    "hostinger_admin_ssh_verified": false,
-    "digitalocean_admin_ssh_verified": false,
+    "hostinger_admin_ssh_verified": true,
+    "digitalocean_admin_ssh_verified": true,
     "matching_postgres_major_version_verified": false,
     "storage_layout_inventory_verified": false,
     "standby_basebackup_verified": false,

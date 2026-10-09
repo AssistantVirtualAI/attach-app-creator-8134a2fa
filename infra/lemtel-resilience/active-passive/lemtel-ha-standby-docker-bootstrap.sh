@@ -22,6 +22,8 @@ require_root
 role="${LEMTEL_HA_ROLE:-}"
 image="${LEMTEL_POSTGRES_IMAGE:-supabase/postgres:17.6.1.136}"
 base_dir="${LEMTEL_HA_STANDBY_BASE_DIR:-/opt/lemtel-ha}"
+secret_dir='/etc/lemtel-ha/age'
+age_identity="${secret_dir}/identity.txt"
 
 if [ "$role" != 'digitalocean_standby' ]; then
   printf 'standby_docker_bootstrap_status=invalid_role\n' >&2
@@ -51,7 +53,11 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 if ! command -v docker >/dev/null 2>&1; then
   apt-get update
-  apt-get install -y --no-install-recommends docker.io docker-compose-v2
+  apt-get install -y --no-install-recommends docker.io docker-compose-v2 age
+fi
+if ! command -v age-keygen >/dev/null 2>&1; then
+  apt-get update
+  apt-get install -y --no-install-recommends age
 fi
 
 systemctl enable --now docker
@@ -75,6 +81,21 @@ install -d -m 0700 \
   "$base_dir/storage" \
   "$base_dir/artifacts" \
   "$base_dir/logs"
+install -d -m 0700 "$secret_dir"
+if [ ! -f "$age_identity" ]; then
+  umask 077
+  age-keygen -o "$age_identity" >/dev/null
+fi
+chmod 0600 "$age_identity"
+if ! grep -q '^AGE-SECRET-KEY-' "$age_identity"; then
+  printf 'standby_docker_bootstrap_status=invalid_age_identity\n' >&2
+  exit 1
+fi
+age_recipient="$(awk '/^# public key: age1/ { print $4; exit }' "$age_identity")"
+if [ -z "$age_recipient" ]; then
+  printf 'standby_docker_bootstrap_status=age_recipient_missing\n' >&2
+  exit 1
+fi
 
 docker pull "$image"
 postgres_version="$(docker run --rm --entrypoint postgres "$image" --version)"
@@ -94,6 +115,8 @@ printf 'postgres_image=%s\n' "$image"
 printf 'postgres_image_major=17\n'
 printf 'standby_base_directory=%s\n' "$base_dir"
 printf 'standby_directories_prepared=true\n'
+printf 'standby_age_recipient=%s\n' "$age_recipient"
+printf 'standby_age_identity_root_readable_only=true\n'
 printf 'containers_started=false\n'
 printf 'postgres_listener_5432_started=false\n'
 printf 'public_database_listener_enabled=false\n'

@@ -30,7 +30,7 @@ The private host-to-host path uses WireGuard `lemtel-ha0` over UDP port `51820`,
 
 After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a one-time interface configuration, starts `wg-quick@lemtel-ha0`, and adds a UFW rule restricted to the peer’s public IPv4 address **only when UFW is active**. The script refuses to overwrite an active interface or pre-existing configuration. It does not bind PostgreSQL, configure Docker, copy Storage, transfer runtime secrets, change DNS, promote the standby, or alter telephony.
 
-`lemtel-ha-standby-docker-bootstrap.sh` is the next isolated stage for a clean DigitalOcean host. It installs Docker plus its Compose plugin only if absent, starts the Docker daemon, prepares root-only standby directories, and pulls the exact PostgreSQL 17 Supabase image already verified on Hostinger. It refuses to run if any container already exists. It does **not** create a database, restore a base backup, run Supabase, publish a port, copy Storage, transfer a secret, configure DNS, or touch telephony.
+`lemtel-ha-standby-docker-bootstrap.sh` is the next isolated stage for a clean DigitalOcean host. It installs Docker plus its Compose plugin and the local `age` tool only if absent, starts the Docker daemon, prepares root-only standby directories, creates one root-readable local encryption identity, and pulls the exact PostgreSQL 17 Supabase image already verified on Hostinger. It emits only the matching public `age` recipient. It refuses to run if any container already exists. It does **not** create a database, restore a base backup, run Supabase, publish a port, copy Storage, transfer a secret, configure DNS, or touch telephony.
 
 ## Controlled implementation after private connectivity
 

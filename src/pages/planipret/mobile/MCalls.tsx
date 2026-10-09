@@ -1,4 +1,6 @@
 import { createPortal } from "react-dom";
+import { Button } from "@/components/ui/button";
+import { TranscriptConversation, normalizeTranscriptTurns } from "@/components/planipret/mobile/call/TranscriptConversation";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useOutletContext, useSearchParams } from "react-router-dom";
@@ -939,10 +941,7 @@ function TranscriptView({
     }
   }, [has, loading, preparing, onFetch]);
 
-  const isCourtier = (speaker: string) => {
-    const s = (speaker || "").toLowerCase();
-    return s.includes("courtier") || s.startsWith("agent") || s.startsWith("broker") || s === "speaker 1" || s === "1";
-  };
+
 
   if ((loading || preparing) && !has) {
     return (
@@ -995,13 +994,7 @@ function TranscriptView({
 
   }
 
-  const segs: Seg[] = segments && segments.length > 0
-    ? segments
-    : (transcript ?? "").split("\n").filter(Boolean).map((line) => {
-        const c = line.indexOf(":");
-        if (c > 0 && c < 30) return { speaker: line.slice(0, c).trim(), text: line.slice(c + 1).trim() };
-        return { speaker: "Speaker", text: line };
-      });
+  const segs = normalizeTranscriptTurns(segments, transcript);
   const wordCount = segs.reduce((n, s) => n + (s.text.split(/\s+/).filter(Boolean).length), 0);
 
   const buildPlainText = () => segs.map((s) => `${s.speaker}: ${s.text}`).join("\n");
@@ -1043,7 +1036,7 @@ function TranscriptView({
     <div className="space-y-3">
       <TranscriptStatusBanner s={status} has={true} />
 
-      <div className="flex items-center justify-between gap-2 sticky top-0 z-10 py-1"
+      <div className="flex flex-wrap items-center justify-between gap-2 sticky top-0 z-10 py-1"
         style={{ background: "var(--pp-bg-base)" }}>
         <div className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
           {wordCount} mots · {segs.length} tours
@@ -1070,28 +1063,7 @@ function TranscriptView({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {segs.map((s, i) => {
-          const right = isCourtier(s.speaker);
-          return (
-            <div key={i} className={`flex flex-col ${right ? "items-end" : "items-start"}`}>
-              <div className="text-[10px] mb-0.5" style={{ color: "var(--pp-text-tertiary, var(--pp-text-secondary))" }}>{s.speaker}</div>
-              <div
-                className="px-3 py-2 text-[13px] leading-relaxed"
-                style={{
-                  maxWidth: "82%",
-                  color: right ? "white" : "var(--pp-text-primary)",
-                  background: right ? "linear-gradient(135deg, var(--pp-brand-accent-2), var(--pp-brand-accent))" : "var(--pp-bg-elevated)",
-                  border: right ? "none" : "1px solid var(--pp-bg-border-2)",
-                  borderRadius: right ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                }}
-              >
-                {s.text}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <TranscriptConversation turns={segs} english={document.documentElement.lang === "en"} />
 
 
       {!analyzed && (
@@ -1489,29 +1461,27 @@ function CallDetailSheet({
   return createPortal(
     <div className="fixed inset-0 z-[120] flex items-end" onClick={onClose} role="dialog" aria-modal="true"
       style={{ paddingTop: "max(env(safe-area-inset-top), 12px)", touchAction: "pan-y" }}>
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)" }} />
+      <div className="pp-call-detail-backdrop absolute inset-0" />
       <motion.div
         onClick={(e) => e.stopPropagation()}
         initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 280 }}
-        className="relative w-full flex flex-col"
+        className="pp-call-detail-panel relative w-full flex flex-col"
         style={{
-          height: "100%",
-          maxHeight: "100%",
+
           paddingBottom: "env(safe-area-inset-bottom)",
           willChange: "transform",
           background: "var(--pp-bg-base)",
           borderTop: "1px solid var(--pp-bg-border-2)",
           borderRadius: "24px 24px 0 0",
-          boxShadow: "0 -8px 32px rgba(0,0,0,0.5)",
+          boxShadow: "var(--pp-shadow-lg)",
         }}
       >
-        {/* Drag handle + close */}
-        <div className="pt-3 pb-2 flex flex-col items-center relative shrink-0">
-          <div style={{ width: 36, height: 4, background: "var(--pp-bg-border-2)", borderRadius: 2 }} />
-          <button onClick={onClose} className="absolute right-3 top-1 p-2.5 rounded-full z-10" style={{ minWidth: 44, minHeight: 44, background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)" }} aria-label={t("common.close")}>
-            <X className="w-5 h-5 mx-auto" />
-          </button>
+        <div className="px-4 pt-3 pb-2 shrink-0">
+          <div className="mx-auto mb-2 h-1 w-9 rounded-full" style={{ background: "var(--pp-bg-border-2)" }} />
+          <Button variant="ghost" onClick={onClose} className="min-h-11 gap-2" style={{ color: "var(--pp-text-primary)" }}>
+            <ChevronDown className="w-4 h-4" /> {lang === "en" ? "Back to calls" : "Retour aux appels"}
+          </Button>
         </div>
 
         {/* Caller header */}

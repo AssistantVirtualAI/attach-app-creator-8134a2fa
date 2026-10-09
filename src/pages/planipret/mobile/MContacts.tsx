@@ -494,7 +494,7 @@ export default function MContacts() {
           <button onClick={() => setCreateOpen(true)}
             className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold active:scale-95 transition"
             style={{ background: "var(--pp-brand-accent-2)", border: "1px solid var(--pp-brand-accent)", color: "#fff" }}>
-            <Plus className="w-3.5 h-3.5" /> {tab === "clients" ? tr("Nouveau client", "New client") : (t("common.new") || "Nouveau")}
+            <Plus className="w-3.5 h-3.5" /> {tab === "clients" ? (lang === "en" ? "New client" : "Nouveau client") : (t("common.new") || "Nouveau")}
           </button>
         )}
 

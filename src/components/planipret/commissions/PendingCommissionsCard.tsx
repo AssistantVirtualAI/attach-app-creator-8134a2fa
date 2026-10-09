@@ -398,7 +398,8 @@ function BrokerMobileRow({ broker, rank, total, onSelect, fr }: { broker: Broker
 function Rank({ value }: { value: number }) {
   return <span className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[10.5px] font-bold shrink-0" style={{ background: value <= 3 ? "color-mix(in srgb, var(--pp-warning) 16%, transparent)" : "var(--pp-bg-elevated)", color: value <= 3 ? "var(--pp-warning)" : "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border-2)" }}>{value}</span>;
 }
-function TeamSplitPanel({ split, fr, name }: { split: Split; fr: boolean; name?: string }) {
+export function TeamSplitPanel({ split, fr, name, title }: { split: Split; fr: boolean; name?: string; title?: string }) {
+  const hasTeam = split.team_members.length > 0 && split.team.amount !== 0;
   const total = split.personal.amount + split.team.amount;
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
   const Box = ({ label, part, accent }: { label: string; part: SplitPart; accent: string }) => (
@@ -412,16 +413,16 @@ function TeamSplitPanel({ split, fr, name }: { split: Split; fr: boolean; name?:
     </div>
   );
   return (
-    <Panel title={name ? (fr ? `${name} — personnel et équipe` : `${name} — personal and team`) : (fr ? "Personnel et équipe" : "Personal and team")} icon={<Users className="w-4 h-4" />}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+    <Panel title={title ?? (name ? (fr ? `${name} — personnel et équipe` : `${name} — personal and team`) : (fr ? "Personnel et équipe" : "Personal and team"))} icon={<Users className="w-4 h-4" />}>
+      <div className={`grid grid-cols-1 ${hasTeam ? "sm:grid-cols-2" : ""} gap-2.5 mb-3`}>
         <Box label={name ? (fr ? "Dossiers du courtier" : "Broker files") : (fr ? "Mes dossiers" : "My files")} part={split.personal} accent="var(--pp-warning)" />
-        <Box label={name ? (fr ? `Son équipe (${split.team_members.length})` : `Team (${split.team_members.length})`) : (fr ? `Mon équipe (${split.team_members.length})` : `My team (${split.team_members.length})`)} part={split.team} accent="var(--pp-brand-accent)" />
+        {hasTeam && <Box label={name ? (fr ? `Son équipe (${split.team_members.length})` : `Team (${split.team_members.length})`) : (fr ? `Mon équipe (${split.team_members.length})` : `My team (${split.team_members.length})`)} part={split.team} accent="var(--pp-brand-accent)" />}
       </div>
-      <div className="h-2 rounded-full overflow-hidden flex mb-3" style={{ background: "var(--pp-bg-border)" }}>
+      {hasTeam && <div className="h-2 rounded-full overflow-hidden flex mb-3" style={{ background: "var(--pp-bg-border)" }}>
         <div style={{ width: `${pct(split.personal.amount)}%`, background: "var(--pp-warning)" }} />
         <div style={{ width: `${pct(split.team.amount)}%`, background: "var(--pp-brand-accent)" }} />
-      </div>
-      {split.team_members.length > 0 ? (
+      </div>}
+      {hasTeam ? (
         <div className="divide-y" style={{ borderColor: "var(--pp-bg-border)" }}>
           {split.team_members.map((m) => (
             <div key={m.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-2 text-[12px]" style={{ borderColor: "var(--pp-bg-border)" }}>
@@ -431,12 +432,10 @@ function TeamSplitPanel({ split, fr, name }: { split: Split; fr: boolean; name?:
             </div>
           ))}
         </div>
-      ) : (
-        <p className="text-[11.5px]" style={{ color: "var(--pp-text-muted)" }}>{fr ? "Aucune commission d'équipe pour cette période." : "No team commissions for this period."}</p>
-      )}
-      <p className="text-[10.5px] mt-2" style={{ color: "var(--pp-text-faint)" }}>
+      ) : null}
+      {hasTeam && <p className="text-[10.5px] mt-2" style={{ color: "var(--pp-text-faint)" }}>
         {fr ? "Séparation selon le courtier principal de chaque dossier dans Maestro. Les montants hors lignes (ex. Override) restent dans le total officiel." : "Split by each file's primary broker in Maestro. Amounts without file lines (e.g. Override) stay in the official total."}
-      </p>
+      </p>}
     </Panel>
   );
 }

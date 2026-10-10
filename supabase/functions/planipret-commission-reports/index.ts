@@ -471,10 +471,17 @@ async function handler(req: Request): Promise<Response> {
           const p: any = brokers[idx++];
           const name = String(p.full_name ?? p.email ?? p.maestro_broker_id);
           try {
-            const token = await getUserMaestroAccessToken(admin, String(p.user_id));
-            if (!token) { failed.push(name); continue; }
-            const res = await fetchPending(token, String(p.maestro_broker_id));
-            if (!res.ok) { failed.push(name); continue; }
+            // One retry: transient Maestro errors or a concurrent token
+            // refresh must not drop a connected broker from the table.
+            let res: Awaited<ReturnType<typeof fetchPending>> | null = null;
+            for (let attempt = 0; attempt < 2 && !(res && res.ok); attempt++) {
+              if (attempt) await new Promise((r) => setTimeout(r, 1500));
+              const token = await getUserMaestroAccessToken(admin, String(p.user_id)).catch(() => null);
+              if (!token) continue;
+              res = await fetchPending(token, String(p.maestro_broker_id));
+              if (!res.ok) log("pending broker failed", name, (res as any).r?.status);
+            }
+            if (!res || !res.ok) { failed.push(name); continue; }
             const s = pack(res.rows, res.official, res.truncated, String(p.maestro_broker_id));
             anyTrunc ||= res.truncated;
             // Tag each row with its receiving broker so the global files/volume
@@ -485,7 +492,7 @@ async function handler(req: Request): Promise<Response> {
               e.amount = r2(e.amount + o.amount); officialAll.set(o.type, e);
             }
             table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume, personal: s.split.personal, team: s.split.team, team_members: s.split.team_members, diag: res.diag });
-          } catch { failed.push(name); }
+          } catch (e) { log("pending broker exception", name, String((e as any)?.message ?? e).slice(0, 200)); failed.push(name); }
         }
       };
       await Promise.all(Array.from({ length: Math.min(5, brokers.length) }, worker));

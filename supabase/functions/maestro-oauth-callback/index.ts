@@ -309,6 +309,24 @@ Deno.serve(async (req) => {
         }
       }
 
+      // One Maestro account belongs to exactly one profile: signing in with a
+      // Maestro login already linked elsewhere must never share its figures.
+      if (resolvedBrokerId) {
+        const pid = (prevProf as any)?.id ?? null;
+        const { data: owners } = await admin.from("planipret_profiles")
+          .select("id, user_id").eq("maestro_broker_id", resolvedBrokerId);
+        const other = (owners ?? []).find((o: any) => o.id !== pid && o.user_id !== userId);
+        if (other) {
+          const clear = { maestro_broker_id: null, maestro_connected: false, maestro_broker_token: null,
+            maestro_refresh_token: null, maestro_token_expires_at: null, maestro_email: null, maestro_scope: null };
+          const upd = admin.from("planipret_profiles").update(clear);
+          pid ? await upd.eq("id", pid) : await upd.eq("user_id", userId);
+          console.warn("[maestro-oauth-callback] maestro_account_already_linked", JSON.stringify({ user_id: userId }));
+          return j({ success: false, error: "maestro_account_already_linked",
+            message: "Ce compte Maestro est déjà lié à un autre utilisateur. Connecte-toi avec ton propre compte Maestro." });
+        }
+      }
+
       // Auto-detect the *telecom* user id for this broker (separate namespace
       // from the CRM/OAuth broker id) so call/SMS/recording sync works right away.
       try {

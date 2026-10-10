@@ -325,7 +325,7 @@ Deno.serve(async (req) => {
         const official = Array.isArray(upstreamSummary)
           ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
           : null;
-        return { ok: true as const, rows, official, truncated: lastPage > 25 };
+        return { ok: true as const, rows, official, truncated };
       };
       const r2 = (n: number) => Math.round(n * 100) / 100;
       // Personal vs team split: a row belongs to the broker's own production when

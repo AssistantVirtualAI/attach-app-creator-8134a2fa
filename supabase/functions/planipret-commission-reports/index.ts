@@ -302,6 +302,7 @@ Deno.serve(async (req) => {
         let lastPage = 1, expected = 0, passes = 0, truncated = false;
         do {
           passes += 1;
+          const sizeBefore = byId.size;
           let page = 1;
           while (page <= 25) {
             const qs = new URLSearchParams();

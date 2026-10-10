@@ -333,6 +333,9 @@ Deno.serve(async (req) => {
             page += 1;
           }
           truncated = lastPage > 25;
+          // Stop early when a full pass adds nothing new: further passes
+          // won't recover rows Maestro never returns.
+          if (byId.size === sizeBefore) break;
         } while (!truncated && expected > 0 && byId.size < expected && passes < 20);
         const raw = [...byId.values()];
         const rows = raw.map(normalizePendingRow);

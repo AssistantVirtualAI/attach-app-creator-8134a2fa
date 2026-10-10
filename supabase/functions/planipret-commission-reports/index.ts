@@ -383,7 +383,16 @@ Deno.serve(async (req) => {
       };
       const pack = (rows: CommissionDepositRow[], official: { type: string; label: string; amount: number }[] | null, truncated: boolean, ownId: string | null = null) => {
         const summary = summarize(rows, truncated);
-        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId) };
+        const officialTotal = official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null;
+        // Pending rows may legitimately have no date yet (not funded): Maestro
+        // counts them in its official total, so the displayed total must too.
+        // When Maestro's official total exists it is the headline number; the
+        // row sum stays available for detail tables.
+        if (officialTotal != null) {
+          summary.total_commission = officialTotal;
+          summary.deposit_count = Math.max(summary.deposit_count, rows.length);
+        }
+        return { ...summary, rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
       };
 
       if (role === "broker") {

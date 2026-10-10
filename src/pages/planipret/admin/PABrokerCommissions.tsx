@@ -70,6 +70,11 @@ export default function PABrokerCommissions({ selfOnly = false }: { selfOnly?: b
     })();
   }, [selfOnly]);
 
+  // Two profiles can share one Maestro id: show the name Maestro reports.
+  const syncNames = (list: Row[]) => setBrokers((prev) => prev.map((b) => {
+    const hit = list.find((r) => r.users_id === b.id);
+    return hit ? { ...b, name: hit.name } : b;
+  }));
   const range = (y: number) => {
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(new Date());
     const to = `${y}-12-31` > today ? today : `${y}-12-31`;
@@ -88,11 +93,13 @@ export default function PABrokerCommissions({ selfOnly = false }: { selfOnly?: b
           if (kind === "paid") {
             const d = await report({ action: "by_agent", filters: range(year), ...(f ? { force: true } : {}) });
             if (cancelled) return;
-            setRows((d.agents ?? []).filter((a: any) => a.users_id != null).map((a: any) => ({ users_id: String(a.users_id), name: a.name, amount: a.total, files: a.files ?? 0, volume: a.loan_volume ?? 0 })));
+            const list = (d.agents ?? []).filter((a: any) => a.users_id != null).map((a: any) => ({ users_id: String(a.users_id), name: a.name, amount: a.total, files: a.files ?? 0, volume: a.loan_volume ?? 0 }));
+            setRows(list); syncNames(list);
           } else {
             const d = await report({ action: "pending", filters: {}, ...(f ? { force: true } : {}) });
             if (cancelled) return;
-            setRows((d.brokers ?? []).map((b: any) => ({ users_id: String(b.users_id), name: b.name, amount: b.amount, files: b.files ?? 0, volume: b.volume ?? 0 })));
+            const list = (d.brokers ?? []).map((b: any) => ({ users_id: String(b.users_id), name: b.name, amount: b.amount, files: b.files ?? 0, volume: b.volume ?? 0 }));
+            setRows(list); syncNames(list);
           }
           setDetail(null); setDetailPy(null);
           return;
@@ -129,7 +136,13 @@ export default function PABrokerCommissions({ selfOnly = false }: { selfOnly?: b
 
   const monthRows = useMemo(() => {
     if (!detail) return [];
-    if (kind === "pending") return detail.months.map((m) => ({ key: m.month, label: `${MONTHS[Number(m.month.slice(5, 7)) - 1]} ${m.month.slice(0, 4)}`, cur: m, prev: null as Month | null }));
+    if (kind === "pending") {
+      // Recent months in detail; older dated rows grouped in one line.
+      const from = `${thisYear - 1}-01`;
+      const older = detail.months.filter((m) => m.month < from).reduce((t, m) => ({ month: "older", commission: t.commission + m.commission, files: t.files + m.files, volume: t.volume + m.volume }), { month: "older", commission: 0, files: 0, volume: 0 } as Month);
+      const recent = detail.months.filter((m) => m.month >= from).map((m) => ({ key: m.month, label: `${MONTHS[Number(m.month.slice(5, 7)) - 1]} ${m.month.slice(0, 4)}`, cur: m, prev: null as Month | null }));
+      return [...(older.commission || older.files ? [{ key: "older", label: fr ? `Avant ${thisYear - 1}` : `Before ${thisYear - 1}`, cur: older, prev: null as Month | null }] : []), ...recent];
+    }
     return Array.from({ length: 12 }, (_, i) => {
       const mm = String(i + 1).padStart(2, "0");
       const cur = detail.months.find((m) => m.month === `${year}-${mm}`) ?? { month: `${year}-${mm}`, commission: 0, files: 0, volume: 0 };

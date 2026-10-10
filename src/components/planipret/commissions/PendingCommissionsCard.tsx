@@ -1,5 +1,6 @@
 // Commissions en attente — même passerelle, même portée et même mémoire
 // hors-ligne que les commissions déposées (action `pending`).
+import DataQualityLine from "./DataQualityLine";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownAZ,

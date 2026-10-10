@@ -477,7 +477,9 @@ async function handler(req: Request): Promise<Response> {
             if (!res.ok) { failed.push(name); continue; }
             const s = pack(res.rows, res.official, res.truncated, String(p.maestro_broker_id));
             anyTrunc ||= res.truncated;
-            allRows.push(...res.rows);
+            // Tag each row with its receiving broker so the global files/volume
+            // rule (own base rows only) applies per broker, same as the table.
+            allRows.push(...res.rows.map((r: any) => ({ ...r, user_id: String(p.maestro_broker_id) })));
             for (const o of res.official ?? []) {
               const e = officialAll.get(o.type) ?? { ...o, amount: 0 };
               e.amount = r2(e.amount + o.amount); officialAll.set(o.type, e);

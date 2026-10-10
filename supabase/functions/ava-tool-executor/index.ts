@@ -1787,7 +1787,97 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   // ===== COMMISSIONS (API officielle Planiprêt, lecture seule) =====
+  // Unified, validated source shared with portal + mobile: paid (deposits) and
+  // pending (pending-commissions), own / team / selected broker / all brokers.
+  async get_commissions(ctx, p) {
+    const role = String((ctx.profile as any)?.role ?? "");
+    if (role !== "broker" && role !== "admin") {
+      return { success: false, error: "forbidden", message: "Les commissions sont réservées aux courtiers et administrateurs." };
+    }
+    const status = ["paid", "pending", "both"].includes(p?.status) ? p.status : "both";
+    const range = commissionRange(p?.period ? p : { period: "ytd" });
+    if ("error" in range) return range.error;
+    const ownId = (ctx.profile as any)?.maestro_broker_id ? String((ctx.profile as any).maestro_broker_id) : null;
+    const norm = (v: unknown) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    let usersId: string | null = null;
+    let targetName: string | null = null;
+    const wanted = String(p?.broker_name ?? "").trim();
+    if (wanted) {
+      const { data: list } = await ctx.admin.from("planipret_profiles")
+        .select("full_name, maestro_broker_id").not("maestro_broker_id", "is", null);
+      const w = norm(wanted);
+      const hits = (list ?? []).filter((b: any) => norm(b.full_name).includes(w) || w.split(/\s+/).every((t) => norm(b.full_name).includes(t)));
+      if (hits.length === 0) return { success: false, error: "broker_not_found", message: `Aucun courtier trouvé pour « ${wanted} ».` };
+      if (hits.length > 1) return { success: false, error: "ambiguous_broker", candidates: hits.slice(0, 8).map((b: any) => b.full_name), message: "Plusieurs courtiers correspondent; précise le nom complet." };
+      targetName = hits[0].full_name;
+      usersId = String(hits[0].maestro_broker_id);
+    }
+    // Broker: own report only; team/peer figures come from the team split of
+    // their own Maestro report (never another broker's token).
+    let peerFilter: string | null = null;
+    if (role === "broker") {
+      if (usersId && usersId !== ownId) { peerFilter = targetName; }
+      usersId = null;
+    }
+    const call = async (action: "summary" | "pending") => {
+      const body: any = { action, filters: { date_from: range.from.slice(0, 10), date_to: range.to.slice(0, 10), ...(usersId ? { users_id: usersId } : {}) } };
+      if (action === "pending") delete body.filters.date_from, delete body.filters.date_to;
+      const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/planipret-commission-reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "x-ava-internal-user-id": ctx.userId },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d?.ok !== true) return { error: String(d?.message ?? d?.error ?? `HTTP ${r.status}`) };
+      return d;
+    };
+    const pickMember = (split: any) => {
+      if (!peerFilter || !split?.team_members) return null;
+      const w = norm(peerFilter);
+      return split.team_members.find((m: any) => norm(m.name).includes(w) || w.includes(norm(m.name))) ?? { name: peerFilter, amount: 0, files: 0, volume: 0, note: "Aucune commission de ce courtier dans ton équipe." };
+    };
+    const out: any = { success: true, scope: role === "admin" ? (usersId ? `courtier: ${targetName}` : "tous les courtiers") : (peerFilter ? `équipe: ${peerFilter}` : "mes commissions"), period: range.label };
+    const lines: string[] = [];
+    if (status !== "pending") {
+      const d: any = await call("summary");
+      if (d.error) { out.paid_error = d.error; lines.push(`Déboursées indisponibles: ${d.error}`); }
+      else {
+        const s = d.summary ?? {};
+        const member = pickMember(d.paid_split);
+        out.paid = member ?? {
+          total: s.total_commission, files: s.deal_count, deposits: s.deposit_count, loan_volume: s.total_loan_volume,
+          personal: d.paid_split?.personal ?? null, team: d.paid_split?.team ?? null,
+          team_members: (d.paid_split?.team_members ?? []).slice(0, 15),
+          top_institutions: (s.top_institutions ?? []).slice(0, 5),
+        };
+        lines.push(`Déboursées (${range.label}): ${fmtCad(member ? member.amount : s.total_commission)}`);
+      }
+    }
+    if (status !== "paid") {
+      const d: any = await call("pending");
+      if (d.error) { out.pending_error = d.error; lines.push(`En attente indisponibles: ${d.error}`); }
+      else {
+        const s = d.summary ?? {};
+        const member = pickMember(s.split);
+        const total = s.official_total ?? s.total_commission;
+        out.pending = member ?? {
+          total, files: s.deal_count, loan_volume: s.total_loan_volume,
+          by_type: s.official_by_type ?? null,
+          personal: s.split?.personal ?? null, team: s.split?.team ?? null,
+          team_members: (s.split?.team_members ?? []).slice(0, 15),
+          brokers: Array.isArray(d.brokers) ? d.brokers.slice(0, 30).map((b: any) => ({ name: b.name, amount: b.amount, files: b.files })) : undefined,
+        };
+        lines.push(`En attente (actuel): ${fmtCad(member ? member.amount : total)}`);
+      }
+    }
+    if (out.paid_error && out.pending_error) out.success = false;
+    out.message = lines.join(" · ");
+    out.instructions = "Chiffres validés au cent côté serveur, identiques au portail et à l'application. Ne jamais inventer ni arrondir autrement; une erreur n'est jamais un zéro.";
+    return out;
+  },
+
   async get_commission_summary(ctx, p) {
+    if (!p?.commission_type) return await TOOLS.get_commissions(ctx, { ...p, status: "paid" });
     const g = await commissionGuard(ctx);
     if ("error" in g) return g.error;
     const range = commissionRange(p);

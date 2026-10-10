@@ -26,7 +26,7 @@
     "storage_layout_inventory_verified": true,
     "standby_basebackup_verified": true,
     "replication_lag_monitoring_verified": true,
-    "storage_integrity_monitoring_verified": false,
+    "storage_integrity_monitoring_verified": true,
     "external_health_routing_verified": false,
     "fencing_verified": false,
     "failover_drill_verified": false,

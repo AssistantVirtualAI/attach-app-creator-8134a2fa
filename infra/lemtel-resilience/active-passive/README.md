@@ -42,10 +42,9 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 ## Remaining controlled implementation
 
-1. Prove the deployed Storage attestation monitor, then update the evidence record. Plaintext `.env` files and private keys are never replicated.
-2. Route the local health evidence to an approved alert destination.
-3. Approve and implement primary fencing, then run the documented promotion/failback procedure in a maintenance window.
-4. Configure controlled external routing only after the private drill has passed. The standby will not auto-promote until fencing prevents split brain.
+1. Route the local health evidence to an approved alert destination. Plaintext `.env` files and private keys are never replicated.
+2. Approve and implement primary fencing, then run the documented promotion/failback procedure in a maintenance window.
+3. Configure controlled external routing only after the private drill has passed. The standby will not auto-promote until fencing prevents split brain.
 
 PostgreSQL documents streaming replication as asynchronous by default and recommends a dedicated replication account, `wal_level=replica`, adequate sender/slot settings, a base backup and a replication slot or WAL retention policy. [PostgreSQL warm standby](https://www.postgresql.org/docs/current/warm-standby.html)
 Supabase documents database state and Storage objects as separate operational components, so Storage requires its own replication procedure. [Supabase self-hosted restore](https://supabase.com/docs/guides/self-hosting/restore-from-platform)

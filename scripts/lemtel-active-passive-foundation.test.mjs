@@ -21,6 +21,7 @@ test('active-passive foundation records the approved availability-first single-w
   assert.equal(value.required_evidence.digitalocean_admin_ssh_verified, true);
   assert.equal(value.required_evidence.standby_basebackup_verified, true);
   assert.equal(value.required_evidence.replication_lag_monitoring_verified, true);
+  assert.equal(value.required_evidence.storage_integrity_monitoring_verified, true);
 });
 
 test('foundation refuses synchronous acknowledgement, unsafe promotion, plaintext secret copying, shared-business data, and premature live routing', () => {

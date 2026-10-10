@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, '..');
 const script = (name) => readFileSync(resolve(root, `infra/lemtel-resilience/active-passive/${name}`), 'utf8');
 const primaryKeyInit = script('lemtel-ha-storage-primary-key-init.sh');
 const standbyReceiver = script('lemtel-ha-storage-standby-receiver-bootstrap.sh');
+const standbyReceiverShell = script('lemtel-ha-storage-standby-receiver-shell-remediate.sh');
 const standbySshAllowuser = script('lemtel-ha-storage-standby-ssh-allowuser-enable.sh');
 const primarySync = script('lemtel-ha-storage-primary-sync.sh');
 
@@ -25,13 +26,24 @@ test('Storage key initialization is root-only, backend-specific, and pins the st
 test('Storage receiver is WireGuard-only and accepts only the pinned rsync write protocol', () => {
   assert.match(standbyReceiver, /bootstrap_private_storage_receiver/u);
   assert.match(standbyReceiver, /useradd --system/u);
-  assert.match(standbyReceiver, /--shell \/usr\/sbin\/nologin/u);
+  assert.match(standbyReceiver, /--shell \/bin\/sh/u);
   assert.match(standbyReceiver, /from=\\"\$primary_tunnel_address\\",restrict,command=/u);
   assert.match(standbyReceiver, /SSH_ORIGINAL_COMMAND/u);
   assert.match(standbyReceiver, /--partial-dir/u);
   assert.match(standbyReceiver, /\.lemtel-ha-manifest\.current\.sha256/u);
   assert.match(standbyReceiver, /exit 126/u);
   assert.doesNotMatch(standbyReceiver, prohibited);
+});
+
+test('Storage receiver shell remediation allows only the forced rsync transport', () => {
+  assert.match(standbyReceiverShell, /remediate_private_storage_receiver_shell/u);
+  assert.match(standbyReceiverShell, /receiver_shell_not_remediable/u);
+  assert.match(standbyReceiverShell, /usermod --shell \/bin\/sh/u);
+  assert.match(standbyReceiverShell, /receiver_key_not_restricted/u);
+  assert.match(standbyReceiverShell, /storage_receiver_forced_command_required=true/u);
+  assert.match(standbyReceiverShell, /storage_receiver_interactive_access_enabled=false/u);
+  assert.doesNotMatch(standbyReceiverShell, /PermitRootLogin\s+yes|PasswordAuthentication\s+yes|AllowUsers\s+root/u);
+  assert.doesNotMatch(standbyReceiverShell, prohibited);
 });
 
 test('Storage receiver SSH access extends only the existing AllowUsers rule transactionally', () => {
@@ -43,6 +55,8 @@ test('Storage receiver SSH access extends only the existing AllowUsers rule tran
   assert.match(standbySshAllowuser, /awk -v original="\$current_line" -v replacement="\$replacement"/u);
   assert.match(standbySshAllowuser, /\/usr\/sbin\/sshd -t/u);
   assert.match(standbySshAllowuser, /trap rollback ERR/u);
+  assert.match(standbySshAllowuser, /rollback_and_fail/u);
+  assert.match(standbySshAllowuser, /for \(field = 2; field <= NF; field\+\+\)/u);
   assert.match(standbySshAllowuser, /existing_admin_access_retained=true/u);
   assert.doesNotMatch(standbySshAllowuser, /PermitRootLogin\s+yes|PasswordAuthentication\s+yes|AllowUsers\s+root/u);
   assert.doesNotMatch(standbySshAllowuser, prohibited);

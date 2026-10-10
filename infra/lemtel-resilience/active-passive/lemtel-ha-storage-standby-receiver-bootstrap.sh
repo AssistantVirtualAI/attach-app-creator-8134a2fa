@@ -33,7 +33,9 @@ handshake="$(wg show lemtel-ha0 latest-handshakes | awk 'NR == 1 { print $2 }')"
 if id "$receiver_user" >/dev/null 2>&1; then
   [ "$(getent passwd "$receiver_user" | cut -d: -f6)" = "$receiver_home" ] || fail receiver_home_mismatch
 else
-  useradd --system --user-group --create-home --home-dir "$receiver_home" --shell /usr/sbin/nologin "$receiver_user"
+  # OpenSSH executes a forced command through the account shell. The key remains
+  # source-pinned and `restrict` + the forced receiver deny interactive use.
+  useradd --system --user-group --create-home --home-dir "$receiver_home" --shell /bin/sh "$receiver_user"
 fi
 
 install -d -o "$receiver_user" -g "$receiver_user" -m 0700 "$receiver_dir"

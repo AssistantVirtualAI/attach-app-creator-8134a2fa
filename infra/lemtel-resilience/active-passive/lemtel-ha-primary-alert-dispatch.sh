@@ -105,16 +105,15 @@ print(json.dumps({
 PY
 )"
 
-printf '%s' "$payload" | docker exec -i "$edge_container" sh -eu -c '
-  api_key="$(printenv RESEND_API_KEY 2>/dev/null || true)"
-  [ -n "$api_key" ]
-  curl --fail --silent --show-error --connect-timeout 5 --max-time 20 \
-    -o /dev/null \
-    -X POST https://api.resend.com/emails \
-    -H "Authorization: Bearer $api_key" \
-    -H "Content-Type: application/json" \
-    --data-binary @-
-' || fail resend_delivery_failed
+api_key="$(docker exec "$edge_container" sh -eu -c 'printenv RESEND_API_KEY 2>/dev/null')" || fail resend_secret_missing
+[ -n "$api_key" ] || fail resend_secret_missing
+printf '%s' "$payload" | curl --fail --silent --show-error --connect-timeout 5 --max-time 20 \
+  -o /dev/null \
+  -X POST https://api.resend.com/emails \
+  -H "Authorization: Bearer $api_key" \
+  -H "Content-Type: application/json" \
+  --data-binary @- || fail resend_delivery_failed
+unset api_key
 
 install -d -m 0700 "$alert_dir"
 tmp="$(mktemp "$alert_dir/.primary-health-notified.XXXXXX")"

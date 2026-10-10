@@ -396,6 +396,18 @@ async function handler(req: Request): Promise<Response> {
           summary.total_commission = officialTotal;
           summary.deposit_count = Math.max(summary.deposit_count, rows.length);
         }
+        const baseOf = (rs: any[]) => {
+          const m = new Map<string, number>();
+          for (const r of rs) {
+            if (String(r.commission_type ?? "").toLowerCase() !== "base") continue;
+            const c = String(r.contract_id ?? r.number ?? "").trim(); if (!c) continue;
+            if (!m.has(c)) m.set(c, num(r.loan_amt ?? r.loan_amount ?? 0));
+          }
+          return { files: m.size, volume: r2([...m.values()].reduce((t, v) => t + v, 0)) };
+        };
+        const allBase = baseOf(rows as any[]);
+        const ownBase = baseOf((rows as any[]).filter((r) => { const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null; return !pid || pid === (ownId ?? String(r.user_id ?? "")); }));
+        (summary as any).base_variants = { all: allBase, own: ownBase };
         return { ...summary, rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
       };
 

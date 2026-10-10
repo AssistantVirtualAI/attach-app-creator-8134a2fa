@@ -13,10 +13,7 @@ fail() {
 
 receiver_user='lemtelstorage'
 primary_tunnel_address='10.253.47.1'
-# The exact existing allowlist is preserved. It includes the restricted backup
-# accounts plus the ongoing Lemtel operations account; no existing access is removed.
-expected_original='AllowUsers lemtelbackupops lemtelbackup lemtelops'
-replacement="${expected_original} ${receiver_user}@${primary_tunnel_address}"
+required_existing_users=(lemtelbackupops lemtelbackup lemtelops)
 
 command -v sshd >/dev/null 2>&1 || fail sshd_missing
 systemctl is-active --quiet ssh || fail ssh_service_inactive
@@ -34,7 +31,24 @@ done < <(grep -RIH --include='sshd_config' --include='*.conf' '^[[:space:]]*Allo
 config_file="${allowuser_matches[0]%%:*}"
 current_line="${allowuser_matches[0]#*:}"
 current_line="$(printf '%s\n' "$current_line" | sed -E 's/^[[:space:]]*//; s/[[:space:]]+$//')"
-[ "$current_line" = "$expected_original" ] || fail unexpected_allowusers_configuration
+case "$current_line" in
+  AllowUsers\ *) ;;
+  *) fail unexpected_allowusers_configuration ;;
+esac
+current_allowlist="${current_line#AllowUsers }"
+read -r -a current_users <<< "$current_allowlist"
+[ "${#current_users[@]}" -eq "${#required_existing_users[@]}" ] || fail unexpected_allowusers_configuration
+for required_user in "${required_existing_users[@]}"; do
+  found=false
+  for current_user in "${current_users[@]}"; do
+    [ "$current_user" = "$required_user" ] && found=true
+  done
+  [ "$found" = true ] || fail unexpected_allowusers_configuration
+done
+case " $current_allowlist " in
+  *" $receiver_user "*|*" $receiver_user@"*) fail receiver_already_allowed ;;
+esac
+replacement="${current_line} ${receiver_user}@${primary_tunnel_address}"
 
 backup_file="/root/lemtel-ha-$(basename "$config_file").allowusers.backup"
 cp -p "$config_file" "$backup_file"
@@ -47,13 +61,29 @@ rollback() {
 }
 trap rollback ERR
 
-sed -i -E "s|^[[:space:]]*AllowUsers[[:space:]]+lemtelbackupops[[:space:]]+lemtelbackup[[:space:]]+lemtelops[[:space:]]*$|$replacement|" "$config_file"
+rewrite_file="$(mktemp "${config_file}.lemtel-ha.XXXXXX")"
+awk -v original="$current_line" -v replacement="$replacement" '
+  {
+    trimmed = $0
+    sub(/^[[:space:]]+/, "", trimmed)
+    sub(/[[:space:]]+$/, "", trimmed)
+    if (trimmed == original) {
+      print replacement
+      replacements++
+    } else {
+      print
+    }
+  }
+  END { exit replacements == 1 ? 0 : 1 }
+' "$config_file" > "$rewrite_file" || fail unexpected_allowusers_configuration
+cat "$rewrite_file" > "$config_file"
+rm -f "$rewrite_file"
 /usr/sbin/sshd -t || fail sshd_configuration_invalid
 systemctl reload ssh
 sleep 1
 systemctl is-active --quiet ssh || fail ssh_service_reload_failed
-actual_line="$(/usr/sbin/sshd -T | awk '$1 == "allowusers" { $1=""; sub(/^ /, ""); print; exit }')"
-[ "$actual_line" = "lemtelbackupops lemtelbackup lemtelops ${receiver_user}@${primary_tunnel_address}" ] || fail allowusers_effective_policy_mismatch
+actual_line="$(/usr/sbin/sshd -T | awk '$1 == "allowusers" { $1=""; sub(/^ /, ""); value=$0 } END { print value }')"
+[ "$actual_line" = "${current_allowlist} ${receiver_user}@${primary_tunnel_address}" ] || fail allowusers_effective_policy_mismatch
 
 rollback_needed=false
 rm -f "$backup_file"

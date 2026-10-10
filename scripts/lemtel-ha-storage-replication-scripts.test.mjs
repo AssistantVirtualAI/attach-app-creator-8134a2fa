@@ -36,9 +36,11 @@ test('Storage receiver is WireGuard-only and accepts only the pinned rsync write
 
 test('Storage receiver SSH access extends only the existing AllowUsers rule transactionally', () => {
   assert.match(standbySshAllowuser, /allow_private_storage_receiver_ssh/u);
-  assert.match(standbySshAllowuser, /expected_original='AllowUsers lemtelbackupops lemtelbackup lemtelops'/u);
+  assert.match(standbySshAllowuser, /required_existing_users=\(lemtelbackupops lemtelbackup lemtelops\)/u);
   assert.match(standbySshAllowuser, /\$\{receiver_user\}@\$\{primary_tunnel_address\}/u);
   assert.match(standbySshAllowuser, /\[ "\$\{#allowuser_matches\[@\]\}" -eq 1 \]/u);
+  assert.match(standbySshAllowuser, /\[ "\$\{#current_users\[@\]\}" -eq "\$\{#required_existing_users\[@\]\}" \]/u);
+  assert.match(standbySshAllowuser, /awk -v original="\$current_line" -v replacement="\$replacement"/u);
   assert.match(standbySshAllowuser, /\/usr\/sbin\/sshd -t/u);
   assert.match(standbySshAllowuser, /trap rollback ERR/u);
   assert.match(standbySshAllowuser, /existing_admin_access_retained=true/u);

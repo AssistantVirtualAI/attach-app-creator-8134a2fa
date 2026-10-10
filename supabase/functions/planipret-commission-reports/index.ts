@@ -396,6 +396,28 @@ async function handler(req: Request): Promise<Response> {
           summary.total_commission = officialTotal;
           summary.deposit_count = Math.max(summary.deposit_count, rows.length);
         }
+        // Pending files/volume (same rule as the tables): broker's own base rows
+        // (primary broker = receiver), dated, positive loan; one count per
+        // contract; volume sums distinct contract+loan entries.
+        {
+          const contracts = new Set<string>(); const vol = new Map<string, number>();
+          for (const r of rows as any[]) {
+            if (String(r.commission_type ?? "").toLowerCase() !== "base") continue;
+            const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null;
+            const receiver = ownId ?? (r.user_id != null ? String(r.user_id) : null);
+            if (pid && receiver && pid !== receiver) continue;
+            const d = String(r.date_trans ?? "");
+            if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
+            const loan = num(r.loan_amt ?? r.loan_amount ?? 0);
+            const c = String(r.contract_id ?? r.number ?? "").trim();
+            if (!c || loan <= 0) continue;
+            contracts.add(`${receiver}|${c}`); vol.set(`${receiver}|${c}|${loan}`, loan);
+          }
+          summary.deal_count = contracts.size;
+          summary.total_loan_volume = r2([...vol.values()].reduce((t, v) => t + v, 0));
+          (summary as any).deposit_count = contracts.size;
+          (summary as any).average_commission = contracts.size ? r2((summary.total_commission ?? 0) / contracts.size) : 0;
+        }
         return { ...summary, rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
       };
 

@@ -55,6 +55,7 @@ test('standby receives a base backup through the private tunnel without publishi
   assert.match(standby, /-h "\$primary_tunnel_address"/u);
   assert.match(standby, /-S lemtel_do_standby/u);
   assert.match(standby, /SELECT pg_is_in_recovery\(\)/u);
+  assert.match(standby, /SELECT pg_is_in_recovery\(\).*grep -qx t/u);
   assert.match(standby, /wal_receiver_status=streaming/u);
   assert.match(standby, /docker run -d --name "\$container"/u);
   assert.match(standby, /passfile=\/var\/lib\/postgresql\/data\/lemtel-ha-replication\.pgpass/u);
@@ -76,6 +77,7 @@ test('standby recovery remediation requires a contained replica and cannot expos
   assert.match(standbyRecoveryRemediate, /standby\.signal/u);
   assert.match(standbyRecoveryRemediate, /hot_standby = on/u);
   assert.match(standbyRecoveryRemediate, /docker start "\$container"/u);
+  assert.match(standbyRecoveryRemediate, /SELECT pg_is_in_recovery\(\).*grep -qx t/u);
   assert.match(standbyRecoveryRemediate, /docker stop --time 15 "\$container"/u);
   assert.match(standbyRecoveryRemediate, /wal_receiver_status=streaming/u);
   assert.match(standbyRecoveryRemediate, /docker port "\$container" \| grep -q \./u);

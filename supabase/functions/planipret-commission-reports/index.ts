@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
       };
       const pack = (rows: CommissionDepositRow[], official: { type: string; label: string; amount: number }[] | null, truncated: boolean, ownId: string | null = null) => {
         const summary = summarize(rows, truncated);
-        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId), breakdown: breakdown(rows), row_fields: rows[0] ? Object.keys(rows[0]).sort() : [] };
+        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId), breakdown: breakdown(rows), row_fields: rows[0] ? Object.keys(rows[0]).sort() : [], recon_rows: (rows as any[]).filter((r) => String(r.commission_type) === "base").map((r) => [r.number, num(r.loan_amount ?? r.loan_amt ?? 0), num(r.amount), r.primary_broker_id, r.user_id, r.date_trans, r.commission_id]) };
       };
 
       if (role === "broker") {

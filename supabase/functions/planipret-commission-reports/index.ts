@@ -283,30 +283,45 @@ Deno.serve(async (req) => {
     // renvoyé au client), avec tableau par courtier et filtre par agent.
     if (action === "pending") {
       const fetchPending = async (token: string, usersId: string | null) => {
-        const raw: any[] = [];
+        // Maestro's pending pagination is not order-stable: pages can repeat
+        // some rows and skip others. Rows are keyed by commission_id and the
+        // page set is re-read (bounded) until every row reported by Maestro
+        // is collected exactly once.
+        const byId = new Map<string, any>();
         let upstreamSummary: unknown = null;
-        let page = 1, lastPage = 1;
-        while (page <= 25) {
-          const qs = new URLSearchParams();
-          if (usersId) qs.set("users_id", usersId);
-          if (filters.financial_inst_id) qs.set("financial_inst_id", filters.financial_inst_id);
-          if (filters.date_from && filters.date_to) {
-            qs.set("date_from", filters.date_from.slice(0, 10));
-            qs.set("date_to", filters.date_to.slice(0, 10));
+        let lastPage = 1, expected = 0, passes = 0, truncated = false;
+        do {
+          passes += 1;
+          let page = 1;
+          while (page <= 25) {
+            const qs = new URLSearchParams();
+            if (usersId) qs.set("users_id", usersId);
+            if (filters.financial_inst_id) qs.set("financial_inst_id", filters.financial_inst_id);
+            if (filters.date_from && filters.date_to) {
+              qs.set("date_from", filters.date_from.slice(0, 10));
+              qs.set("date_to", filters.date_to.slice(0, 10));
+            }
+            qs.set("page", String(page));
+            qs.set("per_page", "200");
+            const r = await commissionGet(`${PENDING_COMMISSION_PATH}?${qs}`, token, cid);
+            if (!r.ok) return { ok: false as const, r };
+            if (page === 1 && passes === 1) upstreamSummary = r.data?.summary ?? null;
+            const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
+            rows.forEach((row, i) => {
+              const key = row?.commission_id != null ? String(row.commission_id) : `p${passes}-${page}-${i}`;
+              if (!byId.has(key)) byId.set(key, row);
+            });
+            lastPage = Number(r.data?.meta?.last_page ?? 1);
+            expected = Number(r.data?.meta?.total ?? 0) || expected;
+            if (page >= lastPage || rows.length === 0) break;
+            page += 1;
           }
-          qs.set("page", String(page));
-          qs.set("per_page", "1000");
-          const r = await commissionGet(`${PENDING_COMMISSION_PATH}?${qs}`, token, cid);
-          if (!r.ok) return { ok: false as const, r };
-          if (page === 1) upstreamSummary = r.data?.summary ?? null;
-          const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
-          raw.push(...rows);
-          lastPage = Number(r.data?.meta?.last_page ?? 1);
-          if (page >= lastPage || rows.length === 0) break;
-          page += 1;
-        }
+          truncated = lastPage > 25;
+        } while (!truncated && expected > 0 && byId.size < expected && passes < 4);
+        if (!truncated && expected > 0 && byId.size < expected) truncated = true;
+        const raw = [...byId.values()];
         const rows = raw.map(normalizePendingRow);
-        (globalThis as any).__ppMeta = { pages: page, raw: raw.length };
+        (globalThis as any).__ppMeta = { passes, raw: raw.length, expected };
         const official = Array.isArray(upstreamSummary)
           ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
           : null;

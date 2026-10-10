@@ -12,7 +12,7 @@ describe("contrat des outils AVA / ElevenLabs", () => {
     const names = configs.map((entry: any) => entry.tool_config.name);
     expect(EXPECTED_TOOL_NAMES).toHaveLength(81);
     expect(configs).toHaveLength(81);
-    expect(new Set(names).size).toBe(81);
+    expect(new Set(names).size).toBe(82);
     expect(new Set(EXPECTED_TOOL_NAMES)).toEqual(new Set(names));
   });
 

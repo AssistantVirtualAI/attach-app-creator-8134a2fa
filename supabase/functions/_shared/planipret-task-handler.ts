@@ -711,6 +711,7 @@ export async function handleTaskRequest(
 
     let upstream: UpstreamList = { ok: false, tasks: [], endpoint: null, status: 0 };
     let all: any[] = [];
+    let resolvedOwnerId: string | null = null;
     if (token) {
       for (const candidate of ownerCandidates) {
         const attempt = await deps.listFetch(candidate, { status, from, to });
@@ -719,8 +720,8 @@ export async function handleTaskRequest(
           (attempt.tasks ?? []).map((t: any) => normalizeTask(t)),
           assigneeIds,
         );
-        if (!upstream.ok) { upstream = attempt; all = rows; }
-        if (rows.length) { upstream = attempt; all = rows; break; }
+        if (!upstream.ok) { upstream = attempt; all = rows; resolvedOwnerId = candidate; }
+        if (rows.length) { upstream = attempt; all = rows; resolvedOwnerId = candidate; break; }
       }
     }
 
@@ -786,6 +787,7 @@ export async function handleTaskRequest(
         success: true,
         source: src,
         maestro_user_id: maestroId,
+          task_owner_id: resolvedOwnerId,
         scoped_broker_id: overrideBroker,
         telecom_user_id: telecomId,
         endpoint: upstream.endpoint,

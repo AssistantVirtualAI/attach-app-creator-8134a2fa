@@ -9,6 +9,7 @@
 - Funded units are distinct contracts, while volume sums each positive non-adjustment base funding entry even when loan amounts repeat; portal/mobile use the shared engine and complete server analytics, with current-year windows ending today in Toronto, to match Maestro without dropping legitimate repeat fundings.
 
 - Maestro task completion uses the documented soft-delete endpoint and a complete GET read-back; never invent a status option ID or trust mutation success alone.
+- Planipret task identity is usage-specific: CRM/commission, assignment, and telecom ids stay distinct; task lists probe verified assignment identities past empty responses and expose only non-sensitive diagnostics.
 - AVA customer lookup is profile-first: show verified Maestro details before contact actions, and offer calls, SMS, or email only when explicitly requested.
 - Every answered inbound or outbound call requires a persisted post-call CRM/AVA decision; recordings remain in AVA and CRM delivery requires an explicit user action.
 - Lemtel UC lives only in src/pages/lemtel-uc, src/components/lemtel-uc, luc_* tables and luc-* functions; never touches Planipret/pbx/legacy Lemtel data — isolation required by product owner.

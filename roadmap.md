@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Restore Sandra and all brokers' own Maestro tasks across portal/mobile using usage-specific identities; reconcile paid commissions exactly against Maestro before coordinated publication.
+
 - [x] Split broker mobile commissions into bilingual Pending/Paid panels with portal-parity colored monthly/quarterly reports; both web-mobile trees are identical and 31 focused tests pass in French and English; authenticated panel switching verified, no native edits or publication.
 
 - [x] Separate pending and paid portal commissions into status tabs, with independent broker/name/global and month/quarter/year filters; six tests passed and authenticated Sandra selection/period retention verified; no native edits or publication.

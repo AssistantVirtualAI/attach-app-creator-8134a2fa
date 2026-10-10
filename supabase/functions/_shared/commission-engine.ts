@@ -88,7 +88,7 @@ function matches(r: RegisterRow, c: Criteria): boolean {
   return true;
 }
 
-const normalizedKeyPart = (value: string | null | undefined) => (value ?? "").trim().toLocaleLowerCase("fr-CA");
+const normalizedKeyPart = (value: unknown) => (value == null ? "" : String(value)).trim().toLocaleLowerCase("fr-CA");
 
 /**
  * A `base` row without a loan amount is never a mortgage file: Maestro uses it for

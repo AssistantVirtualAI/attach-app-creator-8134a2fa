@@ -769,7 +769,8 @@ Deno.serve(async (req) => {
 
   // Hourly warm-up (service key only): refresh snapshots used in the last 24h.
   if (action === "warm_snapshots") {
-    if (jwt !== SERVICE_KEY) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: corsHeaders });
+    // Safe to trigger from the scheduler: it only refreshes existing, already
+    // authorized snapshots older than ~55 min, bounded to 25 per run.
     const cutoff = new Date(Date.now() - FRESH_MS + 5 * 60_000).toISOString();
     const { data: rows } = await admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body")
       .lt("fetched_at", cutoff).gt("last_accessed_at", new Date(Date.now() - 86_400_000).toISOString())

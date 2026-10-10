@@ -611,7 +611,13 @@ Deno.serve(async (req) => {
           .select("id, contact_name, contact_number, note, scheduled_at, status")
           .or(`user_id.eq.${profile.id},user_id.eq.${u.user.id}`)
           .eq("status", "pending").order("scheduled_at", { ascending: true }).limit(15);
-        dataBlocks.push(`Rappels/tâches en attente: ${JSON.stringify(rem ?? []).slice(0, 3000)}`);
+        dataBlocks.push(`Rappels en attente (planipret_reminders — ce ne sont PAS les tâches Maestro): ${JSON.stringify(rem ?? []).slice(0, 3000)}`);
+        try {
+          const tr = await invokeFunction("ava-tool-executor", authHeader, { tool_name: "list_tasks", parameters: { status: "pending", filter: "open", page: 1, limit: 50 } });
+          const t: any = tr?.data ?? {};
+          const tasks = Array.isArray(t?.tasks) ? t.tasks : [];
+          dataBlocks.push(`Tâches Maestro ouvertes (${t?.total ?? tasks.length} au total): ${JSON.stringify(tasks.slice(0, 25)).slice(0, 4000)}. Si l'utilisateur demande ses tâches, réponds avec CES données, jamais avec les rappels.`);
+        } catch (e) { console.error("pp-ava-chat tasks prefetch fail", e); }
       }
 
       const reportPeriod = wantsReport(userMessage);

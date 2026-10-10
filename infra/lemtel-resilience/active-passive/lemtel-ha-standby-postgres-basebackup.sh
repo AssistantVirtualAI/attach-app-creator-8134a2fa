@@ -50,7 +50,15 @@ case "$password" in
 esac
 printf '%s\n' "${primary_tunnel_address}:5432:*:lemtel_ha_replication:${password}" > "$pgpass"
 chmod 0600 "$pgpass"
-cleanup() { rm -f "$pgpass"; }
+standby_started=false
+cleanup() {
+  status=$?
+  rm -f "$pgpass"
+  if [ "$status" -ne 0 ] && [ "$standby_started" = true ]; then
+    docker stop --time 15 "$container" >/dev/null 2>&1 || true
+  fi
+  return "$status"
+}
 trap cleanup EXIT
 
 # The one-shot client has no listener. It reaches the primary only through the host WireGuard interface.
@@ -71,6 +79,11 @@ esac
 install -m 0600 "$pgpass" "$data_dir/lemtel-ha-replication.pgpass"
 sed -i "s|^primary_conninfo = .*|primary_conninfo = 'host=${primary_tunnel_address} port=5432 user=lemtel_ha_replication application_name=lemtel_do_standby passfile=/var/lib/postgresql/data/lemtel-ha-replication.pgpass'|" "$data_dir/postgresql.auto.conf"
 grep -Fqx "primary_conninfo = 'host=${primary_tunnel_address} port=5432 user=lemtel_ha_replication application_name=lemtel_do_standby passfile=/var/lib/postgresql/data/lemtel-ha-replication.pgpass'" "$data_dir/postgresql.auto.conf" || fail primary_conninfo_write_failed
+# pg_basebackup copies the primary configuration. The primary may intentionally keep
+# hot_standby off, but this read-only replica must enable it to accept recovery checks.
+sed -i '/^[[:space:]]*hot_standby[[:space:]]*=/d' "$data_dir/postgresql.auto.conf"
+printf '%s\n' 'hot_standby = on' >> "$data_dir/postgresql.auto.conf"
+grep -Fqx 'hot_standby = on' "$data_dir/postgresql.auto.conf" || fail hot_standby_enable_failed
 unset password
 chown -R "$uid:$gid" "$data_dir"
 
@@ -79,6 +92,7 @@ docker run -d --name "$container" --restart unless-stopped \
   --security-opt no-new-privileges:true \
   -v "$data_dir:/var/lib/postgresql/data" \
   "$image" >/dev/null
+standby_started=true
 for _ in $(seq 1 45); do
   if docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null | grep -qx true \
     && docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()' 2>/dev/null | grep -qx true; then

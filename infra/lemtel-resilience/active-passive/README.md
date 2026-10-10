@@ -10,7 +10,7 @@ The owner selected **availability-first** on 2026-10-09. PostgreSQL commits on H
 - Hostinger runs a self-hosted Supabase stack with PostgreSQL 17 and local Storage mounted in the Storage container.
 - DigitalOcean runs only the PostgreSQL warm standby required for physical streaming replication. A Storage runtime and public application listener are not started there.
 - Lemtel source artifacts already arrive with one immutable digest on both hosts. That delivery does not deploy or start a runtime.
-- Lemtel DNS uses an external `ui-dns` nameserver set. Its account/API access and health-routing capability are not yet verified.
+- Cloudflare is selected as the Lemtel routing authority. The canonical hostname `lemtel.assistantvirtualai.com` is approved and confirmed unused by a read-only inventory; it has not been created in DNS and carries no traffic yet.
 - The two public server endpoints can reach each other over SSH. They do not share a private provider network, so the replication path must use an authenticated encrypted tunnel.
 
 ## Preflight evidence completed
@@ -44,8 +44,9 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 ## Remaining controlled implementation
 
-1. Approve and implement primary fencing, then run the documented promotion/failback procedure in a maintenance window. Plaintext `.env` files and private keys are never replicated.
-2. Configure controlled external routing only after the private drill has passed. The standby will not auto-promote until fencing prevents split brain.
+1. Stage the inactive Supabase/Edge runtime configuration on DigitalOcean through an encrypted envelope. Plaintext `.env` files and private keys are never replicated.
+2. Create and validate the canonical Hostinger route on `lemtel.assistantvirtualai.com` without moving existing client traffic, then prove the matching dormant runtime path on DigitalOcean.
+3. Approve and implement primary fencing, then run the documented promotion/failback procedure in a maintenance window. The standby will not auto-promote until fencing prevents split brain.
 
 PostgreSQL documents streaming replication as asynchronous by default and recommends a dedicated replication account, `wal_level=replica`, adequate sender/slot settings, a base backup and a replication slot or WAL retention policy. [PostgreSQL warm standby](https://www.postgresql.org/docs/current/warm-standby.html)
 Supabase documents database state and Storage objects as separate operational components, so Storage requires its own replication procedure. [Supabase self-hosted restore](https://supabase.com/docs/guides/self-hosting/restore-from-platform)

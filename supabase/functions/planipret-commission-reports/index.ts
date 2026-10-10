@@ -320,12 +320,10 @@ Deno.serve(async (req) => {
         } while (!truncated && expected > 0 && byId.size < expected && passes < 8);
         const raw = [...byId.values()];
         const rows = raw.map(normalizePendingRow);
-        (globalThis as any).__ppMeta = { passes, raw: raw.length, expected };
-        const unstable_rows = expected > byId.size ? expected - byId.size : 0;
         const official = Array.isArray(upstreamSummary)
           ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
           : null;
-        return { ok: true as const, rows, official, truncated, unstable_rows };
+        return { ok: true as const, rows, official, truncated };
       };
       const r2 = (n: number) => Math.round(n * 100) / 100;
       // Personal vs team split: a row belongs to the broker's own production when
@@ -356,23 +354,9 @@ Deno.serve(async (req) => {
           team_members: [...members.values()].map((m) => ({ id: m.id, name: m.name, ...out(m) })).sort((a, b) => b.amount - a.amount),
         };
       };
-      // Aggregates per (commission type, share type) so the Maestro PDF report
-      // (one type, one share type, row-level loan totals) can be reconciled.
-      const breakdown = (rows: CommissionDepositRow[]) => {
-        const g = new Map<string, { commission_type: string; split_type: string; rows: number; amount: number; loan: number }>();
-        for (const r of rows as any[]) {
-          const t = String(r.commission_type ?? "base");
-          const s = `${r.primary_broker_id != null && String(r.primary_broker_id) !== String(r.user_id) ? "team" : "own"}|${String(r.status ?? "")}|${r.date_trans && !String(r.date_trans).startsWith("0000") ? "dated" : "undated"}|${num(r.loan_amount ?? r.loan_amt ?? 0) > 0 ? "loan" : "noloan"}`;
-          const k = `${t}|${s}`;
-          const b = g.get(k) ?? { commission_type: t, split_type: s, rows: 0, amount: 0, loan: 0 };
-          b.rows += 1; b.amount += num(r.amount); b.loan += num(r.loan_amount ?? r.loan_amt ?? 0);
-          g.set(k, b);
-        }
-        return [...g.values()].map((b) => ({ ...b, amount: r2(b.amount), loan: r2(b.loan) }));
-      };
       const pack = (rows: CommissionDepositRow[], official: { type: string; label: string; amount: number }[] | null, truncated: boolean, ownId: string | null = null) => {
         const summary = summarize(rows, truncated);
-        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId), breakdown: breakdown(rows), row_fields: rows[0] ? Object.keys(rows[0]).sort() : [], recon_meta: (globalThis as any).__ppMeta ?? null, recon_rows: (rows as any[]).filter((r) => String(r.commission_type) === "base").map((r) => [r.number, num(r.loan_amount ?? r.loan_amt ?? 0), num(r.amount), r.primary_broker_id, r.user_id, r.date_trans, r.commission_id, r.product_name, r.product_id, r.status, r.company]) };
+        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId) };
       };
 
       if (role === "broker") {

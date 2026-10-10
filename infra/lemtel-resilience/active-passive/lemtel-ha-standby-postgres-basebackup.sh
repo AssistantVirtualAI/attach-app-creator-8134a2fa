@@ -95,13 +95,13 @@ docker run -d --name "$container" --restart unless-stopped \
 standby_started=true
 for _ in $(seq 1 45); do
   if docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null | grep -qx true \
-    && docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()' 2>/dev/null | grep -qx true; then
+    && docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()' 2>/dev/null | grep -qx t; then
     break
   fi
   sleep 2
 done
 docker inspect --format '{{.State.Running}}' "$container" | grep -qx true || fail standby_container_not_running
-docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()' | grep -qx true || fail standby_not_in_recovery
+docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()' | grep -qx t || fail standby_not_in_recovery
 # Docker lists the image's internal 5432/tcp declaration even when no host port is
 # published. `docker port` emits output only for a real host binding.
 if docker port "$container" | grep -q .; then fail standby_published_port_detected; fi

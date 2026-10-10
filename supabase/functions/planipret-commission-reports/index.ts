@@ -754,7 +754,7 @@ async function handler(req: Request): Promise<Response> {
         const norm = (v: unknown) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
         if (owner) {
           const o = norm(owner);
-          const mk = () => ({ amount: 0, files: new Set<string>(), volume: 0 });
+          const mk = () => ({ amount: 0, files: new Set<string>(), volume: 0, vk: new Set<string>() });
           const own = mk(), team = mk();
           const mem = new Map<string, { name: string; b: ReturnType<typeof mk> }>();
           for (const { row: r, unique_volume, unique_deal } of paidFlags(all)) {
@@ -765,7 +765,7 @@ async function handler(req: Request): Promise<Response> {
             const amt = num(r.amount); const n = String(r.number ?? "");
             const vol = unique_volume ? num(r.loan_amt) : 0;
             const isBase = String((r as any).commission_type ?? "base").toLowerCase() === "base" && Number((r as any).is_adjustment) !== 1 && num(r.loan_amt) > 0;
-            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { if (!x.files.has(n)) x.volume += num(r.loan_amt); x.files.add(n); } };
+            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { const k = `${n}|${num(r.loan_amt)}`; if (!x.vk.has(k)) { x.vk.add(k); x.volume += num(r.loan_amt); } x.files.add(n); } };
             apply(b);
             if (b === team) { const m = mem.get(t) ?? { name: String(target).trim(), b: mk() }; apply(m.b); mem.set(t, m); }
           }

@@ -302,6 +302,7 @@ Deno.serve(async (req) => {
         let lastPage = 1, expected = 0, passes = 0, truncated = false;
         do {
           passes += 1;
+          const sizeBefore = byId.size;
           let page = 1;
           while (page <= 25) {
             const qs = new URLSearchParams();
@@ -318,7 +319,12 @@ Deno.serve(async (req) => {
             if (page === 1 && passes === 1) upstreamSummary = r.data?.summary ?? null;
             const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
             rows.forEach((row, i) => {
-              const key = row?.commission_id != null ? String(row.commission_id) : `p${passes}-${page}-${i}`;
+              // Key must distinguish legitimate repeat rows: Maestro can emit
+              // several lines (base, bonus, override…) sharing one
+              // commission_id. Dedup only true page-repeat duplicates.
+              const key = row?.commission_id != null
+                ? `${row.commission_id}|${row.commission_type ?? ""}|${row.commission_amount ?? row.amount ?? ""}`
+                : `p${passes}-${page}-${i}`;
               if (!byId.has(key)) byId.set(key, row);
             });
             lastPage = Number(r.data?.meta?.last_page ?? 1);
@@ -327,13 +333,28 @@ Deno.serve(async (req) => {
             page += 1;
           }
           truncated = lastPage > 25;
-        } while (!truncated && expected > 0 && byId.size < expected && passes < 8);
+          // Stop early when a full pass adds nothing new: further passes
+          // won't recover rows Maestro never returns.
+          if (byId.size === sizeBefore) break;
+        } while (!truncated && expected > 0 && byId.size < expected && passes < 20);
         const raw = [...byId.values()];
         const rows = raw.map(normalizePendingRow);
         const official = Array.isArray(upstreamSummary)
           ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
           : null;
-        return { ok: true as const, rows, official, truncated };
+        const diag = {
+          expected_meta_total: expected,
+          collected: byId.size,
+          passes,
+          last_page: lastPage,
+          by_type: rows.reduce((acc: Record<string, number>, r: any) => {
+            const t = String(r.commission_type ?? "base");
+            acc[t] = Math.round(((acc[t] ?? 0) + num(r.amount)) * 100) / 100;
+            return acc;
+          }, {}),
+          rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)),
+        };
+        return { ok: true as const, rows, official, truncated, diag };
       };
       const r2 = (n: number) => Math.round(n * 100) / 100;
       // Personal vs team split: a row belongs to the broker's own production when
@@ -366,7 +387,16 @@ Deno.serve(async (req) => {
       };
       const pack = (rows: CommissionDepositRow[], official: { type: string; label: string; amount: number }[] | null, truncated: boolean, ownId: string | null = null) => {
         const summary = summarize(rows, truncated);
-        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId) };
+        const officialTotal = official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null;
+        // Pending rows may legitimately have no date yet (not funded): Maestro
+        // counts them in its official total, so the displayed total must too.
+        // When Maestro's official total exists it is the headline number; the
+        // row sum stays available for detail tables.
+        if (officialTotal != null) {
+          summary.total_commission = officialTotal;
+          summary.deposit_count = Math.max(summary.deposit_count, rows.length);
+        }
+        return { ...summary, rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
       };
 
       if (role === "broker") {
@@ -377,7 +407,7 @@ Deno.serve(async (req) => {
         const summary = pack(res.rows, res.official, res.truncated, resolvedUsersId ? String(resolvedUsersId) : null);
         const validation = await validateCommissionOutput({ source: "pending_commissions", rows: res.rows, truncated: res.truncated, official: res.official, officialTotal: summary.official_total, scope });
         if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions en attente n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
-        return json({ ok: true, summary, validation, source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: resolvedUsersId, generated_at: validation.checked_at }, scope, correlation_id: cid }, 200, cid);
+        return json({ ok: true, summary, validation, diag: res.diag, source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: resolvedUsersId, generated_at: validation.checked_at }, scope, correlation_id: cid }, 200, cid);
       }
 
       // Admin : courtiers déjà authentifiés auprès de Maestro.
@@ -415,7 +445,7 @@ Deno.serve(async (req) => {
               const e = officialAll.get(o.type) ?? { ...o, amount: 0 };
               e.amount = r2(e.amount + o.amount); officialAll.set(o.type, e);
             }
-            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume, personal: s.split.personal, team: s.split.team, team_members: s.split.team_members });
+            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume, personal: s.split.personal, team: s.split.team, team_members: s.split.team_members, diag: res.diag });
           } catch { failed.push(name); }
         }
       };

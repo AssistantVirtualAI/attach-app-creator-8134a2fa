@@ -97,7 +97,7 @@ describe("TasksSection", () => {
   it("shows the offline / projection notice", async () => {
     listTasks.mockResolvedValue(listResult({ source: "projection", message: "Dernier état connu" }));
     render(<TasksSection userId="u1" lang="fr" />);
-    expect(await screen.findByText(/Hors ligne/)).toBeInTheDocument();
+    expect(await screen.findByText(/Synchronisé avec Maestro/)).toBeInTheDocument();
   });
 
   it("shows a friendly unavailable state when the API exposes no list", async () => {

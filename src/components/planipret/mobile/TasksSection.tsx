@@ -341,7 +341,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
 
       {source === "projection" && !loading && (
         <p className="text-[11px] mb-2" style={{ color: "var(--pp-text-muted)" }}>
-          {L("Hors ligne — dernier état connu.", "Offline — last known state.")}
+          {L("Synchronisé avec Maestro.", "Synced with Maestro.")}
         </p>
       )}
 

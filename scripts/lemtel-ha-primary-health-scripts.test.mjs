@@ -66,6 +66,7 @@ test('primary alerts enablement stores recipients root-only and starts a bounded
   assert.match(alertsEnable, /LEMTEL_HA_ALERT_RECIPIENTS/u);
   assert.match(alertsEnable, /primary-health-alert-recipients/u);
   assert.match(alertsEnable, /install -o root -g root -m 0600/u);
+  assert.match(alertsEnable, /awk 'END \{ print NR \}'/u);
   assert.match(alertsEnable, /OnUnitActiveSec=2min/u);
   assert.match(alertsEnable, /systemctl start lemtel-ha-primary-alert-dispatch\.service/u);
   assert.match(alertsEnable, /resend_existing_runtime_secret_reused=true/u);

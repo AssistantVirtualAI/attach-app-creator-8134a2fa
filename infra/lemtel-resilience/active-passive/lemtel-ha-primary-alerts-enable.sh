@@ -31,7 +31,7 @@ umask 077
 recipients_tmp="$(mktemp)"
 trap 'rm -f "$recipients_tmp"' EXIT
 printf '%s' "$recipients_csv" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed '/^$/d' > "$recipients_tmp"
-recipient_count="$(wc -l < "$recipients_tmp" | tr -d ' ')"
+recipient_count="$(awk 'END { print NR }' "$recipients_tmp")"
 [ "$recipient_count" -ge 1 ] && [ "$recipient_count" -le 50 ] || fail recipient_count_invalid
 while IFS= read -r recipient; do
   [[ "$recipient" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || fail recipient_invalid

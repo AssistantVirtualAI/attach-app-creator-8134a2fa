@@ -64,7 +64,7 @@ IFS='|' read -r primary_in_recovery streaming_count max_lag_bytes <<< "$db_state
 [[ "$streaming_count" =~ ^[0-9]+$ ]] && [ "$streaming_count" -ge 1 ] || fail postgres_streaming_absent
 [[ "$max_lag_bytes" =~ ^[0-9]+$ ]] || fail postgres_lag_unreadable
 
-[ -s "$storage_log" ] || fail storage_sync_log_missing
+[ -f "$storage_log" ] || fail storage_sync_log_missing
 storage_last_sync_epoch="$(stat -c %Y "$storage_log")"
 storage_sync_age_seconds="$(( $(date +%s) - storage_last_sync_epoch ))"
 [ "$storage_sync_age_seconds" -ge 0 ] || fail storage_sync_clock_invalid

@@ -21,6 +21,8 @@ test('primary health check is root-only and covers Auth, replication and Storage
   assert.match(healthCheck, /pg_wal_lsn_diff/u);
   assert.match(healthCheck, /lemtel-ha-storage-sync\.timer/u);
   assert.match(healthCheck, /max_storage_freshness_seconds=900/u);
+  assert.match(healthCheck, /\[ -f "\$storage_log" \] \|\| fail storage_sync_log_missing/u);
+  assert.doesNotMatch(healthCheck, /\[ -s "\$storage_log" \]/u);
   assert.match(healthCheck, /primary_health_status=healthy/u);
   assert.match(healthCheck, /dns_failover_enabled=false/u);
   assert.match(healthCheck, /automatic_promotion_enabled=false/u);

@@ -24,6 +24,74 @@ function check(key: string, expected: unknown, actual: unknown) {
   return { key, expected_cents, actual_cents, delta_cents, ok: delta_cents === 0 };
 }
 
+export interface DataQuality {
+  received: number;
+  counted_files: number;
+  reasons: Record<string, number>;
+  duplicates: number;
+  conflicting_loans: number;
+  unknown_types: string[];
+  by_type: Record<string, number>;
+  expected_rows: number | null;
+  missing_rows: number;
+  excluded_samples: Array<{ reason: string; contract: string; type: string; amount: number; loan: number; date: string | null }>;
+}
+
+const KNOWN_TYPES = new Set(["base", "bonus", "bonus2", "bonus 2", "perform", "performance", "override", "external", "adjustment", "ajustement"]);
+
+/** Reads every row and classifies it: counted in files/volume, or set aside with an explicit reason. */
+export function profileRows(rows: any[], ownId: string | null, expectedRows: number | null = null): DataQuality {
+  const reasons: Record<string, number> = {};
+  const by_type: Record<string, number> = {};
+  const unknown = new Set<string>();
+  const seen = new Set<string>();
+  const loans = new Map<string, Set<number>>();
+  const files = new Set<string>();
+  const samples: DataQuality["excluded_samples"] = [];
+  let duplicates = 0;
+  const bump = (k: string) => { reasons[k] = (reasons[k] ?? 0) + 1; };
+  for (const r of rows) {
+    const type = String(r.commission_type ?? "base").trim().toLowerCase();
+    by_type[type] = (by_type[type] ?? 0) + 1;
+    if (!KNOWN_TYPES.has(type)) unknown.add(type);
+    const contract = String(r.contract_id ?? r.number ?? "").trim();
+    const rawAmt = r.commission_amount ?? r.amount;
+    const amount = num(rawAmt); const loan = num(r.loan_amt ?? r.loan_amount ?? 0);
+    const date = String(r.date_trans ?? "").trim();
+    const key = `${r.commission_id ?? ""}|${contract}|${r.product_id ?? ""}|${type}|${amount}`;
+    let reason: string | null = null;
+    if (seen.has(key)) { reason = "duplicate"; duplicates++; }
+    seen.add(key);
+    if (!reason && rawAmt != null && rawAmt !== "" && !Number.isFinite(Number(String(rawAmt).replace(/[^0-9.-]/g, "")))) reason = "non_numeric";
+    if (!reason && type !== "base") reason = "not_base";
+    const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null;
+    const receiver = ownId ?? (r.user_id != null ? String(r.user_id) : null);
+    if (!reason && pid && receiver && pid !== receiver) reason = "team_file";
+    if (!reason && (!/^\d{4}-\d{2}-\d{2}/.test(date) || date.startsWith("0000"))) reason = "undated";
+    if (!reason && !contract) reason = "no_contract";
+    if (!reason && loan <= 0) reason = "zero_loan";
+    if (type === "base" && contract && loan > 0) {
+      const set = loans.get(contract) ?? new Set<number>(); set.add(loan); loans.set(contract, set);
+    }
+    if (reason) {
+      bump(reason);
+      if (reason !== "not_base" && reason !== "team_file" && samples.length < 200) samples.push({ reason, contract, type, amount, loan, date: date || null });
+    } else { bump("counted"); files.add(contract); }
+  }
+  return {
+    received: rows.length,
+    counted_files: files.size,
+    reasons,
+    duplicates,
+    conflicting_loans: [...loans.values()].filter((v) => v.size > 1).length,
+    unknown_types: [...unknown],
+    by_type,
+    expected_rows: expectedRows,
+    missing_rows: expectedRows != null ? Math.max(0, expectedRows - rows.length) : 0,
+    excluded_samples: samples,
+  };
+}
+
 export function deterministicPaidChecks(rows: CommissionDepositRow[], summary: CommissionSummary) {
   const dated = rows.filter((row) => /^\d{4}-\d{2}-\d{2}/.test(String(row.date_trans ?? "").trim()));
   const amount = dated.reduce((total, row) => total + cents(row.amount), 0);
@@ -70,7 +138,11 @@ catégories officielles override/external; une catégorie officielle qui ne bala
 Réponds uniquement en JSON:
 {"status":"ok|warnings|blocked","summary":"...","anomalies":[{"type":"...","severity":"info|warning|critical","detail":"..."}]}
 Maximum 12 anomalies. Bloque seulement une source mélangée, un résultat partiel, un contrôle obligatoire en échec,
-ou une incohérence critique. N'affiche aucune donnée absente.`;
+ou une incohérence critique. N'affiche aucune donnée absente.
+Analyse aussi data_quality (lignes reçues, comptées, écartées par raison, doublons, prêts contradictoires,
+types inconnus, lignes manquantes selon la pagination) et compare current_headline à previous_snapshot :
+signale toute variation inhabituelle (> 15 % de dossiers ou de volume) et explique en français simple
+pourquoi des lignes sont écartées. Ne recalcule jamais les chiffres.`;
 
 function parseAi(text: string | null) {
   if (!text) return null;
@@ -92,6 +164,9 @@ export async function validateCommissionOutput(input: {
   official?: Array<{ type: string; label: string; amount: number }> | null;
   officialTotal?: number | null;
   scope: { role: string; mode: string; users_id?: string | null };
+  dataQuality?: DataQuality | null;
+  previous?: { total_cents: number; files: number; volume_cents: number; fetched_at: string } | null;
+  current?: { files: number; volume: number; total: number } | null;
 }): Promise<CommissionValidation> {
   const checks = input.source === "paid_deposits"
     ? deterministicPaidChecks(input.rows, input.summary as CommissionSummary)
@@ -104,6 +179,9 @@ export async function validateCommissionOutput(input: {
     scope: { role: input.scope.role, mode: input.scope.mode, selected: Boolean(input.scope.users_id) },
     row_count: input.rows.length,
     checks,
+    data_quality: input.dataQuality ? { ...input.dataQuality, excluded_samples: undefined } : null,
+    previous_snapshot: input.previous ?? null,
+    current_headline: input.current ? { files: input.current.files, volume_cents: cents(input.current.volume), total_cents: cents(input.current.total) } : null,
     totals: input.source === "paid_deposits"
       ? { commission_cents: cents(input.summary?.total_commission), volume_cents: cents(input.summary?.total_loan_volume), deals: input.summary?.deal_count ?? 0 }
       : { official_total_cents: cents(input.officialTotal), categories: (input.official ?? []).map((item) => ({ type: item.type, amount_cents: cents(item.amount) })) },

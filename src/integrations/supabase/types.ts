@@ -10051,6 +10051,48 @@ export type Database = {
           },
         ]
       }
+      planipret_commission_ai_audit: {
+        Row: {
+          ai_status: string | null
+          anomalies: Json
+          broker_id: string | null
+          created_at: string
+          data_quality: Json | null
+          headline: Json | null
+          id: string
+          source: string
+          status: string
+          summary: string | null
+          user_id: string | null
+        }
+        Insert: {
+          ai_status?: string | null
+          anomalies?: Json
+          broker_id?: string | null
+          created_at?: string
+          data_quality?: Json | null
+          headline?: Json | null
+          id?: string
+          source: string
+          status: string
+          summary?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          ai_status?: string | null
+          anomalies?: Json
+          broker_id?: string | null
+          created_at?: string
+          data_quality?: Json | null
+          headline?: Json | null
+          id?: string
+          source?: string
+          status?: string
+          summary?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       planipret_commission_broker_aliases: {
         Row: {
           agent_key: string

@@ -460,6 +460,62 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       sentiment: { type: "string", description: "positive, neutral, negative (optionnel)" },
       next_steps: { type: "string", description: "Prochaines étapes (optionnel)" },
     }, ["call_id"]),
+    mk("get_app_settings", "Lit les réglages de l'application (langue, ne pas déranger, AVA, Maestro, Microsoft 365, préférences)."),
+    mk("update_app_setting", "Modifie un réglage de l'app (bouton Réglages/Plus). Directs: dnd, language, dark_mode, notifications, voice_assistant, include_commissions (confirmation requise). Les réglages sensibles (password, privacy, ai_consent, profile, ringtone, call_audio, extension, connections, ms365, maestro, voicemail_greeting, ava_voice) ouvrent l'écran correspondant.", {
+      setting: { type: "string", description: "Nom du réglage" },
+      value: { type: "string", description: "on/off, fr/en…" },
+      confirmed: { type: "boolean", description: "true après confirmation du courtier" },
+    }, ["setting"]),
+    mk("read_teams_messages", "Lit les derniers messages d'un chat ou canal Teams.", {
+      chat_id: { type: "string", description: "ID du chat (list_teams_chats)" },
+      team_id: { type: "string", description: "ID équipe (canal)" },
+      channel_id: { type: "string", description: "ID canal" },
+      limit: { type: "number", description: "Nombre (défaut 20)" },
+    }),
+    mk("reply_teams_message", "Répond dans un chat ou canal Teams. Confirmation requise.", {
+      chat_id: { type: "string", description: "ID du chat" },
+      team_id: { type: "string", description: "ID équipe" },
+      channel_id: { type: "string", description: "ID canal" },
+      content: { type: "string", description: "Texte" },
+      confirmed: { type: "boolean", description: "true après confirmation" },
+    }, ["content"]),
+    mk("get_sms_thread", "Lit une conversation texto complète avec un numéro.", {
+      number: { type: "string", description: "Numéro de téléphone" },
+      thread_id: { type: "string", description: "ID de fil (optionnel)" },
+      limit: { type: "number", description: "Nombre (défaut 30)" },
+    }),
+    mk("reply_email", "Répond à un courriel (ou répondre à tous). Confirmation requise.", {
+      message_id: { type: "string", description: "ID du courriel" },
+      body: { type: "string", description: "Texte de la réponse" },
+      reply_all: { type: "boolean", description: "Répondre à tous" },
+      confirmed: { type: "boolean", description: "true après confirmation" },
+    }, ["message_id", "body"]),
+    mk("forward_email", "Transfère un courriel. Confirmation requise.", {
+      message_id: { type: "string", description: "ID du courriel" },
+      to: { type: "string", description: "Courriel destinataire" },
+      contact_name: { type: "string", description: "Nom du contact (sinon to)" },
+      comment: { type: "string", description: "Message (optionnel)" },
+      confirmed: { type: "boolean", description: "true après confirmation" },
+    }, ["message_id"]),
+    mk("manage_voicemail", "Gère un message vocal : mark_read, mark_unread, delete (confirmation) ou transcript.", {
+      voicemail_id: { type: "string", description: "ID du message vocal" },
+      action: { type: "string", enum: ["mark_read", "mark_unread", "delete", "transcript"], description: "Action" },
+      confirmed: { type: "boolean", description: "true pour delete après confirmation" },
+    }, ["voicemail_id", "action"]),
+    mk("control_call", "Contrôle un appel actif : hold, unhold ou transfer (confirmation pour transfer).", {
+      call_id: { type: "string", description: "ID de l'appel (get_active_calls)" },
+      action: { type: "string", enum: ["hold", "unhold", "transfer"], description: "Action" },
+      destination: { type: "string", description: "Numéro ou poste pour transfer" },
+      contact_name: { type: "string", description: "Nom du contact pour transfer" },
+      confirmed: { type: "boolean", description: "true après confirmation" },
+    }, ["call_id", "action"]),
+    mk("get_contract_details", "Détails des contrats d'un client (prêteur, montant, taux, terme, échéance, statut).", {
+      client_id: { type: "string", description: "ID client Maestro" },
+      query: { type: "string", description: "Nom, téléphone ou courriel si pas d'ID" },
+    }),
+    mk("find_upcoming_renewals", "Contrats arrivant à échéance (renouvellements) dans les N prochains jours.", {
+      days: { type: "number", description: "Fenêtre en jours (défaut 120)" },
+    }),
     mk("push_client_note", "Ajoute une note libre au timeline de communications d'un client Maestro.", {
       client_id: { type: "string", description: "ID du client Maestro" },
       note: { type: "string", description: "Contenu de la note" },
@@ -488,4 +544,5 @@ export const EXPECTED_TOOL_NAMES = [
   "navigate_to", "show_client_in_app", "open_call_detail", "open_dialer", "open_sms_composer", "open_email_composer",
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event", "get_sms_conversations", "get_unread_emails", "get_recent_emails", "summarize_email", "update_client", "list_teams_chats", "create_teams_chat", "send_teams_message",
   "get_daily_briefing", "get_my_stats", "get_performance_report", "generate_voicemail_greeting", "explain_feature", "get_integration_status", "push_call_summary", "push_client_note", "push_communication_log",
+  "get_app_settings", "update_app_setting", "read_teams_messages", "reply_teams_message", "get_sms_thread", "reply_email", "forward_email", "manage_voicemail", "control_call", "get_contract_details", "find_upcoming_renewals",
 ];

@@ -747,6 +747,50 @@ Deno.serve(async (req) => {
         } catch (e) { console.error("pp-ava-chat maestro list fail", e); }
       }
 
+      // Full-app access: commissions (validated, same as portal/app), Teams, settings, renewals.
+      const runTool = async (tool_name: string, parameters: Record<string, unknown>) => {
+        const r = await invokeFunction("ava-tool-executor", authHeader, { tool_name, parameters, session_id: sessionId });
+        return r.data ?? { success: false, error: `HTTP ${r.status}` };
+      };
+      try {
+        if (/commission|d[ée]bours|paid|pending|en attente|d[ée]p[oô]ts?|payes?|revenus?/i.test(userMessage)) {
+          const status = /pending|en attente/i.test(userMessage) && !/d[ée]bours|paid|pay[ée]/i.test(userMessage) ? "pending"
+            : /d[ée]bours|paid|pay[ée]/i.test(userMessage) && !/pending|en attente/i.test(userMessage) ? "paid" : "both";
+          const period = /trimestre|quarter/i.test(userMessage) ? "quarter" : /\bmois\b|month/i.test(userMessage) ? "month" : /l'?ann[ée]e derni|last year/i.test(userMessage) ? "year" : "ytd";
+          const nrm = (v: unknown) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          const msgN = ` ${nrm(userMessage).replace(/[^a-z0-9]+/g, " ")} `;
+          const { data: brokerList } = await admin.from("planipret_profiles").select("full_name").not("maestro_broker_id", "is", null);
+          const fullHit = (brokerList ?? []).map((b: any) => String(b.full_name ?? "")).filter((n: string) => n && msgN.includes(` ${nrm(n).replace(/[^a-z0-9]+/g, " ").trim()} `));
+          const firstHit = fullHit.length ? [] : (brokerList ?? []).map((b: any) => String(b.full_name ?? "")).filter((n: string) => {
+            const parts = nrm(n).split(/\s+/).filter((x) => x.length > 2);
+            return parts.some((x) => msgN.includes(` ${x} `));
+          });
+          const named = fullHit[0] ?? (firstHit.length === 1 ? firstHit[0] : undefined);
+          const params: Record<string, unknown> = { status, period };
+          if (named) params.broker_name = named;
+          let c: any = await runTool("get_commissions", params);
+          if (c?.error === "broker_not_found" && named) c = await runTool("get_commissions", { status, period });
+          dataBlocks.push(`Commissions validées (identiques au portail et à l'app): ${JSON.stringify(c).slice(0, 5000)}. Utilise EXACTEMENT ces montants; une erreur n'est jamais 0 $.`);
+        }
+        if (/\bteams\b/i.test(userMessage)) {
+          const t: any = await runTool("list_teams_chats", {});
+          dataBlocks.push(`Chats Teams: ${JSON.stringify({ chats: t?.chats ?? [], teams: t?.teams ?? [] }).slice(0, 3000)}`);
+          const first = (t?.chats ?? [])[0];
+          if (first?.chat_id && /lis|lire|derniers?|read|messages?/i.test(userMessage)) {
+            const m: any = await runTool("read_teams_messages", { chat_id: first.chat_id, limit: 15 });
+            dataBlocks.push(`Messages Teams (chat le plus récent): ${JSON.stringify(m?.messages ?? []).slice(0, 3000)}`);
+          }
+        }
+        if (/r[ée]glage|param[eè]tre|settings?|ne pas d[ée]ranger|\bdnd\b|mode sombre|dark mode|langue|language|notification/i.test(userMessage)) {
+          const st: any = await runTool("get_app_settings", {});
+          dataBlocks.push(`Réglages de l'app: ${JSON.stringify(st).slice(0, 2000)}`);
+        }
+        if (/renouvel|[ée]ch[ée]ance|renewal|maturit/i.test(userMessage)) {
+          const rn: any = await runTool("find_upcoming_renewals", { days: 120 });
+          dataBlocks.push(`Renouvellements à venir: ${JSON.stringify(rn).slice(0, 3000)}`);
+        }
+      } catch (e) { console.error("pp-ava-chat full-access fetch fail", e); }
+
       if (dataBlocks.length) appContext += `\n${dataBlocks.join("\n")}`;
     }
 
@@ -793,7 +837,8 @@ SMS non lus: ${smsUnread ?? 0}`;
  MAESTRO CLIENTS/COURTIERS: tu peux consulter la liste des clients et des courtiers du courtier, leurs profils détaillés et leurs dossiers hypothécaires. Utilise kind='maestro_action' avec payload.action parmi: list_clients (payload.search, payload.offset pour pagination, payload.limit), client_profile (payload.client_id OU payload.client_name — retourne aussi les dossiers/contrats du client), client_contracts (payload.client_id OU payload.client_name — statut, institution, montant, taux, dates), list_brokers (payload.search, payload.offset pour pagination), broker_profile (payload.broker_id). Ne demande jamais l'ID Maestro à l'utilisateur: donne le nom, le courriel ou le téléphone. Ne jamais inventer un montant, un taux, un statut ou une date: n'affiche que ce que Maestro retourne. TÂCHES: pour terminer une tâche, maestro_action payload.action='complete_task' avec payload.task_id OU payload.search (titre ou nom du client); pour reporter, payload.action='reschedule_task' avec payload.task_id OU payload.search et payload.due_at (YYYY-MM-DD HH:mm:ss, heure de Toronto). Ne dis jamais « terminée » avant le résultat. Si la section "Clients Maestro" ou "Courtiers Maestro" apparaît dans [Contexte], réponds directement avec ces données (nom, téléphone, courriel) sans redemander.
  RECHERCHE CLIENT — ORDRE OBLIGATOIRE: « trouver/chercher/find/fetch/show ce client » signifie afficher son profil Maestro vérifié, pas communiquer avec lui. Affiche d'abord le profil et ses dossiers disponibles, sans bouton d'appel, SMS ou courriel. Propose une communication uniquement si la demande actuelle contient explicitement appeler, envoyer un SMS ou envoyer un courriel.
 
- COMMISSIONS: pour toute question sur les commissions, dépôts, prêteurs ou volume, utilise kind='commission_action' avec payload.action parmi: summary, deposits, agents (admin), institutions, et payload.filters (period, date_from, date_to, commission_type, financial_inst_id). Réponds avec des montants agrégés; ne divulgue jamais de noms de clients complets. Propose kind='open_commissions' pour ouvrir la page détaillée.
+ COMMISSIONS: si [Contexte] contient « Commissions validées », réponds directement avec ces montants (déboursées et en attente séparés, jamais additionnés ni confondus). Sinon utilise kind='commission_action' avec payload.action parmi: summary, deposits, agents (admin), institutions, et payload.filters (period, date_from, date_to, commission_type, financial_inst_id). Réponds avec des montants agrégés; ne divulgue jamais de noms de clients complets. Propose kind='open_commissions' pour ouvrir la page détaillée.
+ ACCÈS COMPLET À L'APP: tu peux tout faire dans l'application. Pour toute action de l'app, propose kind='maestro_action' avec payload.action = nom de l'outil et ses paramètres. Outils: get_commissions (status paid|pending|both, broker_name, period) — admin: tous les courtiers ou un courtier; courtier: lui, son équipe ou un membre de son équipe; update_app_setting (setting: dnd|language|dark_mode|notifications|voice_assistant|include_commissions, value) — les réglages sensibles (password, privacy, ai_consent, profile, ringtone, call_audio, extension, connections, ms365, maestro, voicemail_greeting) ouvrent l'écran; read_teams_messages / reply_teams_message (chat_id, content); get_sms_thread (number); reply_email (message_id, body, reply_all) / forward_email (message_id, to); manage_voicemail (voicemail_id, action mark_read|mark_unread|delete|transcript); control_call (call_id, action hold|unhold|transfer, destination); get_contract_details (client_id ou query); find_upcoming_renewals (days); create_client; update_client; create_task; complete_task; reschedule_task; navigate_to (route /mplanipret/...). Le toucher de la suggestion par l'utilisateur vaut confirmation; décris toujours précisément l'action avant.
  Pour Microsoft utilise kind='ms365_action' et payload.action parmi: read_emails, read_email_detail, list_calendar_events, send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, search_contact.
  RÉPERTOIRE: quand l'utilisateur demande d'envoyer un courriel/SMS/appel à une personne par son nom, cherche d'abord son adresse dans [Contexte] (section "Contacts trouvés" + "Contact Microsoft"). Si tu trouves une correspondance unique, propose directement l'action ms365_action send_email (payload.to = [email], subject, body) pour confirmation. Si plusieurs correspondances, liste-les et demande laquelle. Si aucune, propose un ms365_action search_contact avec payload.query = nom, ou demande l'adresse exacte.
  Pour créer un rendez-vous: payload.action='create_calendar_event' avec subject, start:{dateTime,timeZone}, end:{dateTime,timeZone}, attendees (array d'emails), isOnlineMeeting (défaut true = lien Teams auto).

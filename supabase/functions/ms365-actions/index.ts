@@ -486,6 +486,23 @@ Deno.serve(async (req) => {
         const txt = await r.text().catch(() => "");
         return j({ success: r.ok, error: r.ok ? null : txt, code: r.status }, r.ok ? 200 : 500);
       }
+      case "list_teams_messages": {
+        const chatId = payload.chat_id, teamId = payload.team_id, channelId = payload.channel_id;
+        const top = Math.min(Math.max(Number(payload.limit ?? 20) || 20, 1), 50);
+        const scope = chatId
+          ? `/chats/${encodeURIComponent(chatId)}/messages?$top=${top}`
+          : (teamId && channelId)
+            ? `/teams/${encodeURIComponent(teamId)}/channels/${encodeURIComponent(channelId)}/messages?$top=${top}`
+            : null;
+        if (!scope) return j({ success: false, error: "chat_id ou team_id+channel_id requis" }, 400);
+        const r = await graph(admin, profile, scope);
+        const d = await r.json().catch(() => ({}));
+        const messages = (d.value ?? []).filter((m: any) => m.messageType === "message" || !m.messageType).map((m: any) => ({
+          id: m.id, from: m.from?.user?.displayName ?? null, created_at: m.createdDateTime,
+          text: String(m.body?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 2000),
+        }));
+        return j({ success: r.ok, messages, error: d?.error?.message }, r.ok ? 200 : 500);
+      }
       case "reply_teams_message":
       case "send_teams_message": {
         const chatId = payload.chat_id;

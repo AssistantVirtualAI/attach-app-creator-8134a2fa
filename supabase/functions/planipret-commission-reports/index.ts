@@ -282,8 +282,6 @@ Deno.serve(async (req) => {
     // Maestro, lu côté serveur avec son propre jeton (lecture seule, jamais
     // renvoyé au client), avec tableau par courtier et filtre par agent.
     if (action === "pending") {
-      const PENDING_ORDER = typeof body?.debug_order === "string" && /^[a-z_]{1,32}$/.test(body.debug_order) ? body.debug_order : "";
-      const PENDING_KEY = body?.debug_key === "full" ? "full" : "id";
       const fetchPending = async (token: string, usersId: string | null) => {
         // Maestro's pending pagination is not order-stable: pages can repeat
         // some rows and skip others. Rows are keyed by commission_id and the
@@ -305,13 +303,12 @@ Deno.serve(async (req) => {
             }
             qs.set("page", String(page));
             qs.set("per_page", "200");
-            if (PENDING_ORDER) { qs.set("order_by", PENDING_ORDER); qs.set("sort", "asc"); }
             const r = await commissionGet(`${PENDING_COMMISSION_PATH}?${qs}`, token, cid);
             if (!r.ok) return { ok: false as const, r };
             if (page === 1 && passes === 1) upstreamSummary = r.data?.summary ?? null;
             const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
             rows.forEach((row, i) => {
-              const key = PENDING_KEY === "full" ? JSON.stringify(row) : (row?.commission_id != null ? String(row.commission_id) : `p${passes}-${page}-${i}`);
+              const key = row?.commission_id != null ? String(row.commission_id) : `p${passes}-${page}-${i}`;
               if (!byId.has(key)) byId.set(key, row);
             });
             lastPage = Number(r.data?.meta?.last_page ?? 1);
@@ -321,14 +318,14 @@ Deno.serve(async (req) => {
           }
           truncated = lastPage > 25;
         } while (!truncated && expected > 0 && byId.size < expected && passes < 8);
-        if (!truncated && expected > 0 && byId.size < expected) truncated = true;
         const raw = [...byId.values()];
         const rows = raw.map(normalizePendingRow);
         (globalThis as any).__ppMeta = { passes, raw: raw.length, expected };
+        const unstable_rows = expected > byId.size ? expected - byId.size : 0;
         const official = Array.isArray(upstreamSummary)
           ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
           : null;
-        return { ok: true as const, rows, official, truncated };
+        return { ok: true as const, rows, official, truncated, unstable_rows };
       };
       const r2 = (n: number) => Math.round(n * 100) / 100;
       // Personal vs team split: a row belongs to the broker's own production when

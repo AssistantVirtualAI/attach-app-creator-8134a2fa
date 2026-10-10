@@ -146,6 +146,7 @@ async function handler(req: Request): Promise<Response> {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "summary");
+    (globalThis as any).__ppDebugRows = body?.debug_rows === true && role === "admin";
 
     // ---- Preference (no Maestro call needed) ----------------------------
     if (action === "preference") {
@@ -408,6 +409,7 @@ async function handler(req: Request): Promise<Response> {
         const allBase = baseOf(rows as any[]);
         const ownBase = baseOf((rows as any[]).filter((r) => { const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null; return !pid || pid === (ownId ?? String(r.user_id ?? "")); }));
         (summary as any).base_variants = { all: allBase, own: ownBase };
+        if (Deno.env.get("PP_DEBUG_ROWS") !== "0" && (globalThis as any).__ppDebugRows) (summary as any).debug_rows = (rows as any[]).filter((r) => String(r.commission_type ?? "").toLowerCase() === "base").map((r) => ({ c: r.contract_id, n: r.number, l: r.loan_amt ?? r.loan_amount, d: r.date_trans, p: r.primary_broker_id, u: r.user_id, st: r.status ?? r.file_status ?? null, k: Object.keys(r).join(",") }));
         return { ...summary, rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
       };
 

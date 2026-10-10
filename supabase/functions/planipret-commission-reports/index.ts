@@ -318,7 +318,12 @@ Deno.serve(async (req) => {
             if (page === 1 && passes === 1) upstreamSummary = r.data?.summary ?? null;
             const rows: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
             rows.forEach((row, i) => {
-              const key = row?.commission_id != null ? String(row.commission_id) : `p${passes}-${page}-${i}`;
+              // Key must distinguish legitimate repeat rows: Maestro can emit
+              // several lines (base, bonus, override…) sharing one
+              // commission_id. Dedup only true page-repeat duplicates.
+              const key = row?.commission_id != null
+                ? `${row.commission_id}|${row.commission_type ?? ""}|${row.commission_amount ?? row.amount ?? ""}`
+                : `p${passes}-${page}-${i}`;
               if (!byId.has(key)) byId.set(key, row);
             });
             lastPage = Number(r.data?.meta?.last_page ?? 1);

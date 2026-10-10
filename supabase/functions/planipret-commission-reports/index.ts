@@ -317,7 +317,7 @@ Deno.serve(async (req) => {
             page += 1;
           }
           truncated = lastPage > 25;
-        } while (!truncated && expected > 0 && byId.size < expected && passes < 4);
+        } while (!truncated && expected > 0 && byId.size < expected && passes < 8);
         if (!truncated && expected > 0 && byId.size < expected) truncated = true;
         const raw = [...byId.values()];
         const rows = raw.map(normalizePendingRow);

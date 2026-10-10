@@ -146,6 +146,20 @@ async function handler(req: Request): Promise<Response> {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "summary");
+    // Claude analyses every live read (with the previous read for drift) and each analysis is audited.
+    const gate = async (source: string, brokerId: string, input: any) => {
+      const { data: prev } = await admin.from("planipret_commission_ai_audit").select("headline, created_at")
+        .eq("broker_id", brokerId).eq("source", source).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const previous = prev?.headline ? { ...(prev.headline as any), fetched_at: prev.created_at } : null;
+      const v = await validateCommissionOutput({ ...input, previous });
+      const h = input.current ?? {};
+      admin.from("planipret_commission_ai_audit").insert({
+        user_id: user.id, broker_id: brokerId, source, status: v.status, ai_status: v.ai_status, summary: v.summary,
+        anomalies: v.anomalies, data_quality: input.dataQuality ? { ...input.dataQuality, excluded_samples: undefined } : null,
+        headline: { files: h.files ?? 0, volume_cents: Math.round(num(h.volume) * 100), total_cents: Math.round(num(h.total) * 100) },
+      }).then(() => {});
+      return v;
+    };
 
     // ---- Preference (no Maestro call needed) ----------------------------
     if (action === "preference") {
@@ -418,7 +432,7 @@ async function handler(req: Request): Promise<Response> {
           (summary as any).deposit_count = contracts.size;
           (summary as any).average_commission = contracts.size ? r2((summary.total_commission ?? 0) / contracts.size) : 0;
         }
-        return { ...summary, rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
+        return { ...summary, data_quality: profileRows(rows as any[], ownId), rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
       };
 
       if (role === "broker") {
@@ -427,7 +441,9 @@ async function handler(req: Request): Promise<Response> {
         if (!res.ok) return upstream(res.r, cid);
         const scope = { role, users_id: resolvedUsersId, mode: "own" };
         const summary = pack(res.rows, res.official, res.truncated, resolvedUsersId ? String(resolvedUsersId) : null);
-        const validation = await validateCommissionOutput({ source: "pending_commissions", rows: res.rows, truncated: res.truncated, official: res.official, officialTotal: summary.official_total, scope });
+        const dq = profileRows(res.rows as any[], resolvedUsersId ? String(resolvedUsersId) : null, Number((res as any).diag?.expected_meta_total) || null);
+        (summary as any).data_quality = dq;
+        const validation = await gate("pending_commissions", String(resolvedUsersId ?? ""), { source: "pending_commissions", rows: res.rows, truncated: res.truncated, official: res.official, officialTotal: summary.official_total, scope, dataQuality: dq, current: { files: summary.deal_count ?? 0, volume: summary.total_loan_volume, total: summary.total_commission } });
         if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions en attente n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
         return json({ ok: true, summary, validation, diag: res.diag, source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: resolvedUsersId, generated_at: validation.checked_at }, scope, correlation_id: cid }, 200, cid);
       }
@@ -677,7 +693,9 @@ async function handler(req: Request): Promise<Response> {
 
       const summary = summarize(all, truncated);
       const validationScope = { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode };
-      const validation = await validateCommissionOutput({ source: "paid_deposits", rows: all, truncated, summary, scope: validationScope });
+      const paidDq = profileRows(all as any[], null);
+      (summary as any).data_quality = paidDq;
+      const validation = await gate("paid_deposits", String(filters.users_id ?? (activeReportScope.mode === "own" ? profile.maestro_broker_id ?? "" : "all")), { source: "paid_deposits", rows: all, truncated, summary, scope: validationScope, dataQuality: paidDq, current: { files: summary.deal_count ?? 0, volume: summary.total_loan_volume, total: summary.total_commission } });
       if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions déboursées n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
       if (action === "analytics") return json({ ok: true, analytics: paidAnalytics(all), validation, source_identity: { source: "paid_deposits", endpoint: "/api/main/commissions/reports/deposits", users_id: filters.users_id ?? null, generated_at: validation.checked_at }, truncated, scope: validationScope }, 200, cid);
       // Paid split: Maestro's target_name is the broker who carried the file.

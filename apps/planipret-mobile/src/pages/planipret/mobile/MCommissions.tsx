@@ -2,6 +2,7 @@
 // Données financières sensibles : lecture seule, aucune donnée mise en cache
 // hors de la session, aucun jeton Maestro côté client.
 import PendingCommissionsCard, { TeamSplitPanel } from "@/components/planipret/commissions/PendingCommissionsCard";
+import { useCommissionLive } from "@/hooks/useCommissionLive";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -265,10 +266,10 @@ export default function MCommissions() {
   }, [allowed, rangeReady, section, filters, call, reportCacheKey, isAdmin, agentId]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    const id = setInterval(() => { if (document.visibilityState === "visible") void load(true); }, 15 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [load]);
+  // Near real-time: the server announces new figures; re-read the scoped snapshot.
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useCommissionLive(() => { void loadRef.current(true); });
 
   useEffect(() => {
     if (!allowed || section !== "paid") return;

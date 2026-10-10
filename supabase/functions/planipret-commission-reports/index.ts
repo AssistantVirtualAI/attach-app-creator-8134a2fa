@@ -434,7 +434,8 @@ async function handler(req: Request): Promise<Response> {
           (summary as any).deposit_count = contracts.size;
           (summary as any).average_commission = contracts.size ? r2((summary.total_commission ?? 0) / contracts.size) : 0;
         }
-        return { ...summary, data_quality: profileRows(rows as any[], ownId), rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
+        const months = baseMonths(rows as any[], { receiver: (r) => ownId ?? (r.user_id != null ? String(r.user_id) : ""), owner: (r) => r.primary_broker_id != null ? String(r.primary_broker_id) : null });
+        return { ...summary, months, data_quality: profileRows(rows as any[], ownId), rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)), official_by_type: official, official_total: officialTotal, split: split(rows, ownId) };
       };
 
       if (role === "broker") {
@@ -736,6 +737,7 @@ async function handler(req: Request): Promise<Response> {
         summary.deal_count = b.files;
         summary.total_loan_volume = b.volume;
         (summary as any).files_rule = "own_base_unique_contracts";
+        (summary as any).months = baseMonths(all as any[], { receiver: (r) => String(r.agent_name_id ?? ""), owner: (r) => r.target_name_id != null ? String(r.target_name_id) : null, skip: (r) => Number(r.is_adjustment) === 1 });
       }
       const validationScope = { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode };
       const paidDq = profileRows(all as any[], null);
@@ -817,9 +819,35 @@ async function handler(req: Request): Promise<Response> {
 
 
 
-// ---- Server-side snapshot cache (fresh 60 min, stale served instantly) ----
-const FRESH_MS = 60 * 60_000;
-const FORCE_MIN_MS = 5 * 60_000;
+
+// Month buckets shared by paid and pending (same rule as the cards):
+// commission = every dated row; files/volume = receiver's own base rows,
+// dated, positive loan, one count per contract, volume per contract+loan.
+function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r: any) => string | null; skip?: (r: any) => boolean }) {
+  const m = new Map<string, { month: string; commission: number; files: Set<string>; vol: Map<string, number> }>();
+  for (const r of rows) {
+    const d = String(r.date_trans ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
+    const key = d.slice(0, 7);
+    const b = m.get(key) ?? { month: key, commission: 0, files: new Set<string>(), vol: new Map<string, number>() };
+    b.commission += Number(r.amount ?? r.commission_amount ?? 0) || 0;
+    m.set(key, b);
+    if (String(r.commission_type ?? "base").toLowerCase() !== "base" || opts.skip?.(r)) continue;
+    const rec = opts.receiver(r); const own = opts.owner(r);
+    if (own && rec && own !== rec) continue;
+    const loan = Number(r.loan_amt ?? r.loan_amount ?? 0) || 0;
+    const c = String(r.number ?? r.contract_id ?? "").trim();
+    if (!c || loan <= 0) continue;
+    b.files.add(`${rec}|${c}`); b.vol.set(`${rec}|${c}|${loan}`, loan);
+  }
+  return [...m.values()].sort((a, b) => a.month.localeCompare(b.month)).map((b) => ({
+    month: b.month, commission: Math.round(b.commission * 100) / 100, files: b.files.size,
+    volume: Math.round([...b.vol.values()].reduce((t, v) => t + v, 0) * 100) / 100,
+  }));
+}
+// ---- Server-side snapshot cache (fresh 5 min, stale served instantly) ----
+const FRESH_MS = 5 * 60_000;
+const FORCE_MIN_MS = 60_000;
 const CACHEABLE = new Set(["summary", "pending", "analytics", "deposits", "by_agent", "agents", "institutions"]);
 
 async function sha(text: string) {
@@ -840,6 +868,18 @@ async function runFresh(req: Request, bodyText: string) {
 }
 async function store(admin: any, key: string, userId: string, body: any, data: any) {
   await admin.from("planipret_commission_snapshots").upsert({ cache_key: key, user_id: userId, request_body: body, payload: data, fetched_at: new Date().toISOString(), last_accessed_at: new Date().toISOString(), refreshing_until: null });
+  await notifyUpdated();
+}
+// Realtime nudge so open portal/app screens refetch their own (scoped)
+// snapshot. Payload carries no figures, ids or names.
+async function notifyUpdated() {
+  try {
+    await fetch(`${Deno.env.get("SUPABASE_URL")}/realtime/v1/api/broadcast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+      body: JSON.stringify({ messages: [{ topic: "pp-commissions-updates", event: "updated", payload: { at: new Date().toISOString() }, private: false }] }),
+    });
+  } catch { /* best effort */ }
 }
 const out = (data: any, cached: boolean, fetchedAt: string, stale = false) =>
   new Response(JSON.stringify({ ...data, cache: { cached, stale, fetched_at: fetchedAt } }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -857,9 +897,9 @@ Deno.serve(async (req) => {
   if (action === "warm_snapshots") {
     // Safe to trigger from the scheduler: it only refreshes existing, already
     // authorized snapshots older than ~55 min, bounded to 25 per run.
-    const cutoff = new Date(Date.now() - FRESH_MS + 5 * 60_000).toISOString();
+    const cutoff = new Date(Date.now() - FRESH_MS + 60_000).toISOString();
     const { data: rows } = await admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body")
-      .lt("fetched_at", cutoff).gt("last_accessed_at", new Date(Date.now() - 86_400_000).toISOString())
+      .lt("fetched_at", cutoff).gt("last_accessed_at", new Date(Date.now() - 2 * 3_600_000).toISOString())
       .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("fetched_at").limit(12);
     let ok = 0, failed = 0;
     await Promise.allSettled((rows ?? []).map(async (row: any) => {

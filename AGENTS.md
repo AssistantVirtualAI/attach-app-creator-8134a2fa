@@ -6,7 +6,8 @@
 - Planipret pending-commission presentation and its scoped stylesheet stay byte-identical in both web source trees so portal and mobile expose the same scoped financial view; category totals remain official while monthly tables are labeled as allocated amounts.
 - Portal and mobile paid and pending commissions use separate status panels with independent retained filters; switching panels must never merge their financial sources or widen broker access.
 - Paid commission summaries, deposits and broker charts share the complete paid-deposit collector, while pending uses its own endpoint; failures never become zero totals and selected-broker admin reads use a server-validated broker-owned credential.
-- Funded units are distinct contracts, while volume sums each positive non-adjustment base funding entry even when loan amounts repeat; portal/mobile use the shared engine and complete server analytics, with current-year windows ending today in Toronto, to match Maestro without dropping legitimate repeat fundings.
+- Commission files and volume (paid and pending, cards, monthly tables, broker table, AVA) count only the receiving broker's own dated Base rows with a positive loan, one per contract, volume per contract+loan; commission totals keep every category so they match Maestro's official totals.
+- Commission screens refresh near real time from short-lived server snapshots plus a figure-free Realtime "updated" broadcast (polling fallback), so portal and mobile always show the same scoped snapshot.
 
 - Maestro task completion uses the documented soft-delete endpoint and a complete GET read-back; never invent a status option ID or trust mutation success alone.
 - Planipret task identity is usage-specific: CRM/commission, assignment, and telecom ids stay distinct; task lists probe verified assignment identities past empty responses and expose only non-sensitive diagnostics.

@@ -1979,7 +1979,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       if (usersId && usersId !== ownId) { peerFilter = targetName; }
       usersId = null;
     }
-    const call = async (action: "summary" | "pending") => {
+    const call = async (action: "summary" | "pending" | "by_agent") => {
       const body: any = { action, filters: { date_from: range.from.slice(0, 10), date_to: range.to.slice(0, 10), ...(usersId ? { users_id: usersId } : {}) } };
       if (action === "pending") delete body.filters.date_from, delete body.filters.date_to;
       const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/planipret-commission-reports`, {
@@ -2025,14 +2025,20 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
           by_type: s.official_by_type ?? null,
           personal: s.split?.personal ?? null, team: s.split?.team ?? null,
           team_members: (s.split?.team_members ?? []).slice(0, 15),
-          brokers: Array.isArray(d.brokers) ? d.brokers.slice(0, 30).map((b: any) => ({ name: b.name, amount: b.amount, files: b.files })) : undefined,
+          brokers: Array.isArray(d.brokers) ? d.brokers.slice(0, 40).map((b: any) => ({ name: b.name, amount: b.amount, files: b.files, loan_volume: b.volume })) : undefined,
         };
         lines.push(`En attente (actuel): ${fmtCad(member ? member.amount : total)}`);
       }
     }
+    // "Commissions par courtier" table (admin, all brokers): same figures as
+    // the portal table — files = own base unique contracts, volume base loans.
+    if (role === "admin" && !usersId && status !== "pending") {
+      const a: any = await call("by_agent");
+      if (!a.error && Array.isArray(a.agents)) out.paid_by_broker = a.agents.slice(0, 40).map((x: any) => ({ name: x.name, amount: Math.round(x.total * 100) / 100, files: x.files, loan_volume: Math.round(x.loan_volume * 100) / 100 }));
+    }
     if (out.paid_error && out.pending_error) out.success = false;
     out.message = lines.join(" · ");
-    out.instructions = "Chiffres validés au cent côté serveur, identiques au portail et à l'application. Ne jamais inventer ni arrondir autrement; une erreur n'est jamais un zéro.";
+    out.instructions = "Pour le tableau Commissions par courtier: utiliser paid_by_broker (déboursées) et pending.brokers (en attente) — dossiers = contrats Base uniques du courtier, volume = prêts Base. Courtier: seulement lui-même et team_members; si not_in_team, refuser clairement. Chiffres validés au cent côté serveur, identiques au portail et à l'application. Ne jamais inventer ni arrondir autrement; une erreur n'est jamais un zéro.";
     return out;
   },
 

@@ -1635,11 +1635,13 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const days = Math.min(Math.max(Number(p?.days ?? 120) || 120, 1), 730);
     const today = new Date().toISOString().slice(0, 10);
     const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
-    const { data, error } = await ctx.admin.from("planipret_contracts").select("*").in("user_id", ownerIds(ctx)).limit(500);
+    let q = ctx.admin.from("planipret_contracts")
+      .select("contract_number, broker_name, status, maestro_status, loan_amt, rate, date_maturity, clients")
+      .gte("date_maturity", today).lte("date_maturity", until).order("date_maturity", { ascending: true }).limit(50);
+    if (String(ctx.profile?.role) !== "admin") q = q.eq("broker_profile_id", ctx.profile.id);
+    const { data, error } = await q;
     if (error) return { success: false, error: error.message };
-    const pick = (c: any) => String(c.maturity_date ?? c.renewal_date ?? c.end_date ?? "").slice(0, 10);
-    const list = (data ?? []).filter((c: any) => { const d = pick(c); return d && d >= today && d <= until; })
-      .sort((a: any, b: any) => pick(a).localeCompare(pick(b))).slice(0, 50);
+    const list = data ?? [];
     return { success: true, days, count: list.length, renewals: list, message: `${list.length} renouvellement(s) dans les ${days} prochains jours.` };
   },
 

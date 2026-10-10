@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
         const g = new Map<string, { commission_type: string; split_type: string; rows: number; amount: number; loan: number }>();
         for (const r of rows as any[]) {
           const t = String(r.commission_type ?? "base");
-          const s = String(r.split_type ?? r.share_type ?? r.partage ?? "");
+          const s = `${r.primary_broker_id != null && String(r.primary_broker_id) !== String(r.user_id) ? "team" : "own"}|${String(r.status ?? "")}|${r.date_trans && !String(r.date_trans).startsWith("0000") ? "dated" : "undated"}|${num(r.loan_amount ?? r.loan_amt ?? 0) > 0 ? "loan" : "noloan"}`;
           const k = `${t}|${s}`;
           const b = g.get(k) ?? { commission_type: t, split_type: s, rows: 0, amount: 0, loan: 0 };
           b.rows += 1; b.amount += num(r.amount); b.loan += num(r.loan_amount ?? r.loan_amt ?? 0);

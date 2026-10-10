@@ -12,15 +12,17 @@ const POLL_MS = 60_000;
 const listeners = new Set<() => void>();
 let channel: ReturnType<typeof supabase.channel> | null = null;
 function ensureChannel() {
-  if (channel) return;
-  channel = supabase
-    .channel("pp-commissions-updates")
-    .on("broadcast", { event: "updated" }, () => listeners.forEach((l) => l()))
-    .subscribe();
+  if (channel || typeof (supabase as any).channel !== "function") return;
+  try {
+    channel = supabase
+      .channel("pp-commissions-updates")
+      .on("broadcast", { event: "updated" }, () => listeners.forEach((l) => l()))
+      .subscribe();
+  } catch { channel = null; /* polling fallback still runs */ }
 }
 function releaseChannel() {
   if (listeners.size || !channel) return;
-  void supabase.removeChannel(channel);
+  try { void supabase.removeChannel(channel); } catch { /* ignore */ }
   channel = null;
 }
 

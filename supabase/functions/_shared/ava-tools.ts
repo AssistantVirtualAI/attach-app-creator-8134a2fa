@@ -256,6 +256,13 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
     }, ["broker_id"]),
 
     // Commissions (API officielle Planiprêt — données financières sensibles)
+    mk("get_commissions", "Commissions validées (mêmes chiffres que le portail et l'app) : déboursées (paid) et/ou en attente (pending). Courtier : ses propres commissions, son équipe, ou un membre de son équipe via broker_name. Admin : tous les courtiers (sans broker_name) ou un courtier précis. À utiliser pour TOUTE question de commissions.", {
+      status: { type: "string", description: "paid, pending ou both (défaut)" },
+      broker_name: { type: "string", description: "Nom d'un courtier précis (optionnel)" },
+      period: { type: "string", description: "month, quarter, year, ytd (défaut) ou custom — pour les déboursées" },
+      date_from: { type: "string", description: "AAAA-MM-JJ si period=custom" },
+      date_to: { type: "string", description: "AAAA-MM-JJ si period=custom" },
+    }),
     mk("get_commission_summary", "Résumé agrégé des commissions du courtier connecté (total, nombre de dépôts, moyenne, volume de prêts, top institutions). Ne jamais divulguer de détail client à voix haute. Nécessite que le courtier ait activé « Inclure les commissions dans AVA ».", {
       period: { type: "string", description: "month (défaut), quarter, year, ytd ou custom" },
       date_from: { type: "string", description: "AAAA-MM-JJ si period=custom" },
@@ -476,7 +483,7 @@ export const EXPECTED_TOOL_NAMES = [
   "analyze_call", "get_hot_leads", "get_coaching_summary",
   "search_client", "get_client_profile", "get_client_contracts", "get_client_history", "list_tasks", "get_task", "list_task_targets", "create_task", "update_task", "delete_task", "complete_task", "reschedule_task", "submit_feedback", "create_appointment", "get_pending_tasks", "get_upcoming_appointments", "create_client",
   "list_my_clients", "get_maestro_client_profile", "list_my_brokers", "get_maestro_broker_profile",
-  "get_commission_summary", "get_commission_by_lender", "compare_commission_periods", "list_commission_deposits", "list_financial_institutions", "get_commission_deposits", "get_commission_agents", "get_financial_institutions", "open_commission_report",
+  "get_commissions", "get_commission_summary", "get_commission_by_lender", "compare_commission_periods", "list_commission_deposits", "list_financial_institutions", "get_commission_deposits", "get_commission_agents", "get_financial_institutions", "open_commission_report",
   "read_emails", "send_email", "search_contact", "propose_email_reply", "summarize_inbox", "update_calendar_event", "delete_calendar_event", "get_calendar_today", "get_calendar_week", "get_upcoming_meetings", "search_ms365_contacts", "find_contact", "search_directory", "list_company_directory",
   "navigate_to", "show_client_in_app", "open_call_detail", "open_dialer", "open_sms_composer", "open_email_composer",
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event", "get_sms_conversations", "get_unread_emails", "get_recent_emails", "summarize_email", "update_client", "list_teams_chats", "create_teams_chat", "send_teams_message",

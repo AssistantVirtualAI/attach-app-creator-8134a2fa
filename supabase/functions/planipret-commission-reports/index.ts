@@ -503,6 +503,7 @@ async function handler(req: Request): Promise<Response> {
         source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: filters.users_id ?? null, generated_at: validation.checked_at },
         brokers: table,
         failed_brokers: failed.length,
+        failed_broker_names: failed,
         scope,
         correlation_id: cid,
       }, 200, cid);

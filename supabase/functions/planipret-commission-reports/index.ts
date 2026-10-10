@@ -338,7 +338,19 @@ Deno.serve(async (req) => {
         const official = Array.isArray(upstreamSummary)
           ? (upstreamSummary as any[]).map((x) => ({ type: String(x?.type ?? ""), label: String(x?.label ?? x?.type ?? ""), amount: Number(x?.amount ?? 0) || 0 }))
           : null;
-        return { ok: true as const, rows, official, truncated };
+        const diag = {
+          expected_meta_total: expected,
+          collected: byId.size,
+          passes,
+          last_page: lastPage,
+          by_type: rows.reduce((acc: Record<string, number>, r: any) => {
+            const t = String(r.commission_type ?? "base");
+            acc[t] = Math.round(((acc[t] ?? 0) + num(r.amount)) * 100) / 100;
+            return acc;
+          }, {}),
+          rows_sum: r2(rows.reduce((t, r: any) => t + num(r.amount), 0)),
+        };
+        return { ok: true as const, rows, official, truncated, diag };
       };
       const r2 = (n: number) => Math.round(n * 100) / 100;
       // Personal vs team split: a row belongs to the broker's own production when

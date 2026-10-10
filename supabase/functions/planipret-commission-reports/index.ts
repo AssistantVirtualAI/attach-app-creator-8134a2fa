@@ -421,9 +421,10 @@ async function handler(req: Request): Promise<Response> {
             if (pid && receiver && pid !== receiver) continue;
             const loan = num(r.loan_amt ?? r.loan_amount ?? 0);
             const c = String(r.contract_id ?? r.number ?? "").trim();
-            if (!c) continue;
-            contracts.add(`${receiver}|${c}`);
-            if (loan > 0) vol.set(`${receiver}|${c}|${loan}`, loan);
+            const d = String(r.date_trans ?? "");
+            if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
+            if (!c || loan <= 0) continue;
+            contracts.add(`${receiver}|${c}`); vol.set(`${receiver}|${c}|${loan}`, loan);
           }
           summary.deal_count = contracts.size;
           summary.total_loan_volume = r2([...vol.values()].reduce((t, v) => t + v, 0));

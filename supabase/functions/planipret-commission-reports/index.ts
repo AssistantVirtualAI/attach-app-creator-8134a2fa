@@ -282,6 +282,7 @@ Deno.serve(async (req) => {
     // Maestro, lu côté serveur avec son propre jeton (lecture seule, jamais
     // renvoyé au client), avec tableau par courtier et filtre par agent.
     if (action === "pending") {
+      const PENDING_ORDER = typeof body?.debug_order === "string" && /^[a-z_]{1,32}$/.test(body.debug_order) ? body.debug_order : "";
       const fetchPending = async (token: string, usersId: string | null) => {
         // Maestro's pending pagination is not order-stable: pages can repeat
         // some rows and skip others. Rows are keyed by commission_id and the
@@ -303,6 +304,7 @@ Deno.serve(async (req) => {
             }
             qs.set("page", String(page));
             qs.set("per_page", "200");
+            if (PENDING_ORDER) { qs.set("order_by", PENDING_ORDER); qs.set("sort", "asc"); }
             const r = await commissionGet(`${PENDING_COMMISSION_PATH}?${qs}`, token, cid);
             if (!r.ok) return { ok: false as const, r };
             if (page === 1 && passes === 1) upstreamSummary = r.data?.summary ?? null;

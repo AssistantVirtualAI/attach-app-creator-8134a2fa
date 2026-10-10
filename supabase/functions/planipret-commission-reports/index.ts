@@ -394,7 +394,7 @@ Deno.serve(async (req) => {
         const summary = pack(res.rows, res.official, res.truncated, resolvedUsersId ? String(resolvedUsersId) : null);
         const validation = await validateCommissionOutput({ source: "pending_commissions", rows: res.rows, truncated: res.truncated, official: res.official, officialTotal: summary.official_total, scope });
         if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions en attente n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
-        return json({ ok: true, summary, validation, source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: resolvedUsersId, generated_at: validation.checked_at }, scope, correlation_id: cid }, 200, cid);
+        return json({ ok: true, summary, validation, diag: res.diag, source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: resolvedUsersId, generated_at: validation.checked_at }, scope, correlation_id: cid }, 200, cid);
       }
 
       // Admin : courtiers déjà authentifiés auprès de Maestro.

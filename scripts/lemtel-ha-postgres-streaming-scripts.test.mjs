@@ -64,6 +64,8 @@ test('standby receives a base backup through the private tunnel without publishi
   assert.match(standby, /pg_basebackup copies the primary configuration/u);
   assert.match(standby, /standby_started=false/u);
   assert.match(standby, /docker stop --time 15 "\$container"/u);
+  assert.match(standby, /docker port "\$container" \| grep -q \./u);
+  assert.doesNotMatch(standby, /NetworkSettings\.Ports/u);
   assert.doesNotMatch(standby, /(?:--publish|docker run -d[\s\S]{0,500}-p\s*5432|pg_promote|docker\s+compose\s+up|\bnsupdate\b|rsync|restic)/imu);
 });
 
@@ -76,5 +78,7 @@ test('standby recovery remediation requires a contained replica and cannot expos
   assert.match(standbyRecoveryRemediate, /docker start "\$container"/u);
   assert.match(standbyRecoveryRemediate, /docker stop --time 15 "\$container"/u);
   assert.match(standbyRecoveryRemediate, /wal_receiver_status=streaming/u);
+  assert.match(standbyRecoveryRemediate, /docker port "\$container" \| grep -q \./u);
+  assert.doesNotMatch(standbyRecoveryRemediate, /NetworkSettings\.Ports/u);
   assert.doesNotMatch(standbyRecoveryRemediate, /(?:--publish|docker run -d[\s\S]{0,500}-p\s*5432|pg_promote|docker\s+compose\s+up|\bnsupdate\b|rsync|restic)/imu);
 });

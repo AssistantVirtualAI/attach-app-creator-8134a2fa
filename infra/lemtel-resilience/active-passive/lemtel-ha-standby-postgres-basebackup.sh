@@ -102,8 +102,9 @@ for _ in $(seq 1 45); do
 done
 docker inspect --format '{{.State.Running}}' "$container" | grep -qx true || fail standby_container_not_running
 docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()' | grep -qx true || fail standby_not_in_recovery
-ports="$(docker inspect --format '{{json .NetworkSettings.Ports}}' "$container")"
-[ "$ports" = 'null' ] || fail standby_published_port_detected
+# Docker lists the image's internal 5432/tcp declaration even when no host port is
+# published. `docker port` emits output only for a real host binding.
+if docker port "$container" | grep -q .; then fail standby_published_port_detected; fi
 if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_detected; fi
 receiver="$(docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT status FROM pg_stat_wal_receiver LIMIT 1')"
 [ "$receiver" = streaming ] || fail wal_receiver_not_streaming

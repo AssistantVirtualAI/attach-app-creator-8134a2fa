@@ -1,5 +1,5 @@
 {
-  "contract_version": "lemtel_active_passive_foundation_v4",
+  "contract_version": "lemtel_active_passive_foundation_v5",
   "scope": "verified_active_passive_rollout_without_telephony",
   "source_branch": "lemtel/integration",
   "authorization": {
@@ -30,6 +30,7 @@
     "standby_basebackup_verified": true,
     "replication_lag_monitoring_verified": true,
     "storage_integrity_monitoring_verified": true,
+    "standby_runtime_config_staged": false,
     "external_health_routing_verified": false,
     "fencing_verified": false,
     "failover_drill_verified": false,

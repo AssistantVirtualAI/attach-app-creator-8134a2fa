@@ -10,7 +10,7 @@ export const CONTRACT_PATH = 'infra/lemtel-resilience/active-passive/contract.js
 const CONTRACT_KEYS = ['contract_version', 'scope', 'source_branch', 'authorization', 'topology', 'required_evidence', 'safety_boundaries', 'implementation_state'];
 const AUTHORIZATION_KEYS = ['active_passive_implementation_authorized', 'fusionpbx_or_sip_activation_authorized', 'planipret_data_in_scope', 'client_cutover_authorized'];
 const TOPOLOGY_KEYS = ['primary', 'standby', 'writer_policy', 'database_replication', 'storage_replication', 'runtime_delivery', 'traffic_routing', 'canonical_public_hostname', 'routing_provider', 'routing_state', 'commit_acknowledgement_policy', 'recovery_point_policy'];
-const EVIDENCE_KEYS = ['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified', 'external_health_routing_verified', 'fencing_verified', 'failover_drill_verified', 'failback_drill_verified'];
+const EVIDENCE_KEYS = ['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified', 'standby_runtime_config_staged', 'external_health_routing_verified', 'fencing_verified', 'failover_drill_verified', 'failback_drill_verified'];
 const SAFETY_KEYS = ['standby_database_publicly_exposed', 'plaintext_secret_replication', 'raw_postgres_volume_copy', 'automatic_promotion_without_fencing', 'fusionpbx_or_sip_change'];
 const STATE_KEYS = ['remote_runtime_enabled', 'dns_failover_enabled', 'automatic_failover_enabled'];
 const VERIFIED_EVIDENCE = new Set(['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified']);
@@ -22,7 +22,7 @@ const everyFalse = (value) => Object.values(value).every((entry) => entry === fa
 export function validateActivePassiveFoundation(contract) {
   const evidence = contract?.required_evidence;
   return exactKeys(contract, CONTRACT_KEYS) &&
-    contract.contract_version === 'lemtel_active_passive_foundation_v4' &&
+    contract.contract_version === 'lemtel_active_passive_foundation_v5' &&
     contract.scope === 'verified_active_passive_rollout_without_telephony' &&
     contract.source_branch === 'lemtel/integration' &&
     exactKeys(contract.authorization, AUTHORIZATION_KEYS) &&

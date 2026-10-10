@@ -503,6 +503,7 @@ async function handler(req: Request): Promise<Response> {
         source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: filters.users_id ?? null, generated_at: validation.checked_at },
         brokers: table,
         failed_brokers: failed.length,
+        failed_broker_names: failed,
         scope,
         correlation_id: cid,
       }, 200, cid);
@@ -624,6 +625,31 @@ async function handler(req: Request): Promise<Response> {
       }, 200, cid);
     }
 
+    // Paid files/volume — same rule as pending: base, non-adjustment rows of
+    // the receiving broker's own files (target = receiver), dated, positive
+    // loan; one count per contract, volume sums distinct contract+loan.
+    const paidBaseFiles = (rows: CommissionDepositRow[]) => {
+      const per = new Map<string, { files: Set<string>; vol: Map<string, number> }>();
+      for (const r of rows as any[]) {
+        if (String(r.commission_type ?? "base").toLowerCase() !== "base") continue;
+        if (Number(r.is_adjustment) === 1) continue;
+        const rec = r.agent_name_id != null ? String(r.agent_name_id) : "";
+        const tgt = r.target_name_id != null ? String(r.target_name_id) : rec;
+        if (rec && tgt && rec !== tgt) continue;
+        const d = String(r.date_trans ?? "");
+        if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
+        const loan = num(r.loan_amt); const c = String(r.number ?? "").trim();
+        if (!c || loan <= 0) continue;
+        const e = per.get(rec) ?? { files: new Set<string>(), vol: new Map<string, number>() };
+        e.files.add(c); e.vol.set(`${c}|${loan}`, loan); per.set(rec, e);
+      }
+      const out = new Map<string, { files: number; volume: number }>();
+      let files = 0, volume = 0;
+      for (const [k, e] of per) { const v = [...e.vol.values()].reduce((t, x) => t + x, 0); out.set(k, { files: e.files.size, volume: Math.round(v * 100) / 100 }); files += e.files.size; volume += v; }
+      return { files, volume: Math.round(volume * 100) / 100, per };
+    };
+    const paidBaseOut = (rows: CommissionDepositRow[]) => { const x = paidBaseFiles(rows); const m = new Map<string, { files: number; volume: number }>(); for (const [k, e] of x.per) m.set(k, { files: e.files.size, volume: Math.round([...e.vol.values()].reduce((t, v) => t + v, 0) * 100) / 100 }); return { files: x.files, volume: x.volume, by: m }; };
+
     // ---- Par courtier (agrégat serveur sur toutes les pages) --------------
     if (action === "by_agent") {
       const buckets = new Map<string, {
@@ -631,6 +657,7 @@ async function handler(req: Request): Promise<Response> {
       }>();
       let truncated = false;
       let scanned = 0;
+      const allAgentRows: CommissionDepositRow[] = [];
 
       const sources = await collectSources();
 
@@ -651,10 +678,11 @@ async function handler(req: Request): Promise<Response> {
             buckets.set(key, b);
           }
           scanned += result.rows.length;
+          allAgentRows.push(...result.rows);
       }
-
+      const baseBy = paidBaseOut(allAgentRows).by;
       const agents = Array.from(buckets.values())
-        .map((b) => ({ ...b, average: b.count ? b.total / b.count : 0 }))
+        .map((b) => { const f = b.users_id != null ? baseBy.get(String(b.users_id)) : undefined; return { ...b, files: f?.files ?? 0, loan_volume: f?.volume ?? 0, average: f?.files ? b.total / f.files : 0 }; })
         .sort((a, b) => b.total - a.total);
 
       log("by_agent", agents.length, "brokers over", scanned, "deposits from", sources.length, "tokens");
@@ -693,6 +721,12 @@ async function handler(req: Request): Promise<Response> {
       }
 
       const summary = summarize(all, truncated);
+      {
+        const b = paidBaseOut(all);
+        summary.deal_count = b.files;
+        summary.total_loan_volume = b.volume;
+        (summary as any).files_rule = "own_base_unique_contracts";
+      }
       const validationScope = { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode };
       const paidDq = profileRows(all as any[], null);
       (summary as any).data_quality = paidDq;

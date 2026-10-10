@@ -471,10 +471,17 @@ async function handler(req: Request): Promise<Response> {
           const p: any = brokers[idx++];
           const name = String(p.full_name ?? p.email ?? p.maestro_broker_id);
           try {
-            const token = await getUserMaestroAccessToken(admin, String(p.user_id));
-            if (!token) { failed.push(name); continue; }
-            const res = await fetchPending(token, String(p.maestro_broker_id));
-            if (!res.ok) { failed.push(name); continue; }
+            // One retry: transient Maestro errors or a concurrent token
+            // refresh must not drop a connected broker from the table.
+            let res: Awaited<ReturnType<typeof fetchPending>> | null = null;
+            for (let attempt = 0; attempt < 2 && !(res && res.ok); attempt++) {
+              if (attempt) await new Promise((r) => setTimeout(r, 1500));
+              const token = await getUserMaestroAccessToken(admin, String(p.user_id)).catch(() => null);
+              if (!token) continue;
+              res = await fetchPending(token, String(p.maestro_broker_id));
+              if (!res.ok) log("pending broker failed", name, (res as any).r?.status);
+            }
+            if (!res || !res.ok) { failed.push(name); continue; }
             const s = pack(res.rows, res.official, res.truncated, String(p.maestro_broker_id));
             anyTrunc ||= res.truncated;
             // Tag each row with its receiving broker so the global files/volume

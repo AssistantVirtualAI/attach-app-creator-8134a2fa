@@ -492,7 +492,7 @@ async function handler(req: Request): Promise<Response> {
               e.amount = r2(e.amount + o.amount); officialAll.set(o.type, e);
             }
             table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume, personal: s.split.personal, team: s.split.team, team_members: s.split.team_members, diag: res.diag });
-          } catch { failed.push(name); }
+          } catch (e) { log("pending broker exception", name, String((e as any)?.message ?? e).slice(0, 200)); failed.push(name); }
         }
       };
       await Promise.all(Array.from({ length: Math.min(5, brokers.length) }, worker));

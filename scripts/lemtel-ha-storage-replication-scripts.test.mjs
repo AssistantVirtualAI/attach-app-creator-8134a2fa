@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, '..');
 const script = (name) => readFileSync(resolve(root, `infra/lemtel-resilience/active-passive/${name}`), 'utf8');
 const primaryKeyInit = script('lemtel-ha-storage-primary-key-init.sh');
 const standbyReceiver = script('lemtel-ha-storage-standby-receiver-bootstrap.sh');
+const standbySshAllowuser = script('lemtel-ha-storage-standby-ssh-allowuser-enable.sh');
 const primarySync = script('lemtel-ha-storage-primary-sync.sh');
 
 const prohibited = /(?:\bpg_promote\b|docker\s+(?:run|compose\s+up)|\bnsupdate\b)/imu;
@@ -31,6 +32,18 @@ test('Storage receiver is WireGuard-only and accepts only the pinned rsync write
   assert.match(standbyReceiver, /\.lemtel-ha-manifest\.current\.sha256/u);
   assert.match(standbyReceiver, /exit 126/u);
   assert.doesNotMatch(standbyReceiver, prohibited);
+});
+
+test('Storage receiver SSH access extends only the existing AllowUsers rule transactionally', () => {
+  assert.match(standbySshAllowuser, /allow_private_storage_receiver_ssh/u);
+  assert.match(standbySshAllowuser, /expected_original='AllowUsers lemtelops'/u);
+  assert.match(standbySshAllowuser, /\$\{receiver_user\}@\$\{primary_tunnel_address\}/u);
+  assert.match(standbySshAllowuser, /\[ "\$\{#allowuser_matches\[@\]\}" -eq 1 \]/u);
+  assert.match(standbySshAllowuser, /\/usr\/sbin\/sshd -t/u);
+  assert.match(standbySshAllowuser, /trap rollback ERR/u);
+  assert.match(standbySshAllowuser, /existing_admin_access_retained=true/u);
+  assert.doesNotMatch(standbySshAllowuser, /PermitRootLogin\s+yes|PasswordAuthentication\s+yes|AllowUsers\s+root/u);
+  assert.doesNotMatch(standbySshAllowuser, prohibited);
 });
 
 test('Storage sync is one-way, locked, checksummed, and does not propagate deletions', () => {

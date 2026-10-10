@@ -14,7 +14,7 @@ const prohibited = /(?:\bpg_promote\b|docker\s+(?:run|compose\s+up)|\bnsupdate\b
 test('Storage key initialization is root-only, backend-specific, and pins the standby host key', () => {
   assert.match(primaryKeyInit, /\[ "\$\(id -u\)" -eq 0 \]/u);
   assert.match(primaryKeyInit, /initialize_private_storage_sync_key/u);
-  assert.match(primaryKeyInit, /LEMTEL_HA_STORAGE_BACKEND:-\}" = filesystem/u);
+  assert.match(primaryKeyInit, /LEMTEL_HA_STORAGE_BACKEND:-\}" = local_filesystem/u);
   assert.match(primaryKeyInit, /standby_host='10\.253\.47\.2'/u);
   assert.match(primaryKeyInit, /LEMTEL_HA_STANDBY_HOST_KEY/u);
   assert.match(primaryKeyInit, /ssh-keygen -q -t ed25519/u);
@@ -35,6 +35,7 @@ test('Storage receiver is WireGuard-only and accepts only the pinned rsync write
 
 test('Storage sync is one-way, locked, checksummed, and does not propagate deletions', () => {
   assert.match(primarySync, /sync_private_storage_once/u);
+  assert.match(primarySync, /LEMTEL_HA_STORAGE_BACKEND:-\}" = local_filesystem/u);
   assert.match(primarySync, /flock -n 9/u);
   assert.match(primarySync, /--checksum/u);
   assert.match(primarySync, /--delay-updates/u);

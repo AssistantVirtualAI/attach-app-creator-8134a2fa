@@ -10,7 +10,7 @@ fail() {
 [ "$(id -u)" -eq 0 ] || fail root_required
 [ "${LEMTEL_HA_EXECUTE:-}" = 'initialize_private_storage_sync_key' ] || fail execution_token_required
 [ "${LEMTEL_HA_ROLE:-}" = 'hostinger_primary' ] || fail invalid_role
-[ "${LEMTEL_HA_STORAGE_BACKEND:-}" = filesystem ] || fail unexpected_storage_backend
+[ "${LEMTEL_HA_STORAGE_BACKEND:-}" = local_filesystem ] || fail unexpected_storage_backend
 
 standby_host='10.253.47.2'
 primary_tunnel_address='10.253.47.1'
@@ -51,7 +51,7 @@ chmod 0600 "$known_hosts"
 
 printf 'storage_primary_key_init_format=lemtel_storage_primary_key_init_v1\n'
 printf 'declared_role=hostinger_primary\n'
-printf 'storage_backend=filesystem\n'
+printf 'storage_backend=local_filesystem\n'
 printf 'wireguard_handshake_verified=true\n'
 printf 'standby_host_key_pinned=true\n'
 printf 'storage_sync_public_key='

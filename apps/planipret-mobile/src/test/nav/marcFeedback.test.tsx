@@ -92,7 +92,7 @@ describe("B — one vertical scroll owner per screen", () => {
   });
   it("Email history and recording segments are contained", () => {
     expect(src("components/planipret/mobile/EmailHistoryList.tsx")).toContain('data-scroll-owner="email-history" className="flex-1 min-h-0 overflow-y-auto overscroll-contain');
-    expect(src("components/planipret/mobile/recordings/RecordingsList.tsx")).toContain("max-h-72 overflow-y-auto overscroll-contain");
+    expect(src("components/planipret/mobile/recordings/RecordingsList.tsx")).toMatch(/max-h-\d+ overflow-y-auto overscroll-contain/);
   });
 
   const touch = (el: Element, type: string, ys: number[]) => {

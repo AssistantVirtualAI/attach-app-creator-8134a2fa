@@ -7,6 +7,8 @@ const root = resolve(import.meta.dirname, '..');
 const script = (name) => readFileSync(resolve(root, `infra/lemtel-resilience/active-passive/${name}`), 'utf8');
 const healthCheck = script('lemtel-ha-primary-health-check.sh');
 const healthTimer = script('lemtel-ha-primary-health-timer-enable.sh');
+const alertDispatch = script('lemtel-ha-primary-alert-dispatch.sh');
+const alertsEnable = script('lemtel-ha-primary-alerts-enable.sh');
 const prohibited = /(?:\bpg_promote\b|\bnsupdate\b|docker\s+(?:run|compose\s+up)|\bturn\b|\bwss\b)/imu;
 
 test('primary health check is root-only and covers Auth, replication and Storage freshness', () => {
@@ -43,4 +45,31 @@ test('primary health timer records local status without configuring notification
   assert.match(healthTimer, /dns_failover_enabled=false/u);
   assert.match(healthTimer, /automatic_promotion_enabled=false/u);
   assert.doesNotMatch(healthTimer, prohibited);
+});
+
+test('primary alert dispatcher reuses the runtime Resend secret and sends only state transitions', () => {
+  assert.match(alertDispatch, /dispatch_private_active_passive_health_alert/u);
+  assert.match(alertDispatch, /LEMTEL_HA_ROLE:-\}" = 'hostinger_primary'/u);
+  assert.match(alertDispatch, /RESEND_API_KEY/u);
+  assert.match(alertDispatch, /LEMTEL_WELCOME_FROM/u);
+  assert.match(alertDispatch, /primary-health\.last-notified/u);
+  assert.match(alertDispatch, /notification_reason=state_unchanged/u);
+  assert.match(alertDispatch, /Authorization: Bearer \$api_key/u);
+  assert.match(alertDispatch, /credential_values_emitted=false/u);
+  assert.match(alertDispatch, /dns_failover_enabled=false/u);
+  assert.match(alertDispatch, /automatic_promotion_enabled=false/u);
+  assert.doesNotMatch(alertDispatch, /(?:\bpg_promote\b|\bnsupdate\b|docker\s+(?:run|compose\s+up)|\brsync\b|\bssh\b|\bturn\b|\bwss\b)/imu);
+});
+
+test('primary alerts enablement stores recipients root-only and starts a bounded dispatcher timer', () => {
+  assert.match(alertsEnable, /enable_private_active_passive_email_alerts/u);
+  assert.match(alertsEnable, /LEMTEL_HA_ALERT_RECIPIENTS/u);
+  assert.match(alertsEnable, /primary-health-alert-recipients/u);
+  assert.match(alertsEnable, /install -o root -g root -m 0600/u);
+  assert.match(alertsEnable, /OnUnitActiveSec=2min/u);
+  assert.match(alertsEnable, /systemctl start lemtel-ha-primary-alert-dispatch\.service/u);
+  assert.match(alertsEnable, /resend_existing_runtime_secret_reused=true/u);
+  assert.match(alertsEnable, /dns_failover_enabled=false/u);
+  assert.match(alertsEnable, /automatic_promotion_enabled=false/u);
+  assert.doesNotMatch(alertsEnable, /(?:\bpg_promote\b|\bnsupdate\b|\bcurl\b|docker\s+(?:run|compose\s+up)|\brsync\b|\bssh\b|\bturn\b|\bwss\b)/imu);
 });

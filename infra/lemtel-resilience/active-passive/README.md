@@ -40,11 +40,12 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 `lemtel-ha-standby-failover-preflight.sh` and `CONTROLLED_FAILOVER_RUNBOOK.md` prepare the next safety gate. The script is root-only and read-only: it confirms recovery/WAL streaming, verifies that the standby still has no host/public PostgreSQL listener, and records whether the private primary database is reachable. It never invokes `pg_promote`, changes DNS, starts a Storage runtime, or treats loss of network reachability as proof that the primary has been fenced. The runbook requires separately approved fencing and a maintenance-window approval before any promotion action is even prepared.
 
+`lemtel-ha-primary-alert-dispatch.sh` and `lemtel-ha-primary-alerts-enable.sh` add state-transition email notifications. The Hostinger dispatcher reads the local health state every two minutes with bounded jitter and sends only initial, degraded, or recovered transitions. It reuses the existing Resend secret inside the edge-runtime container rather than copying it into a file or repository; recipients are a root-only Hostinger file. The dispatcher does not change DNS, promote DO, open ports, start a standby runtime, or touch telephony.
+
 ## Remaining controlled implementation
 
-1. Route the local health evidence to an approved alert destination. Plaintext `.env` files and private keys are never replicated.
-2. Approve and implement primary fencing, then run the documented promotion/failback procedure in a maintenance window.
-3. Configure controlled external routing only after the private drill has passed. The standby will not auto-promote until fencing prevents split brain.
+1. Approve and implement primary fencing, then run the documented promotion/failback procedure in a maintenance window. Plaintext `.env` files and private keys are never replicated.
+2. Configure controlled external routing only after the private drill has passed. The standby will not auto-promote until fencing prevents split brain.
 
 PostgreSQL documents streaming replication as asynchronous by default and recommends a dedicated replication account, `wal_level=replica`, adequate sender/slot settings, a base backup and a replication slot or WAL retention policy. [PostgreSQL warm standby](https://www.postgresql.org/docs/current/warm-standby.html)
 Supabase documents database state and Storage objects as separate operational components, so Storage requires its own replication procedure. [Supabase self-hosted restore](https://supabase.com/docs/guides/self-hosting/restore-from-platform)

@@ -771,12 +771,15 @@ Deno.serve(async (req) => {
             const parts = nrm(n).split(/\s+/).filter((x) => x.length > 2);
             return parts.some((x) => msgN.includes(` ${x} `));
           });
-          const named = fullHit[0] ?? (firstHit.length === 1 ? firstHit[0] : undefined);
+          // Several brokers or the "par courtier" table → full table (admin: all
+          // brokers; broker: own + team members), never just the first name.
+          const wantsTable = fullHit.length > 1 || /par courtier|tableau|by broker|chaque courtier|tous les courtiers|all brokers/i.test(userMessage);
+          const named = wantsTable ? undefined : (fullHit[0] ?? (firstHit.length === 1 ? firstHit[0] : undefined));
           const params: Record<string, unknown> = { status, period };
           if (named) params.broker_name = named;
           let c: any = await runTool("get_commissions", params);
           if (c?.error === "broker_not_found" && named) c = await runTool("get_commissions", { status, period });
-          dataBlocks.push(`Commissions validées (identiques au portail et à l'app): ${JSON.stringify(c).slice(0, 5000)}. Utilise EXACTEMENT ces montants; une erreur n'est jamais 0 $.`);
+          dataBlocks.push(`Commissions validées (identiques au portail et à l'app): ${JSON.stringify(c).slice(0, 9000)}. Utilise EXACTEMENT ces montants; une erreur n'est jamais 0 $. Le champ scope indique à qui appartiennent les chiffres (ne dis pas « tes » si scope est un autre courtier). Si un courtier demandé est absent des données d'un courtier (hors équipe), refuse clairement: il n'est pas dans ton équipe.`);
         }
         if (/\bteams\b/i.test(userMessage)) {
           const t: any = await runTool("list_teams_chats", {});

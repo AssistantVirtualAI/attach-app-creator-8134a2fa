@@ -379,8 +379,11 @@ async function handler(req: Request): Promise<Response> {
         const members = new Map<string, { id: string; name: string; amount: number; contracts: Map<string, number> }>();
         const add = (b: ReturnType<typeof mk>, r: any) => {
           b.amount += num(r.commission_amount ?? r.amount);
-          const c = String(r.contract_id ?? r.number ?? "");
-          if (c) b.contracts.set(c, Math.max(b.contracts.get(c) ?? 0, num(r.loan_amount ?? r.loan_amt ?? 0)));
+          // Files/volume: base rows only, dated, positive loan (same rule as cards).
+          const c = String(r.contract_id ?? r.number ?? "").trim();
+          const loan = num(r.loan_amount ?? r.loan_amt ?? 0);
+          const d = String(r.date_trans ?? "");
+          if (c && loan > 0 && String(r.commission_type ?? "").toLowerCase() === "base" && /^\d{4}-\d{2}-\d{2}/.test(d) && !d.startsWith("0000")) b.contracts.set(c, Math.max(b.contracts.get(c) ?? 0, loan));
         };
         for (const r of rows as any[]) {
           const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null;
@@ -761,7 +764,8 @@ async function handler(req: Request): Promise<Response> {
             const b = !t || t === o ? own : team;
             const amt = num(r.amount); const n = String(r.number ?? "");
             const vol = unique_volume ? num(r.loan_amt) : 0;
-            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && unique_deal) x.files.add(n); x.volume += vol; };
+            const isBase = String((r as any).commission_type ?? "base").toLowerCase() === "base" && Number((r as any).is_adjustment) !== 1 && num(r.loan_amt) > 0;
+            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { if (!x.files.has(n)) x.volume += num(r.loan_amt); x.files.add(n); } };
             apply(b);
             if (b === team) { const m = mem.get(t) ?? { name: String(target).trim(), b: mk() }; apply(m.b); mem.set(t, m); }
           }

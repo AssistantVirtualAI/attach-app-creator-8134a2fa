@@ -757,7 +757,15 @@ Deno.serve(async (req) => {
           const status = /pending|en attente/i.test(userMessage) && !/d[ée]bours|paid|pay[ée]/i.test(userMessage) ? "pending"
             : /d[ée]bours|paid|pay[ée]/i.test(userMessage) && !/pending|en attente/i.test(userMessage) ? "paid" : "both";
           const period = /trimestre|quarter/i.test(userMessage) ? "quarter" : /\bmois\b|month/i.test(userMessage) ? "month" : /l'?ann[ée]e derni|last year/i.test(userMessage) ? "year" : "ytd";
-          const named = tokens.names.find((n: string) => n && n.split(/\s+/).length >= 1 && !/^(ava|planipret|maestro)$/i.test(n));
+          const nrm = (v: unknown) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          const msgN = ` ${nrm(userMessage).replace(/[^a-z0-9]+/g, " ")} `;
+          const { data: brokerList } = await admin.from("planipret_profiles").select("full_name").not("maestro_broker_id", "is", null);
+          const fullHit = (brokerList ?? []).map((b: any) => String(b.full_name ?? "")).filter((n: string) => n && msgN.includes(` ${nrm(n).replace(/[^a-z0-9]+/g, " ").trim()} `));
+          const firstHit = fullHit.length ? [] : (brokerList ?? []).map((b: any) => String(b.full_name ?? "")).filter((n: string) => {
+            const parts = nrm(n).split(/\s+/).filter((x) => x.length > 2);
+            return parts.some((x) => msgN.includes(` ${x} `));
+          });
+          const named = fullHit[0] ?? (firstHit.length === 1 ? firstHit[0] : undefined);
           const params: Record<string, unknown> = { status, period };
           if (named) params.broker_name = named;
           let c: any = await runTool("get_commissions", params);

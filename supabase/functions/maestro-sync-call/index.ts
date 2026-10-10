@@ -470,6 +470,24 @@ Deno.serve(async (req) => {
       // fiche : si la transcription/résumé y sont, l'envoi a réussi.
       let pushOk = res.ok;
       let confirmedByReadback = false;
+      // Maestro répond 500 sur certains contenus volumineux : renvoyer une
+      // version allégée (notes/transcription tronquées), puis minimale.
+      if (!pushOk && Number(res.status) >= 500 && mId) {
+        const path = `/api/v1/users/${encodeURIComponent(String(auth.brokerId ?? ""))}/calls/${encodeURIComponent(String(mId))}`;
+        const lite = {
+          status: "ended",
+          saving_call_recording: recordingLink ? 1 : 0,
+          saving_call_transcript: prettyText ? 1 : 0,
+          ai_summary: summary ? String(summary).slice(0, 2000) : undefined,
+          transcript: prettyText ? prettyText.slice(0, 6000) : undefined,
+          call_recording_filename: recordingLink ?? undefined,
+          notes: [recordingLink ? `Enregistrement: ${recordingLink}` : null, summary ? `Résumé IA: ${String(summary).slice(0, 1500)}` : null].filter(Boolean).join("\n\n") || undefined,
+        };
+        for (const body of [lite, { status: "ended", ai_summary: lite.ai_summary, call_recording_filename: lite.call_recording_filename }]) {
+          const r2 = await maestroFetch(cfg, { method: "PUT", path, token: auth.token, body }).catch(() => null);
+          if (r2?.ok) { pushOk = true; break; }
+        }
+      }
       if (!pushOk && mId) {
         const rb = await maestroFetch(cfg, {
           method: "GET",

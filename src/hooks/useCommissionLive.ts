@@ -8,28 +8,43 @@ import { supabase } from "@/integrations/supabase/client";
 const THROTTLE_MS = 20_000;
 const POLL_MS = 60_000;
 
+// One shared subscription for every mounted screen.
+const listeners = new Set<() => void>();
+let channel: ReturnType<typeof supabase.channel> | null = null;
+function ensureChannel() {
+  if (channel) return;
+  channel = supabase
+    .channel("pp-commissions-updates")
+    .on("broadcast", { event: "updated" }, () => listeners.forEach((l) => l()))
+    .subscribe();
+}
+function releaseChannel() {
+  if (listeners.size || !channel) return;
+  void supabase.removeChannel(channel);
+  channel = null;
+}
+
 export function useCommissionLive(onUpdate: () => void) {
   const cb = useRef(onUpdate);
   cb.current = onUpdate;
   useEffect(() => {
     let last = Date.now();
     const fire = () => {
-      if (document.visibilityState !== "visible") return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       if (Date.now() - last < THROTTLE_MS) return;
       last = Date.now();
       cb.current();
     };
-    const channel = supabase
-      .channel(`pp-commissions-updates`)
-      .on("broadcast", { event: "updated" }, fire)
-      .subscribe();
+    listeners.add(fire);
+    ensureChannel();
     const id = setInterval(fire, POLL_MS);
     const onVis = () => { if (document.visibilityState === "visible") fire(); };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
-      void supabase.removeChannel(channel);
+      listeners.delete(fire);
+      releaseChannel();
     };
   }, []);
 }

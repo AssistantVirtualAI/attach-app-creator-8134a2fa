@@ -200,7 +200,7 @@ export async function validateCommissionOutput(input: {
     detail: String(item?.detail ?? "").slice(0, 300),
   })) : [];
   // Claude est consultatif : seul le rapprochement arithmétique déterministe bloque.
-  const blocked = deterministicBlocked || (input.dataQuality?.missing_rows ?? 0) > 0 && false;
+  const blocked = deterministicBlocked;
   const warning = !blocked && (aiStatus !== "ok" || checks.some((item) => !item.ok) || anomalies.length > 0);
   return {
     source: input.source,

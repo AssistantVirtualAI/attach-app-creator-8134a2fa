@@ -16,6 +16,9 @@ test('active-passive foundation records the approved availability-first single-w
   assert.equal(value.topology.primary, 'hostinger_primary');
   assert.equal(value.topology.standby, 'digitalocean_warm_standby');
   assert.equal(value.topology.writer_policy, 'single_writer_hostinger');
+  assert.equal(value.topology.canonical_public_hostname, 'lemtel.assistantvirtualai.com');
+  assert.equal(value.topology.routing_provider, 'cloudflare');
+  assert.equal(value.topology.routing_state, 'canonical_hostname_approved_dns_unchanged');
   assert.equal(value.topology.commit_acknowledgement_policy, 'availability_first_async_streaming_with_measured_lag');
   assert.equal(value.required_evidence.hostinger_admin_ssh_verified, true);
   assert.equal(value.required_evidence.digitalocean_admin_ssh_verified, true);
@@ -31,6 +34,7 @@ test('foundation refuses synchronous acknowledgement, unsafe promotion, plaintex
     (value) => { value.safety_boundaries.plaintext_secret_replication = true; },
     (value) => { value.authorization.planipret_data_in_scope = true; },
     (value) => { value.authorization.fusionpbx_or_sip_activation_authorized = true; },
+    (value) => { value.topology.routing_state = 'dns_cutover_complete'; },
     (value) => { value.implementation_state.dns_failover_enabled = true; },
     (value) => { value.required_evidence.failover_drill_verified = true; },
   ]) {

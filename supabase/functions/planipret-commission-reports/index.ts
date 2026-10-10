@@ -117,9 +117,19 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
     if (!jwt) return json({ error: "unauthorized", message: "Authentification requise." }, 401, cid);
-    const { data: userRes, error: userErr } = await admin.auth.getUser(jwt);
-    const user = userRes?.user;
-    if (userErr || !user) return json({ error: "unauthorized", message: "Session invalide." }, 401, cid);
+    // Trusted server-to-server path (AVA tool executor, voice sessions): only a
+    // caller holding the service-role key may name the already-verified user.
+    // Role/scope rules below still apply to that user exactly as for a JWT.
+    const internalUid = req.headers.get("x-ava-internal-user-id")?.trim() ?? "";
+    let user: any = null;
+    if (internalUid && jwt === SERVICE_KEY && /^[0-9a-f-]{36}$/i.test(internalUid)) {
+      const { data } = await admin.auth.admin.getUserById(internalUid);
+      user = data?.user ?? null;
+    } else {
+      const { data: userRes, error: userErr } = await admin.auth.getUser(jwt);
+      user = userErr ? null : userRes?.user ?? null;
+    }
+    if (!user) return json({ error: "unauthorized", message: "Session invalide." }, 401, cid);
     const authenticatedUser = user;
 
     const profile = await findProfileForAuthenticatedUser(admin, authenticatedUser);

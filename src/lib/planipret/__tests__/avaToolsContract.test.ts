@@ -10,9 +10,9 @@ describe("contrat des outils AVA / ElevenLabs", () => {
   it("expose exactement les 81 outils canoniques uniques", () => {
     const configs = buildAvaToolConfigs("https://example.supabase.co", "anon-test");
     const names = configs.map((entry: any) => entry.tool_config.name);
-    expect(EXPECTED_TOOL_NAMES).toHaveLength(81);
-    expect(configs).toHaveLength(81);
-    expect(new Set(names).size).toBe(81);
+    expect(EXPECTED_TOOL_NAMES).toHaveLength(82);
+    expect(configs).toHaveLength(82);
+    expect(new Set(names).size).toBe(82);
     expect(new Set(EXPECTED_TOOL_NAMES)).toEqual(new Set(names));
   });
 

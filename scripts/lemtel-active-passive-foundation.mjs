@@ -61,7 +61,6 @@ export function reviewActivePassiveFoundation(contract) {
     client_cutover_authorized: false,
     automatic_failover_enabled: false,
     reasons: [
-      'ALERT_DELIVERY_REQUIRED',
       'FENCING_EXTERNAL_HEALTH_ROUTING_AND_DRILL_REQUIRED'
     ]
   };

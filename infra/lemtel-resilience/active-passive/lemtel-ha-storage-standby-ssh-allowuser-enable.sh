@@ -18,7 +18,7 @@ required_existing_users=(lemtelbackupops lemtelbackup lemtelops)
 command -v sshd >/dev/null 2>&1 || fail sshd_missing
 systemctl is-active --quiet ssh || fail ssh_service_inactive
 id "$receiver_user" >/dev/null 2>&1 || fail receiver_user_missing
-[ "$(getent passwd "$receiver_user" | cut -d: -f7)" = '/usr/sbin/nologin' ] || fail receiver_shell_not_restricted
+[ "$(getent passwd "$receiver_user" | cut -d: -f7)" = '/bin/sh' ] || fail receiver_shell_not_ready
 [ -x /usr/local/libexec/lemtel-ha-storage-rsync-receiver ] || fail receiver_command_missing
 [ -f "/home/$receiver_user/.ssh/authorized_keys" ] || fail receiver_authorized_key_missing
 
@@ -59,6 +59,11 @@ rollback() {
     /usr/sbin/sshd -t && systemctl reload ssh || true
   fi
 }
+rollback_and_fail() {
+  rollback
+  rollback_needed=false
+  fail "$1"
+}
 trap rollback ERR
 
 rewrite_file="$(mktemp "${config_file}.lemtel-ha.XXXXXX")"
@@ -78,12 +83,20 @@ awk -v original="$current_line" -v replacement="$replacement" '
 ' "$config_file" > "$rewrite_file" || fail unexpected_allowusers_configuration
 cat "$rewrite_file" > "$config_file"
 rm -f "$rewrite_file"
-/usr/sbin/sshd -t || fail sshd_configuration_invalid
-systemctl reload ssh
+/usr/sbin/sshd -t || rollback_and_fail sshd_configuration_invalid
+systemctl reload ssh || rollback_and_fail ssh_service_reload_failed
 sleep 1
-systemctl is-active --quiet ssh || fail ssh_service_reload_failed
-actual_line="$(/usr/sbin/sshd -T | awk '$1 == "allowusers" { $1=""; sub(/^ /, ""); value=$0 } END { print value }')"
-[ "$actual_line" = "${current_allowlist} ${receiver_user}@${primary_tunnel_address}" ] || fail allowusers_effective_policy_mismatch
+systemctl is-active --quiet ssh || rollback_and_fail ssh_service_reload_failed
+actual_line="$(/usr/sbin/sshd -T | awk '
+  $1 == "allowusers" {
+    for (field = 2; field <= NF; field++) {
+      printf "%s%s", field > 2 ? " " : "", $field
+    }
+    found = 1
+  }
+  END { if (found) print "" }
+')"
+[ "$actual_line" = "${current_allowlist} ${receiver_user}@${primary_tunnel_address}" ] || rollback_and_fail allowusers_effective_policy_mismatch
 
 rollback_needed=false
 rm -f "$backup_file"

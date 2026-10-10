@@ -785,13 +785,13 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, refreshed: ok, failed }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  if (!CACHEABLE.has(action) || !jwt) return (await runFresh(req, bodyText)).r;
+  if (!CACHEABLE.has(action) || !jwt) { const f = await runFresh(req, bodyText); return new Response(f.text, { status: f.r.status, headers: f.r.headers }); }
 
   let userId = "";
   const internalUid = req.headers.get("x-ava-internal-user-id")?.trim() ?? "";
   if (internalUid && jwt === SERVICE_KEY) userId = internalUid;
   else { const { data } = await admin.auth.getUser(jwt); userId = data?.user?.id ?? ""; }
-  if (!userId) return (await runFresh(req, bodyText)).r;
+  if (!userId) { const f = await runFresh(req, bodyText); return new Response(f.text, { status: f.r.status, headers: f.r.headers }); }
 
   const norm = stableBody(body);
   const key = await sha(`${userId}|${JSON.stringify(norm)}`);

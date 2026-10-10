@@ -42,6 +42,8 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 `lemtel-ha-primary-alert-dispatch.sh` and `lemtel-ha-primary-alerts-enable.sh` add state-transition email notifications. The Hostinger dispatcher reads the local health state every two minutes with bounded jitter and sends only initial, degraded, or recovered transitions. It reuses the existing Resend secret inside the edge-runtime container rather than copying it into a file or repository; recipients are a root-only Hostinger file. The dispatcher does not change DNS, promote DO, open ports, start a standby runtime, or touch telephony.
 
+`lemtel-ha-primary-standby-runtime-envelope-create.sh` and `lemtel-ha-standby-runtime-envelope-stage.sh` prepare the next deliberately inactive step. The primary script encrypts only the active Compose configuration, `.env`, Edge Functions, and Caddy configuration to the exact standby `age` recipient. It never includes PostgreSQL or Storage data, which retain their independent replication paths. The standby script decrypts the envelope root-only, validates the exact file allow-list and Compose syntax, and refuses if anything except the existing PostgreSQL standby is running. It never invokes `docker compose up`, starts a public listener, starts Storage, changes DNS, or promotes PostgreSQL.
+
 ## Remaining controlled implementation
 
 1. Stage the inactive Supabase/Edge runtime configuration on DigitalOcean through an encrypted envelope. Plaintext `.env` files and private keys are never replicated.

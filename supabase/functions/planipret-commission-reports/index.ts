@@ -322,10 +322,9 @@ async function handler(req: Request): Promise<Response> {
             const qs = new URLSearchParams();
             if (usersId) qs.set("users_id", usersId);
             if (filters.financial_inst_id) qs.set("financial_inst_id", filters.financial_inst_id);
-            if (filters.date_from && filters.date_to) {
-              qs.set("date_from", filters.date_from.slice(0, 10));
-              qs.set("date_to", filters.date_to.slice(0, 10));
-            }
+            // Pending is not period-scoped: Maestro's official totals ignore
+            // dates, so rows must not be date-filtered either (else files and
+            // volume drift from the totals).
             qs.set("page", String(page));
             qs.set("per_page", "200");
             const r = await commissionGet(`${PENDING_COMMISSION_PATH}?${qs}`, token, cid);
@@ -420,10 +419,10 @@ async function handler(req: Request): Promise<Response> {
             const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null;
             const receiver = ownId ?? (r.user_id != null ? String(r.user_id) : null);
             if (pid && receiver && pid !== receiver) continue;
-            const d = String(r.date_trans ?? "");
-            if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
             const loan = num(r.loan_amt ?? r.loan_amount ?? 0);
             const c = String(r.contract_id ?? r.number ?? "").trim();
+            const d = String(r.date_trans ?? "");
+            if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
             if (!c || loan <= 0) continue;
             contracts.add(`${receiver}|${c}`); vol.set(`${receiver}|${c}|${loan}`, loan);
           }

@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, '..');
 const primary = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-primary-postgres-streaming-prepare.sh'), 'utf8');
 const standby = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-standby-postgres-basebackup.sh'), 'utf8');
 const standbyRecoveryRemediate = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-standby-postgres-recovery-remediate.sh'), 'utf8');
+const standbyFailoverPreflight = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-standby-failover-preflight.sh'), 'utf8');
 
 for (const [label, source] of [['primary', primary], ['standby', standby]]) {
   test(`${label} PostgreSQL streaming script is root-only and requires an execution token`, () => {
@@ -83,4 +84,16 @@ test('standby recovery remediation requires a contained replica and cannot expos
   assert.match(standbyRecoveryRemediate, /docker port "\$container" \| grep -q \./u);
   assert.doesNotMatch(standbyRecoveryRemediate, /NetworkSettings\.Ports/u);
   assert.doesNotMatch(standbyRecoveryRemediate, /(?:--publish|docker run -d[\s\S]{0,500}-p\s*5432|pg_promote|docker\s+compose\s+up|\bnsupdate\b|rsync|restic)/imu);
+});
+
+test('standby failover preflight gathers evidence without promotion or routing changes', () => {
+  assert.match(standbyFailoverPreflight, /preflight_controlled_standby_failover/u);
+  assert.match(standbyFailoverPreflight, /LEMTEL_HA_ROLE:-\}" = 'digitalocean_standby'/u);
+  assert.match(standbyFailoverPreflight, /SELECT pg_is_in_recovery\(\)/u);
+  assert.match(standbyFailoverPreflight, /pg_stat_wal_receiver/u);
+  assert.match(standbyFailoverPreflight, /primary_writer_reachable=/u);
+  assert.match(standbyFailoverPreflight, /fencing_verified=false/u);
+  assert.match(standbyFailoverPreflight, /promotion_executed=false/u);
+  assert.match(standbyFailoverPreflight, /automatic_promotion_enabled=false/u);
+  assert.doesNotMatch(standbyFailoverPreflight, /(?:pg_promote|docker\s+compose\s+up|\bnsupdate\b|rsync|restic)/imu);
 });

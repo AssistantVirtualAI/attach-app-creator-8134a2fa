@@ -1,5 +1,5 @@
 {
-  "contract_version": "lemtel_active_passive_foundation_v2",
+  "contract_version": "lemtel_active_passive_foundation_v3",
   "scope": "verified_active_passive_rollout_without_telephony",
   "source_branch": "lemtel/integration",
   "authorization": {
@@ -22,10 +22,10 @@
   "required_evidence": {
     "hostinger_admin_ssh_verified": true,
     "digitalocean_admin_ssh_verified": true,
-    "matching_postgres_major_version_verified": false,
-    "storage_layout_inventory_verified": false,
-    "standby_basebackup_verified": false,
-    "replication_lag_monitoring_verified": false,
+    "matching_postgres_major_version_verified": true,
+    "storage_layout_inventory_verified": true,
+    "standby_basebackup_verified": true,
+    "replication_lag_monitoring_verified": true,
     "storage_integrity_monitoring_verified": false,
     "external_health_routing_verified": false,
     "fencing_verified": false,

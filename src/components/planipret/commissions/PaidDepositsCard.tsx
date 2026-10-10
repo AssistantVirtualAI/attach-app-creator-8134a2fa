@@ -2,6 +2,7 @@
 // (planipret-commission-reports, actions `summary` et `by_agent`). Même
 // présentation que les commissions en attente; jamais mélangé avec `pending`.
 import { useEffect, useMemo, useState } from "react";
+import { useCommissionLive } from "@/hooks/useCommissionLive";
 import { BarChart3, BriefcaseBusiness, CalendarDays, ChevronRight, Landmark, RefreshCw, Search, Users, WalletCards } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"overview" | "brokers" | "monthly" | "quarterly">("overview");
   const [reload, setReload] = useState(0);
+  // Near real-time: refetch the scoped snapshot when the server reports new figures.
+  useCommissionLive(() => setReload((n) => n + 1));
 
   const range = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, "0");

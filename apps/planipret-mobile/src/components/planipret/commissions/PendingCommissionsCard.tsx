@@ -2,6 +2,7 @@
 // hors-ligne que les commissions déposées (action `pending`).
 import DataQualityLine from "./DataQualityLine";
 import { useEffect, useMemo, useState } from "react";
+import { useCommissionLive } from "@/hooks/useCommissionLive";
 import {
   ArrowDownAZ,
   BriefcaseBusiness,
@@ -84,6 +85,8 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
   const [agent, setAgent] = useState("");
   const [tab, setTab] = useState<"overview" | "brokers" | "monthly" | "types">("overview");
   const [reload, setReload] = useState(0);
+  // Near real-time: refetch the scoped snapshot when the server reports new figures.
+  useCommissionLive(() => setReload((n) => n + 1));
   const [brokers, setBrokers] = useState<BrokerRow[] | null>(null);
   const [search, setSearch] = useState("");
   const [brokerSearch, setBrokerSearch] = useState("");

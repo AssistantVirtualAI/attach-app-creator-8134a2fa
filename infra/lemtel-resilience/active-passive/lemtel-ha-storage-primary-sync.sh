@@ -11,7 +11,7 @@ fail() {
 [ "$(id -u)" -eq 0 ] || fail root_required
 [ "${LEMTEL_HA_EXECUTE:-}" = 'sync_private_storage_once' ] || fail execution_token_required
 [ "${LEMTEL_HA_ROLE:-}" = 'hostinger_primary' ] || fail invalid_role
-[ "${LEMTEL_HA_STORAGE_BACKEND:-}" = filesystem ] || fail unexpected_storage_backend
+[ "${LEMTEL_HA_STORAGE_BACKEND:-}" = local_filesystem ] || fail unexpected_storage_backend
 
 primary_tunnel_address='10.253.47.1'
 standby_tunnel_address='10.253.47.2'
@@ -67,7 +67,7 @@ file_count="$(find "$source_dir" -type f -printf . | wc -c)"
 byte_count="$(du -sb "$source_dir" | awk '{ print $1 }')"
 printf 'storage_primary_sync_format=lemtel_storage_primary_sync_v1\n'
 printf 'declared_role=hostinger_primary\n'
-printf 'storage_backend=filesystem\n'
+printf 'storage_backend=local_filesystem\n'
 printf 'wireguard_handshake_verified=true\n'
 printf 'sync_direction=hostinger_to_digitalocean_only\n'
 printf 'rsync_checksum_verification=true\n'

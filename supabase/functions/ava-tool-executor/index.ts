@@ -1431,6 +1431,11 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       "/mplanipret/contacts", "/mplanipret/voicemail", "/mplanipret/more",
       "/mplanipret/stats", "/mplanipret/pipeline", "/mplanipret/search",
       "/mplanipret/notifications", "/mplanipret/extension-sync",
+      "/mplanipret/tasks", "/mplanipret/commissions", "/mplanipret/commissions/tableaux",
+      "/mplanipret/clients-360", "/mplanipret/brokers-360", "/mplanipret/broker-activity",
+      "/mplanipret/maestro", "/mplanipret/maestro-sync", "/mplanipret/ava", "/mplanipret/change-password",
+      "/mplanipret/privacy", "/mplanipret/feedback", "/mplanipret/connections", "/mplanipret/sip-debug",
+      "/mplanipret/ms365-diagnostics",
     ]);
     const base = (p.route ?? "").split("?")[0];
     if (!ALLOWED.has(base)) return { success: false, error: "route_not_allowed" };
@@ -1484,6 +1489,159 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     return { success: true, count: contacts.length, contacts, message: `${contacts.length} entrée(s) dans l'annuaire de l'entreprise` };
   },
 
+
+  // ===== ACCÈS COMPLET APP (réglages, Teams, SMS, courriels, messagerie, appels, contrats) =====
+  async get_app_settings(ctx) {
+    const { data: prof } = await ctx.admin.from("planipret_profiles")
+      .select("full_name, email, extension, language, dnd_enabled, voice_agent_enabled, maestro_connected, role")
+      .eq("id", ctx.profile.id).maybeSingle();
+    const { data: st } = await ctx.admin.from("planipret_settings").select("preferences").eq("user_id", ctx.userId).maybeSingle();
+    const ms = await msAction(ctx, "connection_status", {}).catch(() => ({}));
+    return {
+      success: true,
+      profile: prof ?? null,
+      preferences: (st?.preferences as any) ?? {},
+      ms365_connected: !!(ms as any)?.connected,
+      device_only: ["dark_mode", "notifications", "voice_assistant", "ringtone", "call_audio"],
+      message: `Langue ${prof?.language ?? "fr"}, ne pas déranger ${prof?.dnd_enabled ? "activé" : "désactivé"}, Maestro ${prof?.maestro_connected ? "connecté" : "non connecté"}.`,
+    };
+  },
+
+  async update_app_setting(ctx, p) {
+    const setting = String(p?.setting ?? "");
+    const value = p?.value;
+    const SAFE = ["dnd", "language", "dark_mode", "notifications", "voice_assistant", "include_commissions"];
+    const OPEN_ONLY: Record<string, string> = {
+      password: "/mplanipret/change-password", privacy: "/mplanipret/privacy", ai_consent: "/mplanipret/more",
+      profile: "/mplanipret/more", ringtone: "/mplanipret/more", call_audio: "/mplanipret/more",
+      extension: "/mplanipret/extension-sync", connections: "/mplanipret/connections", ms365: "/mplanipret/connections",
+      maestro: "/mplanipret/maestro", voicemail_greeting: "/mplanipret/calls?tab=voicemails", ava_voice: "/mplanipret/more",
+    };
+    if (OPEN_ONLY[setting]) {
+      await broadcastNav(ctx, OPEN_ONLY[setting], { open_setting: setting });
+      return { success: true, opened: OPEN_ONLY[setting], message: "Je t'ouvre ce réglage; c'est toi qui le modifies pour des raisons de sécurité." };
+    }
+    if (!SAFE.includes(setting)) return { success: false, error: "unknown_setting", allowed: [...SAFE, ...Object.keys(OPEN_ONLY)] };
+    if (p?.confirmed !== true) {
+      return { success: false, pending_confirmation: true, message: `Je vais régler « ${setting} » à ${JSON.stringify(value)}. Confirme, puis rappelle update_app_setting avec confirmed=true.` };
+    }
+    const bool = value === true || value === "on" || value === "true" || value === 1 || value === "1";
+    if (setting === "dnd") {
+      const { error } = await ctx.admin.from("planipret_profiles").update({ dnd_enabled: bool }).eq("id", ctx.profile.id);
+      if (error) return { success: false, error: error.message };
+    } else if (setting === "language") {
+      const lang = String(value).toLowerCase().startsWith("en") ? "en" : "fr";
+      const { error } = await ctx.admin.from("planipret_profiles").update({ language: lang }).eq("id", ctx.profile.id);
+      if (error) return { success: false, error: error.message };
+    } else if (setting === "include_commissions") {
+      const { data: st } = await ctx.admin.from("planipret_settings").select("preferences").eq("user_id", ctx.userId).maybeSingle();
+      const prefs = { ...((st?.preferences as any) ?? {}), ava_include_commissions: bool };
+      const { error } = await ctx.admin.from("planipret_settings").upsert({ user_id: ctx.userId, preferences: prefs }, { onConflict: "user_id" });
+      if (error) return { success: false, error: error.message };
+    }
+    // Device-only settings (dark mode, notifications, voice assistant) are applied by the open app.
+    try {
+      const ch = ctx.admin.channel(`ava-nav:${ctx.userId}`);
+      await ch.send({ type: "broadcast", event: "navigate", payload: { settings_changed: { setting, value: setting === "language" ? (String(value).toLowerCase().startsWith("en") ? "en" : "fr") : bool } } });
+      await ctx.admin.removeChannel(ch);
+    } catch (_) { /* noop */ }
+    return { success: true, setting, value: setting === "language" ? value : bool, message: `Réglage « ${setting} » mis à jour.` };
+  },
+
+  async read_teams_messages(ctx, p) {
+    if (!p?.chat_id && !(p?.team_id && p?.channel_id)) return { success: false, error: "chat_id_or_channel_required", message: "Utilise list_teams_chats pour choisir la conversation." };
+    const j = await msAction(ctx, "list_teams_messages", { chat_id: p.chat_id, team_id: p.team_id, channel_id: p.channel_id, limit: p.limit });
+    return { success: !!j?.success, messages: j?.messages ?? [], count: (j?.messages ?? []).length, error: j?.error };
+  },
+
+  async reply_teams_message(ctx, p) {
+    if (p?.confirmed !== true) return { success: false, pending_confirmation: true, message: "Lis la réponse au courtier, puis rappelle reply_teams_message avec confirmed=true." };
+    return await TOOLS.send_teams_message(ctx, p);
+  },
+
+  async get_sms_thread(ctx, p) {
+    const num = String(p?.number ?? p?.phone ?? "").replace(/\D/g, "").slice(-10);
+    if (!p?.thread_id && num.length < 7) return { success: false, error: "number_or_thread_required" };
+    let q = ctx.admin.from("planipret_phone_messages")
+      .select("id, direction, from_number, to_number, body, status, created_at, read_at, thread_id")
+      .in("user_id", ownerIds(ctx)).order("created_at", { ascending: false }).limit(Math.min(Number(p?.limit ?? 30) || 30, 100));
+    q = p?.thread_id ? q.eq("thread_id", p.thread_id) : q.or(`from_number.ilike.%${num},to_number.ilike.%${num}`);
+    const { data, error } = await q;
+    if (error) return { success: false, error: error.message };
+    return { success: true, messages: (data ?? []).reverse(), count: data?.length ?? 0 };
+  },
+
+  async reply_email(ctx, p) {
+    if (!p?.message_id || !(p?.comment ?? p?.body)) return { success: false, error: "message_id_and_body_required" };
+    if (p?.confirmed !== true) return { success: false, pending_confirmation: true, message: "Lis la réponse au courtier, puis rappelle reply_email avec confirmed=true." };
+    const j = await msAction(ctx, p?.reply_all ? "reply_all_email" : "reply_email", { message_id: p.message_id, comment: p.comment ?? p.body, body: p.body ?? p.comment });
+    return { success: !!j?.success, message: j?.success ? "Réponse envoyée." : `Échec : ${j?.error ?? "inconnu"}` };
+  },
+
+  async forward_email(ctx, p) {
+    if (!p?.message_id) return { success: false, error: "message_id_required" };
+    let to = p?.to;
+    if (!to && p?.contact_name) { const hit = await resolveContact(ctx, p.contact_name, "email"); to = hit?.value; }
+    if (!to) return { success: false, error: "recipient_required" };
+    if (p?.confirmed !== true) return { success: false, pending_confirmation: true, message: `Je transfère ce courriel à ${to}. Confirme, puis rappelle forward_email avec confirmed=true.` };
+    const j = await msAction(ctx, "forward_email", { message_id: p.message_id, to, comment: p.comment ?? "" });
+    return { success: !!j?.success, message: j?.success ? `Courriel transféré à ${to}.` : `Échec : ${j?.error ?? "inconnu"}` };
+  },
+
+  async manage_voicemail(ctx, p) {
+    const id = String(p?.voicemail_id ?? "");
+    const action = String(p?.action ?? "");
+    if (!id || !["mark_read", "mark_unread", "delete", "transcript"].includes(action)) return { success: false, error: "voicemail_id_and_action_required" };
+    const { data: vm } = await ctx.admin.from("planipret_voicemails").select("id, from_number, from_name, transcript, folder")
+      .eq("id", id).in("user_id", ownerIds(ctx)).maybeSingle();
+    if (!vm) return { success: false, error: "voicemail_not_found_or_forbidden" };
+    if (action === "transcript") return { success: true, transcript: vm.transcript ?? null, message: vm.transcript ? "Transcription disponible." : "Pas encore de transcription pour ce message." };
+    if (action === "delete" && p?.confirmed !== true) return { success: false, pending_confirmation: true, message: `Supprimer le message de ${vm.from_name ?? vm.from_number}? Rappelle avec confirmed=true.` };
+    const patch = action === "delete" ? { folder: "trash" } : { is_read: action === "mark_read" };
+    const { error } = await ctx.admin.from("planipret_voicemails").update(patch).eq("id", id);
+    return error ? { success: false, error: error.message } : { success: true, message: action === "delete" ? "Message déplacé à la corbeille." : "Message mis à jour." };
+  },
+
+  async control_call(ctx, p) {
+    const action = String(p?.action ?? "");
+    if (!["hold", "unhold", "transfer"].includes(action) || !p?.call_id) return { success: false, error: "call_id_and_action_required" };
+    let dest = String(p?.destination ?? "").trim();
+    if (action === "transfer") {
+      if (!dest && p?.contact_name) { const hit = await resolveContact(ctx, p.contact_name, "phone"); dest = hit?.value ?? ""; }
+      if (!dest) return { success: false, error: "destination_required" };
+      if (p?.confirmed !== true) return { success: false, pending_confirmation: true, message: `Transférer l'appel vers ${dest}? Rappelle avec confirmed=true.` };
+    }
+    const ext = encodeURIComponent(ctx.profile.extension);
+    const r = await nsBrokerFetch(ctx.admin, ctx.profile,
+      `/domains/${DOMAIN}/users/${ext}/calls/${encodeURIComponent(p.call_id)}`,
+      { method: "PATCH", body: JSON.stringify(action === "transfer" ? { action: "transfer", destination: dest } : { action }) });
+    return { success: r.ok, message: r.ok ? (action === "transfer" ? `Appel transféré vers ${dest}.` : action === "hold" ? "Appel en attente." : "Appel repris.") : "L'action sur l'appel a échoué." };
+  },
+
+  async get_contract_details(ctx, p) {
+    const r: any = await TOOLS.get_client_contracts(ctx, p);
+    if (!r?.success || r?.multiple) return r;
+    const contracts = (r.contracts ?? []).map((c: any) => ({
+      id: c.id ?? c.contract_id ?? null, number: c.number ?? c.contract_number ?? null,
+      lender: c.institution ?? c.lender ?? c.financial_institution ?? null,
+      amount: c.loan_amount ?? c.amount ?? null, rate: c.rate ?? c.interest_rate ?? null,
+      term: c.term ?? null, renewal_date: c.maturity_date ?? c.renewal_date ?? c.end_date ?? null,
+      status: c.status ?? null,
+    }));
+    return { success: true, client_id: r.client_id, contracts, count: contracts.length };
+  },
+
+  async find_upcoming_renewals(ctx, p) {
+    const days = Math.min(Math.max(Number(p?.days ?? 120) || 120, 1), 730);
+    const today = new Date().toISOString().slice(0, 10);
+    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    const { data, error } = await ctx.admin.from("planipret_contracts").select("*").in("user_id", ownerIds(ctx)).limit(500);
+    if (error) return { success: false, error: error.message };
+    const pick = (c: any) => String(c.maturity_date ?? c.renewal_date ?? c.end_date ?? "").slice(0, 10);
+    const list = (data ?? []).filter((c: any) => { const d = pick(c); return d && d >= today && d <= until; })
+      .sort((a: any, b: any) => pick(a).localeCompare(pick(b))).slice(0, 50);
+    return { success: true, days, count: list.length, renewals: list, message: `${list.length} renouvellement(s) dans les ${days} prochains jours.` };
+  },
 
   // ===== M365 TEAMS =====
   async list_teams_chats(ctx, _p) {

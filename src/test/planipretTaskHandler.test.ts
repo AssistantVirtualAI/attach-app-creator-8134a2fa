@@ -424,7 +424,7 @@ describe("planipret task handler — list & isolation", () => {
 
   it("uses the API and mirrors it into the projection when the list works", async () => {
     const { deps } = makeDeps({
-      admin,
+      admin: createMockAdmin(),
       listFetch: async () => ({
         ok: true,
         endpoint: "/telecom/api/v1/users/387460525/tasks",

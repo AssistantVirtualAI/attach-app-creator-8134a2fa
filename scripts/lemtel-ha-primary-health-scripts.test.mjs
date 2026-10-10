@@ -23,6 +23,9 @@ test('primary health check is root-only and covers Auth, replication and Storage
   assert.match(healthCheck, /max_storage_freshness_seconds=900/u);
   assert.match(healthCheck, /\[ -f "\$storage_log" \] \|\| fail storage_sync_log_missing/u);
   assert.doesNotMatch(healthCheck, /\[ -s "\$storage_log" \]/u);
+  assert.match(healthCheck, /storage_integrity_attestation_missing/u);
+  assert.match(healthCheck, /storage_manifest_integrity_invalid/u);
+  assert.match(healthCheck, /storage_manifest_integrity_verified=true/u);
   assert.match(healthCheck, /primary_health_status=healthy/u);
   assert.match(healthCheck, /dns_failover_enabled=false/u);
   assert.match(healthCheck, /automatic_promotion_enabled=false/u);

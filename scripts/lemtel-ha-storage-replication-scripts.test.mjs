@@ -68,6 +68,9 @@ test('Storage sync is one-way, locked, checksummed, and does not propagate delet
   assert.match(primarySync, /LEMTEL_HA_STORAGE_BACKEND:-\}" = local_filesystem/u);
   assert.match(primarySync, /flock -n 9/u);
   assert.match(primarySync, /--checksum/u);
+  assert.match(primarySync, /last-success/u);
+  assert.match(primarySync, /manifest_sha256=/u);
+  assert.match(primarySync, /storage_integrity_attestation_written=true/u);
   assert.match(primarySync, /--delay-updates/u);
   assert.match(primarySync, /--partial-dir=\.lemtel-ha-partial/u);
   assert.match(primarySync, /--no-owner --no-group/u);

@@ -774,15 +774,15 @@ Deno.serve(async (req) => {
     const cutoff = new Date(Date.now() - FRESH_MS + 5 * 60_000).toISOString();
     const { data: rows } = await admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body")
       .lt("fetched_at", cutoff).gt("last_accessed_at", new Date(Date.now() - 86_400_000).toISOString())
-      .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("fetched_at").limit(25);
+      .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("fetched_at").limit(12);
     let ok = 0, failed = 0;
-    for (const row of rows ?? []) {
+    await Promise.allSettled((rows ?? []).map(async (row: any) => {
       await admin.from("planipret_commission_snapshots").update({ refreshing_until: new Date(Date.now() + 10 * 60_000).toISOString() }).eq("cache_key", row.cache_key);
       const h = new Headers({ Authorization: `Bearer ${SERVICE_KEY}`, "x-ava-internal-user-id": row.user_id, "Content-Type": "application/json" });
       const { data } = await runFresh(new Request(req.url, { method: "POST", headers: h }), JSON.stringify(row.request_body));
       if (data?.ok === true) { await store(admin, row.cache_key, row.user_id, row.request_body, data); ok++; }
       else { failed++; await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", row.cache_key); }
-    }
+    }));
     return new Response(JSON.stringify({ ok: true, refreshed: ok, failed }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 

@@ -142,7 +142,8 @@ ou une incohérence critique. N'affiche aucune donnée absente.
 Analyse aussi data_quality (lignes reçues, comptées, écartées par raison, doublons, prêts contradictoires,
 types inconnus, lignes manquantes selon la pagination) et compare current_headline à previous_snapshot :
 signale toute variation inhabituelle (> 15 % de dossiers ou de volume) et explique en français simple
-pourquoi des lignes sont écartées. Ne recalcule jamais les chiffres.`;
+pourquoi des lignes sont écartées. Ne recalcule jamais les chiffres.
+Tous les champs *_cents sont en CENTS de dollars canadiens : divise par 100 avant de citer un montant, écris « $ » (jamais €).`;
 
 function parseAi(text: string | null) {
   if (!text) return null;

@@ -1,5 +1,6 @@
 // Commissions en attente — même passerelle, même portée et même mémoire
 // hors-ligne que les commissions déposées (action `pending`).
+import DataQualityLine from "./DataQualityLine";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownAZ,
@@ -229,6 +230,8 @@ export default function PendingCommissionsCard({ lang = "fr", filters, cacheScop
             <Kpi icon={<Landmark className="w-4 h-4" />} label={fr ? "Volume hypothécaire" : "Mortgage volume"} value={cad(summary.total_loan_volume)} tone={TONES[0]} />
             <Kpi icon={<Users className="w-4 h-4" />} label={isAdminView && !selectedBroker ? (fr ? "Courtiers" : "Brokers") : (fr ? "Moyenne par dossier" : "Average per file")} value={isAdminView && !selectedBroker ? String(brokers?.length ?? 0) : cad(dealCount ? officialTotal / dealCount : 0)} />
           </div>
+          <DataQualityLine dq={(summary as any).data_quality} ai={validation as any} fr={fr} />
+
 
           {(tab === "overview" || tab === "types") && types.length > 0 && (
             <div aria-label={fr ? "Totaux officiels Maestro" : "Official Maestro totals"}>

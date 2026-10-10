@@ -38,12 +38,14 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 `lemtel-ha-primary-health-check.sh` and `lemtel-ha-primary-health-timer-enable.sh` add the separate primary-owned health monitor. It records local health status every two minutes with bounded jitter: WireGuard handshake, running primary containers, authenticated-route reachability without printing the endpoint, PostgreSQL writer state and streaming-replica lag, plus Storage timer/freshness. It writes local status and systemd journal evidence only; notification delivery remains separate until an alert destination is explicitly configured. It does not promote DO, change DNS, restart containers, expose a listener, or contact telephony.
 
+`lemtel-ha-standby-failover-preflight.sh` and `CONTROLLED_FAILOVER_RUNBOOK.md` prepare the next safety gate. The script is root-only and read-only: it confirms recovery/WAL streaming, verifies that the standby still has no host/public PostgreSQL listener, and records whether the private primary database is reachable. It never invokes `pg_promote`, changes DNS, starts a Storage runtime, or treats loss of network reachability as proof that the primary has been fenced. The runbook requires separately approved fencing and a maintenance-window approval before any promotion action is even prepared.
+
 ## Remaining controlled implementation
 
-1. Bootstrap the restricted Storage receiver on DigitalOcean, initialize the dedicated Hostinger key and prove one checksum-verified, one-way initial filesystem sync. PostgreSQL volume copying is prohibited because it is not a safe replication mechanism.
-2. Activate and observe the host-owned timer, then add retention-safe Storage freshness/integrity evidence. Plaintext `.env` files and private keys are never replicated.
-3. Route the local health evidence to an approved alert destination, then add fencing and an explicit promotion/failback runbook.
-4. Configure controlled external routing only after private readiness and a maintenance-window drill have passed. The standby will not auto-promote until fencing prevents split brain.
+1. Add retention-safe Storage integrity monitoring beyond the existing checksum/manifest sync evidence. Plaintext `.env` files and private keys are never replicated.
+2. Route the local health evidence to an approved alert destination.
+3. Approve and implement primary fencing, then run the documented promotion/failback procedure in a maintenance window.
+4. Configure controlled external routing only after the private drill has passed. The standby will not auto-promote until fencing prevents split brain.
 
 PostgreSQL documents streaming replication as asynchronous by default and recommends a dedicated replication account, `wal_level=replica`, adequate sender/slot settings, a base backup and a replication slot or WAL retention policy. [PostgreSQL warm standby](https://www.postgresql.org/docs/current/warm-standby.html)
 Supabase documents database state and Storage objects as separate operational components, so Storage requires its own replication procedure. [Supabase self-hosted restore](https://supabase.com/docs/guides/self-hosting/restore-from-platform)

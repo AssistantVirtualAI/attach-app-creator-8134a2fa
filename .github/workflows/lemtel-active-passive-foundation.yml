@@ -34,7 +34,7 @@ jobs:
       - name: Validate approved foundation and its safety boundaries
         run: |
           node --test scripts/lemtel-active-passive-foundation.test.mjs scripts/lemtel-ha-preflight-scripts.test.mjs scripts/lemtel-ha-wireguard-scripts.test.mjs scripts/lemtel-ha-standby-docker-bootstrap.test.mjs
-          node scripts/lemtel-active-passive-foundation.mjs | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x = JSON.parse(s); if (x.status !== "active_passive_availability_first_preflight_authorized" || !x.implementation_authorized || x.commit_acknowledgement_policy !== "availability_first_async_streaming_with_measured_lag" || x.automatic_failover_enabled || x.fusionpbx_or_sip_change_authorized) process.exit(1) })'
+          node scripts/lemtel-active-passive-foundation.mjs | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x = JSON.parse(s); if (x.status !== "active_passive_availability_first_monitoring_authorized" || !x.implementation_authorized || x.commit_acknowledgement_policy !== "availability_first_async_streaming_with_measured_lag" || x.automatic_failover_enabled || x.fusionpbx_or_sip_change_authorized) process.exit(1) })'
       - name: Confirm inventory helper is read-only and redacted
         run: |
           test -x infra/lemtel-resilience/active-passive/lemtel-ha-inventory.sh

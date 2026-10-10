@@ -19,6 +19,8 @@ test('active-passive foundation records the approved availability-first single-w
   assert.equal(value.topology.commit_acknowledgement_policy, 'availability_first_async_streaming_with_measured_lag');
   assert.equal(value.required_evidence.hostinger_admin_ssh_verified, true);
   assert.equal(value.required_evidence.digitalocean_admin_ssh_verified, true);
+  assert.equal(value.required_evidence.standby_basebackup_verified, true);
+  assert.equal(value.required_evidence.replication_lag_monitoring_verified, true);
 });
 
 test('foundation refuses synchronous acknowledgement, unsafe promotion, plaintext secret copying, shared-business data, and premature live routing', () => {
@@ -37,20 +39,20 @@ test('foundation refuses synchronous acknowledgement, unsafe promotion, plaintex
   }
 });
 
-test('foundation is authorized to preflight but does not misstate runtime or failover readiness', () => {
+test('foundation records monitoring progress without misrepresenting failover readiness', () => {
   const review = reviewActivePassiveFoundation(contract());
-  assert.equal(review.status, 'active_passive_availability_first_preflight_authorized');
+  assert.equal(review.status, 'active_passive_availability_first_monitoring_authorized');
   assert.equal(review.implementation_authorized, true);
   assert.equal(review.automatic_failover_enabled, false);
   assert.equal(review.fusionpbx_or_sip_change_authorized, false);
   assert.equal(review.commit_acknowledgement_policy, 'availability_first_async_streaming_with_measured_lag');
 });
 
-test('command reports only the approved preflight state and has no external capability', () => {
+test('command reports the approved monitored state and has no external capability', () => {
   const result = run(root);
   assert.equal(result.code, 0);
   const report = JSON.parse(result.stdout);
-  assert.equal(report.status, 'active_passive_availability_first_preflight_authorized');
+  assert.equal(report.status, 'active_passive_availability_first_monitoring_authorized');
   assert.doesNotMatch(result.stdout, /\b(?:\d{1,3}\.){3}\d{1,3}\b/u);
   const source = readFileSync(resolve(root, 'scripts/lemtel-active-passive-foundation.mjs'), 'utf8');
   assert.doesNotMatch(source, /\b(?:child_process|spawn\s*\(|exec(?:File)?\s*\(|fetch\s*\(|process\.env|node:(?:net|http|https|tls)|docker|ssh|curl|wget|restic|psql)\b/);

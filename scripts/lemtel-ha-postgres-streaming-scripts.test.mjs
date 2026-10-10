@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const primary = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-primary-postgres-streaming-prepare.sh'), 'utf8');
 const standby = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-standby-postgres-basebackup.sh'), 'utf8');
+const standbyRecoveryRemediate = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-standby-postgres-recovery-remediate.sh'), 'utf8');
 
 for (const [label, source] of [['primary', primary], ['standby', standby]]) {
   test(`${label} PostgreSQL streaming script is root-only and requires an execution token`, () => {
@@ -58,5 +59,22 @@ test('standby receives a base backup through the private tunnel without publishi
   assert.match(standby, /docker run -d --name "\$container"/u);
   assert.match(standby, /passfile=\/var\/lib\/postgresql\/data\/lemtel-ha-replication\.pgpass/u);
   assert.match(standby, /install -d -m 0700 \/etc\/lemtel-ha\/secrets "\$data_dir"\nif find "\$data_dir"/u);
+  assert.match(standby, /hot_standby = on/u);
+  assert.match(standby, /hot_standby_enable_failed/u);
+  assert.match(standby, /pg_basebackup copies the primary configuration/u);
+  assert.match(standby, /standby_started=false/u);
+  assert.match(standby, /docker stop --time 15 "\$container"/u);
   assert.doesNotMatch(standby, /(?:--publish|docker run -d[\s\S]{0,500}-p\s*5432|pg_promote|docker\s+compose\s+up|\bnsupdate\b|rsync|restic)/imu);
+});
+
+test('standby recovery remediation requires a contained replica and cannot expose or promote it', () => {
+  assert.match(standbyRecoveryRemediate, /require_root/u);
+  assert.match(standbyRecoveryRemediate, /remediate_private_postgres_standby_recovery/u);
+  assert.match(standbyRecoveryRemediate, /standby_container_must_be_stopped/u);
+  assert.match(standbyRecoveryRemediate, /standby\.signal/u);
+  assert.match(standbyRecoveryRemediate, /hot_standby = on/u);
+  assert.match(standbyRecoveryRemediate, /docker start "\$container"/u);
+  assert.match(standbyRecoveryRemediate, /docker stop --time 15 "\$container"/u);
+  assert.match(standbyRecoveryRemediate, /wal_receiver_status=streaming/u);
+  assert.doesNotMatch(standbyRecoveryRemediate, /(?:--publish|docker run -d[\s\S]{0,500}-p\s*5432|pg_promote|docker\s+compose\s+up|\bnsupdate\b|rsync|restic)/imu);
 });

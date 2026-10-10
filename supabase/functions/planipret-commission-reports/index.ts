@@ -31,7 +31,7 @@ import {
 } from "../_shared/commission-reports.ts";
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
 import { resolveCommissionScope } from "../_shared/commission-scope.ts";
-import { validateCommissionOutput } from "../_shared/commission-validation.ts";
+import { validateCommissionOutput, profileRows } from "../_shared/commission-validation.ts";
 
 const json = (body: unknown, status = 200, cid?: string) =>
   new Response(JSON.stringify(body), {

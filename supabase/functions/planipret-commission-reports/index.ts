@@ -374,7 +374,7 @@ async function handler(req: Request): Promise<Response> {
       // Maestro's primary_broker_id equals the receiving broker; otherwise it is
       // an override earned on a team member's file (explicit field, never inferred).
       const split = (rows: CommissionDepositRow[], ownId: string | null) => {
-        const mk = () => ({ amount: 0, contracts: new Map<string, number>() });
+        const mk = () => ({ amount: 0, contracts: new Map<string, number>(), vols: new Map<string, number>() });
         const own = mk(); const teamAll = mk();
         const members = new Map<string, { id: string; name: string; amount: number; contracts: Map<string, number> }>();
         const add = (b: ReturnType<typeof mk>, r: any) => {
@@ -383,7 +383,7 @@ async function handler(req: Request): Promise<Response> {
           const c = String(r.contract_id ?? r.number ?? "").trim();
           const loan = num(r.loan_amount ?? r.loan_amt ?? 0);
           const d = String(r.date_trans ?? "");
-          if (c && loan > 0 && String(r.commission_type ?? "").toLowerCase() === "base" && /^\d{4}-\d{2}-\d{2}/.test(d) && !d.startsWith("0000")) b.contracts.set(c, Math.max(b.contracts.get(c) ?? 0, loan));
+          if (c && loan > 0 && String(r.commission_type ?? "").toLowerCase() === "base" && /^\d{4}-\d{2}-\d{2}/.test(d) && !d.startsWith("0000")) { b.contracts.set(c, loan); b.vols.set(`${c}|${loan}`, loan); }
         };
         for (const r of rows as any[]) {
           const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null;
@@ -394,7 +394,7 @@ async function handler(req: Request): Promise<Response> {
           const m = members.get(pid) ?? { id: pid, name, ...mk() };
           add(m as any, r); members.set(pid, m);
         }
-        const out = (b: { amount: number; contracts: Map<string, number> }) => ({ amount: r2(b.amount), files: b.contracts.size, volume: r2([...b.contracts.values()].reduce((t, v) => t + v, 0)) });
+        const out = (b: { amount: number; contracts: Map<string, number>; vols: Map<string, number> }) => ({ amount: r2(b.amount), files: b.contracts.size, volume: r2([...b.vols.values()].reduce((t, v) => t + v, 0)) });
         return {
           personal: out(own),
           team: out(teamAll),

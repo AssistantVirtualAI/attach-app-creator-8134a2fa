@@ -1994,7 +1994,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const pickMember = (split: any) => {
       if (!peerFilter || !split?.team_members) return null;
       const w = norm(peerFilter);
-      return split.team_members.find((m: any) => norm(m.name).includes(w) || w.includes(norm(m.name))) ?? { name: peerFilter, amount: 0, files: 0, volume: 0, note: "Aucune commission de ce courtier dans ton équipe." };
+      return split.team_members.find((m: any) => norm(m.name).includes(w) || w.includes(norm(m.name))) ?? { name: peerFilter, not_in_team: true, message: `${peerFilter} ne fait pas partie de ton équipe. Tu n'as pas accès à ses chiffres — ne jamais afficher 0 $ à sa place.` };
     };
     const out: any = { success: true, scope: role === "admin" ? (usersId ? `courtier: ${targetName}` : "tous les courtiers") : (peerFilter ? `équipe: ${peerFilter}` : "mes commissions"), period: range.label };
     const lines: string[] = [];

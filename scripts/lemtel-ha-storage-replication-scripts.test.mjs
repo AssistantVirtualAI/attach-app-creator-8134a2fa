@@ -10,6 +10,7 @@ const standbyReceiver = script('lemtel-ha-storage-standby-receiver-bootstrap.sh'
 const standbyReceiverShell = script('lemtel-ha-storage-standby-receiver-shell-remediate.sh');
 const standbySshAllowuser = script('lemtel-ha-storage-standby-ssh-allowuser-enable.sh');
 const primarySync = script('lemtel-ha-storage-primary-sync.sh');
+const primaryTimer = script('lemtel-ha-storage-primary-timer-enable.sh');
 
 const prohibited = /(?:\bpg_promote\b|docker\s+(?:run|compose\s+up)|\bnsupdate\b)/imu;
 
@@ -76,4 +77,18 @@ test('Storage sync is one-way, locked, checksummed, and does not propagate delet
   assert.match(primarySync, /storage_delete_propagation_enabled=false/u);
   assert.doesNotMatch(primarySync, /--delete/u);
   assert.doesNotMatch(primarySync, prohibited);
+});
+
+test('Storage timer is primary-owned, private, and does not start a standby runtime', () => {
+  assert.match(primaryTimer, /enable_private_storage_sync_timer/u);
+  assert.match(primaryTimer, /LEMTEL_HA_ROLE:-\}" = 'hostinger_primary'/u);
+  assert.match(primaryTimer, /OnUnitActiveSec=5min/u);
+  assert.match(primaryTimer, /RandomizedDelaySec=30s/u);
+  assert.match(primaryTimer, /LEMTEL_HA_STORAGE_BACKEND=local_filesystem/u);
+  assert.match(primaryTimer, /ExecStart=\/usr\/local\/sbin\/lemtel-ha-storage-primary-sync/u);
+  assert.match(primaryTimer, /systemd-analyze verify/u);
+  assert.match(primaryTimer, /systemctl enable --now lemtel-ha-storage-sync\.timer/u);
+  assert.match(primaryTimer, /storage_delete_propagation_enabled=false/u);
+  assert.match(primaryTimer, /standby_storage_runtime_started=false/u);
+  assert.doesNotMatch(primaryTimer, prohibited);
 });

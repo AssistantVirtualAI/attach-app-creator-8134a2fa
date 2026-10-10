@@ -432,7 +432,7 @@ Deno.serve(async (req) => {
               const e = officialAll.get(o.type) ?? { ...o, amount: 0 };
               e.amount = r2(e.amount + o.amount); officialAll.set(o.type, e);
             }
-            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume, personal: s.split.personal, team: s.split.team, team_members: s.split.team_members });
+            table.push({ users_id: Number(p.maestro_broker_id), name, amount: s.official_total ?? s.total_commission, files: s.deal_count, volume: s.total_loan_volume, personal: s.split.personal, team: s.split.team, team_members: s.split.team_members, diag: res.diag });
           } catch { failed.push(name); }
         }
       };

@@ -611,7 +611,7 @@ Deno.serve(async (req) => {
           .select("id, contact_name, contact_number, note, scheduled_at, status")
           .or(`user_id.eq.${profile.id},user_id.eq.${u.user.id}`)
           .eq("status", "pending").order("scheduled_at", { ascending: true }).limit(15);
-        dataBlocks.push(`Rappels/tâches en attente: ${JSON.stringify(rem ?? []).slice(0, 3000)}`);
+        dataBlocks.push(`Rappels en attente (planipret_reminders — ce ne sont PAS les tâches Maestro): ${JSON.stringify(rem ?? []).slice(0, 3000)}`);
         try {
           const tr = await invokeFunction("ava-tool-executor", authHeader, { tool_name: "list_tasks", parameters: { status: "pending", filter: "open", page: 1, limit: 50 } });
           const t: any = tr?.data ?? {};

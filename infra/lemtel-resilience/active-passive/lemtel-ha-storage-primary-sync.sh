@@ -54,6 +54,7 @@ rsync -rltp --checksum --delay-updates --partial-dir=.lemtel-ha-partial \
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 manifest="$manifest_dir/storage-$stamp.sha256"
+attestation="$manifest_dir/last-success"
 (
   cd "$source_dir"
   LC_ALL=C find . -type f -print0 | sort -z | xargs -0r sha256sum
@@ -65,12 +66,23 @@ rsync -rltp --checksum --delay-updates --no-owner --no-group \
 
 file_count="$(find "$source_dir" -type f -printf . | wc -c)"
 byte_count="$(du -sb "$source_dir" | awk '{ print $1 }')"
+attestation_tmp="$(mktemp "$manifest_dir/.last-success.XXXXXX")"
+{
+  printf 'sync_timestamp_utc=%s\n' "$stamp"
+  printf 'manifest_name=%s\n' "$(basename "$manifest")"
+  printf 'manifest_sha256=%s\n' "$manifest_hash"
+  printf 'source_file_count=%s\n' "$file_count"
+  printf 'source_bytes=%s\n' "$byte_count"
+} > "$attestation_tmp"
+chmod 0600 "$attestation_tmp"
+mv -f "$attestation_tmp" "$attestation"
 printf 'storage_primary_sync_format=lemtel_storage_primary_sync_v1\n'
 printf 'declared_role=hostinger_primary\n'
 printf 'storage_backend=local_filesystem\n'
 printf 'wireguard_handshake_verified=true\n'
 printf 'sync_direction=hostinger_to_digitalocean_only\n'
 printf 'rsync_checksum_verification=true\n'
+printf 'storage_integrity_attestation_written=true\n'
 printf 'storage_manifest_sha256=%s\n' "$manifest_hash"
 printf 'source_file_count=%s\n' "$file_count"
 printf 'source_bytes=%s\n' "$byte_count"

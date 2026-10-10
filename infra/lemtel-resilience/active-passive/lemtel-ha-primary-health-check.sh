@@ -35,7 +35,9 @@ db_container='supabase-db'
 auth_container='supabase-auth'
 caddy_container='supabase-caddy'
 storage_timer='lemtel-ha-storage-sync.timer'
+storage_manifest_dir='/var/lib/lemtel-ha/storage-sync-manifests'
 storage_log='/var/lib/lemtel-ha/storage-sync-manifests/last-rsync.log'
+storage_attestation='/var/lib/lemtel-ha/storage-sync-manifests/last-success'
 max_storage_freshness_seconds=900
 
 command -v docker >/dev/null 2>&1 || fail docker_missing
@@ -70,6 +72,16 @@ storage_sync_age_seconds="$(( $(date +%s) - storage_last_sync_epoch ))"
 [ "$storage_sync_age_seconds" -ge 0 ] || fail storage_sync_clock_invalid
 [ "$storage_sync_age_seconds" -le "$max_storage_freshness_seconds" ] || fail storage_sync_stale
 
+[ -s "$storage_attestation" ] || fail storage_integrity_attestation_missing
+manifest_name="$(sed -n 's/^manifest_name=//p' "$storage_attestation" | sed -n '1p')"
+expected_manifest_hash="$(sed -n 's/^manifest_sha256=//p' "$storage_attestation" | sed -n '1p')"
+case "$manifest_name" in storage-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z.sha256) ;; *) fail storage_manifest_name_invalid ;; esac
+[[ "$expected_manifest_hash" =~ ^[0-9a-f]{64}$ ]] || fail storage_manifest_hash_invalid
+manifest_path="$storage_manifest_dir/$manifest_name"
+[ -f "$manifest_path" ] || fail storage_manifest_missing
+actual_manifest_hash="$(sha256sum "$manifest_path" | awk '{ print $1 }')"
+[ "$actual_manifest_hash" = "$expected_manifest_hash" ] || fail storage_manifest_integrity_invalid
+
 auth_url="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$auth_container" | sed -n 's/^API_EXTERNAL_URL=//p' | sed -n '1p')"
 case "$auth_url" in
   https://*) auth_scheme=https ;;
@@ -93,6 +105,7 @@ printf 'postgres_max_lag_bytes=%s\n' "$max_lag_bytes"
 printf 'storage_timer_active=true\n'
 printf 'storage_sync_age_seconds=%s\n' "$storage_sync_age_seconds"
 printf 'storage_freshness_within_policy=true\n'
+printf 'storage_manifest_integrity_verified=true\n'
 printf 'standby_storage_runtime_started=false\n'
 printf 'public_storage_listener_enabled=false\n'
 printf 'automatic_promotion_enabled=false\n'

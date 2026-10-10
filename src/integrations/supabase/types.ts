@@ -10416,6 +10416,36 @@ export type Database = {
           },
         ]
       }
+      planipret_commission_snapshots: {
+        Row: {
+          cache_key: string
+          fetched_at: string
+          last_accessed_at: string
+          payload: Json
+          refreshing_until: string | null
+          request_body: Json
+          user_id: string
+        }
+        Insert: {
+          cache_key: string
+          fetched_at?: string
+          last_accessed_at?: string
+          payload: Json
+          refreshing_until?: string | null
+          request_body: Json
+          user_id: string
+        }
+        Update: {
+          cache_key?: string
+          fetched_at?: string
+          last_accessed_at?: string
+          payload?: Json
+          refreshing_until?: string | null
+          request_body?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_commission_stats: {
         Row: {
           broker_name: string

@@ -100,7 +100,7 @@ const num = (v: unknown) => {
 };
 
 
-Deno.serve(async (req) => {
+async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const cid = crypto.randomUUID().slice(0, 8);
@@ -727,4 +727,99 @@ Deno.serve(async (req) => {
       { upstream_status: r.status },
     );
   }
+}
+
+
+
+// ---- Server-side snapshot cache (fresh 60 min, stale served instantly) ----
+const FRESH_MS = 60 * 60_000;
+const FORCE_MIN_MS = 5 * 60_000;
+const CACHEABLE = new Set(["summary", "pending", "analytics", "deposits", "by_agent", "agents", "institutions"]);
+
+async function sha(text: string) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function stableBody(b: any) {
+  const { force, refresh, ...rest } = b ?? {};
+  const sort = (v: any): any => Array.isArray(v) ? v.map(sort) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sort(v[k])])) : v;
+  return sort(rest);
+}
+async function runFresh(req: Request, bodyText: string) {
+  const h = new Headers(req.headers); h.delete("content-length");
+  const r = await handler(new Request(req.url, { method: "POST", headers: h, body: bodyText }));
+  const text = await r.text();
+  let data: any = null; try { data = JSON.parse(text); } catch { /* */ }
+  return { r, text, data };
+}
+async function store(admin: any, key: string, userId: string, body: any, data: any) {
+  await admin.from("planipret_commission_snapshots").upsert({ cache_key: key, user_id: userId, request_body: body, payload: data, fetched_at: new Date().toISOString(), last_accessed_at: new Date().toISOString(), refreshing_until: null });
+}
+const out = (data: any, cached: boolean, fetchedAt: string, stale = false) =>
+  new Response(JSON.stringify({ ...data, cache: { cached, stale, fetched_at: fetchedAt } }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return handler(req);
+  const bodyText = await req.text();
+  let body: any = {}; try { body = JSON.parse(bodyText || "{}"); } catch { /* */ }
+  const action = String(body?.action ?? "summary");
+  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_KEY, { auth: { persistSession: false } });
+  const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+
+  // Hourly warm-up (service key only): refresh snapshots used in the last 24h.
+  if (action === "warm_snapshots") {
+    // Safe to trigger from the scheduler: it only refreshes existing, already
+    // authorized snapshots older than ~55 min, bounded to 25 per run.
+    const cutoff = new Date(Date.now() - FRESH_MS + 5 * 60_000).toISOString();
+    const { data: rows } = await admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body")
+      .lt("fetched_at", cutoff).gt("last_accessed_at", new Date(Date.now() - 86_400_000).toISOString())
+      .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("fetched_at").limit(12);
+    let ok = 0, failed = 0;
+    await Promise.allSettled((rows ?? []).map(async (row: any) => {
+      await admin.from("planipret_commission_snapshots").update({ refreshing_until: new Date(Date.now() + 10 * 60_000).toISOString() }).eq("cache_key", row.cache_key);
+      const h = new Headers({ Authorization: `Bearer ${SERVICE_KEY}`, "x-ava-internal-user-id": row.user_id, "Content-Type": "application/json" });
+      const { data } = await runFresh(new Request(req.url, { method: "POST", headers: h }), JSON.stringify(row.request_body));
+      if (data?.ok === true) { await store(admin, row.cache_key, row.user_id, row.request_body, data); ok++; }
+      else { failed++; await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", row.cache_key); }
+    }));
+    return new Response(JSON.stringify({ ok: true, refreshed: ok, failed }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
+  if (!CACHEABLE.has(action) || !jwt) { const f = await runFresh(req, bodyText); return new Response(f.text, { status: f.r.status, headers: f.r.headers }); }
+
+  let userId = "";
+  const internalUid = req.headers.get("x-ava-internal-user-id")?.trim() ?? "";
+  if (internalUid && jwt === SERVICE_KEY) userId = internalUid;
+  else { const { data } = await admin.auth.getUser(jwt); userId = data?.user?.id ?? ""; }
+  if (!userId) { const f = await runFresh(req, bodyText); return new Response(f.text, { status: f.r.status, headers: f.r.headers }); }
+
+  const norm = stableBody(body);
+  const key = await sha(`${userId}|${JSON.stringify(norm)}`);
+  const { data: snap } = await admin.from("planipret_commission_snapshots").select("payload,fetched_at,refreshing_until").eq("cache_key", key).maybeSingle();
+  const age = snap ? Date.now() - new Date(snap.fetched_at).getTime() : Infinity;
+  const force = body?.force === true || body?.refresh === true;
+
+  if (snap && (age < (force ? FORCE_MIN_MS : FRESH_MS))) {
+    admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", key).then(() => {});
+    return out(snap.payload, true, snap.fetched_at);
+  }
+  if (snap && !force) {
+    // Stale: answer instantly, refresh in the background once.
+    const busy = snap.refreshing_until && new Date(snap.refreshing_until).getTime() > Date.now();
+    if (!busy) {
+      await admin.from("planipret_commission_snapshots").update({ refreshing_until: new Date(Date.now() + 10 * 60_000).toISOString(), last_accessed_at: new Date().toISOString() }).eq("cache_key", key);
+      const job = runFresh(req, bodyText).then(async ({ data }) => {
+        if (data?.ok === true) await store(admin, key, userId, norm, data);
+        else await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", key);
+      }).catch(() => {});
+      (globalThis as any).EdgeRuntime?.waitUntil?.(job);
+    }
+    return out(snap.payload, true, snap.fetched_at, true);
+  }
+  const { r, text, data } = await runFresh(req, bodyText);
+  if (data?.ok === true) { await store(admin, key, userId, norm, data); return out(data, false, new Date().toISOString()); }
+  // Failure never becomes $0: fall back to last good copy when present.
+  if (snap) return out(snap.payload, true, snap.fetched_at, true);
+  return new Response(text, { status: r.status, headers: r.headers });
 });

@@ -492,7 +492,7 @@ async function handler(req: Request): Promise<Response> {
       const official = officialAll.size ? [...officialAll.values()] : null;
       const scope = { role, users_id: filters.users_id ?? null, mode: filters.users_id ? "selected_broker" : "all_brokers" };
       const summary = pack(allRows, official, anyTrunc);
-      const validation = await validateCommissionOutput({ source: "pending_commissions", rows: allRows, truncated: anyTrunc, official, officialTotal: summary.official_total, scope });
+      const validation = await gate("pending_commissions", String(filters.users_id ?? "all"), { source: "pending_commissions", rows: allRows, truncated: anyTrunc, official, officialTotal: summary.official_total, scope, dataQuality: (summary as any).data_quality, current: { files: summary.deal_count ?? 0, volume: summary.total_loan_volume, total: summary.total_commission } });
       if (!validation.validated) return applicationError("commission_validation_blocked", "Les commissions en attente n'ont pas passé le contrôle final. La dernière version validée reste affichée.", cid, { validation });
       log("pending admin brokers", table.length, "failed", failed.length);
       return json({

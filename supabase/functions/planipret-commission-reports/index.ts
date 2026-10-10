@@ -734,7 +734,7 @@ async function handler(req: Request): Promise<Response> {
 // ---- Server-side snapshot cache (fresh 60 min, stale served instantly) ----
 const FRESH_MS = 60 * 60_000;
 const FORCE_MIN_MS = 5 * 60_000;
-const CACHEABLE = new Set(["summary", "pending", "paid", "analytics", "deposits", "monthly", "agents", "by_broker", "stats"]);
+const CACHEABLE = new Set(["summary", "pending", "analytics", "deposits", "by_agent", "agents", "institutions"]);
 
 async function sha(text: string) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -746,7 +746,8 @@ function stableBody(b: any) {
   return sort(rest);
 }
 async function runFresh(req: Request, bodyText: string) {
-  const r = await handler(new Request(req.url, { method: "POST", headers: req.headers, body: bodyText }));
+  const h = new Headers(req.headers); h.delete("content-length");
+  const r = await handler(new Request(req.url, { method: "POST", headers: h, body: bodyText }));
   const text = await r.text();
   let data: any = null; try { data = JSON.parse(text); } catch { /* */ }
   return { r, text, data };
@@ -784,13 +785,13 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, refreshed: ok, failed }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  if (!CACHEABLE.has(action) || !jwt) return handler(new Request(req.url, { method: "POST", headers: req.headers, body: bodyText }));
+  if (!CACHEABLE.has(action) || !jwt) return (await runFresh(req, bodyText)).r;
 
   let userId = "";
   const internalUid = req.headers.get("x-ava-internal-user-id")?.trim() ?? "";
   if (internalUid && jwt === SERVICE_KEY) userId = internalUid;
   else { const { data } = await admin.auth.getUser(jwt); userId = data?.user?.id ?? ""; }
-  if (!userId) return handler(new Request(req.url, { method: "POST", headers: req.headers, body: bodyText }));
+  if (!userId) return (await runFresh(req, bodyText)).r;
 
   const norm = stableBody(body);
   const key = await sha(`${userId}|${JSON.stringify(norm)}`);

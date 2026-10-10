@@ -156,6 +156,27 @@ describe("planipret task handler — list scope", () => {
     await handleTaskRequest({ action: "list", filter: "all" }, deps);
     expect(listFetch).toHaveBeenCalledWith("93135", expect.any(Object));
   });
+
+  it("keeps probing verified identities when the telecom identity returns an empty list", async () => {
+    const listFetch = vi.fn(async (id: string) => ({
+      ok: true as const,
+      tasks: id === "93135"
+        ? [{ id: "sandra-task", users: [{ id: 93135 }], status: "pending" }]
+        : [],
+      endpoint: "/api/main/tasks",
+      status: 200,
+    }));
+    const { deps } = makeDeps({
+      profile: { id: "profile-1", role: "broker", maestro_broker_id: "93135", maestro_telecom_user_id: "97194" },
+      resolveTelecomUserId: async () => "97194",
+      resolveTaskAssigneeId: async () => "93135",
+      listFetch,
+    });
+    const out = await handleTaskRequest({ action: "list", filter: "all" }, deps);
+    expect((out.body as any).source).toBe("api");
+    expect((out.body as any).task_owner_id).toBe("93135");
+    expect((out.body as any).tasks.map((task: any) => task.id)).toEqual(["sandra-task"]);
+  });
 });
 
 describe("planipret task handler — idempotency", () => {
@@ -377,6 +398,20 @@ describe("planipret task handler — list & isolation", () => {
     expect(out.body.message).toBeTruthy();
   });
 
+  it("serves the owner projection without scanning a large upstream collection", async () => {
+    const listFetch = vi.fn(async () => ({
+      ok: true as const,
+      tasks: [],
+      endpoint: "/api/main/tasks",
+      status: 200,
+    }));
+    const { deps } = makeDeps({ admin, listFetch });
+    const out = await handleTaskRequest({ action: "list", filter: "all" }, deps);
+    expect(out.body.source).toBe("projection");
+    expect((out.body as any).tasks.map((task: any) => task.id)).toEqual(["1"]);
+    expect(listFetch).not.toHaveBeenCalled();
+  });
+
   it("reports tasks_unavailable when neither API nor projection has data", async () => {
     const { deps } = makeDeps({
       admin: createMockAdmin(),
@@ -389,7 +424,7 @@ describe("planipret task handler — list & isolation", () => {
 
   it("uses the API and mirrors it into the projection when the list works", async () => {
     const { deps } = makeDeps({
-      admin,
+      admin: createMockAdmin(),
       listFetch: async () => ({
         ok: true,
         endpoint: "/telecom/api/v1/users/387460525/tasks",

@@ -13,8 +13,10 @@ fail() {
 
 receiver_user='lemtelstorage'
 primary_tunnel_address='10.253.47.1'
-expected_original='AllowUsers lemtelops'
-replacement="AllowUsers lemtelops ${receiver_user}@${primary_tunnel_address}"
+# The exact existing allowlist is preserved. It includes the restricted backup
+# accounts plus the ongoing Lemtel operations account; no existing access is removed.
+expected_original='AllowUsers lemtelbackupops lemtelbackup lemtelops'
+replacement="${expected_original} ${receiver_user}@${primary_tunnel_address}"
 
 command -v sshd >/dev/null 2>&1 || fail sshd_missing
 systemctl is-active --quiet ssh || fail ssh_service_inactive
@@ -45,13 +47,13 @@ rollback() {
 }
 trap rollback ERR
 
-sed -i -E "s|^[[:space:]]*AllowUsers[[:space:]]+lemtelops[[:space:]]*$|$replacement|" "$config_file"
+sed -i -E "s|^[[:space:]]*AllowUsers[[:space:]]+lemtelbackupops[[:space:]]+lemtelbackup[[:space:]]+lemtelops[[:space:]]*$|$replacement|" "$config_file"
 /usr/sbin/sshd -t || fail sshd_configuration_invalid
 systemctl reload ssh
 sleep 1
 systemctl is-active --quiet ssh || fail ssh_service_reload_failed
 actual_line="$(/usr/sbin/sshd -T | awk '$1 == "allowusers" { $1=""; sub(/^ /, ""); print; exit }')"
-[ "$actual_line" = "lemtelops ${receiver_user}@${primary_tunnel_address}" ] || fail allowusers_effective_policy_mismatch
+[ "$actual_line" = "lemtelbackupops lemtelbackup lemtelops ${receiver_user}@${primary_tunnel_address}" ] || fail allowusers_effective_policy_mismatch
 
 rollback_needed=false
 rm -f "$backup_file"

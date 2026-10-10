@@ -398,6 +398,20 @@ describe("planipret task handler — list & isolation", () => {
     expect(out.body.message).toBeTruthy();
   });
 
+  it("serves the owner projection without scanning a large upstream collection", async () => {
+    const listFetch = vi.fn(async () => ({
+      ok: true as const,
+      tasks: [],
+      endpoint: "/api/main/tasks",
+      status: 200,
+    }));
+    const { deps } = makeDeps({ admin, listFetch });
+    const out = await handleTaskRequest({ action: "list", filter: "all" }, deps);
+    expect(out.body.source).toBe("projection");
+    expect((out.body as any).tasks.map((task: any) => task.id)).toEqual(["1"]);
+    expect(listFetch).not.toHaveBeenCalled();
+  });
+
   it("reports tasks_unavailable when neither API nor projection has data", async () => {
     const { deps } = makeDeps({
       admin: createMockAdmin(),

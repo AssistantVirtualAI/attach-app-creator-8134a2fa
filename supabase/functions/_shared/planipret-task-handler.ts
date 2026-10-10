@@ -712,7 +712,15 @@ export async function handleTaskRequest(
     let upstream: UpstreamList = { ok: false, tasks: [], endpoint: null, status: 0 };
     let all: any[] = [];
     let resolvedOwnerId: string | null = null;
-    if (token) {
+    // The scheduled sync keeps this owner-scoped projection current. Prefer it
+    // for interactive lists: large Maestro accounts can expose 80+ collection
+    // pages even when an assignee filter is ignored upstream, exhausting the
+    // edge CPU budget before the broker sees any task. Mutations still use the
+    // documented live read-back paths below.
+    const projected = overrideBroker ? [] : await loadProjection(admin, userId).catch(() => []);
+    if (projected.length) {
+      all = projected;
+    } else if (token) {
       for (const candidate of ownerCandidates) {
         const attempt = await deps.listFetch(candidate, { status, from, to });
         if (!attempt.ok) continue;
@@ -747,7 +755,9 @@ export async function handleTaskRequest(
 
 
     let src: "api" | "projection" | "unavailable";
-    if (upstream.ok) {
+    if (projected.length) {
+      src = "projection";
+    } else if (upstream.ok) {
       src = "api";
       // Never write another broker's tasks into the caller's local projection.
       // When an admin inspects a broker, mirror them under THAT broker's own

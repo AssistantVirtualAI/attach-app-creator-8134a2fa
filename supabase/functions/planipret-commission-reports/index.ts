@@ -340,9 +340,23 @@ Deno.serve(async (req) => {
           team_members: [...members.values()].map((m) => ({ id: m.id, name: m.name, ...out(m) })).sort((a, b) => b.amount - a.amount),
         };
       };
+      // Aggregates per (commission type, share type) so the Maestro PDF report
+      // (one type, one share type, row-level loan totals) can be reconciled.
+      const breakdown = (rows: CommissionDepositRow[]) => {
+        const g = new Map<string, { commission_type: string; split_type: string; rows: number; amount: number; loan: number }>();
+        for (const r of rows as any[]) {
+          const t = String(r.commission_type ?? "base");
+          const s = String(r.split_type ?? r.share_type ?? r.partage ?? "");
+          const k = `${t}|${s}`;
+          const b = g.get(k) ?? { commission_type: t, split_type: s, rows: 0, amount: 0, loan: 0 };
+          b.rows += 1; b.amount += num(r.amount); b.loan += num(r.loan_amount ?? r.loan_amt ?? 0);
+          g.set(k, b);
+        }
+        return [...g.values()].map((b) => ({ ...b, amount: r2(b.amount), loan: r2(b.loan) }));
+      };
       const pack = (rows: CommissionDepositRow[], official: { type: string; label: string; amount: number }[] | null, truncated: boolean, ownId: string | null = null) => {
         const summary = summarize(rows, truncated);
-        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId) };
+        return { ...summary, official_by_type: official, official_total: official ? r2(official.reduce((t, x) => t + x.amount, 0)) : null, split: split(rows, ownId), breakdown: breakdown(rows), row_fields: rows[0] ? Object.keys(rows[0]).sort() : [] };
       };
 
       if (role === "broker") {

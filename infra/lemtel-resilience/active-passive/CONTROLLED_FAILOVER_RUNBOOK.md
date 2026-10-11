@@ -14,13 +14,13 @@ Le présent runbook s’applique seulement au backend Lemtel. Il n’autorise au
 2. Le statut primaire, le dernier lag PostgreSQL connu et l’âge du dernier sync Storage ont été enregistrés dans le journal d’incident.
 3. Le prévol root-only du standby indique `standby_in_recovery=true`, `wal_receiver_status=streaming` au dernier état connu, et aucun port PostgreSQL hôte/public.
 4. L’équipe a explicitement confirmé la décision de basculer, l’impact attendu et le propriétaire de la fenêtre de maintenance.
-5. Un plan de **fencing** du primaire est approuvé : le primaire doit être rendu non-writer avant toute promotion. L’absence de réponse réseau ne suffit pas à prouver qu’il ne peut plus écrire.
+5. Le plan de **fencing** du primaire est prêt : `lemtel-ha-primary-fence.sh` rend `supabase-db` non-redémarrable puis l’arrête, enregistre son état root-only et vérifie l’absence de listener PostgreSQL. Il exige ses deux jetons explicites et doit être exécuté avant toute promotion. L’absence de réponse réseau ne suffit pas à prouver qu’il ne peut plus écrire.
 6. L’autorité DNS et la procédure de routage sont disponibles et une approbation spécifique de changement DNS est obtenue. À ce stade, aucun accès API DNS n’est configuré pour Lemtel.
 
 ## Séquence contrôlée — non exécutée aujourd’hui
 
 1. **Déclarer l’incident** et geler tout déploiement ou modification manuelle côté Hostinger et DO.
-2. **Fencer Hostinger** suivant le plan approuvé : empêcher toute écriture au primaire, puis enregistrer la preuve de ce fencing. Ne pas supposer qu’un timeout réseau constitue un fencing.
+2. **Fencer Hostinger** avec `lemtel-ha-primary-fence.sh`, puis enregistrer la preuve de ce fencing. Ne pas supposer qu’un timeout réseau constitue un fencing. Si et seulement si la bascule est abandonnée avant toute promotion et tout DNS cutover, restaurer Hostinger avec `lemtel-ha-primary-fence-abort-before-promotion.sh`; après une promotion, ne jamais redémarrer le primaire comme writer.
 3. **Capturer l’état DO** à l’aide de `lemtel-ha-standby-failover-preflight.sh`. Ce script est en lecture seule et n’exécute jamais `pg_promote`.
 4. **Obtenir une confirmation explicite** pour une promotion ponctuelle. La promotion sera une action séparée, versionnée et observée ; elle n’est pas automatisée par ce package.
 5. **Valider le writer promu** : intégrité, lecture/écriture contrôlée, absence de reprise de Hostinger comme writer, et protection contre un second writer.

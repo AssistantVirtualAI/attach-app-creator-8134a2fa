@@ -275,22 +275,23 @@ Deno.serve(async (req) => {
 
     // Per-broker leaderboard on the selected window (admin global view)
     const brokerKeys = uniq([
-      ...volumeTranches(scopedAll, cyYtd).map((r) => r.agent_name),
-      ...volumeTranches(scopedAll, pyYtd).map((r) => r.agent_name),
+      ...volumeTranches(scopedAll, cyYtd).map((r) => brokerId(r)),
+      ...volumeTranches(scopedAll, pyYtd).map((r) => brokerId(r)),
     ]);
     const brokerTotalVolume = periodVolume(scopedAll, cyYtd);
     const brokers = brokerKeys
-      .map((name) => {
-        const c = brokerMetrics(scopedAll, cyYtd, name);
-        const p = brokerMetrics(scopedAll, pyYtd, name);
-        const idRow = firstRowByAgent.get(name) as any;
+      .map((id) => {
+        const c = brokerMetrics(scopedAll, cyYtd, id);
+        const p = brokerMetrics(scopedAll, pyYtd, id);
+        const idRow = firstRowByAgent.get(id) as any;
+        const name = idRow?.agent_name ?? id;
         return {
           broker: name,
           firstName: idRow?.first_name ?? null,
           lastName: idRow?.last_name ?? null,
           maestroBrokerId: idRow?.maestro_broker_id ?? null,
           brokerUserId: idRow?.broker_user_id ?? null,
-          isMe: !!myName && name.trim().toLowerCase() === myName.trim().toLowerCase(),
+          isMe: !!idRow?.broker_user_id && idRow.broker_user_id === user.id,
           volume: c.volume, deals: c.deals, commission: c.commission,
           avgDeal: c.avgDeal, bps: c.bps, commissionPerDeal: c.commissionPerDeal,
           pyVolume: p.volume, pyDeals: p.deals, pyCommission: p.commission,

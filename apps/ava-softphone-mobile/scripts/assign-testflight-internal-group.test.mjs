@@ -29,6 +29,10 @@ test("TestFlight assignment is explicitly gated in the protected iOS environment
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(
     workflow,
+    /marketing_version:\n        description: "Existing iOS marketing version\."\n        required: true\n        default: "1\.1"\n        type: string/,
+  );
+  assert.match(
+    workflow,
     /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-group-v1\.1\.5-r\*"/,
   );
   assert.match(workflow, /environment: lemtel-ios-testflight/);

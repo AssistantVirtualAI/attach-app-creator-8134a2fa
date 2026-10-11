@@ -69,3 +69,22 @@ test("TestFlight delivery is signed, internal, Hostinger-bound, and Lemtel-tag c
   assert.doesNotMatch(workflow, /apps\/planipret-mobile/);
   assert.doesNotMatch(workflow, /branches:\s*\n\s+- "Planipret"/);
 });
+
+test("TestFlight internal-group association workflow stays valid and Lemtel-only", () => {
+  const workflow = readRepo(
+    ".github/workflows/lemtel-ios-testflight-internal-group.yml",
+  );
+  assert.match(
+    workflow,
+    /marketing_version:\n        description: "Existing iOS marketing version\."\n        required: true\n        default: "1\.1"\n        type: string/,
+  );
+  assert.match(
+    workflow,
+    /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-group-v1\.1\.5-r\*"/,
+  );
+  assert.match(workflow, /environment: lemtel-ios-testflight/);
+  assert.match(workflow, /TESTFLIGHT_APP_ID: "6786177551"/);
+  assert.match(workflow, /TESTFLIGHT_GROUP_NAME: "Lemtel Internal"/);
+  assert.match(workflow, /assign-testflight-internal-group\.mjs/);
+  assert.doesNotMatch(workflow, /planipret/i);
+});

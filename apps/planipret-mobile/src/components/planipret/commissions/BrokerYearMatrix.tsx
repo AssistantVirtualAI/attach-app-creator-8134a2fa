@@ -16,7 +16,7 @@ export default function BrokerYearMatrix({
   lang: "fr" | "en";
   brokerYearly: YearlyBroker[];
   years: number[];
-  onSelect?: (broker: string) => void;
+  onSelect?: (brokerKey: string) => void;
 }) {
   const isFr = lang === "fr";
   const [metric, setMetric] = useState<Metric>("volume");
@@ -92,12 +92,13 @@ export default function BrokerYearMatrix({
           </thead>
           <tbody>
             {brokerYearly.map((b, ri) => (
-              <tr key={b.broker}
-                onClick={() => onSelect?.(b.broker)}
-                style={{ background: ri % 2 ? "rgba(127,127,127,.045)" : "transparent", cursor: onSelect ? "pointer" : undefined }}>
+              <tr key={b.brokerKey ?? `row-${ri}`}
+                data-broker-key={b.brokerKey}
+                onClick={() => b.linked !== false && b.brokerKey && onSelect?.(b.brokerKey)}
+                style={{ background: ri % 2 ? "rgba(127,127,127,.045)" : "transparent", cursor: onSelect && b.linked !== false ? "pointer" : undefined }}>
                 <td style={{ ...cellStyle, textAlign: "left", fontWeight: 700 }}>
                   {`${b.firstName ?? ""} ${b.lastName ?? ""}`.trim() || b.broker}
-                  {!b.brokerUserId && (
+                  {b.linked === false && (
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: "#f59e0b" }}>
                       {isFr ? "non rattaché" : "unlinked"}
                     </span>

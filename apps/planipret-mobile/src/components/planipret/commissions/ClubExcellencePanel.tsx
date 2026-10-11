@@ -115,7 +115,7 @@ function Podium({ club, isFr, clubVolume }: { club: any[]; isFr: boolean; clubVo
       {order.map((c) => {
         const col = colors[c.rank] ?? GOLD;
         return (
-          <div key={c.broker} style={{ textAlign: "center" }}>
+          <div key={c.brokerKey ?? c.broker} style={{ textAlign: "center" }}>
             <div
               className="ov3d-card"
               style={{
@@ -168,7 +168,7 @@ function Podium({ club, isFr, clubVolume }: { club: any[]; isFr: boolean; clubVo
 
 export default function ClubExcellencePanel({
   lang, data, isAdminView, onBroker,
-}: { lang: Lang; data: any; isAdminView?: boolean; onBroker?: (name: string) => void }) {
+}: { lang: Lang; data: any; isAdminView?: boolean; onBroker?: (brokerKey: string) => void }) {
   const isFr = lang === "fr";
   const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
   const club: any[] = Array.isArray(data?.club) ? data.club : [];
@@ -330,14 +330,15 @@ export default function ClubExcellencePanel({
                 const share = totals.volume ? (c.volume / totals.volume) * 100 : 0;
                 return (
                   <tr
-                    key={c.broker}
+                    key={c.brokerKey ?? c.broker}
                     className="ov3d-row"
                     style={{
                       ["--ov3d-accent" as any]: accent,
                       cursor: isAdminView && onBroker ? "pointer" : undefined,
                       background: c.isMe ? "linear-gradient(90deg, rgba(139,92,246,.14), transparent 60%)" : undefined,
                     }}
-                    onClick={() => isAdminView && onBroker?.(c.broker)}
+                    data-broker-key={c.brokerKey}
+                    onClick={() => isAdminView && c.linked !== false && c.brokerKey && onBroker?.(c.brokerKey)}
                   >
                     <td style={{ fontWeight: 900, color: accent }}>
                       <span className="inline-flex items-center gap-1">

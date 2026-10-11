@@ -14,7 +14,7 @@ describe("BNC percentages on date boundaries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T05:00:00Z"));
     const rows = [
-      bncRow("2025-01-05", 1_000_000, "B-PY1"),
+      bncRow("2025-01-01", 1_000_000, "B-PY1"),
       bncRow("2025-12-31", 8_000_000, "B-PY2"), // previous December must be excluded
       bncRow("2026-01-01", 1_500_000, "B-CY1"),
     ];

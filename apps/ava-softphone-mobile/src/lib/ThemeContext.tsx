@@ -8,6 +8,12 @@ const ThemeCtx = createContext<Ctx>({ mode: 'dark', toggle: () => {}, setMode: (
 
 const STORAGE_KEY = 'ava.theme.mode';
 
+function applyDocumentTheme(mode: Mode) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.setAttribute('data-theme', mode);
+  document.body.setAttribute('data-theme', mode);
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<Mode>(() => {
     try {
@@ -17,16 +23,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return 'dark';
   });
 
+  // Some established screens consume the runtime color proxy while rendering.
+  // Keep the DOM token in sync before children render so Daylight never paints
+  // a white surface with a stale dark-mode foreground for one frame.
+  applyDocumentTheme(mode);
+
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, mode); } catch {}
-    document.documentElement.setAttribute('data-theme', mode);
-    document.body.setAttribute('data-theme', mode);
+    applyDocumentTheme(mode);
   }, [mode]);
 
   const value = useMemo<Ctx>(() => ({
     mode,
-    setMode,
-    toggle: () => setMode((m) => (m === 'dark' ? 'light' : 'dark')),
+    setMode: (next) => {
+      applyDocumentTheme(next);
+      setMode(next);
+    },
+    toggle: () => {
+      const next = mode === 'dark' ? 'light' : 'dark';
+      applyDocumentTheme(next);
+      setMode(next);
+    },
   }), [mode]);
 
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;

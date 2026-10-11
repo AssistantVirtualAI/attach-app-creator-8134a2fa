@@ -20,6 +20,7 @@ import {
   isoWeeksInYear,
   resolveWindow,
   isInsurance,
+  brokerId,
   type Granularity,
   yoy,
 } from "../_shared/commission-engine.ts";
@@ -235,7 +236,7 @@ Deno.serve(async (req) => {
     const mine = scopedAll;
 
     const firstRowByAgent = new Map<string, RegisterRow>();
-    for (const r of scopedAll) if (r.agent_name != null && !firstRowByAgent.has(r.agent_name)) firstRowByAgent.set(r.agent_name, r);
+    for (const r of scopedAll) { const id = brokerId(r); if (id && !firstRowByAgent.has(id)) firstRowByAgent.set(id, r); }
 
     const resolved = resolveWindow(granularity, year, periodIndex);
     const cyYtd = resolved.window;

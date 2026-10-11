@@ -13,7 +13,7 @@ const TOPOLOGY_KEYS = ['primary', 'standby', 'writer_policy', 'database_replicat
 const EVIDENCE_KEYS = ['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified', 'standby_runtime_config_staged', 'external_health_routing_verified', 'fencing_verified', 'failover_drill_verified', 'failback_drill_verified'];
 const SAFETY_KEYS = ['standby_database_publicly_exposed', 'plaintext_secret_replication', 'raw_postgres_volume_copy', 'automatic_promotion_without_fencing', 'fusionpbx_or_sip_change'];
 const STATE_KEYS = ['remote_runtime_enabled', 'dns_failover_enabled', 'automatic_failover_enabled'];
-const VERIFIED_EVIDENCE = new Set(['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified']);
+const VERIFIED_EVIDENCE = new Set(['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified', 'standby_runtime_config_staged']);
 
 const exactKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) &&
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());

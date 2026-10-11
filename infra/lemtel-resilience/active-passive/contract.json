@@ -30,7 +30,7 @@
     "standby_basebackup_verified": true,
     "replication_lag_monitoring_verified": true,
     "storage_integrity_monitoring_verified": true,
-    "standby_runtime_config_staged": false,
+    "standby_runtime_config_staged": true,
     "external_health_routing_verified": false,
     "fencing_verified": false,
     "failover_drill_verified": false,

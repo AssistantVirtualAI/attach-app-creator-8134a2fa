@@ -376,7 +376,7 @@ async function handler(req: Request): Promise<Response> {
       const split = (rows: CommissionDepositRow[], ownId: string | null) => {
         const mk = () => ({ amount: 0, contracts: new Map<string, number>(), vols: new Map<string, number>() });
         const own = mk(); const teamAll = mk();
-        const members = new Map<string, { id: string; name: string; amount: number; contracts: Map<string, number> }>();
+        const members = new Map<string, { id: string; name: string } & ReturnType<typeof mk>>();
         const add = (b: ReturnType<typeof mk>, r: any) => {
           b.amount += num(r.commission_amount ?? r.amount);
           // Files/volume: base rows only, dated, positive loan (same rule as cards).

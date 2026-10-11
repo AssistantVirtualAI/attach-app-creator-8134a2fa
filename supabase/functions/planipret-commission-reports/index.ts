@@ -451,7 +451,9 @@ async function handler(req: Request): Promise<Response> {
         return json({ ok: true, summary, validation, diag: res.diag, source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: resolvedUsersId, generated_at: validation.checked_at }, scope, correlation_id: cid }, 200, cid);
       }
 
-      // Admin : courtiers déjà authentifiés auprès de Maestro.
+      // Admin : vue cabinet ou courtier tiers = jeton administrateur Maestro
+      // obligatoire. Aucun repli vers l'OAuth d'un autre courtier.
+      if (!firmToken.token) return scopeError("admin_scope_unavailable");
       let q = admin.from("planipret_profiles")
         .select("user_id, full_name, email, maestro_broker_id")
         .eq("maestro_connected", true)
@@ -480,7 +482,8 @@ async function handler(req: Request): Promise<Response> {
             let res: Awaited<ReturnType<typeof fetchPending>> | null = null;
             for (let attempt = 0; attempt < 2 && !(res && res.ok); attempt++) {
               if (attempt) await new Promise((r) => setTimeout(r, 1500));
-              const token = await getUserMaestroAccessToken(admin, String(p.user_id)).catch(() => null);
+              // Strict admin scope: only the firm administrator credential.
+              const token = firmToken.token;
               if (!token) continue;
               res = await fetchPending(token, String(p.maestro_broker_id));
               if (!res.ok) log("pending broker failed", name, (res as any).r?.status);

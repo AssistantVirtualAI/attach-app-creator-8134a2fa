@@ -359,17 +359,18 @@ Deno.serve(async (req) => {
     const yearsWithData = Array.from(
       new Set(scopedAll.map((r) => Number((r as any).fiscal_year)).filter((y) => Number.isFinite(y))),
     ).sort((a, b) => a - b);
-    const yearlyBrokerKeys = uniq(scopedAll.map((r) => r.agent_name)).sort((a, b) => a.localeCompare(b));
+    const yearlyBrokerKeys = uniq(scopedAll.map((r) => brokerId(r))).sort((a, b) => a.localeCompare(b));
     const byBroker = new Map<string, typeof scopedAll>();
     for (const r of scopedAll) {
-      const k = r.agent_name ?? "";
+      const k = brokerId(r);
       const arr = byBroker.get(k); if (arr) arr.push(r); else byBroker.set(k, [r]);
     }
-    const brokerYearly = yearlyBrokerKeys.map((name) => {
-      const bRows = byBroker.get(name) ?? [];
+    const brokerYearly = yearlyBrokerKeys.map((id) => {
+      const bRows = byBroker.get(id) ?? [];
       const idRow = bRows[0] as any;
+      const name = idRow?.agent_name ?? id;
       const cells = yearsWithData.map((y) => {
-        const m = brokerMetrics(scopedAll, yearWindow(y), name);
+        const m = brokerMetrics(scopedAll, yearWindow(y), id);
         return { year: y, volume: m.volume, deals: m.deals, commission: m.commission, bps: m.bps, avgDeal: m.avgDeal };
       });
       return {
@@ -386,10 +387,10 @@ Deno.serve(async (req) => {
     }).sort((a, b) => b.totalVolume - a.totalVolume);
 
     // Brokers whose register rows are not attached to a portal account yet
-    const unlinkedBrokers = uniq(scopedAll.filter((r: any) => !r.broker_user_id).map((r) => r.agent_name))
-      .map((name) => {
-        const rows = byBroker.get(name) ?? [];
-        return { broker: name, rows: rows.length, commission: rows.reduce((a, r) => a + (Number(r.amount) || 0), 0) };
+    const unlinkedBrokers = uniq(scopedAll.filter((r: any) => !r.broker_user_id).map((r) => brokerId(r)))
+      .map((id) => {
+        const rows = byBroker.get(id) ?? [];
+        return { broker: (rows[0] as any)?.agent_name ?? id, rows: rows.length, commission: rows.reduce((a, r) => a + (Number(r.amount) || 0), 0) };
       });
 
     const monthly = Array.from({ length: 12 }, (_, i) => {

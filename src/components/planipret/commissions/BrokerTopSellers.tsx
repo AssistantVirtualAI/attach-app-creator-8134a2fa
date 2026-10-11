@@ -72,6 +72,8 @@ export default function BrokerTopSellers({
         const v = pick(b);
         return {
           broker: b.broker,
+          brokerKey: b.brokerKey,
+          linked: b.linked,
           name: label(b),
           ...v,
           avgDeal: v.deals ? v.volume / v.deals : 0,

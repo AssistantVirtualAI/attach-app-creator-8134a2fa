@@ -12,6 +12,9 @@ fail() {
 [ "${LEMTEL_HA_EXECUTE:-}" = 'abort_primary_fence_before_standby_promotion' ] || fail execution_token_required
 [ "${LEMTEL_HA_ROLE:-}" = 'hostinger_primary' ] || fail invalid_role
 [ "${LEMTEL_HA_ABORT_BEFORE_PROMOTION:-}" = 'I_CONFIRM_NO_STANDBY_PROMOTION_OR_DNS_CUTOVER_OCCURRED' ] || fail abort_acknowledgement_required
+incident_id="${LEMTEL_HA_INCIDENT_ID:-}"
+case "$incident_id" in ''|*[!a-z0-9-]*) fail invalid_incident_id ;; esac
+[ "${#incident_id}" -ge 8 ] || fail invalid_incident_id
 
 container='supabase-db'
 state_file='/var/lib/lemtel-ha/fencing/primary-fence.state'
@@ -26,9 +29,11 @@ exec 9>"$lock_file"
 flock -n 9 || fail concurrent_fencing_operation
 
 format="$(sed -n 's/^format=//p' "$state_file")"
+recorded_incident_id="$(sed -n 's/^incident_id=//p' "$state_file")"
 recorded_container="$(sed -n 's/^container=//p' "$state_file")"
 original_restart_policy="$(sed -n 's/^original_restart_policy=//p' "$state_file")"
 [ "$format" = lemtel_primary_fence_v1 ] || fail fencing_state_invalid
+[ "$recorded_incident_id" = "$incident_id" ] || fail fencing_state_incident_mismatch
 [ "$recorded_container" = "$container" ] || fail fencing_state_container_invalid
 case "$original_restart_policy" in
   no|always|unless-stopped|on-failure) ;;
@@ -45,6 +50,7 @@ for attempt in $(seq 1 24); do
     rm -f "$state_file"
     printf 'primary_fence_abort_format=lemtel_primary_fence_abort_v1\n'
     printf 'declared_role=hostinger_primary\n'
+    printf 'incident_id_matched=true\n'
     printf 'abort_before_standby_promotion=true\n'
     printf 'primary_database_running=true\n'
     printf 'original_restart_policy_restored=true\n'

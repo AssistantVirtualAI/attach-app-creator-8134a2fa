@@ -12,6 +12,8 @@ test('primary fencing requires root, explicit tokens, an acknowledgement, and se
   assert.match(fence, /fence_primary_for_controlled_failover/u);
   assert.match(fence, /LEMTEL_HA_ROLE:-\}" = 'hostinger_primary'/u);
   assert.match(fence, /I_UNDERSTAND_PRIMARY_WRITES_WILL_STOP/u);
+  assert.match(fence, /LEMTEL_HA_INCIDENT_ID/u);
+  assert.match(fence, /incident_id_recorded=true/u);
   assert.match(fence, /container='supabase-db'/u);
   assert.match(fence, /flock -n 9 \|\| fail concurrent_fencing_operation/u);
   assert.match(fence, /docker update --restart no "\$container"/u);
@@ -32,6 +34,8 @@ test('primary fencing requires root, explicit tokens, an acknowledgement, and se
 test('aborting a fence may restore the primary only before promotion or DNS cutover', () => {
   assert.match(abort, /abort_primary_fence_before_standby_promotion/u);
   assert.match(abort, /I_CONFIRM_NO_STANDBY_PROMOTION_OR_DNS_CUTOVER_OCCURRED/u);
+  assert.match(abort, /fencing_state_incident_mismatch/u);
+  assert.match(abort, /incident_id_matched=true/u);
   assert.match(abort, /primary-fence\.state/u);
   assert.match(abort, /docker update --restart "\$original_restart_policy" "\$container"/u);
   assert.match(abort, /docker start "\$container"/u);

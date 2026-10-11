@@ -3,6 +3,7 @@
 // hors de la session, aucun jeton Maestro côté client.
 import PendingCommissionsCard, { TeamSplitPanel } from "@/components/planipret/commissions/PendingCommissionsCard";
 import PaidDepositsCard from "@/components/planipret/commissions/PaidDepositsCard";
+import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import { useCommissionLive } from "@/hooks/useCommissionLive";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";

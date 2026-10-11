@@ -2,6 +2,7 @@
 // Données financières sensibles : lecture seule, aucune donnée mise en cache
 // hors de la session, aucun jeton Maestro côté client.
 import PendingCommissionsCard, { TeamSplitPanel } from "@/components/planipret/commissions/PendingCommissionsCard";
+import PaidDepositsCard from "@/components/planipret/commissions/PaidDepositsCard";
 import { useCommissionLive } from "@/hooks/useCommissionLive";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
@@ -435,6 +436,14 @@ export default function MCommissions() {
         </div>
       )}
 
+      {section === "paid" && (
+        <div className="mb-4">
+          <PaidDepositsCard lang={fr ? "fr" : "en"} scope={isAdmin ? "admin" : "broker"} />
+          <Button variant="outline" className="w-full min-h-11 mt-3" onClick={() => navigate("tableaux")}>
+            {fr ? "Graphiques par courtier" : "Broker charts"}
+          </Button>
+        </div>
+      )}
       {section === "paid" && (loading ? (
         <div className="space-y-2">
           {[0, 1, 2].map((i) => <div key={i} className="h-20 rounded-xl animate-pulse" style={{ background: "var(--pp-bg-surface, #0A1628)" }} />)}

@@ -19,7 +19,7 @@ case "$incident_id" in ''|*[!a-z0-9-]*) fail invalid_incident_id ;; esac
 
 base_dir='/opt/lemtel-ha'
 stage_dir="$base_dir/runtime-stage"
-promotion_state="$base_dir/fencing/standby-promotion.state"
+promotion_state='/var/lib/lemtel-ha/fencing/standby-promotion.state'
 postgres_container='lemtel-postgres-standby'
 storage_receiver_dir='/home/lemtelstorage/storage-current'
 storage_mount="$stage_dir/volumes/storage"

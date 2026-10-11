@@ -10,6 +10,9 @@ const FILES = [
   "components/planipret/mobile/MCommissionCharts.tsx",
   "hooks/useCommissionLive.ts",
   "lib/planipret/ppEdge.ts",
+  "components/planipret/commissions/PaidDepositsCard.tsx",
+  "pages/planipret/admin/PABrokerCommissions.tsx",
+  "pages/planipret/mobile/MBrokerCommissionCharts.tsx",
 ];
 
 describe("commission parity portal ↔ mobile", () => {

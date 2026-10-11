@@ -89,6 +89,8 @@ function matches(r: RegisterRow, c: Criteria): boolean {
 }
 
 const normalizedKeyPart = (value: unknown) => (value == null ? "" : String(value)).trim().toLocaleLowerCase("fr-CA");
+/** Unique broker identity for keys (never the display name). */
+const brokerKey = (r: RegisterRow) => normalizedKeyPart((r as any).broker_user_id ?? "");
 
 /**
  * A `base` row without a loan amount is never a mortgage file: Maestro uses it for
@@ -169,21 +171,24 @@ function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
 
   // Negative base rows are commission clawbacks: they never remove the funded
   // volume of their positive twin, they simply do not add volume themselves.
+  // Validated rule (same as portal/mobile/AVA): volume = one loan per
+  // broker+contract+loan amount; units = unique broker+contract. Every key is
+  // scoped by the unique broker identity, never by a display name.
   const volume: RegisterRow[] = [];
+  const seenVol = new Set<string>();
   for (const r of candidates) {
     const f = flags(r);
     if (f.loan < 0) { excluded.push({ row: r, reason: "reversal_row" }); continue; }
-    // Separate dated paid base entries are separate funding tranches even when
-    // contract, lender, product and loan amount match. Only units are unique.
+    const vk = `${brokerKey(r)}|${f.dKey}|${f.loan}`;
+    if (seenVol.has(vk)) { excluded.push({ row: r, reason: "duplicate_amount" }); continue; }
+    seenVol.add(vk);
     volume.push(r);
   }
 
-  // Deals = distinct contract numbers among the retained base rows of the period
-  // (calendar-year rule: a contract counts once per period, never twice).
   const seenDeal = new Set<string>();
   const deals: RegisterRow[] = [];
   for (const r of volume) {
-    const k = flags(r).dKey;
+    const k = `${brokerKey(r)}|${flags(r).dKey}`;
     if (seenDeal.has(k)) continue;
     seenDeal.add(k);
     deals.push(r);

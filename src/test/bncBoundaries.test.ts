@@ -73,7 +73,7 @@ describe("BNC percentages on date boundaries", () => {
     expect(utcCapped.window.start).toBe("2026-01-01");
     // The engine works in UTC, so the cap follows the UTC month deterministically.
     expect(utcCapped.window.end).toBe("2026-08-31");
-    expect(utcCapped.priorWindow).toEqual({ start: "2025-01-01", end: "2025-09-30" });
+    expect(utcCapped.priorWindow).toEqual({ start: "2025-01-01", end: "2025-08-31" });
 
     // Same instant, one hour earlier locally: still inside August in UTC.
     vi.setSystemTime(new Date("2026-08-31T18:30:00-04:00"));

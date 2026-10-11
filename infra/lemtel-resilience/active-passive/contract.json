@@ -1,5 +1,5 @@
 {
-  "contract_version": "lemtel_active_passive_foundation_v5",
+  "contract_version": "lemtel_active_passive_foundation_v6",
   "scope": "verified_active_passive_rollout_without_telephony",
   "source_branch": "lemtel/integration",
   "authorization": {
@@ -18,7 +18,7 @@
     "traffic_routing": "external_health_checked_active_passive",
     "canonical_public_hostname": "lemtel.assistantvirtualai.com",
     "routing_provider": "cloudflare",
-    "routing_state": "canonical_hostname_approved_dns_unchanged",
+    "routing_state": "canonical_primary_route_live_no_failover",
     "commit_acknowledgement_policy": "availability_first_async_streaming_with_measured_lag",
     "recovery_point_policy": "no_fixed_rpo_until_controlled_drill_measures_lag_and_recovery"
   },
@@ -31,7 +31,7 @@
     "replication_lag_monitoring_verified": true,
     "storage_integrity_monitoring_verified": true,
     "standby_runtime_config_staged": true,
-    "external_health_routing_verified": false,
+    "external_health_routing_verified": true,
     "fencing_verified": false,
     "failover_drill_verified": false,
     "failback_drill_verified": false

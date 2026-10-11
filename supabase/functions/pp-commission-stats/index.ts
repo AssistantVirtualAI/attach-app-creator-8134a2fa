@@ -20,6 +20,7 @@ import {
   isoWeeksInYear,
   resolveWindow,
   isInsurance,
+  brokerId,
   type Granularity,
   yoy,
 } from "../_shared/commission-engine.ts";
@@ -235,7 +236,7 @@ Deno.serve(async (req) => {
     const mine = scopedAll;
 
     const firstRowByAgent = new Map<string, RegisterRow>();
-    for (const r of scopedAll) if (r.agent_name != null && !firstRowByAgent.has(r.agent_name)) firstRowByAgent.set(r.agent_name, r);
+    for (const r of scopedAll) { const id = brokerId(r); if (id && !firstRowByAgent.has(id)) firstRowByAgent.set(id, r); }
 
     const resolved = resolveWindow(granularity, year, periodIndex);
     const cyYtd = resolved.window;
@@ -249,7 +250,7 @@ Deno.serve(async (req) => {
       month: metrics(mine, cyMonth),
       monthPy: metrics(mine, pyMonth),
       activeLenders: uniq(volumeTranches(mine, cyYtd).map((r) => r.institution)).length,
-      activeBrokers: uniq(volumeTranches(scopedAll, cyYtd).map((r) => r.agent_name)).length,
+      activeBrokers: uniq(volumeTranches(scopedAll, cyYtd).map((r) => brokerId(r))).length,
     };
 
     // Trend series adapted to the granularity (weeks when granularity=week, otherwise months)
@@ -274,22 +275,23 @@ Deno.serve(async (req) => {
 
     // Per-broker leaderboard on the selected window (admin global view)
     const brokerKeys = uniq([
-      ...volumeTranches(scopedAll, cyYtd).map((r) => r.agent_name),
-      ...volumeTranches(scopedAll, pyYtd).map((r) => r.agent_name),
+      ...volumeTranches(scopedAll, cyYtd).map((r) => brokerId(r)),
+      ...volumeTranches(scopedAll, pyYtd).map((r) => brokerId(r)),
     ]);
     const brokerTotalVolume = periodVolume(scopedAll, cyYtd);
     const brokers = brokerKeys
-      .map((name) => {
-        const c = brokerMetrics(scopedAll, cyYtd, name);
-        const p = brokerMetrics(scopedAll, pyYtd, name);
-        const idRow = firstRowByAgent.get(name) as any;
+      .map((id) => {
+        const c = brokerMetrics(scopedAll, cyYtd, id);
+        const p = brokerMetrics(scopedAll, pyYtd, id);
+        const idRow = firstRowByAgent.get(id) as any;
+        const name = idRow?.agent_name ?? id;
         return {
           broker: name,
           firstName: idRow?.first_name ?? null,
           lastName: idRow?.last_name ?? null,
           maestroBrokerId: idRow?.maestro_broker_id ?? null,
           brokerUserId: idRow?.broker_user_id ?? null,
-          isMe: !!myName && name.trim().toLowerCase() === myName.trim().toLowerCase(),
+          isMe: !!idRow?.broker_user_id && idRow.broker_user_id === user.id,
           volume: c.volume, deals: c.deals, commission: c.commission,
           avgDeal: c.avgDeal, bps: c.bps, commissionPerDeal: c.commissionPerDeal,
           pyVolume: p.volume, pyDeals: p.deals, pyCommission: p.commission,
@@ -302,7 +304,7 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.volume - a.volume)
       .map((x, i) => ({ rank: i + 1, ...x }));
 
-    const agentsWithData = uniq(scopedAll.map((r) => r.agent_name));
+    const agentsWithData = uniq(scopedAll.map((r) => brokerId(r)));
 
     // Firm-wide broker directory: in the admin global view the filter must list
     // every broker of the firm, not just those already present in the imported
@@ -357,17 +359,18 @@ Deno.serve(async (req) => {
     const yearsWithData = Array.from(
       new Set(scopedAll.map((r) => Number((r as any).fiscal_year)).filter((y) => Number.isFinite(y))),
     ).sort((a, b) => a - b);
-    const yearlyBrokerKeys = uniq(scopedAll.map((r) => r.agent_name)).sort((a, b) => a.localeCompare(b));
+    const yearlyBrokerKeys = uniq(scopedAll.map((r) => brokerId(r))).sort((a, b) => a.localeCompare(b));
     const byBroker = new Map<string, typeof scopedAll>();
     for (const r of scopedAll) {
-      const k = r.agent_name ?? "";
+      const k = brokerId(r);
       const arr = byBroker.get(k); if (arr) arr.push(r); else byBroker.set(k, [r]);
     }
-    const brokerYearly = yearlyBrokerKeys.map((name) => {
-      const bRows = byBroker.get(name) ?? [];
+    const brokerYearly = yearlyBrokerKeys.map((id) => {
+      const bRows = byBroker.get(id) ?? [];
       const idRow = bRows[0] as any;
+      const name = idRow?.agent_name ?? id;
       const cells = yearsWithData.map((y) => {
-        const m = brokerMetrics(scopedAll, yearWindow(y), name);
+        const m = brokerMetrics(scopedAll, yearWindow(y), id);
         return { year: y, volume: m.volume, deals: m.deals, commission: m.commission, bps: m.bps, avgDeal: m.avgDeal };
       });
       return {
@@ -384,10 +387,10 @@ Deno.serve(async (req) => {
     }).sort((a, b) => b.totalVolume - a.totalVolume);
 
     // Brokers whose register rows are not attached to a portal account yet
-    const unlinkedBrokers = uniq(scopedAll.filter((r: any) => !r.broker_user_id).map((r) => r.agent_name))
-      .map((name) => {
-        const rows = byBroker.get(name) ?? [];
-        return { broker: name, rows: rows.length, commission: rows.reduce((a, r) => a + (Number(r.amount) || 0), 0) };
+    const unlinkedBrokers = uniq(scopedAll.filter((r: any) => !r.broker_user_id).map((r) => brokerId(r)))
+      .map((id) => {
+        const rows = byBroker.get(id) ?? [];
+        return { broker: (rows[0] as any)?.agent_name ?? id, rows: rows.length, commission: rows.reduce((a, r) => a + (Number(r.amount) || 0), 0) };
       });
 
     const monthly = Array.from({ length: 12 }, (_, i) => {
@@ -458,19 +461,20 @@ Deno.serve(async (req) => {
     // a broker only ever gets his own line (with his rank inside the standings).
     const seasonCur = seasonWindow(year - (month >= 8 ? 0 : 1));
     const seasonPrev = seasonWindow(year - (month >= 8 ? 1 : 2));
-    const brokerNames = uniq(volumeTranches(allRows, seasonCur).map((r) => r.agent_name));
+    const brokerNames = uniq(volumeTranches(allRows, seasonCur).map((r) => brokerId(r)));
     const clubFull = brokerNames
-      .map((name) => {
-        const c = brokerMetrics(allRows, seasonCur, name);
-        const p = brokerMetrics(allRows, seasonPrev, name);
-        const idRow = firstRowByAgent.get(name) as any;
+      .map((id) => {
+        const c = brokerMetrics(allRows, seasonCur, id);
+        const p = brokerMetrics(allRows, seasonPrev, id);
+        const idRow = firstRowByAgent.get(id) as any;
+        const name = idRow?.agent_name ?? id;
         return {
           broker: name,
           firstName: idRow?.first_name ?? null,
           lastName: idRow?.last_name ?? null,
           maestroBrokerId: idRow?.maestro_broker_id ?? null,
           brokerUserId: idRow?.broker_user_id ?? null,
-          isMe: !!myName && name.trim().toLowerCase() === myName.trim().toLowerCase(),
+          isMe: !!idRow?.broker_user_id && idRow.broker_user_id === user.id,
           volume: c.volume,
           deals: c.deals,
           commission: c.commission,
@@ -554,11 +558,11 @@ Deno.serve(async (req) => {
 
     // Broker Monthly vs Lender Monthly independent MATCH/MISMATCH (v3 §11)
     const brokerScope = agent ? mine : scopedAll;
-    const brokerBreak = uniq(brokerScope.map((r) => r.agent_name)).map((name) => ({
-      broker: name,
-      volume: brokerMetrics(brokerScope, cyYtd, name).volume,
-      deals: brokerMetrics(brokerScope, cyYtd, name).deals,
-      commission: brokerMetrics(brokerScope, cyYtd, name).commission,
+    const brokerBreak = uniq(brokerScope.map((r) => brokerId(r))).map((id) => ({
+      broker: (byBroker.get(id)?.[0] as any)?.agent_name ?? id,
+      volume: brokerMetrics(brokerScope, cyYtd, id).volume,
+      deals: brokerMetrics(brokerScope, cyYtd, id).deals,
+      commission: brokerMetrics(brokerScope, cyYtd, id).commission,
     }));
     const brokerVolume = brokerBreak.reduce((s2, b) => s2 + b.volume, 0);
     const brokerDeals = brokerBreak.reduce((s2, b) => s2 + b.deals, 0);
@@ -708,16 +712,19 @@ Deno.serve(async (req) => {
       typeof body?.detailAgent === "string" && body.detailAgent.trim() ? body.detailAgent.trim() : null;
     let detail: any = null;
     if (detailAgent) {
+      const dLower = detailAgent.toLowerCase();
+      const isDetailRow = (r: any) =>
+        (r.agent_name ?? "").trim().toLowerCase() === dLower || brokerId(r) === dLower;
       const dRows = scopedAll
-        .filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase())
+        .filter(isDetailRow)
         .filter(inWin)
         .sort((a, b) => (a.date_trans ?? "").localeCompare(b.date_trans ?? "") || a.source_row - b.source_row);
       const dVolRows = new Set(
-        volumeTranches(scopedAll.filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase()), cyYtd)
+        volumeTranches(scopedAll.filter(isDetailRow), cyYtd)
           .map((r) => r.source_row),
       );
       const dDealRows = new Set(
-        dealContracts(scopedAll.filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase()), cyYtd)
+        dealContracts(scopedAll.filter(isDetailRow), cyYtd)
           .map((r) => r.source_row),
       );
       const idRow = dRows[0] as any;

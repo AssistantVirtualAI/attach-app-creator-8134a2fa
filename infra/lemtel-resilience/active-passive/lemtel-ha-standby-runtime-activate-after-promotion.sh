@@ -34,7 +34,9 @@ systemctl is-active --quiet docker || fail docker_inactive
 [ -d "$stage_dir" ] || fail runtime_stage_missing
 [ -s "$promotion_state" ] || fail standby_promotion_state_missing
 [ -d "$storage_receiver_dir" ] || fail standby_storage_receiver_missing
-[ -s "$storage_receiver_dir/.lemtel-ha-manifest.current.sha256" ] || fail standby_storage_manifest_missing
+# An empty manifest is the valid checksum listing for an empty filesystem Storage
+# source. Require a regular manifest file, not non-empty content.
+[ -f "$storage_receiver_dir/.lemtel-ha-manifest.current.sha256" ] || fail standby_storage_manifest_missing
 
 grep -Fxq 'format=lemtel_standby_promotion_v1' "$promotion_state" || fail standby_promotion_state_invalid
 grep -Fxq "incident_id=$incident_id" "$promotion_state" || fail standby_promotion_incident_mismatch

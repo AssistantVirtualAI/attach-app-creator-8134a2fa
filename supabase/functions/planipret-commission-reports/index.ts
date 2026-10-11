@@ -451,7 +451,9 @@ async function handler(req: Request): Promise<Response> {
         return json({ ok: true, summary, validation, diag: res.diag, source_identity: { source: "pending_commissions", endpoint: PENDING_COMMISSION_PATH, users_id: resolvedUsersId, generated_at: validation.checked_at }, scope, correlation_id: cid }, 200, cid);
       }
 
-      // Admin : courtiers déjà authentifiés auprès de Maestro.
+      // Admin : vue cabinet ou courtier tiers = jeton administrateur Maestro
+      // obligatoire. Aucun repli vers l'OAuth d'un autre courtier.
+      if (!firmToken.token) return scopeError("admin_scope_unavailable");
       let q = admin.from("planipret_profiles")
         .select("user_id, full_name, email, maestro_broker_id")
         .eq("maestro_connected", true)
@@ -480,7 +482,8 @@ async function handler(req: Request): Promise<Response> {
             let res: Awaited<ReturnType<typeof fetchPending>> | null = null;
             for (let attempt = 0; attempt < 2 && !(res && res.ok); attempt++) {
               if (attempt) await new Promise((r) => setTimeout(r, 1500));
-              const token = await getUserMaestroAccessToken(admin, String(p.user_id)).catch(() => null);
+              // Strict admin scope: only the firm administrator credential.
+              const token = firmToken.token;
               if (!token) continue;
               res = await fetchPending(token, String(p.maestro_broker_id));
               if (!res.ok) log("pending broker failed", name, (res as any).r?.status);
@@ -526,36 +529,9 @@ async function handler(req: Request): Promise<Response> {
     // An authenticated Planiprêt administrator can read a selected connected
     // broker using that broker's server-only token, just like pending reports.
     // Maestro personal tokens must never be paired with a peer's users_id.
-    let selectedToken: string | null = null;
-    if (role === "admin" && filters.users_id) {
-      const { data: selected } = await admin.from("planipret_profiles")
-        .select("user_id")
-        .eq("maestro_broker_id", filters.users_id)
-        .eq("maestro_connected", true)
-        .limit(1).maybeSingle();
-      if (selected?.user_id) selectedToken = await getUserMaestroAccessToken(admin, String(selected.user_id));
-    }
+    // Strict admin scope: firm/peer views use only the firm credential.
     const brokerSources: { token: string; label: string; user_id: string | null; usersId: string }[] = [];
-    if (role === "admin" && !filters.users_id && !firmToken.token) {
-      const { data: connected } = await admin.from("planipret_profiles")
-        .select("user_id, full_name, maestro_broker_id")
-        .eq("maestro_connected", true).not("maestro_broker_id", "is", null);
-      const seenIds = new Set<string>();
-      for (const broker of connected ?? []) {
-        const id = String(broker.maestro_broker_id);
-        if (!broker.user_id || seenIds.has(id)) continue;
-        seenIds.add(id);
-        const token = await getUserMaestroAccessToken(admin, String(broker.user_id));
-        if (!token) return applicationError("maestro_not_connected", "Un compte courtier doit être reconnecté à Maestro. Le total du cabinet est indisponible; sélectionnez un courtier pour consulter ses déboursés.", cid);
-        brokerSources.push({ token, label: String(broker.full_name ?? id), user_id: String(broker.user_id), usersId: id });
-      }
-    }
-    const firstBroker = brokerSources[0];
-    const reportScope = firstBroker
-      ? { ok: true as const, token: firstBroker.token, usersId: null, mode: "all_brokers" as const }
-      : selectedToken && filters.users_id
-      ? { ok: true as const, token: selectedToken, usersId: filters.users_id, mode: "selected_broker" as const }
-      : resolveCommissionScope({
+    const reportScope = resolveCommissionScope({
       role: role as "admin" | "broker",
       action,
       requestedUsersId: filters.users_id,

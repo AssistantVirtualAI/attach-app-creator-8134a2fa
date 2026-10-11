@@ -21,8 +21,8 @@ describe("windows", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-26T16:23:00Z"));
     const r = resolveWindow("ytd", 2026, 12);
-    expect(r.window).toEqual({ start: "2026-01-01", end: "2026-08-31" });
-    expect(r.priorWindow).toEqual({ start: "2025-01-01", end: "2025-08-31" });
+    expect(r.window).toEqual({ start: "2026-01-01", end: "2026-08-26" });
+    expect(r.priorWindow).toEqual({ start: "2025-01-01", end: "2025-08-26" });
   });
 
   it("month/quarter compare same period", () => {

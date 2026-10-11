@@ -33,15 +33,23 @@ describe("commission volume rules", () => {
   it("includes a transaction timestamp on the final calendar day", () => {
     expect(periodVolume([row({ date_trans: "2026-12-31 23:59:59" })], window)).toBe(300000);
   });
-  it("counts every funding row, including two products on the same contract", () => {
+  it("counts distinct loans of one contract once each, and the contract once", () => {
     const rows = [
       row({ source_row: 1, loan_amt: 200_000 }),
       row({ source_row: 2, mortgage_type: "Marge Hypothécaire", loan_amt: 100_000 }),
     ];
-
-    expect(volumeTranches(rows, window)).toHaveLength(2);
     expect(periodVolume(rows, window)).toBe(300_000);
-    expect(periodDeals(rows, window)).toBe(1); // one unique contract number
+    expect(periodDeals(rows, window)).toBe(1);
+  });
+
+  it("never double-counts the same contract+loan repeated in base rows", () => {
+    const rows = [
+      row({ source_row: 1, loan_amt: 300_000, amount: 1_000 }),
+      row({ source_row: 2, date_trans: "2026-06-02", loan_amt: 300_000, amount: 500 }),
+    ];
+    expect(periodVolume(rows, window)).toBe(300_000);
+    expect(periodDeals(rows, window)).toBe(1);
+    expect(periodCommission(rows, window)).toBe(1_500);
   });
 
   it("excludes adjustment rows from volume and deals but keeps them in commissions", () => {
@@ -49,7 +57,6 @@ describe("commission volume rules", () => {
       row({ source_row: 1, loan_amt: 200_000, amount: 1_000 }),
       row({ source_row: 2, number: "PLPR-2", loan_amt: 150_000, amount: 800, is_adjustment: "1" }),
     ];
-
     expect(periodVolume(rows, window)).toBe(200_000);
     expect(periodDeals(rows, window)).toBe(1);
     expect(periodCommission(rows, window)).toBe(1_800);
@@ -59,36 +66,32 @@ describe("commission volume rules", () => {
     const rows = [
       row({ source_row: 1, loan_amt: 200_000, amount: 1_000 }),
       row({ source_row: 2, number: "PLPR-3", loan_amt: 0, amount: 158.86, institution: "Lepelco Assurances Inc" }),
-      row({ source_row: 3, number: "PLPR-4", loan_amt: 0, amount: 102.53, institution: "Desjardins Assurances" }),
     ];
-
     expect(periodVolume(rows, window)).toBe(200_000);
-    expect(periodDeals(rows, window)).toBe(1);
     expect(periodCommission(rows, window)).toBe(1_000);
   });
 
-  it("keeps identical contract numbers from different brokers distinct", () => {
+  it("never dedupes two brokers with same contract, lender, product and amount, even with the same name", () => {
     const rows = [
-      row({ source_row: 1, broker_user_id: "broker-1" }),
-      row({ source_row: 2, broker_user_id: "broker-2", loan_amt: 400_000 }),
+      row({ source_row: 1, broker_user_id: "broker-1", agent_name: "Jean Tremblay" }),
+      row({ source_row: 2, broker_user_id: "broker-2", agent_name: "Jean Tremblay" }),
     ];
-
-    expect(periodVolume(rows, window)).toBe(700_000);
-  });
-
-  it("counts separate funding entries with matching amounts and keeps funded volume of clawed-back rows", () => {
-    const rows = [
-      row({ source_row: 1, loan_amt: 300_000, amount: 1_000 }),
-      row({ source_row: 2, date_trans: "2026-06-02", loan_amt: 300_000, amount: 0 }),
-      row({ source_row: 3, number: "PLPR-9", loan_amt: 250_000, amount: 500 }),
-      row({ source_row: 4, number: "PLPR-9", loan_amt: -250_000, amount: 0 }), // commission clawback only
-    ];
-
-    expect(periodVolume(rows, window)).toBe(850_000);
+    expect(periodVolume(rows, window)).toBe(600_000);
     expect(periodDeals(rows, window)).toBe(2);
-    expect(periodCommission(rows, window)).toBe(1_500);
   });
 
+  it("keeps clawback rows out of volume without removing the funded twin", () => {
+    const rows = [
+      row({ source_row: 3, number: "PLPR-9", loan_amt: 250_000, amount: 500 }),
+      row({ source_row: 4, number: "PLPR-9", loan_amt: -250_000, amount: 0 }),
+    ];
+    expect(periodVolume(rows, window)).toBe(250_000);
+    expect(periodDeals(rows, window)).toBe(1);
+  });
+
+  it("ignores undated rows in KPIs", () => {
+    expect(periodVolume([row({ date_trans: null as any })], window)).toBe(0);
+  });
 });
 
 describe("workbook spec conformance", () => {

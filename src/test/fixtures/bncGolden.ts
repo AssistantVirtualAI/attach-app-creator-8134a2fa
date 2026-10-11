@@ -8,7 +8,7 @@
 import type { RegisterRow } from "../../../supabase/functions/_shared/commission-engine";
 
 /** Frozen "now" used by every golden test (Aug 26 2026, UTC). */
-export const GOLDEN_NOW = "2026-08-26T16:23:00Z";
+export const GOLDEN_NOW = "2026-08-31T16:00:00Z";
 export const GOLDEN_YEAR = 2026;
 
 let seq = 1000;

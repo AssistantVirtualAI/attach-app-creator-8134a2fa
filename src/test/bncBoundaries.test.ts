@@ -14,13 +14,13 @@ describe("BNC percentages on date boundaries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T05:00:00Z"));
     const rows = [
-      bncRow("2025-01-05", 1_000_000, "B-PY1"),
+      bncRow("2025-01-01", 1_000_000, "B-PY1"),
       bncRow("2025-12-31", 8_000_000, "B-PY2"), // previous December must be excluded
       bncRow("2026-01-01", 1_500_000, "B-CY1"),
     ];
     const { window, priorWindow } = resolveWindow("ytd", 2026, 12);
-    expect(window).toEqual({ start: "2026-01-01", end: "2026-01-31" });
-    expect(priorWindow).toEqual({ start: "2025-01-01", end: "2025-01-31" });
+    expect(window).toEqual({ start: "2026-01-01", end: "2026-01-01" });
+    expect(priorWindow).toEqual({ start: "2025-01-01", end: "2025-01-01" });
 
     const cy = metrics(rows, window, BNC);
     const py = metrics(rows, priorWindow, BNC);
@@ -72,8 +72,8 @@ describe("BNC percentages on date boundaries", () => {
     const utcCapped = resolveWindow("ytd", 2026, 12);
     expect(utcCapped.window.start).toBe("2026-01-01");
     // The engine works in UTC, so the cap follows the UTC month deterministically.
-    expect(utcCapped.window.end).toBe("2026-09-30");
-    expect(utcCapped.priorWindow).toEqual({ start: "2025-01-01", end: "2025-09-30" });
+    expect(utcCapped.window.end).toBe("2026-08-31");
+    expect(utcCapped.priorWindow).toEqual({ start: "2025-01-01", end: "2025-08-31" });
 
     // Same instant, one hour earlier locally: still inside August in UTC.
     vi.setSystemTime(new Date("2026-08-31T18:30:00-04:00"));

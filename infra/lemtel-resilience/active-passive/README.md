@@ -44,6 +44,8 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 `lemtel-ha-primary-standby-runtime-envelope-create.sh` and `lemtel-ha-standby-runtime-envelope-stage.sh` completed the deliberately inactive runtime stage. The primary encrypts only the active Compose configuration, `.env`, Edge Functions, and Caddy configuration to the exact standby `age` recipient. It never includes PostgreSQL or Storage data, which retain their independent replication paths. The standby decrypts the envelope root-only, validates the exact file allow-list and Compose syntax, and refuses if anything except the existing PostgreSQL standby is running. The runtime is staged but remains dormant: it never invokes `docker compose up`, starts a public listener, starts Storage, changes DNS, or promotes PostgreSQL.
 
+`lemtel-ha-primary-canonical-caddy-prepare.sh` is the separate, root-only preparation for the approved canonical hostname. It generates a root-only candidate Caddyfile that keeps the existing proxy hostname and adds `lemtel.assistantvirtualai.com`, then parses that candidate inside the already-running Caddy image. It never replaces the mounted Caddyfile, reloads Caddy, restarts containers, calls Cloudflare, changes DNS, moves traffic, or contacts telephony. A separate, explicitly approved live-routing action is still required after this preparation.
+
 ## Remaining controlled implementation
 
 1. Create and validate the canonical Hostinger route on `lemtel.assistantvirtualai.com` without moving existing client traffic, then prove the matching dormant runtime path on DigitalOcean.

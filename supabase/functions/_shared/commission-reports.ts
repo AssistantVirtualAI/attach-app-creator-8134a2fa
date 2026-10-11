@@ -289,6 +289,8 @@ export function paidFlags(allRows: CommissionDepositRow[]) {
     term: r.term == null ? null : String(r.term),
     date_trans: r.date_trans?.trim().slice(0, 10) ?? null,
     commission_type: r.commission_type ?? "base", source_row,
+    // Identity scoping: unique Maestro broker id, never the display name.
+    broker_user_id: (r as any).broker_user_id ?? (r.agent_name_id != null ? String(r.agent_name_id) : null),
   }));
   return helperFlags(rows, { start: "0000-01-01", end: "9999-12-31" });
 }

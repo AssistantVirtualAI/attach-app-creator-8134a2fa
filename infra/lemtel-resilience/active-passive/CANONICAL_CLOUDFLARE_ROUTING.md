@@ -4,7 +4,7 @@ Le nom public canonique approuvé pour Lemtel est **`lemtel.assistantvirtualai.c
 
 ## Prévol primaire effectué
 
-Hostinger exécute Caddy et publie déjà les ports HTTPS nécessaires. Le proxy est configuré par variables d’environnement et l’URL primaire actuelle n’est pas encore le nom canonique. Ces faits établissent que le routage doit être appliqué par une procédure transactionnelle : sauvegarde de la configuration, ajout du nom à la configuration proxy, validation de Caddy, test HTTPS, puis seulement une configuration durable des URL Lemtel. `lemtel-ha-primary-canonical-caddy-prepare.sh` prépare et valide un candidat root-only qui conserve le nom existant ; il ne modifie pas le Caddyfile monté, ne recharge pas Caddy et ne crée aucun DNS. Aucun changement de trafic n’a été fait dans cette phase.
+Hostinger exécute Caddy et publie déjà les ports HTTPS nécessaires. Le proxy est configuré par variables d’environnement et l’URL primaire actuelle n’est pas encore le nom canonique. Ces faits établissent que le routage doit être appliqué par une procédure transactionnelle : sauvegarde de la configuration, ajout du nom à la configuration proxy, validation de Caddy, test HTTPS, puis seulement une configuration durable des URL Lemtel. `lemtel-ha-primary-canonical-caddy-prepare.sh` prépare et valide un candidat root-only qui conserve le nom existant ; il ne modifie pas le Caddyfile monté, ne recharge pas Caddy et ne crée aucun DNS. `lemtel-ha-primary-canonical-caddy-apply.sh` applique uniquement ce candidat après une confirmation explicite : verrou exclusif, sauvegarde, comparaison avec le Caddyfile actif, validation, hot reload, puis rollback automatique sur échec. Aucun changement de trafic n’a encore été fait dans cette phase.
 
 ## Séquence contrôlée
 

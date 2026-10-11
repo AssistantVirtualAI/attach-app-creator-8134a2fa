@@ -11,8 +11,8 @@ on:
       marketing_version:
         description: "Existing iOS marketing version."
         required: true
-      default: "1.1"
-      type: string
+        default: "1.1"
+        type: string
   push:
     tags:
       - "lemtel-ios-testflight-group-v1.1.5-r*"

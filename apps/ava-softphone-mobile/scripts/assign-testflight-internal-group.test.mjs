@@ -18,6 +18,13 @@ test("TestFlight assignment is restricted to the processed Lemtel internal build
   assert.match(assignmentScript, /appId !== "6786177551"/);
   assert.match(assignmentScript, /groupName !== "Lemtel Internal"/);
   assert.match(assignmentScript, /marketingVersion !== "1\.1"/);
+  assert.match(assignmentScript, /"filter\[version\]": buildVersion/);
+  assert.match(
+    assignmentScript,
+    /"filter\[preReleaseVersion\.version\]": marketingVersion/,
+  );
+  assert.match(assignmentScript, /"filter\[processingState\]": "VALID"/);
+  assert.doesNotMatch(assignmentScript, /filter\[buildVersion\]/);
   assert.match(assignmentScript, /processingState !== "VALID"/);
   assert.match(assignmentScript, /\/v1\/betaGroups\/\$\{group\.id\}\/relationships\/builds/);
   assert.match(assignmentScript, /type: "builds"/);

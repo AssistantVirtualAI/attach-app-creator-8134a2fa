@@ -73,8 +73,9 @@ const token = apiToken({
 
 const buildQuery = new URLSearchParams({
   "filter[app]": appId,
-  "filter[buildVersion]": buildVersion,
-  "filter[version]": marketingVersion,
+  "filter[version]": buildVersion,
+  "filter[preReleaseVersion.version]": marketingVersion,
+  "filter[processingState]": "VALID",
   limit: "2",
 });
 const builds = await appleRequest(`/v1/builds?${buildQuery.toString()}`, token);

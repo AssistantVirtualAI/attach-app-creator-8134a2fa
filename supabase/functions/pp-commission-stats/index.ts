@@ -21,6 +21,7 @@ import {
   resolveWindow,
   isInsurance,
   brokerId,
+  isLinkedBrokerKey,
   type Granularity,
   yoy,
 } from "../_shared/commission-engine.ts";
@@ -287,6 +288,8 @@ Deno.serve(async (req) => {
         const name = idRow?.agent_name ?? id;
         return {
           broker: name,
+          brokerKey: id,
+          linked: isLinkedBrokerKey(id),
           firstName: idRow?.first_name ?? null,
           lastName: idRow?.last_name ?? null,
           maestroBrokerId: idRow?.maestro_broker_id ?? null,
@@ -375,6 +378,8 @@ Deno.serve(async (req) => {
       });
       return {
         broker: name,
+        brokerKey: id,
+        linked: isLinkedBrokerKey(id),
         firstName: idRow?.first_name ?? null,
         lastName: idRow?.last_name ?? null,
         brokerUserId: idRow?.broker_user_id ?? null,
@@ -390,7 +395,7 @@ Deno.serve(async (req) => {
     const unlinkedBrokers = uniq(scopedAll.filter((r: any) => !r.broker_user_id).map((r) => brokerId(r)))
       .map((id) => {
         const rows = byBroker.get(id) ?? [];
-        return { broker: (rows[0] as any)?.agent_name ?? id, rows: rows.length, commission: rows.reduce((a, r) => a + (Number(r.amount) || 0), 0) };
+        return { broker: (rows[0] as any)?.agent_name ?? id, brokerKey: id, linked: isLinkedBrokerKey(id), rows: rows.length, commission: rows.reduce((a, r) => a + (Number(r.amount) || 0), 0) };
       });
 
     const monthly = Array.from({ length: 12 }, (_, i) => {
@@ -470,6 +475,8 @@ Deno.serve(async (req) => {
         const name = idRow?.agent_name ?? id;
         return {
           broker: name,
+          brokerKey: id,
+          linked: isLinkedBrokerKey(id),
           firstName: idRow?.first_name ?? null,
           lastName: idRow?.last_name ?? null,
           maestroBrokerId: idRow?.maestro_broker_id ?? null,
@@ -560,6 +567,7 @@ Deno.serve(async (req) => {
     const brokerScope = agent ? mine : scopedAll;
     const brokerBreak = uniq(brokerScope.map((r) => brokerId(r))).map((id) => ({
       broker: (byBroker.get(id)?.[0] as any)?.agent_name ?? id,
+      brokerKey: id,
       volume: brokerMetrics(brokerScope, cyYtd, id).volume,
       deals: brokerMetrics(brokerScope, cyYtd, id).deals,
       commission: brokerMetrics(brokerScope, cyYtd, id).commission,
@@ -708,13 +716,14 @@ Deno.serve(async (req) => {
     };
 
     // ---- Drill-down: one broker, selected window, commissions by type + deal lines ----
-    const detailAgent: string | null =
-      typeof body?.detailAgent === "string" && body.detailAgent.trim() ? body.detailAgent.trim() : null;
+    // Drill-down is selected ONLY by the stable key (brokerId). `detailAgent` is
+    // accepted for backward compatibility but treated as a key, never a name.
+    const rawKey = typeof body?.detailBrokerKey === "string" ? body.detailBrokerKey
+      : typeof body?.detailAgent === "string" ? body.detailAgent : "";
+    const detailBrokerKey: string | null = rawKey.trim() && isLinkedBrokerKey(rawKey.trim()) ? rawKey.trim() : null;
     let detail: any = null;
-    if (detailAgent) {
-      const dLower = detailAgent.toLowerCase();
-      const isDetailRow = (r: any) =>
-        (r.agent_name ?? "").trim().toLowerCase() === dLower || brokerId(r) === dLower;
+    if (detailBrokerKey) {
+      const isDetailRow = (r: any) => brokerId(r) === detailBrokerKey;
       const dRows = scopedAll
         .filter(isDetailRow)
         .filter(inWin)
@@ -756,14 +765,15 @@ Deno.serve(async (req) => {
       ).sort((a: any, b: any) => a.period.localeCompare(b.period));
 
       detail = {
-        agent: detailAgent,
+        agent: detailBrokerKey,
+        brokerKey: detailBrokerKey,
         firstName: idRow?.first_name ?? null,
         lastName: idRow?.last_name ?? null,
         maestroBrokerId: idRow?.maestro_broker_id ?? null,
         window: cyYtd,
         periodLabel: resolved.label,
-        kpi: metrics(scopedAll, cyYtd, { broker: detailAgent }),
-        kpiPy: metrics(scopedAll, pyYtd, { broker: detailAgent }),
+        kpi: metrics(scopedAll, cyYtd, { brokerKey: detailBrokerKey }),
+        kpiPy: metrics(scopedAll, pyYtd, { brokerKey: detailBrokerKey }),
         byType,
         byPeriod,
         lines: dRows.slice(0, 2000).map((r) => ({

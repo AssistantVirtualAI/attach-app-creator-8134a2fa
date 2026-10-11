@@ -94,7 +94,7 @@ function matches(r: RegisterRow, c: Criteria): boolean {
 
 const normalizedKeyPart = (value: unknown) => (value == null ? "" : String(value)).trim().toLocaleLowerCase("fr-CA");
 /** Unique broker identity for keys (never the display name). */
-const brokerKey = (r: RegisterRow) => normalizedKeyPart((r as any).broker_user_id ?? "");
+const brokerKey = (r: RegisterRow) => brokerId(r);
 
 /**
  * Stable broker identity for grouping: portal user id first, then the Maestro

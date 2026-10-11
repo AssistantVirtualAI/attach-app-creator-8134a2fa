@@ -319,7 +319,7 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
             periodIndex,
             scope: "all",
             agent: null,
-            detailAgent: drillAgent,
+            detailBrokerKey: drillAgent,
           },
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         });

@@ -45,6 +45,8 @@ test('promoted standby runtime activation requires fencing evidence and preserve
   assert.match(standbyActivation, /LEMTEL_HA_ROLE:-\}" = 'digitalocean_standby'/u);
   assert.match(standbyActivation, /I_UNDERSTAND_PROMOTED_STANDBY_RUNTIME_WILL_START/u);
   assert.match(standbyActivation, /standby-promotion\.state/u);
+  assert.match(standbyActivation, /\/var\/lib\/lemtel-ha\/fencing\/standby-promotion\.state/u);
+  assert.doesNotMatch(standbyActivation, /\/opt\/lemtel-ha\/fencing\/standby-promotion\.state/u);
   assert.match(standbyActivation, /primary_fence_not_confirmed/u);
   assert.match(standbyActivation, /SELECT pg_is_in_recovery\(\)/u);
   assert.match(standbyActivation, /docker network connect --alias db/u);

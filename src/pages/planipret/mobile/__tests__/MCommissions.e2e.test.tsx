@@ -13,16 +13,30 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const invokeMock = vi.fn();
+// Chainable Realtime channel mock (channel().on().on().subscribe(), removeChannel).
+const channels: { name: string; handlers: Array<() => void>; removed: boolean }[] = [];
+const makeChannel = (name: string) => {
+  const entry = { name, handlers: [] as Array<() => void>, removed: false };
+  channels.push(entry);
+  const ch: any = {
+    on: (_t: string, _f: unknown, cb: () => void) => { entry.handlers.push(cb); return ch; },
+    subscribe: () => ch,
+    __entry: entry,
+  };
+  return ch;
+};
 let outletProfile: any = { role: "broker" };
 let currentLang: "fr" | "en" = "fr";
 
 vi.mock("@/lib/planipret/ppEdge", () => ({
-  ppEdgeInvoke: (fn: string, body: any) => invokeMock(fn, { body }),
+  ppEdgeInvoke: (fn: string, body: any, o?: any) => invokeMock(fn, { body, edgeOpts: o }),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: (fn: string, opts: any) => invokeMock(fn, opts) },
+    channel: (name: string) => makeChannel(name),
+    removeChannel: (ch: any) => { if (ch?.__entry) ch.__entry.removed = true; return Promise.resolve("ok"); },
     auth: {
       getUser: () => Promise.resolve({ data: { user: { id: "u1" } } }),
       getSession: () => Promise.resolve({ data: { session: { access_token: "t" } } }),
@@ -111,6 +125,7 @@ const money = (expected: string) =>
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
+  channels.length = 0;
   invokeMock.mockReset();
   invokeMock.mockImplementation(respond);
   outletProfile = { role: "broker" };
@@ -168,7 +183,8 @@ describe("MCommissions (mobile)", () => {
     );
     render(<MCommissions />);
     expect(await screen.findByText("maestro_not_configured")).toBeInTheDocument();
-    expect(screen.queryByText("Commissions déboursées")).not.toBeInTheDocument();
+    // An error never becomes a zero total in the paid panel.
+    expect(screen.queryByText((_, el) => !!el && el.children.length === 0 && norm(el.textContent ?? "") === "0$")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "En attente" }));
     expect(screen.getAllByText("Commissions en attente").length).toBeGreaterThan(0);
     await waitFor(() => expect(invokeMock.mock.calls.some((c) => c[1]?.body?.action === "pending")).toBe(true));
@@ -177,12 +193,14 @@ describe("MCommissions (mobile)", () => {
   it("recharge avec une nouvelle fenêtre quand la période change", async () => {
     render(<MCommissions />);
     await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    const firstFrom = invokeMock.mock.calls.find((c) => c[1]?.body?.action === "summary")?.[1].body.filters.date_from;
+    // The paid panel (PaidDepositsCard) has its own 90 s summary call; track only the screen's.
+    const screenSummary = (c: any[]) => c[1]?.body?.action === "summary" && c[1]?.edgeOpts?.timeoutMs !== 90_000;
+    const firstFrom = invokeMock.mock.calls.find(screenSummary)?.[1].body.filters.date_from;
 
     fireEvent.click(screen.getByText("Année en cours"));
 
     await waitFor(() => {
-      const calls = invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "summary");
+      const calls = invokeMock.mock.calls.filter(screenSummary);
       const lastFrom = calls[calls.length - 1][1].body.filters.date_from;
       expect(lastFrom).not.toBe(firstFrom);
       expect(lastFrom).toMatch(/^\d{4}-01-01/);

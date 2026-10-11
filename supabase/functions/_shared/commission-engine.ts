@@ -111,6 +111,14 @@ export function brokerId(r: RegisterRow): string {
   return a ? `unlinked:${a}` : "unlinked:";
 }
 
+/** Drill-down key from a request body: only a linked stable key, never a display name. */
+export function resolveDetailBrokerKey(body: any): string | null {
+  const raw = typeof body?.detailBrokerKey === "string" ? body.detailBrokerKey
+    : typeof body?.detailAgent === "string" ? body.detailAgent : "";
+  const k = raw.trim();
+  return k && isLinkedBrokerKey(k) ? k : null;
+}
+
 /** True when the key comes from a stable identity (portal user or Maestro id). */
 export const isLinkedBrokerKey = (key: string | null | undefined) =>
   !!key && (key.startsWith("user:") || key.startsWith("maestro:"));

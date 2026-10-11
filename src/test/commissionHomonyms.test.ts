@@ -2,7 +2,7 @@
 // grouping through the drill-down; unlinked rows never merge by display name.
 import { describe, expect, it } from "vitest";
 import {
-  brokerId, isLinkedBrokerKey, metrics, metricsByBroker, type RegisterRow,
+  brokerId, isLinkedBrokerKey, resolveDetailBrokerKey, metrics, metricsByBroker, type RegisterRow,
 } from "../../supabase/functions/_shared/commission-engine";
 
 const ALL = { start: "0000-01-01", end: "9999-12-31" };
@@ -44,5 +44,22 @@ describe("homonym brokers", () => {
     // the unlinked row never merges into either linked broker
     const m = metricsByBroker(ROWS, ALL);
     expect(m.get("unlinked:jean tremblay")).toMatchObject({ deals: 1, volume: 100000 });
+  });
+
+  it("pp-commission-stats rejects a display name as detail key", () => {
+    expect(resolveDetailBrokerKey({ detailBrokerKey: "Jean Tremblay" })).toBeNull();
+    expect(resolveDetailBrokerKey({ detailAgent: "Jean Tremblay" })).toBeNull();
+    expect(resolveDetailBrokerKey({ detailBrokerKey: "unlinked:jean tremblay" })).toBeNull();
+    expect(resolveDetailBrokerKey({ detailBrokerKey: " user:u-a " })).toBe("user:u-a");
+    expect(resolveDetailBrokerKey({ detailAgent: "maestro:222" })).toBe("maestro:222");
+  });
+
+  it("each homonym's drill-down via the server key holds only its own rows", () => {
+    for (const k of ["user:u-a", "maestro:222"]) {
+      const key = resolveDetailBrokerKey({ detailBrokerKey: k })!;
+      const rows = ROWS.filter((r) => brokerId(r) === key);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((r) => brokerId(r) === k)).toBe(true);
+    }
   });
 });

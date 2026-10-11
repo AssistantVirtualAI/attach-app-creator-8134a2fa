@@ -22,6 +22,7 @@ import {
   isInsurance,
   brokerId,
   isLinkedBrokerKey,
+  resolveDetailBrokerKey,
   type Granularity,
   yoy,
 } from "../_shared/commission-engine.ts";
@@ -718,9 +719,7 @@ Deno.serve(async (req) => {
     // ---- Drill-down: one broker, selected window, commissions by type + deal lines ----
     // Drill-down is selected ONLY by the stable key (brokerId). `detailAgent` is
     // accepted for backward compatibility but treated as a key, never a name.
-    const rawKey = typeof body?.detailBrokerKey === "string" ? body.detailBrokerKey
-      : typeof body?.detailAgent === "string" ? body.detailAgent : "";
-    const detailBrokerKey: string | null = rawKey.trim() && isLinkedBrokerKey(rawKey.trim()) ? rawKey.trim() : null;
+    const detailBrokerKey: string | null = resolveDetailBrokerKey(body);
     let detail: any = null;
     if (detailBrokerKey) {
       const isDetailRow = (r: any) => brokerId(r) === detailBrokerKey;

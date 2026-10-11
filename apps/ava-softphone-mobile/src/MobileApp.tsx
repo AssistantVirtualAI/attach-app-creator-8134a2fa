@@ -25,7 +25,7 @@ import BottomTabs, { Tab } from './components/BottomTabs';
 import NotificationsSheet from './components/NotificationsSheet';
 import { useTheme } from './lib/ThemeContext';
 import { useT } from './lib/i18n';
-import { Bell, Sun, Moon, Globe, Grid3X3, Home, Menu, MessageCircle, MoreHorizontal, Phone, Settings, UsersRound } from 'lucide-react';
+import { Bell, Sun, Moon, Settings } from 'lucide-react';
 import ActiveCallSheet from './components/ActiveCallSheet';
 import SipDebugPanel from './components/SipDebugPanel';
 import SplashAva from './components/SplashAva';
@@ -700,12 +700,10 @@ class ScreenErrorBoundary extends Component<
   }
 }
 
-/* ─── Top header with hamburger dropdown + actions ─────────────────────── */
+/* ─── Top header with direct workspace actions ─────────────────────────── */
 function TopHeader({
   tab, onNavigate, haptic, creds, onOpenProfile,
 }: { tab: Tab; onNavigate: (t: Tab) => void; haptic: (s?: ImpactStyle) => Promise<void>; creds: Creds; onOpenProfile: () => void }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const { mode, toggle: toggleTheme } = useTheme();
   const { lang, toggle: toggleLang, t: tr } = useT();
@@ -746,28 +744,16 @@ function TopHeader({
     contacts: tr('tabs.contacts' as any), chats: tr('tabs.chats' as any), calls: tr('tabs.calls' as any),
     keypad: tr('tabs.keypad' as any), speeddial: tr('tabs.speeddial' as any), settings: tr('tabs.settings' as any), home: tr('tabs.home' as any),
   };
-  const navItems: { id: Tab; label: string; Icon: typeof Home }[] = [
-    { id: 'home', label: tr('tabs.home' as any), Icon: Home },
-    { id: 'contacts', label: tr('tabs.contacts' as any), Icon: UsersRound },
-    { id: 'chats', label: tr('tabs.chats' as any), Icon: MessageCircle },
-    { id: 'calls', label: tr('tabs.calls' as any), Icon: Phone },
-    { id: 'keypad', label: tr('tabs.keypad' as any), Icon: Grid3X3 },
-    { id: 'settings', label: tr('tabs.settings' as any), Icon: Settings },
-  ];
   const shellButton: React.CSSProperties = {
-    width: 40, height: 40, flex: '0 0 auto', display: 'grid', placeItems: 'center', padding: 0,
-    borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.graphite,
+    width: 36, height: 36, flex: '0 0 auto', display: 'grid', placeItems: 'center', padding: 0,
+    borderRadius: 11, border: `1px solid ${colors.border}`, background: colors.graphite,
     color: colors.textIce, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
   };
-  const closePanels = () => { setMenuOpen(false); setToolsOpen(false); };
 
   return (
     <header style={{ position: 'relative', zIndex: 65, padding: '8px 12px', background: colors.navSurface, borderBottom: `1px solid ${colors.border}`, boxShadow: '0 10px 30px -24px rgba(0,0,0,.72)', backdropFilter: 'blur(22px) saturate(160%)', WebkitBackdropFilter: 'blur(22px) saturate(160%)' }}>
       <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,#0023e6,#7a4cff 52%,#21d4fd)', opacity: .92 }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 46 }}>
-        <button type="button" aria-label={tr('tabs.more' as any) || 'Menu'} onClick={() => { void haptic(ImpactStyle.Light); setMenuOpen((open) => !open); setToolsOpen(false); }} style={{ ...shellButton, background: menuOpen ? `${colors.lemtelBlue}22` : colors.graphite }}>
-          <Menu size={21} strokeWidth={2.3} />
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 40 }}>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src="/lemtel-icon.png" alt="Lemtel" width={32} height={32} style={{ width: 32, height: 32, borderRadius: 10, boxShadow: `0 8px 20px -10px ${colors.lemtelBlue}` }} />
           <div style={{ minWidth: 0 }}>
@@ -778,43 +764,26 @@ function TopHeader({
             <div style={{ color: colors.mutedSilver, fontSize: 10.5, fontWeight: 700, letterSpacing: .35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labels[tab] || 'Lemtel Softphone'}</div>
           </div>
         </div>
-        <button type="button" aria-label="Profile and status" title={`Profile · ${presence.status.replace('_', ' ')}`} onClick={() => { void haptic(ImpactStyle.Light); onOpenProfile(); closePanels(); }} style={{ ...shellButton, width: 38, height: 38, borderRadius: 19, overflow: 'hidden', position: 'relative' }}>
+        <button type="button" aria-label="Profile and status" title={`Profile · ${presence.status.replace('_', ' ')}`} onClick={() => { void haptic(ImpactStyle.Light); onOpenProfile(); }} style={{ ...shellButton, width: 38, height: 38, borderRadius: 19, overflow: 'hidden', position: 'relative' }}>
           {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: .35 }}>{initials}</span>}
           <span style={{ position: 'absolute', right: 0, bottom: 0, width: 10, height: 10, borderRadius: '50%', background: presence.color, border: `2px solid ${colors.navSurface}` }} />
         </button>
-        <button type="button" aria-label="Workspace controls" onClick={() => { void haptic(ImpactStyle.Light); setToolsOpen((open) => !open); setMenuOpen(false); }} style={{ ...shellButton, width: 40, height: 40, background: toolsOpen ? `${colors.lemtelBlue}22` : colors.graphite }}>
-          <MoreHorizontal size={21} strokeWidth={2.4} />
+        <button type="button" aria-label={tr('tabs.settings' as any) || 'Settings'} title={tr('tabs.settings' as any) || 'Settings'} onClick={() => { void haptic(ImpactStyle.Light); onNavigate('settings'); }} style={shellButton}>
+          <Settings size={18} strokeWidth={2.35} />
+        </button>
+        <button type="button" aria-label={lang === 'fr' ? 'Passer en anglais' : 'Switch to French'} title={lang === 'fr' ? 'English' : 'Français'} onClick={() => { void haptic(ImpactStyle.Light); toggleLang(); }} style={{ ...shellButton, fontSize: 10, fontWeight: 850, letterSpacing: .4 }}>
+          {lang.toUpperCase()}
+        </button>
+        <button type="button" aria-label={mode === 'dark' ? 'Switch to Daylight' : 'Switch to Dark'} title={mode === 'dark' ? 'Daylight' : 'Dark'} onClick={() => { void haptic(ImpactStyle.Light); toggleTheme(); }} style={shellButton}>
+          {mode === 'dark' ? <Sun size={18} strokeWidth={2.35} /> : <Moon size={18} strokeWidth={2.35} />}
+        </button>
+        <button type="button" aria-label={tr('notifications.title' as any) || 'Notifications'} title={tr('notifications.title' as any) || 'Notifications'} onClick={() => { void haptic(ImpactStyle.Light); setNotifOpen(true); }} style={shellButton}>
+          <Bell size={18} strokeWidth={2.35} />
         </button>
       </div>
-
-      {(menuOpen || toolsOpen) && <button type="button" aria-label="Close menu" onClick={closePanels} style={{ position: 'fixed', zIndex: 66, inset: 0, border: 0, background: 'transparent', padding: 0 }} />}
-      {menuOpen && (
-        <nav aria-label="Lemtel navigation" style={{ position: 'absolute', zIndex: 67, top: 62, left: 12, width: 'min(288px, calc(100vw - 24px))', padding: 8, borderRadius: 18, background: colors.navSurface, border: `1px solid ${colors.border}`, boxShadow: '0 28px 70px -28px rgba(0,0,0,.72)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)' }}>
-          <div style={{ padding: '7px 8px 9px', color: colors.mutedSilver, fontSize: 10, fontWeight: 800, letterSpacing: 1.3, textTransform: 'uppercase' }}>Lemtel workspace</div>
-          {navItems.map(({ id, label, Icon }) => {
-            const active = tab === id;
-            return <button key={id} type="button" onClick={() => { closePanels(); onNavigate(id); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 12px', borderRadius: 12, border: active ? `1px solid ${colors.lemtelBlue}44` : '1px solid transparent', background: active ? `${colors.lemtelBlue}18` : 'transparent', color: active ? colors.lemtelBlue : colors.textIce, cursor: 'pointer', textAlign: 'left', fontSize: 14, fontWeight: active ? 800 : 650 }}><Icon size={18} strokeWidth={active ? 2.5 : 2} /><span>{label}</span></button>;
-          })}
-        </nav>
-      )}
-      {toolsOpen && (
-        <aside aria-label="Workspace controls" style={{ position: 'absolute', zIndex: 67, top: 62, right: 12, width: 'min(260px, calc(100vw - 24px))', padding: 8, borderRadius: 18, background: colors.navSurface, border: `1px solid ${colors.border}`, boxShadow: '0 28px 70px -28px rgba(0,0,0,.72)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)' }}>
-          <button type="button" onClick={() => { toggleLang(); }} style={toolRow(colors)}><Globe size={17} /><span style={{ flex: 1 }}>{lang === 'fr' ? 'Français' : 'English'}</span><span style={{ color: colors.avaCyan, fontSize: 11, fontWeight: 800 }}>{lang.toUpperCase()}</span></button>
-          <button type="button" onClick={() => { toggleTheme(); }} style={toolRow(colors)}>{mode === 'dark' ? <Sun size={17} /> : <Moon size={17} />}<span style={{ flex: 1 }}>{mode === 'dark' ? 'Dark' : 'Daylight'}</span></button>
-          <button type="button" onClick={() => { closePanels(); setNotifOpen(true); }} style={toolRow(colors)}><Bell size={17} /><span style={{ flex: 1 }}>{tr('notifications.title' as any) || 'Notifications'}</span></button>
-        </aside>
-      )}
       <NotificationsSheet open={notifOpen} onClose={() => setNotifOpen(false)} onNavigate={(next) => { setNotifOpen(false); onNavigate(next); }} />
     </header>
   );
-}
-
-function toolRow(c: typeof colors): React.CSSProperties {
-  return {
-    width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, padding: '10px 11px',
-    borderRadius: 12, border: '1px solid transparent', background: 'transparent', color: c.textIce,
-    cursor: 'pointer', textAlign: 'left', fontSize: 13, fontWeight: 700,
-  };
 }
 
 // Phase 21A: local notice after a finalized access block. Shows no device reference,

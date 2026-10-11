@@ -9,9 +9,9 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import BottomTabs from '../components/BottomTabs';
-import { ThemeProvider, useThemeColors } from '../lib/ThemeContext';
+import { ThemeProvider, useTheme, useThemeColors } from '../lib/ThemeContext';
 
 function setViewport(w: number, h: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: w });
@@ -36,6 +36,11 @@ function ScreenStub({ name }: { name: string }) {
   );
 }
 
+function ThemeSwitchProbe() {
+  const { mode, setMode } = useTheme();
+  return <button onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}>switch theme</button>;
+}
+
 const SCREENS = ['Home', 'History', 'Chat', 'Settings'] as const;
 const BREAKPOINTS = [
   { name: 'mobile',  w: 375,  h: 812 },
@@ -50,6 +55,14 @@ beforeEach(() => {
 });
 
 describe('light-mode responsive snapshots', () => {
+  it('updates the DOM token before a Daylight repaint', async () => {
+    localStorage.setItem('ava.theme.mode', 'dark');
+    const { getByText } = render(<ThemeProvider><ThemeSwitchProbe /></ThemeProvider>);
+    fireEvent.click(getByText('switch theme'));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(document.body.getAttribute('data-theme')).toBe('light');
+  });
+
   for (const bp of BREAKPOINTS) {
     describe(`@${bp.name} ${bp.w}x${bp.h}`, () => {
       it('BottomTabs', () => {

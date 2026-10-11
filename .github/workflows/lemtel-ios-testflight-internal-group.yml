@@ -1,0 +1,46 @@
+name: Lemtel iOS — Associate processed build to Lemtel Internal
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_version:
+        description: "Existing VALID iOS build number to associate with Lemtel Internal."
+        required: true
+        default: "5"
+        type: string
+      marketing_version:
+        description: "Existing iOS marketing version."
+        required: true
+        default: "1.1"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-ios-testflight-internal-group
+  cancel-in-progress: false
+
+jobs:
+  associate-existing-build:
+    name: Associate VALID Lemtel build to internal testers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: lemtel-ios-testflight
+    env:
+      TESTFLIGHT_APP_ID: "6786177551"
+      TESTFLIGHT_GROUP_NAME: "Lemtel Internal"
+      TESTFLIGHT_BUILD_VERSION: ${{ inputs.build_version }}
+      TESTFLIGHT_MARKETING_VERSION: ${{ inputs.marketing_version }}
+      APPSTORE_ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
+      APPSTORE_API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
+      APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Associate the exact processed Lemtel build
+        run: node apps/ava-softphone-mobile/scripts/assign-testflight-internal-group.mjs

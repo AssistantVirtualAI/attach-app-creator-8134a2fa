@@ -22,6 +22,10 @@ type Metric = "volume" | "commission" | "deals";
 
 export type YearlyBroker = {
   broker: string;
+  /** Stable opaque identity (brokerId) — the only value sent to drill-down. */
+  brokerKey?: string;
+  linked?: boolean;
+  maestroBrokerId?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   brokerUserId?: string | null;
@@ -50,7 +54,7 @@ export default function BrokerTopSellers({
   years: number[];
   year: number | "all";
   onYear: (y: number | "all") => void;
-  onSelect?: (broker: string) => void;
+  onSelect?: (brokerKey: string) => void;
 }) {
   const isFr = lang === "fr";
   const [metric, setMetric] = useState<Metric>("volume");
@@ -159,11 +163,12 @@ export default function BrokerTopSellers({
           <div className="grid gap-2.5 mb-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))" }}>
             {rows.slice(0, 3).map((r, i) => (
               <div
-                key={r.broker}
+                key={r.brokerKey ?? `top-${i}`}
+                data-broker-key={r.brokerKey}
                 role={onSelect ? "button" : undefined}
                 tabIndex={onSelect ? 0 : undefined}
-                onClick={() => onSelect?.(r.broker)}
-                onKeyDown={(e) => { if (onSelect && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(r.broker); } }}
+                onClick={() => r.linked !== false && r.brokerKey && onSelect?.(r.brokerKey)}
+                onKeyDown={(e) => { if (onSelect && r.linked !== false && r.brokerKey && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(r.brokerKey); } }}
                 className={`ov3d-card${onSelect ? " pp-drillable" : ""}`}
                 style={{
                   padding: 12, borderRadius: 14,
@@ -198,9 +203,9 @@ export default function BrokerTopSellers({
                   tickFormatter={(v) => (metric === "deals" ? fmtNum(Number(v)) : `${Math.round(Number(v) / 1000)}k`)} />
                 <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [fmt(Number(v)), metricLabel]} />
-                <Bar dataKey={metric} radius={[0, 6, 6, 0]} onClick={(d: any) => onSelect?.(d?.payload?.broker)}>
+                <Bar dataKey={metric} radius={[0, 6, 6, 0]} onClick={(d: any) => { const p = d?.payload; if (p?.brokerKey && p.linked !== false) onSelect?.(p.brokerKey); }}>
                   {rows.slice(0, 12).map((r, i) => (
-                    <Cell key={r.broker} fill={i < 3 ? PODIUM[i] : "#5B8FF9"} cursor={onSelect ? "pointer" : undefined} />
+                    <Cell key={r.brokerKey ?? `bar-${i}`} fill={i < 3 ? PODIUM[i] : "#5B8FF9"} cursor={onSelect ? "pointer" : undefined} />
                   ))}
                 </Bar>
               </BarChart>

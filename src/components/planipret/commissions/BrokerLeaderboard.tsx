@@ -35,10 +35,10 @@ export default function BrokerLeaderboard({
   lang: "fr" | "en";
   brokers: any[];
   periodLabel?: string;
-  onSelect?: (broker: string) => void;
+  onSelect?: (brokerKey: string) => void;
 }) {
   const isFr = lang === "fr";
-  const top = brokers.slice(0, 10).map((b) => ({ ...b, name: b.broker }));
+  const top = brokers.slice(0, 10).map((b) => ({ ...b, name: `${b.firstName ?? ""} ${b.lastName ?? ""}`.trim() || b.broker }));
 
   return (
     <>
@@ -92,9 +92,10 @@ export default function BrokerLeaderboard({
             <tbody>
               {brokers.map((b, ri) => (
                 <tr
-                  key={b.broker}
-                  onClick={() => onSelect?.(b.broker)}
-                  style={{ background: ri % 2 ? "rgba(127,127,127,.045)" : "transparent", cursor: onSelect ? "pointer" : undefined }}
+                  key={b.brokerKey ?? `row-${ri}`}
+                  data-broker-key={b.brokerKey}
+                  onClick={() => b.linked !== false && b.brokerKey && onSelect?.(b.brokerKey)}
+                  style={{ background: ri % 2 ? "rgba(127,127,127,.045)" : "transparent", cursor: onSelect && b.linked !== false ? "pointer" : undefined }}
                 >
                   {[
                     b.rank <= 3

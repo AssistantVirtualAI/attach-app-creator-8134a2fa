@@ -37,6 +37,10 @@ runtime_paths=(
   docker-compose.lemtel-db-init.yml
   volumes/functions
   volumes/proxy/caddy
+  volumes/api/envoy/envoy.yaml
+  volumes/api/envoy/cds.yaml
+  volumes/api/envoy/lds.template.yaml
+  volumes/api/envoy/docker-entrypoint.sh
 )
 
 cd "$compose_dir"

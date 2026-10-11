@@ -9,6 +9,7 @@ const primaryEnvelope = script('lemtel-ha-primary-standby-runtime-envelope-creat
 const standbyStage = script('lemtel-ha-standby-runtime-envelope-stage.sh');
 const standbyActivation = script('lemtel-ha-standby-runtime-activate-after-promotion.sh');
 const emptyStorageManifestStage = script('lemtel-ha-standby-empty-storage-manifest-stage.sh');
+const failedRuntimeStageReset = script('lemtel-ha-standby-runtime-stage-reset-after-failure.sh');
 const unsafe = /(?:\bpg_promote\b|\bnsupdate\b|docker\s+(?:run|compose\s+up)|\brsync\b|\bssh\b|\bscp\b|\bturn\b|\bwss\b)/imu;
 
 test('primary runtime envelope is root-only, encrypted, and excludes independent data volumes', () => {
@@ -19,6 +20,10 @@ test('primary runtime envelope is root-only, encrypted, and excludes independent
   assert.match(primaryEnvelope, /docker-compose\.lemtel-private\.yml/u);
   assert.match(primaryEnvelope, /volumes\/functions/u);
   assert.match(primaryEnvelope, /volumes\/proxy\/caddy/u);
+  assert.match(primaryEnvelope, /volumes\/api\/envoy\/envoy\.yaml/u);
+  assert.match(primaryEnvelope, /volumes\/api\/envoy\/cds\.yaml/u);
+  assert.match(primaryEnvelope, /volumes\/api\/envoy\/lds\.template\.yaml/u);
+  assert.match(primaryEnvelope, /volumes\/api\/envoy\/docker-entrypoint\.sh/u);
   assert.match(primaryEnvelope, /database_data_included=false/u);
   assert.match(primaryEnvelope, /storage_data_included=false/u);
   assert.match(primaryEnvelope, /credential_values_emitted=false/u);
@@ -30,6 +35,8 @@ test('standby runtime stage is root-only, allow-listed, config-only, and never s
   assert.match(standbyStage, /LEMTEL_HA_ROLE:-\}" = 'digitalocean_standby'/u);
   assert.match(standbyStage, /age -d -i "\$age_identity"/u);
   assert.match(standbyStage, /envelope_content_unapproved/u);
+  assert.match(standbyStage, /runtime_envoy_file_missing/u);
+  assert.match(standbyStage, /volumes\/api\/envoy\/docker-entrypoint\.sh/u);
   assert.match(standbyStage, /docker compose[\s\\]+/u);
   assert.match(standbyStage, /config >\/dev\/null/u);
   assert.match(standbyStage, /containers_started=false/u);
@@ -82,4 +89,19 @@ test('empty Storage recovery stages only a cryptographically valid empty manifes
   assert.match(emptyStorageManifestStage, /automatic_promotion_enabled=false/u);
   assert.match(emptyStorageManifestStage, /fusionpbx_or_sip_contacted=false/u);
   assert.doesNotMatch(emptyStorageManifestStage, unsafe);
+});
+
+test('failed runtime stage reset preserves the promoted database and removes only inactive configuration', () => {
+  assert.match(failedRuntimeStageReset, /reset_failed_standby_runtime_stage/u);
+  assert.match(failedRuntimeStageReset, /LEMTEL_HA_ROLE:-\}" = 'digitalocean_standby'/u);
+  assert.match(failedRuntimeStageReset, /I_UNDERSTAND_ONLY_FAILED_RUNTIME_CONFIGURATION_WILL_BE_REMOVED/u);
+  assert.match(failedRuntimeStageReset, /runtime_containers_still_running/u);
+  assert.match(failedRuntimeStageReset, /promoted_database_preserved=true/u);
+  assert.match(failedRuntimeStageReset, /runtime_configuration_removed=true/u);
+  assert.match(failedRuntimeStageReset, /runtime_started=false/u);
+  assert.match(failedRuntimeStageReset, /public_database_listener_enabled=false/u);
+  assert.match(failedRuntimeStageReset, /dns_change_executed=false/u);
+  assert.match(failedRuntimeStageReset, /automatic_promotion_enabled=false/u);
+  assert.match(failedRuntimeStageReset, /fusionpbx_or_sip_contacted=false/u);
+  assert.doesNotMatch(failedRuntimeStageReset, unsafe);
 });

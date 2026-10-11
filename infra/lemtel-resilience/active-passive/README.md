@@ -56,6 +56,8 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 `lemtel-ha-standby-empty-storage-manifest-stage.sh` is a narrowly scoped root-only recovery guard for the exceptional case where both the frozen Hostinger Storage attestation and the DigitalOcean receiver prove there are **zero Storage files**. A zero-byte SHA-256 manifest is the correct canonical checksum list for that state. The script requires a separate acknowledgement, verifies the standard empty-file SHA-256 and refuses if either side reports any payload file or partial file. It writes only the expected local manifest marker for the already-promoted standby; it does not copy Storage data, start runtime services, alter PostgreSQL, change DNS, restart Hostinger, or contact telephony.
 
+The encrypted runtime envelope explicitly includes the four Envoy bind-mounted files required by the active Compose configuration. The staging script rejects an envelope missing any of them before a runtime can start. If a prior activation attempt failed before completion, `lemtel-ha-standby-runtime-stage-reset-after-failure.sh` removes only the dormant decrypted configuration after it proves that the promoted database is still private and running, no application container or runtime network survives, and the transient Storage link is absent. It never removes database or Storage data, changes DNS, restarts Hostinger, or contacts telephony.
+
 ## Remaining controlled implementation
 
 1. Prove the matching dormant runtime path on DigitalOcean under controlled promotion conditions; it must remain inactive until the fenced drill.

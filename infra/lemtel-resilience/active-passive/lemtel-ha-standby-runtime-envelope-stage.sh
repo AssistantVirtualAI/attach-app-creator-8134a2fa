@@ -38,7 +38,7 @@ trap 'rm -f "$work_tar"' EXIT
 # Only files required for a dormant runtime configuration are allowed.
 while IFS= read -r entry; do
   case "$entry" in
-    .env|docker-compose.yml|docker-compose.caddy.yml|docker-compose.lemtel-private.yml|docker-compose.lemtel-db-init.yml|volumes/|volumes/functions/|volumes/functions/*|volumes/proxy/|volumes/proxy/caddy/|volumes/proxy/caddy/*)
+    .env|docker-compose.yml|docker-compose.caddy.yml|docker-compose.lemtel-private.yml|docker-compose.lemtel-db-init.yml|volumes/|volumes/functions/|volumes/functions/*|volumes/proxy/|volumes/proxy/caddy/|volumes/proxy/caddy/*|volumes/api/|volumes/api/envoy/|volumes/api/envoy/envoy.yaml|volumes/api/envoy/cds.yaml|volumes/api/envoy/lds.template.yaml|volumes/api/envoy/docker-entrypoint.sh)
       ;;
     *) fail envelope_content_unapproved ;;
   esac
@@ -51,6 +51,14 @@ install -d -o root -g root -m 0700 "$stage_dir"
 tar --extract --file "$work_tar" --directory "$stage_dir" --no-same-owner --no-same-permissions
 find "$stage_dir" -type d -exec chmod 0700 {} +
 find "$stage_dir" -type f -exec chmod 0600 {} +
+
+for envoy_file in \
+  volumes/api/envoy/envoy.yaml \
+  volumes/api/envoy/cds.yaml \
+  volumes/api/envoy/lds.template.yaml \
+  volumes/api/envoy/docker-entrypoint.sh; do
+  [ -f "$stage_dir/$envoy_file" ] || fail runtime_envoy_file_missing
+done
 
 cd "$stage_dir"
 docker compose \

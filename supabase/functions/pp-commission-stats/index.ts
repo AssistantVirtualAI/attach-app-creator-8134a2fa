@@ -474,7 +474,7 @@ Deno.serve(async (req) => {
           lastName: idRow?.last_name ?? null,
           maestroBrokerId: idRow?.maestro_broker_id ?? null,
           brokerUserId: idRow?.broker_user_id ?? null,
-          isMe: !!myName && name.trim().toLowerCase() === myName.trim().toLowerCase(),
+          isMe: !!idRow?.broker_user_id && idRow.broker_user_id === user.id,
           volume: c.volume,
           deals: c.deals,
           commission: c.commission,
@@ -712,16 +712,19 @@ Deno.serve(async (req) => {
       typeof body?.detailAgent === "string" && body.detailAgent.trim() ? body.detailAgent.trim() : null;
     let detail: any = null;
     if (detailAgent) {
+      const dLower = detailAgent.toLowerCase();
+      const isDetailRow = (r: any) =>
+        (r.agent_name ?? "").trim().toLowerCase() === dLower || brokerId(r) === dLower;
       const dRows = scopedAll
-        .filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase())
+        .filter(isDetailRow)
         .filter(inWin)
         .sort((a, b) => (a.date_trans ?? "").localeCompare(b.date_trans ?? "") || a.source_row - b.source_row);
       const dVolRows = new Set(
-        volumeTranches(scopedAll.filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase()), cyYtd)
+        volumeTranches(scopedAll.filter(isDetailRow), cyYtd)
           .map((r) => r.source_row),
       );
       const dDealRows = new Set(
-        dealContracts(scopedAll.filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase()), cyYtd)
+        dealContracts(scopedAll.filter(isDetailRow), cyYtd)
           .map((r) => r.source_row),
       );
       const idRow = dRows[0] as any;

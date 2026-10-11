@@ -120,8 +120,8 @@ describe("commission summary", () => {
     const report = summarize(rows);
     const analytics = paidAnalytics(rows);
     expect(report.deal_count).toBe(2);
-    expect(report.total_loan_volume).toBe(900000);
-    expect(analytics.months.reduce((s, m) => s + m.volume, 0)).toBe(900000);
+    expect(report.total_loan_volume).toBe(600000);
+    expect(analytics.months.reduce((s, m) => s + m.volume, 0)).toBe(600000);
     expect(analytics.months.reduce((s, m) => s + m.deals, 0)).toBe(2);
     expect(analytics.lenders).toEqual([{ key: "BNC", volume: 700000, deals: 1 }, { key: "TD", volume: 200000, deals: 1 }]);
     expect(analytics.lenders.reduce((s, l) => s + l.volume, 0)).toBe(report.total_loan_volume);

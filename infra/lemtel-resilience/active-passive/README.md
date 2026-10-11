@@ -54,6 +54,8 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 `lemtel-ha-standby-runtime-activate-after-promotion.sh` is that separate runtime gate. It runs only after the matching irreversible promotion evidence, requires a third explicit acknowledgement, re-validates the staged Compose allow-list, reconnects the separately promoted database as the private `db` service alias, mounts only the independently replicated Storage receiver path, and starts the configured non-database services. It confirms that PostgreSQL remains without a host or public port. It deliberately does not change DNS, promote automatically, restart Hostinger, or contact telephony. Any startup failure stops only the newly started standby services and removes the transient runtime network/mount; it never restarts the former primary.
 
+`lemtel-ha-standby-empty-storage-manifest-stage.sh` is a narrowly scoped root-only recovery guard for the exceptional case where both the frozen Hostinger Storage attestation and the DigitalOcean receiver prove there are **zero Storage files**. A zero-byte SHA-256 manifest is the correct canonical checksum list for that state. The script requires a separate acknowledgement, verifies the standard empty-file SHA-256 and refuses if either side reports any payload file or partial file. It writes only the expected local manifest marker for the already-promoted standby; it does not copy Storage data, start runtime services, alter PostgreSQL, change DNS, restart Hostinger, or contact telephony.
+
 ## Remaining controlled implementation
 
 1. Prove the matching dormant runtime path on DigitalOcean under controlled promotion conditions; it must remain inactive until the fenced drill.

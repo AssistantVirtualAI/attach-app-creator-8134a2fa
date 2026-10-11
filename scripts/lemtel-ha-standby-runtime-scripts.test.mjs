@@ -8,6 +8,7 @@ const script = (name) => readFileSync(resolve(root, `infra/lemtel-resilience/act
 const primaryEnvelope = script('lemtel-ha-primary-standby-runtime-envelope-create.sh');
 const standbyStage = script('lemtel-ha-standby-runtime-envelope-stage.sh');
 const standbyActivation = script('lemtel-ha-standby-runtime-activate-after-promotion.sh');
+const emptyStorageManifestStage = script('lemtel-ha-standby-empty-storage-manifest-stage.sh');
 const unsafe = /(?:\bpg_promote\b|\bnsupdate\b|docker\s+(?:run|compose\s+up)|\brsync\b|\bssh\b|\bscp\b|\bturn\b|\bwss\b)/imu;
 
 test('primary runtime envelope is root-only, encrypted, and excludes independent data volumes', () => {
@@ -48,6 +49,8 @@ test('promoted standby runtime activation requires fencing evidence and preserve
   assert.match(standbyActivation, /\/var\/lib\/lemtel-ha\/fencing\/standby-promotion\.state/u);
   assert.doesNotMatch(standbyActivation, /\/opt\/lemtel-ha\/fencing\/standby-promotion\.state/u);
   assert.match(standbyActivation, /primary_fence_not_confirmed/u);
+  assert.match(standbyActivation, /\[ -f "\$storage_receiver_dir\/\.lemtel-ha-manifest\.current\.sha256" \]/u);
+  assert.doesNotMatch(standbyActivation, /\[ -s "\$storage_receiver_dir\/\.lemtel-ha-manifest\.current\.sha256" \]/u);
   assert.match(standbyActivation, /SELECT pg_is_in_recovery\(\)/u);
   assert.match(standbyActivation, /docker network connect --alias db/u);
   assert.match(standbyActivation, /docker compose --project-name lemtel-ha-standby/u);
@@ -63,4 +66,20 @@ test('promoted standby runtime activation requires fencing evidence and preserve
   assert.match(standbyActivation, /fusionpbx_or_sip_contacted=false/u);
   assert.match(standbyActivation, /credential_values_emitted=false/u);
   assert.doesNotMatch(standbyActivation, /(?:\b(?:curl|wget|ssh|scp|rsync|restic|nsupdate)\b|cloudflare|\bturn\b|\bwss\b)/imu);
+});
+
+test('empty Storage recovery stages only a cryptographically valid empty manifest', () => {
+  assert.match(emptyStorageManifestStage, /stage_empty_storage_manifest_after_verified_empty_storage/u);
+  assert.match(emptyStorageManifestStage, /LEMTEL_HA_ROLE:-\}" = 'digitalocean_standby'/u);
+  assert.match(emptyStorageManifestStage, /I_UNDERSTAND_THIS_STAGES_ONLY_A_VERIFIED_EMPTY_STORAGE_MANIFEST/u);
+  assert.match(emptyStorageManifestStage, /source_file_count/u);
+  assert.match(emptyStorageManifestStage, /primary_storage_file_count_not_empty/u);
+  assert.match(emptyStorageManifestStage, /standby_storage_file_count_not_empty/u);
+  assert.match(emptyStorageManifestStage, /e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/u);
+  assert.match(emptyStorageManifestStage, /storage_manifest_staged=true/u);
+  assert.match(emptyStorageManifestStage, /storage_runtime_started=false/u);
+  assert.match(emptyStorageManifestStage, /dns_change_executed=false/u);
+  assert.match(emptyStorageManifestStage, /automatic_promotion_enabled=false/u);
+  assert.match(emptyStorageManifestStage, /fusionpbx_or_sip_contacted=false/u);
+  assert.doesNotMatch(emptyStorageManifestStage, unsafe);
 });

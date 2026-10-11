@@ -250,7 +250,7 @@ Deno.serve(async (req) => {
       month: metrics(mine, cyMonth),
       monthPy: metrics(mine, pyMonth),
       activeLenders: uniq(volumeTranches(mine, cyYtd).map((r) => r.institution)).length,
-      activeBrokers: uniq(volumeTranches(scopedAll, cyYtd).map((r) => r.agent_name)).length,
+      activeBrokers: uniq(volumeTranches(scopedAll, cyYtd).map((r) => brokerId(r))).length,
     };
 
     // Trend series adapted to the granularity (weeks when granularity=week, otherwise months)
@@ -304,7 +304,7 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.volume - a.volume)
       .map((x, i) => ({ rank: i + 1, ...x }));
 
-    const agentsWithData = uniq(scopedAll.map((r) => r.agent_name));
+    const agentsWithData = uniq(scopedAll.map((r) => brokerId(r)));
 
     // Firm-wide broker directory: in the admin global view the filter must list
     // every broker of the firm, not just those already present in the imported

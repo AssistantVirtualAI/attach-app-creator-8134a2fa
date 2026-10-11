@@ -35,7 +35,7 @@ test("APNs entitlement is configuration-specific for device tests and TestFlight
   assert.doesNotMatch(entitlements, /com\.apple\.developer\.pushkit\.unrestricted-voip/);
   assert.match(project, /APS_ENVIRONMENT = development;[\s\S]*?name = Debug;/);
   assert.match(project, /APS_ENVIRONMENT = production;[\s\S]*?name = Release;/);
-  assert.match(project, /CURRENT_PROJECT_VERSION = 4;/);
+  assert.match(project, /CURRENT_PROJECT_VERSION = 5;/);
   assert.match(project, /MARKETING_VERSION = 1\.1;/);
   assert.match(project, /CODE_SIGN_IDENTITY = "Apple Distribution";[\s\S]*?name = Release;/);
   assert.match(project, /CODE_SIGN_STYLE = Manual;[\s\S]*?PROVISIONING_PROFILE_SPECIFIER = "\$\(LEMTEL_APP_STORE_PROFILE_UUID\)";[\s\S]*?name = Release;/);
@@ -64,7 +64,7 @@ test("TestFlight delivery is signed, internal, Hostinger-bound, and Lemtel-tag c
   assert.match(workflow, /steps\.app_store_profile\.outputs\.profiles/);
   assert.match(workflow, /LEMTEL_APP_STORE_PROFILE_UUID/);
   assert.match(workflow, /signingStyle<\/key><string>manual<\/string>/);
-  assert.match(workflow, /Lemtel 1\.1 \(4\): test the organization Home, Desktop-aligned visual system/);
+  assert.match(workflow, /Lemtel 1\.1 \(5\): test Daylight contrast, direct header actions/);
   assert.doesNotMatch(workflow, /uses-non-exempt-encryption:/);
   assert.doesNotMatch(workflow, /apps\/planipret-mobile/);
   assert.doesNotMatch(workflow, /branches:\s*\n\s+- "Planipret"/);

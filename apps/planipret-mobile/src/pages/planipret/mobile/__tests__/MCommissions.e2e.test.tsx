@@ -13,12 +13,26 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const invokeMock = vi.fn();
+// Chainable Realtime channel mock (channel().on().on().subscribe(), removeChannel).
+const channels: { name: string; handlers: Array<() => void>; removed: boolean }[] = [];
+const makeChannel = (name: string) => {
+  const entry = { name, handlers: [] as Array<() => void>, removed: false };
+  channels.push(entry);
+  const ch: any = {
+    on: (_t: string, _f: unknown, cb: () => void) => { entry.handlers.push(cb); return ch; },
+    subscribe: () => ch,
+    __entry: entry,
+  };
+  return ch;
+};
 let outletProfile: any = { role: "broker" };
 let currentLang: "fr" | "en" = "fr";
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: (fn: string, opts: any) => invokeMock(fn, opts) },
+    channel: (name: string) => makeChannel(name),
+    removeChannel: (ch: any) => { if (ch?.__entry) ch.__entry.removed = true; return Promise.resolve("ok"); },
     auth: {
       getUser: () => Promise.resolve({ data: { user: { id: "u1" } } }),
       getSession: () => Promise.resolve({ data: { session: { access_token: "t" } } }),
@@ -106,6 +120,7 @@ const money = (expected: string) =>
 
 beforeEach(() => {
   localStorage.clear();
+  channels.length = 0;
   invokeMock.mockReset();
   invokeMock.mockImplementation(respond);
   outletProfile = { role: "broker" };

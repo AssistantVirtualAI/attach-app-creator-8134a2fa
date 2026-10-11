@@ -39,6 +39,13 @@ case "$original_restart_policy" in
   *) fail unsupported_restart_policy ;;
 esac
 
+# A receiver cannot remain `streaming` after this script stops the writer. Record
+# the last observable primary-side evidence before fencing so the later promotion
+# can distinguish that expected disconnect from an uninitialised standby.
+pre_fence_streaming_replicas="$(docker exec -u postgres "$container" psql -X -At -d postgres -c "SELECT count(*) FROM pg_stat_replication WHERE state = 'streaming'")"
+[ -n "$pre_fence_streaming_replicas" ] || fail primary_replication_state_unavailable
+[ "$pre_fence_streaming_replicas" -ge 1 ] || fail no_streaming_standby_before_fence
+
 rollback_armed=true
 rollback() {
   if [ "${rollback_armed:-false}" = true ]; then
@@ -50,8 +57,8 @@ rollback() {
 trap rollback ERR INT TERM
 
 umask 077
-printf 'format=lemtel_primary_fence_v1\nincident_id=%s\noriginal_restart_policy=%s\ncontainer=%s\nfenced_at_utc=%s\n' \
-  "$incident_id" "$original_restart_policy" "$container" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$state_file"
+printf 'format=lemtel_primary_fence_v1\nincident_id=%s\noriginal_restart_policy=%s\ncontainer=%s\npre_fence_streaming_replicas=%s\nfenced_at_utc=%s\n' \
+  "$incident_id" "$original_restart_policy" "$container" "$pre_fence_streaming_replicas" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$state_file"
 chmod 0600 "$state_file"
 
 docker update --restart no "$container" >/dev/null
@@ -60,7 +67,7 @@ docker stop --time 30 "$container" >/dev/null
 [ "$(docker inspect --format '{{.State.Running}}' "$container")" = false ] || fail primary_database_still_running
 [ "$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$container")" = no ] || fail primary_restart_policy_not_fenced
 if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_detected; fi
-printf 'fenced_database_running=false\nfenced_restart_policy=no\n' >> "$state_file"
+printf 'fenced_database_running=false\nfenced_restart_policy=no\npre_fence_streaming_replica_verified=true\n' >> "$state_file"
 
 rollback_armed=false
 trap - ERR INT TERM

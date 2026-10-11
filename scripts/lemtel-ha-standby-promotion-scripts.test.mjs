@@ -17,6 +17,10 @@ test('standby promotion is root-only, manually gated, evidence-bound, and irreve
   assert.match(source, /fenced_database_running=false/u);
   assert.match(source, /fenced_restart_policy=no/u);
   assert.match(source, /primary_writer_still_reachable/u);
+  assert.match(source, /standby_signal_missing/u);
+  assert.match(source, /standby_wal_position_missing/u);
+  assert.match(source, /detached_after_primary_fence/u);
+  assert.match(source, /wal_receiver_evidence=%s/u);
   assert.match(source, /container='lemtel-postgres-standby'/u);
   assert.match(source, /SELECT pg_is_in_recovery\(\)/u);
   assert.match(source, /pg_ctl promote -D \/var\/lib\/postgresql\/data/u);

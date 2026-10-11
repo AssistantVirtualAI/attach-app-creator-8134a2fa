@@ -49,12 +49,24 @@ flock -n 9 || fail concurrent_standby_promotion
 
 pre_promotion_recovery="$(docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()')"
 [ "$pre_promotion_recovery" = t ] || fail standby_not_in_recovery
-receiver="$(docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT status FROM pg_stat_wal_receiver LIMIT 1')"
-[ "$receiver" = streaming ] || fail wal_receiver_not_streaming
 
 # This independently confirms that the fenced private writer is no longer reachable.
 if timeout 3 bash -c "</dev/tcp/${primary_tunnel_address}/5432" 2>/dev/null; then
   fail primary_writer_still_reachable
+fi
+
+# Once fencing has stopped the writer, PostgreSQL correctly tears down the WAL
+# receiver. Require either a still-streaming receiver (race-free early fence) or
+# a genuine physical standby with a last received/replayed WAL position. This is
+# not a bypass: the primary is already unreachable and `standby.signal` remains.
+receiver="$(docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT status FROM pg_stat_wal_receiver LIMIT 1' || true)"
+if [ "$receiver" = streaming ]; then
+  wal_receiver_evidence='streaming'
+else
+  docker exec -u postgres "$container" test -f /var/lib/postgresql/data/standby.signal || fail standby_signal_missing
+  wal_position_available="$(docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_last_wal_receive_lsn() IS NOT NULL AND pg_last_wal_replay_lsn() IS NOT NULL')"
+  [ "$wal_position_available" = t ] || fail standby_wal_position_missing
+  wal_receiver_evidence='detached_after_primary_fence'
 fi
 
 install -d -o root -g root -m 0700 "$state_dir"
@@ -81,6 +93,7 @@ printf 'declared_role=digitalocean_standby\n'
 printf 'incident_id_matched=true\n'
 printf 'primary_fence_evidence_verified=true\n'
 printf 'primary_writer_reachable=false\n'
+printf 'wal_receiver_evidence=%s\n' "$wal_receiver_evidence"
 printf 'standby_database_container=lemtel-postgres-standby\n'
 printf 'standby_promoted=true\n'
 printf 'standby_in_recovery=false\n'

@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, '..');
 const script = (name) => readFileSync(resolve(root, `infra/lemtel-resilience/active-passive/${name}`), 'utf8');
 const primaryEnvelope = script('lemtel-ha-primary-standby-runtime-envelope-create.sh');
 const standbyStage = script('lemtel-ha-standby-runtime-envelope-stage.sh');
+const standbyActivation = script('lemtel-ha-standby-runtime-activate-after-promotion.sh');
 const unsafe = /(?:\bpg_promote\b|\bnsupdate\b|docker\s+(?:run|compose\s+up)|\brsync\b|\bssh\b|\bscp\b|\bturn\b|\bwss\b)/imu;
 
 test('primary runtime envelope is root-only, encrypted, and excludes independent data volumes', () => {
@@ -37,4 +38,27 @@ test('standby runtime stage is root-only, allow-listed, config-only, and never s
   assert.match(standbyStage, /automatic_promotion_enabled=false/u);
   assert.match(standbyStage, /credential_values_emitted=false/u);
   assert.doesNotMatch(standbyStage, unsafe);
+});
+
+test('promoted standby runtime activation requires fencing evidence and preserves the private database boundary', () => {
+  assert.match(standbyActivation, /activate_promoted_standby_runtime/u);
+  assert.match(standbyActivation, /LEMTEL_HA_ROLE:-\}" = 'digitalocean_standby'/u);
+  assert.match(standbyActivation, /I_UNDERSTAND_PROMOTED_STANDBY_RUNTIME_WILL_START/u);
+  assert.match(standbyActivation, /standby-promotion\.state/u);
+  assert.match(standbyActivation, /primary_fence_not_confirmed/u);
+  assert.match(standbyActivation, /SELECT pg_is_in_recovery\(\)/u);
+  assert.match(standbyActivation, /docker network connect --alias db/u);
+  assert.match(standbyActivation, /docker compose --project-name lemtel-ha-standby/u);
+  assert.match(standbyActivation, /up --detach --no-build --no-deps/u);
+  assert.match(standbyActivation, /standby_runtime_started=true/u);
+  assert.match(standbyActivation, /storage_runtime_started=true/u);
+  assert.match(standbyActivation, /public_runtime_listener_enabled=true/u);
+  assert.match(standbyActivation, /host_postgres_listener_enabled=false/u);
+  assert.match(standbyActivation, /public_database_listener_enabled=false/u);
+  assert.match(standbyActivation, /dns_change_executed=false/u);
+  assert.match(standbyActivation, /automatic_promotion_enabled=false/u);
+  assert.match(standbyActivation, /former_primary_restart_attempted=false/u);
+  assert.match(standbyActivation, /fusionpbx_or_sip_contacted=false/u);
+  assert.match(standbyActivation, /credential_values_emitted=false/u);
+  assert.doesNotMatch(standbyActivation, /(?:\b(?:curl|wget|ssh|scp|rsync|restic|nsupdate)\b|cloudflare|\bturn\b|\bwss\b)/imu);
 });

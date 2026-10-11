@@ -52,6 +52,8 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 `lemtel-ha-standby-postgres-promote.sh` is the separate, irreversible writer-promotion gate. It requires the matching root-only primary fence evidence, an incident identifier, a second explicit acknowledgement, active WireGuard, a healthy recovering WAL receiver, an unreachable primary database endpoint, and no host/public PostgreSQL listener. It then runs `pg_ctl promote` only for the existing standby database and records the promotion root-only. It never starts the dormant Supabase runtime, Storage, Caddy, DNS routing, former-primary restart, or telephony. A promoted DO database therefore remains private until a separate runtime and routing operation has been validated.
 
+`lemtel-ha-standby-runtime-activate-after-promotion.sh` is that separate runtime gate. It runs only after the matching irreversible promotion evidence, requires a third explicit acknowledgement, re-validates the staged Compose allow-list, reconnects the separately promoted database as the private `db` service alias, mounts only the independently replicated Storage receiver path, and starts the configured non-database services. It confirms that PostgreSQL remains without a host or public port. It deliberately does not change DNS, promote automatically, restart Hostinger, or contact telephony. Any startup failure stops only the newly started standby services and removes the transient runtime network/mount; it never restarts the former primary.
+
 ## Remaining controlled implementation
 
 1. Prove the matching dormant runtime path on DigitalOcean under controlled promotion conditions; it must remain inactive until the fenced drill.

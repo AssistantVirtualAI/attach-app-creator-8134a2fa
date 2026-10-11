@@ -19,7 +19,11 @@ vi.mock("@/lib/native/permissions/contacts", () => ({
 }));
 vi.mock("@/lib/native/permissions/platform", () => ({ openAppSettings: vi.fn() }));
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { functions: { invoke: vi.fn(async () => ({ data: { success: true }, error: null })) } },
+  supabase: { functions: { invoke: vi.fn(async () => ({ data: { success: true }, error: null })) }, auth: {
+      getSession: () => Promise.resolve({ data: { session: null } }),
+      getUser: () => Promise.resolve({ data: { user: null } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    } },
 }));
 vi.mock("@/lib/callEdge", () => ({ callEdge: vi.fn(async () => ({ numbers: [] })), toE164: (v: string) => v }));
 vi.mock("@/components/planipret/ava/AvaSummarizeSheet", () => ({ default: () => null }));
@@ -35,9 +39,11 @@ const clients = [
   { id: "1", name: "Alice Recente", cell_phone: "5145559911", created_at: ago(3), last_activity_at: ago(1) },
   { id: "3", name: "Chloe Soixante", phone: "5145550003", created_at: ago(60), last_activity_at: ago(60) },
 ];
-vi.mock("@/lib/ppContactsCache", () => ({
+vi.mock("@/lib/ppContactsCache", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ppContactsCache")>()),
   peekPpContacts: (a: string) => (a === "maestro_clients" ? clients : []),
   getPpContacts: async (a: string) => (a === "maestro_clients" ? clients : []),
+  peekPpContactsVerified: async (a: string) => (a === "maestro_clients" ? clients : []),
   prefetchPpContacts: vi.fn(),
 }));
 

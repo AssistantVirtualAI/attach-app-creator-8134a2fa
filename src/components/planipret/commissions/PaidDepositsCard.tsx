@@ -71,7 +71,13 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
           isAdmin && !agent ? ppEdgeInvoke("planipret-commission-reports", { action: "by_agent", filters: range }, { retries: 1, timeoutMs: 90_000 }) : Promise.resolve(null),
         ]);
         const sd = (s as any)?.data ?? s;
-        if ((s as any)?.error || !sd?.ok) throw new Error(sd?.message ?? (s as any)?.error?.message ?? (fr ? "Rapport des déboursées indisponible." : "Paid report unavailable."));
+        if ((s as any)?.error || !sd?.ok) {
+          // Never surface raw server details; map known codes to a clear cause.
+          const code = String(sd?.error ?? "");
+          throw new Error(code === "admin_scope_unavailable"
+            ? (fr ? "La vue « Tous les courtiers » requiert un accès Maestro administrateur." : "The All brokers view requires Maestro administrator access.")
+            : (fr ? "Rapport des déboursées indisponible." : "Paid report unavailable."));
+        }
         const ad = a ? ((a as any)?.data ?? a) : null;
         if (cancelled) return;
         setSummary(sd.summary);

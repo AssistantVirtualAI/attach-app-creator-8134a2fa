@@ -31,7 +31,11 @@ vi.mock("@/hooks/useMplanipretLang", () => ({
 }));
 vi.mock("@/lib/planipret/callerLookup", () => ({ useCallerNames: () => ({}) }));
 vi.mock("@/lib/ms365Connect", () => ({ connectMs365: vi.fn() }));
-vi.mock("@/lib/ppContactsCache", () => ({ getPpContacts: () => Promise.resolve([]) }));
+vi.mock("@/lib/ppContactsCache", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ppContactsCache")>()),
+  getPpContacts: () => Promise.resolve([]),
+  peekPpContactsVerified: () => Promise.resolve(null),
+}));
 vi.mock("@/services/avaProactive", () => ({ callAva: vi.fn() }));
 vi.mock("@/components/planipret/SmsTemplatesSheet", () => ({ default: () => null }));
 vi.mock("@/components/planipret/ava/AvaSummarizeSheet", () => ({ default: () => null }));

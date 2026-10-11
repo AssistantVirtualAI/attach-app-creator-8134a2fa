@@ -79,7 +79,8 @@ export interface Criteria {
   institution?: string;
   mortgage_type?: string;
   term?: string;
-  broker?: string; // agent_name
+  broker?: string; // agent_name (display only — never used for drill-down)
+  brokerKey?: string; // stable identity from brokerId(row)
 }
 
 function matches(r: RegisterRow, c: Criteria): boolean {
@@ -87,6 +88,7 @@ function matches(r: RegisterRow, c: Criteria): boolean {
   if (c.mortgage_type !== undefined && (r.mortgage_type ?? "") !== c.mortgage_type) return false;
   if (c.term !== undefined && (r.term ?? "") !== c.term) return false;
   if (c.broker !== undefined && (r.agent_name ?? "") !== c.broker) return false;
+  if (c.brokerKey !== undefined && brokerId(r) !== c.brokerKey) return false;
   return true;
 }
 
@@ -99,11 +101,19 @@ const brokerKey = (r: RegisterRow) => normalizedKeyPart((r as any).broker_user_i
  * broker id, then the normalized agent key, and only as a last resort the
  * display name. Two brokers sharing a display name never merge.
  */
-export const brokerId = (r: RegisterRow) =>
-  normalizedKeyPart(r.broker_user_id) ||
-  normalizedKeyPart(r.maestro_broker_id) ||
-  normalizedKeyPart(r.agent_key) ||
-  normalizedKeyPart(r.agent_name);
+export function brokerId(r: RegisterRow): string {
+  const u = normalizedKeyPart(r.broker_user_id);
+  if (u) return `user:${u}`;
+  const m = normalizedKeyPart(r.maestro_broker_id);
+  if (m) return `maestro:${m}`;
+  // Unlinked: isolated namespace, never equal to a linked broker's key.
+  const a = normalizedKeyPart(r.agent_key) || normalizedKeyPart(r.agent_name);
+  return a ? `unlinked:${a}` : "unlinked:";
+}
+
+/** True when the key comes from a stable identity (portal user or Maestro id). */
+export const isLinkedBrokerKey = (key: string | null | undefined) =>
+  !!key && (key.startsWith("user:") || key.startsWith("maestro:"));
 
 /**
  * A `base` row without a loan amount is never a mortgage file: Maestro uses it for

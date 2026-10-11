@@ -25,12 +25,17 @@ test("TestFlight assignment is restricted to the processed Lemtel internal build
   assert.doesNotMatch(assignmentScript, /Planipret/i);
 });
 
-test("TestFlight assignment can only be started manually in the protected iOS environment", () => {
+test("TestFlight assignment is explicitly gated in the protected iOS environment", () => {
   assert.match(workflow, /workflow_dispatch:/);
-  assert.doesNotMatch(workflow, /\n\s*push:/);
+  assert.match(
+    workflow,
+    /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-group-v1\.1\.5-r\*"/,
+  );
   assert.match(workflow, /environment: lemtel-ios-testflight/);
   assert.match(workflow, /TESTFLIGHT_APP_ID: "6786177551"/);
   assert.match(workflow, /TESTFLIGHT_GROUP_NAME: "Lemtel Internal"/);
+  assert.match(workflow, /github\.event_name == 'push' && '5'/);
+  assert.match(workflow, /github\.event_name == 'push' && '1\.1'/);
   assert.match(workflow, /APPSTORE_API_PRIVATE_KEY: \$\{\{ secrets\.APPSTORE_API_PRIVATE_KEY \}\}/);
   assert.match(workflow, /assign-testflight-internal-group\.mjs/);
   assert.doesNotMatch(workflow, /planipret/i);

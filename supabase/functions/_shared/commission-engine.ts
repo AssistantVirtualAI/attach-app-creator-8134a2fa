@@ -18,6 +18,8 @@ export interface RegisterRow {
   commission_type: string | null;
   source_row: number;
   broker_user_id?: string | null;
+  maestro_broker_id?: string | null;
+  agent_key?: string | null;
   is_adjustment?: unknown;
 }
 
@@ -91,6 +93,17 @@ function matches(r: RegisterRow, c: Criteria): boolean {
 const normalizedKeyPart = (value: unknown) => (value == null ? "" : String(value)).trim().toLocaleLowerCase("fr-CA");
 /** Unique broker identity for keys (never the display name). */
 const brokerKey = (r: RegisterRow) => normalizedKeyPart((r as any).broker_user_id ?? "");
+
+/**
+ * Stable broker identity for grouping: portal user id first, then the Maestro
+ * broker id, then the normalized agent key, and only as a last resort the
+ * display name. Two brokers sharing a display name never merge.
+ */
+export const brokerId = (r: RegisterRow) =>
+  normalizedKeyPart(r.broker_user_id) ||
+  normalizedKeyPart(r.maestro_broker_id) ||
+  normalizedKeyPart(r.agent_key) ||
+  normalizedKeyPart(r.agent_name);
 
 /**
  * A `base` row without a loan amount is never a mortgage file: Maestro uses it for
@@ -314,7 +327,7 @@ export function metricsByBroker(rows: RegisterRow[], w: Window): Map<string, Met
   if (hit) return hit;
   const acc = new Map<string, { volume: number; deals: number; commission: number }>();
   const get = (r: RegisterRow) => {
-    const k = r.agent_name ?? "";
+    const k = brokerId(r);
     let a = acc.get(k);
     if (!a) { a = { volume: 0, deals: 0, commission: 0 }; acc.set(k, a); }
     return a;

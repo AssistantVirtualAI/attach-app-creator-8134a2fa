@@ -13,7 +13,7 @@ const TOPOLOGY_KEYS = ['primary', 'standby', 'writer_policy', 'database_replicat
 const EVIDENCE_KEYS = ['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified', 'standby_runtime_config_staged', 'external_health_routing_verified', 'fencing_verified', 'failover_drill_verified', 'failback_drill_verified'];
 const SAFETY_KEYS = ['standby_database_publicly_exposed', 'plaintext_secret_replication', 'raw_postgres_volume_copy', 'automatic_promotion_without_fencing', 'fusionpbx_or_sip_change'];
 const STATE_KEYS = ['remote_runtime_enabled', 'dns_failover_enabled', 'automatic_failover_enabled'];
-const VERIFIED_EVIDENCE = new Set(['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified', 'standby_runtime_config_staged']);
+const VERIFIED_EVIDENCE = new Set(['hostinger_admin_ssh_verified', 'digitalocean_admin_ssh_verified', 'matching_postgres_major_version_verified', 'storage_layout_inventory_verified', 'standby_basebackup_verified', 'replication_lag_monitoring_verified', 'storage_integrity_monitoring_verified', 'standby_runtime_config_staged', 'external_health_routing_verified']);
 
 const exactKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) &&
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
@@ -22,7 +22,7 @@ const everyFalse = (value) => Object.values(value).every((entry) => entry === fa
 export function validateActivePassiveFoundation(contract) {
   const evidence = contract?.required_evidence;
   return exactKeys(contract, CONTRACT_KEYS) &&
-    contract.contract_version === 'lemtel_active_passive_foundation_v5' &&
+    contract.contract_version === 'lemtel_active_passive_foundation_v6' &&
     contract.scope === 'verified_active_passive_rollout_without_telephony' &&
     contract.source_branch === 'lemtel/integration' &&
     exactKeys(contract.authorization, AUTHORIZATION_KEYS) &&
@@ -40,7 +40,7 @@ export function validateActivePassiveFoundation(contract) {
     contract.topology.traffic_routing === 'external_health_checked_active_passive' &&
     contract.topology.canonical_public_hostname === 'lemtel.assistantvirtualai.com' &&
     contract.topology.routing_provider === 'cloudflare' &&
-    contract.topology.routing_state === 'canonical_hostname_approved_dns_unchanged' &&
+    contract.topology.routing_state === 'canonical_primary_route_live_no_failover' &&
     contract.topology.commit_acknowledgement_policy === 'availability_first_async_streaming_with_measured_lag' &&
     contract.topology.recovery_point_policy === 'no_fixed_rpo_until_controlled_drill_measures_lag_and_recovery' &&
     exactKeys(evidence, EVIDENCE_KEYS) &&
@@ -64,7 +64,7 @@ export function reviewActivePassiveFoundation(contract) {
     client_cutover_authorized: false,
     automatic_failover_enabled: false,
     reasons: [
-      'FENCING_EXTERNAL_HEALTH_ROUTING_AND_DRILL_REQUIRED'
+      'FENCING_PROMOTION_AND_DRILL_REQUIRED'
     ]
   };
 }

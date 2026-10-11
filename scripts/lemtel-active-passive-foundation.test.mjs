@@ -18,7 +18,7 @@ test('active-passive foundation records the approved availability-first single-w
   assert.equal(value.topology.writer_policy, 'single_writer_hostinger');
   assert.equal(value.topology.canonical_public_hostname, 'lemtel.assistantvirtualai.com');
   assert.equal(value.topology.routing_provider, 'cloudflare');
-  assert.equal(value.topology.routing_state, 'canonical_hostname_approved_dns_unchanged');
+  assert.equal(value.topology.routing_state, 'canonical_primary_route_live_no_failover');
   assert.equal(value.topology.commit_acknowledgement_policy, 'availability_first_async_streaming_with_measured_lag');
   assert.equal(value.required_evidence.hostinger_admin_ssh_verified, true);
   assert.equal(value.required_evidence.digitalocean_admin_ssh_verified, true);
@@ -26,6 +26,7 @@ test('active-passive foundation records the approved availability-first single-w
   assert.equal(value.required_evidence.replication_lag_monitoring_verified, true);
   assert.equal(value.required_evidence.storage_integrity_monitoring_verified, true);
   assert.equal(value.required_evidence.standby_runtime_config_staged, true);
+  assert.equal(value.required_evidence.external_health_routing_verified, true);
 });
 
 test('foundation refuses synchronous acknowledgement, unsafe promotion, plaintext secret copying, shared-business data, and premature live routing', () => {

@@ -461,12 +461,13 @@ Deno.serve(async (req) => {
     // a broker only ever gets his own line (with his rank inside the standings).
     const seasonCur = seasonWindow(year - (month >= 8 ? 0 : 1));
     const seasonPrev = seasonWindow(year - (month >= 8 ? 1 : 2));
-    const brokerNames = uniq(volumeTranches(allRows, seasonCur).map((r) => r.agent_name));
+    const brokerNames = uniq(volumeTranches(allRows, seasonCur).map((r) => brokerId(r)));
     const clubFull = brokerNames
-      .map((name) => {
-        const c = brokerMetrics(allRows, seasonCur, name);
-        const p = brokerMetrics(allRows, seasonPrev, name);
-        const idRow = firstRowByAgent.get(name) as any;
+      .map((id) => {
+        const c = brokerMetrics(allRows, seasonCur, id);
+        const p = brokerMetrics(allRows, seasonPrev, id);
+        const idRow = firstRowByAgent.get(id) as any;
+        const name = idRow?.agent_name ?? id;
         return {
           broker: name,
           firstName: idRow?.first_name ?? null,
@@ -557,11 +558,11 @@ Deno.serve(async (req) => {
 
     // Broker Monthly vs Lender Monthly independent MATCH/MISMATCH (v3 §11)
     const brokerScope = agent ? mine : scopedAll;
-    const brokerBreak = uniq(brokerScope.map((r) => r.agent_name)).map((name) => ({
-      broker: name,
-      volume: brokerMetrics(brokerScope, cyYtd, name).volume,
-      deals: brokerMetrics(brokerScope, cyYtd, name).deals,
-      commission: brokerMetrics(brokerScope, cyYtd, name).commission,
+    const brokerBreak = uniq(brokerScope.map((r) => brokerId(r))).map((id) => ({
+      broker: (byBroker.get(id)?.[0] as any)?.agent_name ?? id,
+      volume: brokerMetrics(brokerScope, cyYtd, id).volume,
+      deals: brokerMetrics(brokerScope, cyYtd, id).deals,
+      commission: brokerMetrics(brokerScope, cyYtd, id).commission,
     }));
     const brokerVolume = brokerBreak.reduce((s2, b) => s2 + b.volume, 0);
     const brokerDeals = brokerBreak.reduce((s2, b) => s2 + b.deals, 0);

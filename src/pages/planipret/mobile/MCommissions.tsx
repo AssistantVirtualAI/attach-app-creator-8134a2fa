@@ -439,6 +439,8 @@ export default function MCommissions() {
       {section === "paid" && (
         <div className="mb-4">
           <PaidDepositsCard lang={fr ? "fr" : "en"} scope={isAdmin ? "admin" : "broker"} />
+          <h2 className="flex items-center gap-2 text-base font-bold mt-5 mb-3">{fr ? "Analyse détaillée" : "Detailed analysis"}</h2>
+          <RegisterCommissions lang={fr ? "fr" : "en"} scope={isAdmin ? "admin" : "broker"} />
           <Button variant="outline" className="w-full min-h-11 mt-3" onClick={() => navigate("tableaux")}>
             {fr ? "Graphiques par courtier" : "Broker charts"}
           </Button>

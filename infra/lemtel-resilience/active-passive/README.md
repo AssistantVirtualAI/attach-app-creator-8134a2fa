@@ -58,6 +58,8 @@ After both public keys are verified, `lemtel-ha-wireguard-configure.sh` writes a
 
 The encrypted runtime envelope explicitly includes the four Envoy bind-mounted files required by the active Compose configuration. The staging script rejects an envelope missing any of them before a runtime can start. If a prior activation attempt failed before completion, `lemtel-ha-standby-runtime-stage-reset-after-failure.sh` removes only the dormant decrypted configuration after it proves that the promoted database is still private and running, no application container or runtime network survives, and the transient Storage link is absent. It never removes database or Storage data, changes DNS, restarts Hostinger, or contacts telephony.
 
+The activation cleanup also removes the stopped, Compose-labelled application containers it just attempted to create. The reset helper independently removes only stopped containers bearing the exact `lemtel-ha-standby` Compose label, then removes an empty residual runtime network. It refuses to proceed if an unknown network endpoint, any running application container, or the separately managed promoted database is encountered.
+
 ## Remaining controlled implementation
 
 1. Prove the matching dormant runtime path on DigitalOcean under controlled promotion conditions; it must remain inactive until the fenced drill.

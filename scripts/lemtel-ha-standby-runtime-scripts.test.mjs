@@ -62,6 +62,7 @@ test('promoted standby runtime activation requires fencing evidence and preserve
   assert.match(standbyActivation, /docker network connect --alias db/u);
   assert.match(standbyActivation, /docker compose --project-name lemtel-ha-standby/u);
   assert.match(standbyActivation, /up --detach --no-build --no-deps/u);
+  assert.match(standbyActivation, /rm --force --stop/u);
   assert.match(standbyActivation, /standby_runtime_started=true/u);
   assert.match(standbyActivation, /storage_runtime_started=true/u);
   assert.match(standbyActivation, /public_runtime_listener_enabled=true/u);
@@ -96,6 +97,9 @@ test('failed runtime stage reset preserves the promoted database and removes onl
   assert.match(failedRuntimeStageReset, /LEMTEL_HA_ROLE:-\}" = 'digitalocean_standby'/u);
   assert.match(failedRuntimeStageReset, /I_UNDERSTAND_ONLY_FAILED_RUNTIME_CONFIGURATION_WILL_BE_REMOVED/u);
   assert.match(failedRuntimeStageReset, /runtime_containers_still_running/u);
+  assert.match(failedRuntimeStageReset, /label=com\.docker\.compose\.project=lemtel-ha-standby/u);
+  assert.match(failedRuntimeStageReset, /docker rm "\$container_id"/u);
+  assert.match(failedRuntimeStageReset, /runtime_network_unexpected_endpoint/u);
   assert.match(failedRuntimeStageReset, /promoted_database_preserved=true/u);
   assert.match(failedRuntimeStageReset, /runtime_configuration_removed=true/u);
   assert.match(failedRuntimeStageReset, /runtime_started=false/u);

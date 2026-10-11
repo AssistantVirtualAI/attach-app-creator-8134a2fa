@@ -71,6 +71,7 @@ cleanup() {
   if [ "$status" -ne 0 ]; then
     if [ "$runtime_start_attempted" = true ]; then
       "${compose[@]}" stop "${app_services[@]}" >/dev/null 2>&1 || true
+      "${compose[@]}" rm --force --stop "${app_services[@]}" >/dev/null 2>&1 || true
     fi
     if [ "$database_connected" = true ]; then
       docker network disconnect "$network" "$postgres_container" >/dev/null 2>&1 || true

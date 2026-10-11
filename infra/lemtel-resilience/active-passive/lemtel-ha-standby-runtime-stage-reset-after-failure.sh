@@ -26,7 +26,18 @@ if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_dete
 
 running="$(docker ps --format '{{.Names}}' | sort | paste -sd, -)"
 [ "$running" = "$postgres_container" ] || fail runtime_containers_still_running
-! docker network inspect "$network" >/dev/null 2>&1 || fail runtime_network_still_present
+mapfile -t stopped_runtime_ids < <(docker ps --all --quiet --filter "label=com.docker.compose.project=lemtel-ha-standby")
+for container_id in "${stopped_runtime_ids[@]}"; do
+  container_name="$(docker inspect --format '{{.Name}}' "$container_id" | sed 's#^/##')"
+  [ "$container_name" != "$postgres_container" ] || fail promoted_database_labeled_as_runtime
+  [ "$(docker inspect --format '{{.State.Running}}' "$container_id")" = false ] || fail runtime_containers_still_running
+  docker rm "$container_id" >/dev/null
+done
+if docker network inspect "$network" >/dev/null 2>&1; then
+  remaining_endpoints="$(docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' "$network")"
+  [ -z "$remaining_endpoints" ] || fail runtime_network_unexpected_endpoint
+  docker network rm "$network" >/dev/null
+fi
 [ ! -e "$storage_mount" ] || fail runtime_storage_link_still_present
 [ -d "$stage_dir" ] || fail runtime_stage_missing
 

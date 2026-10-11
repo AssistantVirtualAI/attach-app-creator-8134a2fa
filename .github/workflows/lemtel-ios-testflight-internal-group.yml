@@ -11,8 +11,11 @@ on:
       marketing_version:
         description: "Existing iOS marketing version."
         required: true
-        default: "1.1"
-        type: string
+      default: "1.1"
+      type: string
+  push:
+    tags:
+      - "lemtel-ios-testflight-group-v1.1.5-r*"
 
 permissions:
   contents: read
@@ -30,8 +33,8 @@ jobs:
     env:
       TESTFLIGHT_APP_ID: "6786177551"
       TESTFLIGHT_GROUP_NAME: "Lemtel Internal"
-      TESTFLIGHT_BUILD_VERSION: ${{ inputs.build_version }}
-      TESTFLIGHT_MARKETING_VERSION: ${{ inputs.marketing_version }}
+      TESTFLIGHT_BUILD_VERSION: ${{ github.event_name == 'push' && '5' || inputs.build_version }}
+      TESTFLIGHT_MARKETING_VERSION: ${{ github.event_name == 'push' && '1.1' || inputs.marketing_version }}
       APPSTORE_ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
       APPSTORE_API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
       APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}

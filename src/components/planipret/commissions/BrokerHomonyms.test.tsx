@@ -5,7 +5,13 @@ vi.mock("recharts", async () => {
   const React = await import("react");
   const Stub = ({ children }: any) => React.createElement("div", null, children);
   const Null = () => null;
-  return new Proxy({}, { get: (_t, k) => (k === "ResponsiveContainer" || String(k).endsWith("Chart") ? Stub : Null) });
+  return {
+    ResponsiveContainer: Stub, BarChart: Stub, ComposedChart: Stub, AreaChart: Stub, LineChart: Stub, PieChart: Stub,
+    RadarChart: Stub, ScatterChart: Stub, Treemap: Null, Pie: Null, Radar: Null, Scatter: Null, PolarGrid: Null,
+    PolarAngleAxis: Null, PolarRadiusAxis: Null, Cell: Null, Bar: Null, Line: Null, Area: Null, Legend: Null,
+    XAxis: Null, YAxis: Null, ZAxis: Null, Tooltip: Null, CartesianGrid: Null, ReferenceLine: Null, LabelList: Null,
+    Label: Null, Brush: Null, ReferenceArea: Null, Funnel: Null, FunnelChart: Stub, RadialBar: Null, RadialBarChart: Stub,
+  };
 });
 
 import BrokerLeaderboard from "./BrokerLeaderboard";

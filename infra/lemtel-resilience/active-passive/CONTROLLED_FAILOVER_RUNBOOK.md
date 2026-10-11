@@ -15,7 +15,7 @@ Le présent runbook s’applique seulement au backend Lemtel. Il n’autorise au
 3. Le prévol root-only du standby indique `standby_in_recovery=true`, `wal_receiver_status=streaming` au dernier état connu, et aucun port PostgreSQL hôte/public.
 4. L’équipe a explicitement confirmé la décision de basculer, l’impact attendu et le propriétaire de la fenêtre de maintenance.
 5. Le plan de **fencing** du primaire est prêt : `lemtel-ha-primary-fence.sh` rend `supabase-db` non-redémarrable puis l’arrête, enregistre son état root-only et vérifie l’absence de listener PostgreSQL. Il exige ses deux jetons explicites et doit être exécuté avant toute promotion. L’absence de réponse réseau ne suffit pas à prouver qu’il ne peut plus écrire.
-6. L’autorité DNS et la procédure de routage sont disponibles et une approbation spécifique de changement DNS est obtenue. À ce stade, aucun accès API DNS n’est configuré pour Lemtel.
+6. L’autorité DNS Cloudflare, le nom primaire canonique et la procédure de routage sont disponibles ; une approbation spécifique de changement DNS reste obligatoire pour la fenêtre de bascule.
 
 ## Séquence contrôlée — non exécutée aujourd’hui
 
@@ -24,8 +24,8 @@ Le présent runbook s’applique seulement au backend Lemtel. Il n’autorise au
 3. **Capturer l’état DO** à l’aide de `lemtel-ha-standby-failover-preflight.sh`. Ce script est en lecture seule et n’exécute jamais `pg_promote`.
 4. **Promouvoir DO** avec `lemtel-ha-standby-postgres-promote.sh`, en passant le même identifiant d’incident et l’attestation de fencing exportée depuis Hostinger. Le script exige que le primaire privé ne soit plus joignable sur PostgreSQL, que le standby soit toujours en recovery avec WAL `streaming`, et qu’aucun port PostgreSQL ne soit publié. La promotion est une action séparée, versionnée et observée ; elle n’est pas automatisée par ce package et ne démarre pas le runtime, Storage ou DNS.
 5. **Valider le writer promu** : intégrité, lecture/écriture contrôlée, absence de reprise de Hostinger comme writer, et protection contre un second writer.
-6. **Routage DNS contrôlé** seulement après les contrôles précédents. Le changement et son TTL effectif doivent être consignés.
-7. **Reprise de service limitée** : aucun runtime Storage/public supplémentaire ni composant de téléphonie ne démarre sans validation de sa propre procédure.
+6. **Activer le runtime DO** avec `lemtel-ha-standby-runtime-activate-after-promotion.sh`. Il réutilise les données Storage déjà synchronisées, démarre le runtime configuré sur DO et impose l’absence de port PostgreSQL public. Il ne modifie pas DNS et ne démarre ni FusionPBX, ni SIP, ni WSS, ni TURN.
+7. **Routage DNS contrôlé** seulement après les contrôles précédents. Le changement et son TTL effectif doivent être consignés.
 
 ## Failback
 

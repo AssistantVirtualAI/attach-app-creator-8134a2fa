@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Replace generic Planiprêt transcript errors with evidence-based diagnostics in both web source trees; verify retry/privacy states without changing native code or call routing.
+- [x] Replace generic Planiprêt transcript errors with evidence-based diagnostics in both web source trees; 20 focused tests pass, browser notice/retry verified, build OK; no native edits or publication.
+- [ ] Verify transcript diagnostics on a real call: requesting user's authenticated call screen returned no calls; requires an accessible recorded call. No installed-device verification performed.
 
 - [x] Restore Sandra and all brokers' own Maestro tasks across portal/mobile using usage-specific identities and the owner-scoped synchronized projection; Sandra's authenticated endpoint now returns 230 tasks and 57 focused task/commission tests pass.
 

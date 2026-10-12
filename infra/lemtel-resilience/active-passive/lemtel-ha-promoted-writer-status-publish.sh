@@ -15,7 +15,15 @@ fail() {
 
 command -v docker >/dev/null 2>&1 || fail docker_missing
 
-db_container='supabase-db'
+resolve_database_container() {
+  local -a candidates=()
+  # Match PostgreSQL itself, never the distinct postgres-meta sidecar.
+  mapfile -t candidates < <(docker ps -a --format '{{.Names}}|{{.Image}}' | awk -F'|' '$2 ~ /(^|\/)postgres(:|$)|supabase\/postgres(:|$)/ { print $1 }')
+  [ "${#candidates[@]}" -eq 1 ] && printf '%s' "${candidates[0]}"
+}
+
+db_container="$(resolve_database_container || true)"
+[ -n "$db_container" ] || fail database_container_unresolved
 auth_container='supabase-auth'
 rest_container='supabase-rest'
 storage_container='supabase-storage'

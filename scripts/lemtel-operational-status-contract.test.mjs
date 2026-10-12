@@ -57,6 +57,9 @@ test('operational status schema is Lemtel-only and denies browser table access',
 test('writer publisher emits only locally verified redacted health and never controls failover', () => {
   assert.match(publisher, /publish_redacted_promoted_writer_status/);
   assert.match(publisher, /digitalocean_promoted_writer/);
+  assert.match(publisher, /resolve_database_container/);
+  assert.match(publisher, /supabase\\\/postgres\(:\|\$\)/);
+  assert.match(publisher, /database_container_unresolved/);
   assert.match(publisher, /"standby": "unknown"/);
   assert.match(publisher, /"route": "unknown"/);
   assert.match(publisher, /"database": "unknown"/);

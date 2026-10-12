@@ -38,6 +38,8 @@ test('DO Storage sync discovers the real local volume and sends checksummed data
   assert.match(sync, /sync_do_writer_private_storage_once/u);
   assert.match(sync, /digitalocean_writer/u);
   assert.match(sync, /docker inspect --format/u);
+  assert.match(sync, /tr -d '\[\[:space:\]\]'/u);
+  assert.doesNotMatch(sync, /tr -d '\[:space:\]'/u);
   assert.match(sync, /invalid_storage_source_mount/u);
   assert.match(sync, /sync_direction=digitalocean_to_hostinger_only/u);
   assert.match(sync, /--checksum/u);

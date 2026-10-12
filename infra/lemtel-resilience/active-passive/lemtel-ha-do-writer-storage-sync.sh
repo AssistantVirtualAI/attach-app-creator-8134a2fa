@@ -33,7 +33,7 @@ command -v flock >/dev/null 2>&1 || fail flock_missing
 command -v sha256sum >/dev/null 2>&1 || fail sha256sum_missing
 docker inspect "$storage_container" >/dev/null 2>&1 || fail storage_container_missing
 docker inspect --format '{{.State.Running}}' "$storage_container" | grep -qx true || fail storage_container_not_running
-source_dir="$(docker inspect --format "{{range .Mounts}}{{if eq .Destination \"$storage_destination\"}}{{.Source}}{{end}}{{end}}" "$storage_container" | tr -d '[:space:]')"
+source_dir="$(docker inspect --format "{{range .Mounts}}{{if eq .Destination \"$storage_destination\"}}{{.Source}}{{end}}{{end}}" "$storage_container" | tr -d '[[:space:]]')"
 case "$source_dir" in /var/lib/docker/volumes/*/_data|/opt/*|/srv/*) ;; *) fail invalid_storage_source_mount ;; esac
 [ -d "$source_dir" ] || fail storage_source_missing
 [ -f "$key_file" ] && [ -f "$key_file.pub" ] && [ -f "$known_hosts" ] || fail storage_sync_key_material_missing

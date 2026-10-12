@@ -24,6 +24,7 @@ envelope_file="$envelope_dir/replication-password-hostinger.age"
 lock_file='/run/lock/lemtel-ha-do-writer-replication-secret-recover.lock'
 sql_file=''
 completed=false
+stale_local_secret_discarded=false
 
 query_database() {
   local query="$1"
@@ -52,7 +53,6 @@ printf '' | age -r "$age_recipient" -o /dev/null || fail invalid_standby_age_rec
 docker inspect "$db_container" >/dev/null 2>&1 || fail database_container_missing
 [ "$(docker inspect --format '{{.Config.Image}}' "$db_container")" = 'supabase/postgres:17.6.1.136' ] || fail unexpected_database_image
 docker inspect --format '{{.State.Running}}' "$db_container" | grep -qx true || fail database_not_running
-[ -f "$secret_file" ] && fail local_replication_secret_already_present
 [ -f "$envelope_file" ] && fail encrypted_replication_envelope_already_present
 
 exec 9>"$lock_file"
@@ -68,6 +68,15 @@ IFS='|' read -r recovery role_can_login role_can_replicate active_replicas role_
 [ "$active_replicas" = 0 ] || fail active_replication_present
 [ "$role_sessions" = 0 ] || fail replication_role_session_present
 case "$slot_active:$slot_kind" in absent:absent|inactive:physical) ;; *) fail replication_slot_active_or_invalid ;; esac
+
+# A prior failed attempt may leave a local plaintext candidate without any
+# encrypted envelope or PostgreSQL password change. It can only be discarded
+# after the writer, role, sessions and slot have all passed the same safety
+# checks above; never reuse or expose that stale candidate.
+if [ -f "$secret_file" ]; then
+  rm -f "$secret_file"
+  stale_local_secret_discarded=true
+fi
 
 install -d -m 0700 "$secret_dir" "$envelope_dir"
 umask 077
@@ -92,6 +101,7 @@ printf 'orphaned_role_confirmed=true\n'
 printf 'active_replication_confirmed=false\n'
 printf 'replication_role_session_confirmed=false\n'
 printf 'existing_slot_active=false\n'
+printf 'stale_local_replication_secret_discarded=%s\n' "$stale_local_secret_discarded"
 printf 'replication_secret_rotated=true\n'
 printf 'replication_secret_envelope_created=true\n'
 printf 'plaintext_secret_replication=false\n'

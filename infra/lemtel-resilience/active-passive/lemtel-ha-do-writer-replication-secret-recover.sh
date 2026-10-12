@@ -58,10 +58,13 @@ docker inspect --format '{{.State.Running}}' "$db_container" | grep -qx true || 
 exec 9>"$lock_file"
 flock -n 9 || fail concurrent_replication_secret_recovery
 
-state="$(query_database "SELECT pg_is_in_recovery(), COALESCE((SELECT rolcanlogin::text || '|' || rolreplication::text FROM pg_roles WHERE rolname = '${replication_role}'), 'false|false'), (SELECT count(*) FROM pg_stat_replication), (SELECT count(*) FROM pg_stat_activity WHERE usename = '${replication_role}'), COALESCE((SELECT CASE WHEN active THEN 'active' ELSE 'inactive' END FROM pg_replication_slots WHERE slot_name = '${replication_slot}'), 'absent'), COALESCE((SELECT slot_type FROM pg_replication_slots WHERE slot_name = '${replication_slot}'), 'absent')")"
-IFS='|' read -r recovery role_state active_replicas role_sessions slot_active slot_kind <<< "$state"
+# psql already uses `|` as its field delimiter. Keep each role attribute in
+# a distinct SQL column so a valid `true|true` role cannot be split into two
+# unrelated shell fields and mistaken for an unsafe role state.
+state="$(query_database "SELECT pg_is_in_recovery(), COALESCE((SELECT rolcanlogin::text FROM pg_roles WHERE rolname = '${replication_role}'), 'false'), COALESCE((SELECT rolreplication::text FROM pg_roles WHERE rolname = '${replication_role}'), 'false'), (SELECT count(*) FROM pg_stat_replication), (SELECT count(*) FROM pg_stat_activity WHERE usename = '${replication_role}'), COALESCE((SELECT CASE WHEN active THEN 'active' ELSE 'inactive' END FROM pg_replication_slots WHERE slot_name = '${replication_slot}'), 'absent'), COALESCE((SELECT slot_type FROM pg_replication_slots WHERE slot_name = '${replication_slot}'), 'absent')")"
+IFS='|' read -r recovery role_can_login role_can_replicate active_replicas role_sessions slot_active slot_kind <<< "$state"
 [ "$recovery" = f ] || fail writer_in_recovery
-[ "$role_state" = 'true|true' ] || fail replication_role_not_orphaned
+[ "$role_can_login" = true ] && [ "$role_can_replicate" = true ] || fail replication_role_not_orphaned
 [ "$active_replicas" = 0 ] || fail active_replication_present
 [ "$role_sessions" = 0 ] || fail replication_role_session_present
 case "$slot_active:$slot_kind" in absent:absent|inactive:physical) ;; *) fail replication_slot_active_or_invalid ;; esac

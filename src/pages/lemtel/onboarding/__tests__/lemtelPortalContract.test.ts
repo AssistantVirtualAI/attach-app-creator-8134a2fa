@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, portalApi, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
@@ -55,5 +57,12 @@ describe("Lemtel portal contract", () => {
 
   it("keeps operational status behind the authoritative portal API", () => {
     expect(typeof portalApi.getOperationalStatus).toBe("function");
+  });
+
+  it("uses absolute fallback routes so malformed operations URLs cannot recurse", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
+    expect(source).toContain('path="operations/*" element={<Navigate to={`${BASE}/operations`} replace />}');
+    expect(source).toContain('Route path="*" element={<Navigate to={`${BASE}/overview`} replace />}');
+    expect(source).not.toContain('Route path="*" element={<Navigate to="overview" replace />}');
   });
 });

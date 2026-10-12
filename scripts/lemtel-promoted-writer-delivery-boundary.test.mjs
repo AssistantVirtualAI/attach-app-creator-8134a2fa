@@ -16,14 +16,14 @@ test('remote artifact delivery fails closed unless the active writer role is dec
   }
 });
 
-test('the immutable source artifact reaches the restricted DigitalOcean receiver for either declared writer role', () => {
+test('a promoted DigitalOcean writer preserves its inbound SSH boundary', () => {
   const sourceArtifact = workflows.find(({ path }) => path.endsWith('lemtel-github-artifact-sync.yml'));
   assert.ok(sourceArtifact);
   assert.match(sourceArtifact.text, /digitalocean-artifact:/);
-  assert.match(sourceArtifact.text, /DigitalOcean restricted receiver without applying it/);
-  assert.match(sourceArtifact.text, /Artifact synchronized only; no container, port, DNS or failover action is performed/);
-  assert.doesNotMatch(sourceArtifact.text, /digitalocean-promoted-writer-boundary:/);
-  assert.doesNotMatch(sourceArtifact.text, /if: \$\{\{ needs\.active-writer-role-gate\.outputs\.active_writer == 'hostinger' \}\}/);
+  assert.match(sourceArtifact.text, /if: \$\{\{ needs\.active-writer-role-gate\.outputs\.active_writer == 'hostinger' \}\}/);
+  assert.match(sourceArtifact.text, /digitalocean-promoted-writer-boundary:/);
+  assert.match(sourceArtifact.text, /inbound SSH receiver is intentionally not contacted/);
+  assert.match(sourceArtifact.text, /outbound pull controller/);
 });
 
 test('private client-test bundles preserve the promoted-writer boundary', () => {

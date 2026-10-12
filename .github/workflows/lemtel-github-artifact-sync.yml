@@ -130,6 +130,7 @@ jobs:
 
   digitalocean-artifact:
     needs: [package, hostinger-artifact, active-writer-role-gate]
+    if: ${{ needs.active-writer-role-gate.outputs.active_writer == 'hostinger' }}
     environment: lemtel-digitalocean-standby
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -143,7 +144,7 @@ jobs:
           set -euo pipefail
           actual=$(sha256sum lemtel-artifact.tgz | awk '{print $1}')
           test "$actual" = "${{ needs.package.outputs.sha256 }}"
-      - name: Deposit same artifact on DigitalOcean restricted receiver without applying it
+      - name: Deposit same artifact on DigitalOcean standby receiver without applying it
         env:
           HOST: ${{ secrets.LEMTEL_DIGITALOCEAN_HOST }}
           KEY: ${{ secrets.LEMTEL_DIGITALOCEAN_DEPLOY_KEY }}
@@ -159,3 +160,13 @@ jobs:
           cat lemtel-artifact.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemtelstandbydeploy@$HOST" "receive $SHA256"
       - name: Assert no runtime action
         run: echo 'Artifact synchronized only; no container, port, DNS or failover action is performed.'
+
+  digitalocean-promoted-writer-boundary:
+    needs: [package, hostinger-artifact, active-writer-role-gate]
+    if: ${{ needs.active-writer-role-gate.outputs.active_writer == 'digitalocean' }}
+    environment: lemtel-digitalocean-standby
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Preserve the promoted-writer SSH boundary
+        run: echo 'DigitalOcean is the declared writer; its inbound SSH receiver is intentionally not contacted. Writer-side source staging requires a separately installed outbound pull controller.'

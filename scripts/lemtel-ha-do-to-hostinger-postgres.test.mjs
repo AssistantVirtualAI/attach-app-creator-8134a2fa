@@ -25,10 +25,13 @@ test('DO relay binds only to its WireGuard address and limits the source to Host
   assert.match(relay, /TCP-LISTEN:5432,bind=\$\{writer_tunnel_address\},reuseaddr,fork/u);
   assert.match(relay, /allow in on lemtel-ha0/u);
   assert.match(relay, /database_port_already_published/u);
+  assert.match(relay, /HostConfig\.NetworkMode/u);
+  assert.match(relay, /database_backend_target='127\.0\.0\.1:5432'/u);
   assert.match(relay, /private_relay_listener_verified=true/u);
   assert.match(relay, /public_database_listener_enabled=false/u);
   assert.match(relay, /rollback\(\)/u);
-  assert.doesNotMatch(relay, /(?:--publish|-p\s*5432|0\.0\.0\.0:5432|::.*5432|pg_basebackup|pg_promote)/imu);
+  assert.doesNotMatch(relay, /(?:--publish|-p\s*5432|pg_basebackup|pg_promote)/imu);
+  assert.doesNotMatch(relay, /TCP-LISTEN:5432,bind=(?:0\.0\.0\.0|\*|\[::\])/imu);
 });
 
 test('DO writer creates a WireGuard-only replication policy and encrypted Hostinger envelope', () => {

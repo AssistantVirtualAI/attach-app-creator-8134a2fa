@@ -37,7 +37,8 @@ Deno.serve(async (req) => {
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const text = (body.text ?? "").trim();
-    const voiceId = body.voice_id || "EXAVITQu4vr4xnSDxMaL";
+    // All Planipret brokers use Amélie (Québec French female voice).
+    const voiceId = "UJCi4DDncuo0VJDSIegj";
     const greetingIndex = Math.min(Math.max(Number(body.greeting_index) || 1, 1), 9);
     if (text.length < 10 || text.length > 500) {
       return jsonResponse({ success: false, error: "text_length_invalid" }, 200);

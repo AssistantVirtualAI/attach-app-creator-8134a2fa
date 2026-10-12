@@ -1,5 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { claudeText } from "../_shared/anthropic.ts";
+import { insightsCacheKey, readInsightsCache, writeInsightsCache } from "../_shared/insights-cache.ts";
 
 /**
  * AI insights for the broker Overview dashboard.
@@ -58,7 +59,12 @@ Deno.serve(async (req) => {
       JSON.stringify(metrics).slice(0, 18000),
     ].join("\n");
 
+    const cacheKey = await insightsCacheKey("overview-insights", userText);
+    const cached = await readInsightsCache(cacheKey);
+    if (cached) return j({ ...(cached as object), cached: true });
+
     const text = await claudeText(SYSTEM, userText, {
+      cacheTtl: "1h",
       model: "claude-sonnet-4-5-20250929",
       max_tokens: 1400,
       temperature: 0.3,
@@ -80,7 +86,9 @@ Deno.serve(async (req) => {
         }))
       : [];
 
-    return j({ success: true, summary: String(parsed.summary ?? "").slice(0, 600), insights });
+    const result = { success: true, summary: String(parsed.summary ?? "").slice(0, 600), insights };
+    await writeInsightsCache(cacheKey, result);
+    return j(result);
   } catch (e: any) {
     console.error("pp-overview-insights error", e);
     return j({ success: false, error: e?.message ?? "server_error" }, 500);

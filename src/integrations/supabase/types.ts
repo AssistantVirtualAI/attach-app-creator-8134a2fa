@@ -613,6 +613,24 @@ export type Database = {
           },
         ]
       }
+      ai_insights_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          payload: Json
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          payload: Json
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       ai_request_audit_log: {
         Row: {
           call_record_id: string | null

@@ -6,7 +6,7 @@
   "artifact": {
     "build_once": true,
     "sha256_required": true,
-    "same_sha256_on_hostinger_and_digitalocean": true,
+    "same_sha256_on_hostinger_and_digitalocean": false,
     "retention_days": 30
   },
   "hostinger": {
@@ -16,7 +16,9 @@
   },
   "digitalocean": {
     "restricted_receiver": true,
-    "writer_artifact_stage": true,
+    "writer_artifact_stage": false,
+    "outbound_pull_controller_configured": false,
+    "inbound_github_ssh_allowed": false,
     "runtime_apply": false,
     "containers_started": false,
     "ports_opened": false,

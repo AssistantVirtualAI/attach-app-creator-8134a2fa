@@ -27,6 +27,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  active-writer-role-gate:
+    environment: lemtel-digitalocean-standby
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      active_writer: ${{ steps.role.outputs.active_writer }}
+    steps:
+      - id: role
+        name: Fail closed unless the current writer role is declared
+        env:
+          LEMTEL_ACTIVE_WRITER: ${{ vars.LEMTEL_ACTIVE_WRITER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$LEMTEL_ACTIVE_WRITER" in
+            hostinger|digitalocean)
+              printf 'active_writer=%s\n' "$LEMTEL_ACTIVE_WRITER" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo 'Missing or unsupported Lemtel active-writer role; refusing remote private-bundle delivery.' >&2
+              exit 1
+              ;;
+          esac
+
   android-and-desktop:
     environment: lemtel-hostinger-staging
     runs-on: ubuntu-latest
@@ -141,7 +165,7 @@ jobs:
           retention-days: 3
 
   hostinger-staging-drop:
-    needs: bundle-and-sync
+    needs: [bundle-and-sync, active-writer-role-gate]
     environment: lemtel-hostinger-primary
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -149,7 +173,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: lemtel-hostinger-private-test-builds-${{ github.run_id }}
-      - name: Deposit private test bundle without applying it
+      - name: Deposit private test bundle on Hostinger recovery receiver without applying it
         env:
           HOST: ${{ secrets.LEMTEL_HOSTINGER_HOST }}
           KEY: ${{ secrets.LEMTEL_HOSTINGER_DEPLOY_KEY }}
@@ -166,7 +190,8 @@ jobs:
           cat lemtel-hostinger-test-builds.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemteldeploy@$HOST" "receive $SHA256"
 
   digitalocean-standby-drop:
-    needs: [bundle-and-sync, hostinger-staging-drop]
+    needs: [bundle-and-sync, hostinger-staging-drop, active-writer-role-gate]
+    if: ${{ needs.active-writer-role-gate.outputs.active_writer == 'hostinger' }}
     environment: lemtel-digitalocean-standby
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -191,3 +216,13 @@ jobs:
           cat lemtel-hostinger-test-builds.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemtelstandbydeploy@$HOST" "receive $SHA256"
       - name: Declare distribution boundary
         run: echo 'No iOS signing, Android release signing, Desktop packaging, public store upload, public hosting or user distribution was performed.'
+
+  digitalocean-promoted-writer-boundary:
+    needs: [bundle-and-sync, hostinger-staging-drop, active-writer-role-gate]
+    if: ${{ needs.active-writer-role-gate.outputs.active_writer == 'digitalocean' }}
+    environment: lemtel-digitalocean-standby
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Preserve the promoted writer boundary
+        run: echo 'DigitalOcean is the declared promoted writer; its former standby SSH receiver is intentionally not contacted and no runtime action or user distribution is performed.'

@@ -1048,9 +1048,18 @@ Deno.serve(async (req) => {
       syncedAt: new Date().toISOString(),
       validation,
       sourceIdentity: { source: "paid_deposits", endpoint: "/api/main/commissions/reports/deposits", generatedAt: validation.checked_at },
+    };
 
-
+    await admin.from("planipret_commission_snapshots").upsert({
+      cache_key: cacheKey,
+      user_id: user.id,
+      request_body: { year, month, scope, granularity, periodIndex, agent },
+      payload,
+      fetched_at: new Date().toISOString(),
+      last_accessed_at: new Date().toISOString(),
+      refreshing_until: null,
     });
+    return json({ ...payload, cache: { cached: false, stale: false, fetched_at: payload.syncedAt } });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

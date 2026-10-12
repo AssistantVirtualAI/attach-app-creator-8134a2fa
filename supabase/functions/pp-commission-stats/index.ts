@@ -121,6 +121,24 @@ Deno.serve(async (req) => {
     const { data: isAdminData } = await admin.rpc("is_planipret_admin", { _user_id: user.id });
     const isAdmin = Boolean(isAdminData);
 
+    // ---- Snapshot cache: a fresh snapshot (< 5 min) is served instantly ----
+    // instead of re-reading the whole register + live Maestro feed. Only
+    // validated `ok: true` payloads are ever stored; errors never get cached.
+    const cacheKey = `stats:${user.id}:${year}:${month}:${scope}:${granularity}:${periodIndex}:${agent ?? ""}`;
+    const FRESH_MS = 5 * 60_000;
+    const { data: snap } = await admin
+      .from("planipret_commission_snapshots")
+      .select("payload,fetched_at")
+      .eq("cache_key", cacheKey)
+      .maybeSingle();
+    if (snap?.payload?.ok === true) {
+      const age = Date.now() - new Date(snap.fetched_at).getTime();
+      if (age < FRESH_MS) {
+        admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", cacheKey).then(() => {});
+        return json({ ...snap.payload, cache: { cached: true, stale: false, fetched_at: snap.fetched_at } });
+      }
+    }
+
     // Pull the years we need: PY, CY, and the season overlap year.
     // PostgREST caps a single response at 1000 rows, which silently truncated
     // the register and produced impossible YoY percentages. Page explicitly.
@@ -973,8 +991,7 @@ Deno.serve(async (req) => {
     });
     if (!validation.validated) return json({ error: "Les commissions déboursées n'ont pas passé le contrôle final. La dernière version validée reste affichée.", validation }, 200);
 
-    return json({
-
+    const payload = {
       ok: true,
       year,
       month,
@@ -1031,9 +1048,18 @@ Deno.serve(async (req) => {
       syncedAt: new Date().toISOString(),
       validation,
       sourceIdentity: { source: "paid_deposits", endpoint: "/api/main/commissions/reports/deposits", generatedAt: validation.checked_at },
+    };
 
-
+    await admin.from("planipret_commission_snapshots").upsert({
+      cache_key: cacheKey,
+      user_id: user.id,
+      request_body: { year, month, scope, granularity, periodIndex, agent },
+      payload,
+      fetched_at: new Date().toISOString(),
+      last_accessed_at: new Date().toISOString(),
+      refreshing_until: null,
     });
+    return json({ ...payload, cache: { cached: false, stale: false, fetched_at: payload.syncedAt } });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

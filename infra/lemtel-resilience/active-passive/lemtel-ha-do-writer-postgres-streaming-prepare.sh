@@ -109,19 +109,42 @@ if [ "$role_state_before" = 'true|true' ] && [ -f "$envelope_file" ]; then
   existing_envelope=true
 fi
 
-expected_hba_rule="host replication ${replication_role} ${standby_tunnel_address}/32 scram-sha-256"
-hba_rule_count="$(docker exec -u 0 "$db_container" sh -eu -c "grep -Fxc '${expected_hba_rule}' '${hba_path}' || true")"
-case "$hba_rule_count" in
-  0)
-    hba_backup="${hba_path}.lemtel-ha-hostinger.backup"
-    docker exec -u 0 "$db_container" sh -eu -c "test ! -e '${hba_backup}'; cp '${hba_path}' '${hba_backup}'; printf '\n# Lemtel Hostinger private physical standby over WireGuard only\n${expected_hba_rule}\n' >> '${hba_path}'"
-    hba_modified=true
-    docker exec -u postgres "$db_container" psql -X -At -d postgres -c 'SELECT pg_reload_conf()' | grep -qx t || fail hba_reload_failed
-    docker exec -u 0 "$db_container" sh -eu -c "grep -Fxc '${expected_hba_rule}' '${hba_path}'" | grep -qx 1 || fail replication_hba_rule_not_loaded
-    ;;
-  1) hba_backup='' ;;
-  *) fail duplicate_replication_hba_rule ;;
+# The relay accepts Hostinger only on WireGuard, then connects locally to the
+# Docker PostgreSQL backend. PostgreSQL therefore sees the Docker bridge
+# gateway rather than the remote WireGuard peer. Both sources are /32-pinned:
+# the peer documents the intended standby and the bridge permits only the
+# already source-limited private relay path.
+relay_bridge_address="$(docker network inspect bridge --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' | tr -d '[:space:]')"
+case "$relay_bridge_address" in
+  10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*) ;;
+  *) fail invalid_relay_bridge_address ;;
 esac
+expected_hba_rules=(
+  "host replication ${replication_role} ${standby_tunnel_address}/32 scram-sha-256"
+  "host replication ${replication_role} ${relay_bridge_address}/32 scram-sha-256"
+)
+hba_backup=''
+for expected_hba_rule in "${expected_hba_rules[@]}"; do
+  hba_rule_count="$(docker exec -u 0 "$db_container" sh -eu -c "grep -Fxc '${expected_hba_rule}' '${hba_path}' || true")"
+  case "$hba_rule_count" in
+    0)
+      if [ "$hba_modified" = false ]; then
+        hba_backup="${hba_path}.lemtel-ha-hostinger.backup"
+        docker exec -u 0 "$db_container" sh -eu -c "test ! -e '${hba_backup}'; cp '${hba_path}' '${hba_backup}'"
+        hba_modified=true
+      fi
+      docker exec -u 0 "$db_container" sh -eu -c "printf '\n# Lemtel Hostinger private physical standby over WireGuard only\n${expected_hba_rule}\n' >> '${hba_path}'"
+      ;;
+    1) ;;
+    *) fail duplicate_replication_hba_rule ;;
+  esac
+done
+if [ "$hba_modified" = true ]; then
+  docker exec -u postgres "$db_container" psql -X -At -d postgres -c 'SELECT pg_reload_conf()' | grep -qx t || fail hba_reload_failed
+fi
+for expected_hba_rule in "${expected_hba_rules[@]}"; do
+  docker exec -u 0 "$db_container" sh -eu -c "grep -Fxc '${expected_hba_rule}' '${hba_path}'" | grep -qx 1 || fail replication_hba_rule_not_loaded
+done
 
 if [ "$role_state_before" = 'false|false' ]; then
   umask 077
@@ -160,6 +183,7 @@ printf 'wireguard_handshake_verified=true\n'
 printf 'database_private_before=true\n'
 printf 'writer_in_recovery=false\n'
 printf 'replication_hba_rule_private_only=true\n'
+printf 'replication_hba_relay_bridge_only=true\n'
 printf 'replication_role_created_or_verified=true\n'
 printf 'physical_replication_slot_created_or_verified=true\n'
 printf 'replication_secret_envelope_created=true\n'

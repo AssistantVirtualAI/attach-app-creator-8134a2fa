@@ -42,6 +42,10 @@ test('DO writer creates a WireGuard-only replication policy and encrypted Hostin
   assert.match(writer, /writer_tunnel_address='10\.253\.47\.2'/u);
   assert.match(writer, /standby_tunnel_address='10\.253\.47\.1'/u);
   assert.match(writer, /host replication \$\{replication_role\} \$\{standby_tunnel_address\}\/32 scram-sha-256/u);
+  assert.match(writer, /docker network inspect bridge/u);
+  assert.match(writer, /invalid_relay_bridge_address/u);
+  assert.match(writer, /host replication \$\{replication_role\} \$\{relay_bridge_address\}\/32 scram-sha-256/u);
+  assert.match(writer, /replication_hba_relay_bridge_only=true/u);
   assert.match(writer, /pg_create_physical_replication_slot/u);
   assert.match(writer, /age -r "\$age_recipient"/u);
   assert.match(writer, /existing_envelope=false/u);

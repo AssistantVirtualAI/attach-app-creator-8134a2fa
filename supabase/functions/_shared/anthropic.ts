@@ -119,6 +119,24 @@ export function withPromptCache(
     );
   }
 
+  // Multi-turn: also cache the growing conversation (Anthropic recommendation).
+  // Breakpoint on the last block of the second-to-last message so the next
+  // turn reads the whole prior history from cache. Max 3 breakpoints used.
+  if (Array.isArray(out.messages) && out.messages.length >= 3) {
+    const idx = out.messages.length - 2;
+    const m = out.messages[idx];
+    const content = typeof m.content === "string"
+      ? [{ type: "text", text: m.content }]
+      : Array.isArray(m.content) ? [...m.content] : null;
+    if (content && content.length) {
+      const last = content.length - 1;
+      if (content[last]?.type === "text" || content[last]?.type === "tool_result") {
+        content[last] = { ...content[last], cache_control: cc };
+        out.messages = out.messages.map((x: any, i: number) => (i === idx ? { ...x, content } : x));
+      }
+    }
+  }
+
   return out;
 }
 

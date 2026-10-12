@@ -20,7 +20,12 @@ require_ipv4() {
 }
 
 listener_present() {
-  ss -H -lun | awk '{print $5}' | grep -Eq "(:|\])${listen_port}$"
+  # WireGuard's kernel-owned UDP socket is authoritative in /proc.  The
+  # `ss` presentation can omit it on this host despite a healthy interface.
+  local port_hex
+  port_hex="$(printf '%04X' "$listen_port")"
+  awk -v port="$port_hex" 'NR > 1 {split($2, pair, ":"); if (toupper(pair[2]) == port) found=1} END {exit(found ? 0 : 1)}' \
+    /proc/net/udp /proc/net/udp6 2>/dev/null
 }
 
 ufw_rule_present() {

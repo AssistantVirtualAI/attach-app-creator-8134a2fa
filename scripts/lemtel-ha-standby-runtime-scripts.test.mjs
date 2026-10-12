@@ -61,8 +61,13 @@ test('promoted standby runtime activation requires fencing evidence and preserve
   assert.match(standbyActivation, /SELECT pg_is_in_recovery\(\)/u);
   assert.match(standbyActivation, /docker network connect --alias db/u);
   assert.match(standbyActivation, /docker compose --project-name lemtel-ha-standby/u);
-  assert.match(standbyActivation, /up --detach --no-build --no-deps/u);
+  assert.match(standbyActivation, /up --detach --force-recreate --no-build --no-deps/u);
   assert.match(standbyActivation, /rm --force --stop/u);
+  assert.match(standbyActivation, /remove_failed_runtime_containers/u);
+  assert.match(standbyActivation, /docker ps --all --quiet --filter "label=com\.docker\.compose\.project=lemtel-ha-standby"/u);
+  assert.match(standbyActivation, /\[ "\$container_name" != "\$postgres_container" \] \|\| return 1/u);
+  assert.match(standbyActivation, /docker stop "\$container_id"/u);
+  assert.match(standbyActivation, /docker rm "\$container_id"/u);
   assert.match(standbyActivation, /standby_runtime_started=true/u);
   assert.match(standbyActivation, /storage_runtime_started=true/u);
   assert.match(standbyActivation, /public_runtime_listener_enabled=true/u);

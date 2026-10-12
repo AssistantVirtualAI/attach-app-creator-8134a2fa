@@ -66,12 +66,27 @@ network_created=false
 database_connected=false
 storage_link_created=false
 runtime_start_attempted=false
+remove_failed_runtime_containers() {
+  mapfile -t runtime_container_ids < <(docker ps --all --quiet --filter "label=com.docker.compose.project=lemtel-ha-standby")
+  for container_id in "${runtime_container_ids[@]}"; do
+    container_name="$(docker inspect --format '{{.Name}}' "$container_id" | sed 's#^/##')"
+    [ "$container_name" != "$postgres_container" ] || return 1
+    if [ "$(docker inspect --format '{{.State.Running}}' "$container_id")" = true ]; then
+      docker stop "$container_id" >/dev/null
+    fi
+    docker rm "$container_id" >/dev/null
+  done
+}
 cleanup() {
   status=$?
   if [ "$status" -ne 0 ]; then
     if [ "$runtime_start_attempted" = true ]; then
       "${compose[@]}" stop "${app_services[@]}" >/dev/null 2>&1 || true
       "${compose[@]}" rm --force --stop "${app_services[@]}" >/dev/null 2>&1 || true
+      # Compose can leave containers in created/exited state after a failed network
+      # attachment. Remove only containers carrying this runtime project label.
+      # Never remove the separately managed promoted database.
+      remove_failed_runtime_containers || true
     fi
     if [ "$database_connected" = true ]; then
       docker network disconnect "$network" "$postgres_container" >/dev/null 2>&1 || true
@@ -100,7 +115,7 @@ ln -s "$storage_receiver_dir" "$storage_mount"
 storage_link_created=true
 
 runtime_start_attempted=true
-"${compose[@]}" up --detach --no-build --no-deps "${app_services[@]}" >/dev/null
+"${compose[@]}" up --detach --force-recreate --no-build --no-deps "${app_services[@]}" >/dev/null
 for service in "${app_services[@]}"; do
   service_id="$("${compose[@]}" ps --quiet "$service")"
   [ -n "$service_id" ] || fail "runtime_service_missing_${service}"

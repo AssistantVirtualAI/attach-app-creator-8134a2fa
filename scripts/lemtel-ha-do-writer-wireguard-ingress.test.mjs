@@ -25,6 +25,8 @@ test('writer ingress remediation rolls back a newly-added rule when handshake ve
   assert.match(source, /firewall_added=false/);
   assert.match(source, /trap rollback EXIT/);
   assert.match(source, /ufw --force delete allow from "\$standby_public_ip" to any port "\$listen_port" proto udp/);
+  assert.match(source, /\/proc\/net\/udp/);
+  assert.match(source, /port_hex="\$\(printf '%04X' "\$listen_port"\)"/);
   assert.match(source, /hostinger_handshake_missing/);
   assert.match(source, /wireguard_handshake_verified=true/);
 });

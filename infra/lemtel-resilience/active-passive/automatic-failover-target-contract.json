@@ -19,10 +19,10 @@
   "required_preflight": {
     "provider_api_credentials_verified": false,
     "independent_arbiter_deployed": false,
-    "hostinger_private_standby_rebuilt": false,
+    "hostinger_private_standby_rebuilt": true,
     "postgres_synchronous_streaming_verified": false,
     "storage_dual_durable_write_verified": false,
-    "runtime_digest_parity_verified": false,
+    "runtime_digest_parity_verified": true,
     "cloudflare_load_balancer_configured": false,
     "digitalocean_fence_drill_verified": false,
     "hostinger_promotion_drill_verified": false,

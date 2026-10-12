@@ -17,6 +17,7 @@ const BOUNDARY_KEYS = ['single_writer_only', 'public_postgres_listener', 'fusion
 const exactKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) &&
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
 const everyFalse = (value) => Object.values(value).every((entry) => entry === false);
+const everyBoolean = (value) => Object.values(value).every((entry) => typeof entry === 'boolean');
 
 export function validateAutomaticFailoverTarget(policy) {
   return exactKeys(policy, POLICY_KEYS) &&
@@ -35,7 +36,7 @@ export function validateAutomaticFailoverTarget(policy) {
     policy.arbitration_and_fencing.hostinger_provider_fence_required === true &&
     policy.arbitration_and_fencing.promotion_requires_verified_old_writer_fenced === true &&
     policy.arbitration_and_fencing.promotion_on_ambiguous_health === false &&
-    exactKeys(policy.required_preflight, PREFLIGHT_KEYS) && everyFalse(policy.required_preflight) &&
+    exactKeys(policy.required_preflight, PREFLIGHT_KEYS) && everyBoolean(policy.required_preflight) &&
     exactKeys(policy.activation, ACTIVATION_KEYS) &&
     policy.activation.user_selected_strategy === true &&
     policy.activation.automatic_fencing_enabled === false &&
@@ -55,6 +56,16 @@ export function reviewAutomaticFailoverTarget(policy) {
   if (!validateAutomaticFailoverTarget(policy)) {
     return { status: 'automatic_failover_target_invalid', activation_authorized: false, reasons: ['AUTOMATIC_FAILOVER_TARGET_INVALID'] };
   }
+  const preflight = policy.required_preflight;
+  const reasons = [
+    !preflight.provider_api_credentials_verified && 'PROVIDER_FENCING_CREDENTIALS_REQUIRED',
+    !preflight.independent_arbiter_deployed && 'INDEPENDENT_ARBITER_REQUIRED',
+    !preflight.hostinger_private_standby_rebuilt && 'HOSTINGER_STANDBY_REBUILD_REQUIRED',
+    (!preflight.postgres_synchronous_streaming_verified || !preflight.storage_dual_durable_write_verified) && 'SYNCHRONOUS_DATABASE_AND_STORAGE_DURABILITY_REQUIRED',
+    !preflight.cloudflare_load_balancer_configured && 'CLOUDFLARE_LOAD_BALANCER_NOT_CONFIGURED',
+    (!preflight.digitalocean_fence_drill_verified || !preflight.hostinger_promotion_drill_verified || !preflight.reverse_failback_drill_verified) && 'FAILOVER_AND_FAILBACK_DRILLS_REQUIRED',
+    'FINAL_ACTIVATION_CONFIRMATION_REQUIRED',
+  ].filter(Boolean);
   return {
     status: 'synchronous_automatic_failover_target_prepared',
     activation_authorized: false,
@@ -62,15 +73,7 @@ export function reviewAutomaticFailoverTarget(policy) {
     standby: 'hostinger_rebuild_as_private_hot_standby',
     database_commit_policy: 'synchronous_replication_required',
     automatic_failover_enabled: false,
-    reasons: [
-      'PROVIDER_FENCING_CREDENTIALS_REQUIRED',
-      'INDEPENDENT_ARBITER_REQUIRED',
-      'HOSTINGER_STANDBY_REBUILD_REQUIRED',
-      'SYNCHRONOUS_DATABASE_AND_STORAGE_DURABILITY_REQUIRED',
-      'CLOUDFLARE_LOAD_BALANCER_NOT_CONFIGURED',
-      'FAILOVER_AND_FAILBACK_DRILLS_REQUIRED',
-      'FINAL_ACTIVATION_CONFIRMATION_REQUIRED'
-    ]
+    reasons,
   };
 }
 

@@ -31,7 +31,6 @@ test('target rejects promotion or traffic routing before all preflights and acti
     (value) => { value.activation.automatic_failback_enabled = true; },
     (value) => { value.arbitration_and_fencing.promotion_on_ambiguous_health = true; },
     (value) => { value.arbitration_and_fencing.promotion_requires_verified_old_writer_fenced = false; },
-    (value) => { value.required_preflight.hostinger_private_standby_rebuilt = true; },
     (value) => { value.boundaries.unfenced_promotion = true; },
     (value) => { value.boundaries.public_postgres_listener = true; },
   ]) {
@@ -39,6 +38,15 @@ test('target rejects promotion or traffic routing before all preflights and acti
     mutate(value);
     assert.equal(validateAutomaticFailoverTarget(value), false);
   }
+});
+
+test('verified standby and immutable digest evidence remains non-activating', () => {
+  const value = policy();
+  assert.equal(value.required_preflight.hostinger_private_standby_rebuilt, true);
+  assert.equal(value.required_preflight.runtime_digest_parity_verified, true);
+  assert.equal(validateAutomaticFailoverTarget(value), true);
+  assert.equal(value.activation.automatic_promotion_enabled, false);
+  assert.equal(value.activation.automatic_traffic_failover_enabled, false);
 });
 
 test('review explains the missing prerequisites without claiming activation', () => {
@@ -49,7 +57,6 @@ test('review explains the missing prerequisites without claiming activation', ()
   assert.deepEqual(review.reasons, [
     'PROVIDER_FENCING_CREDENTIALS_REQUIRED',
     'INDEPENDENT_ARBITER_REQUIRED',
-    'HOSTINGER_STANDBY_REBUILD_REQUIRED',
     'SYNCHRONOUS_DATABASE_AND_STORAGE_DURABILITY_REQUIRED',
     'CLOUDFLARE_LOAD_BALANCER_NOT_CONFIGURED',
     'FAILOVER_AND_FAILBACK_DRILLS_REQUIRED',

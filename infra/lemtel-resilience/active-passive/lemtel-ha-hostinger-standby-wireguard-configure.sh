@@ -32,8 +32,10 @@ interface='lemtel-ha0'
 config_path="/etc/wireguard/${interface}.conf"
 service="wg-quick@${interface}"
 private_key_path='/etc/lemtel-ha/wireguard/private.key'
-local_address='10.253.47.2/30'
-peer_address='10.253.47.1/32'
+# The promoted DigitalOcean writer retains the former standby address (.2).
+# The reconstructed Hostinger standby always uses the peer address (.1).
+local_address='10.253.47.1/30'
+peer_address='10.253.47.2/32'
 
 require_key "$peer_key" || fail invalid_do_writer_public_key
 endpoint_ip="${peer_endpoint%:*}"
@@ -72,7 +74,7 @@ if ! systemctl enable --now "$service"; then
   fail service_start_failed_configuration_removed
 fi
 
-ip -4 addr show dev "$interface" | grep -Fq '10.253.47.2/30' || fail local_address_not_applied
+ip -4 addr show dev "$interface" | grep -Fq '10.253.47.1/30' || fail local_address_not_applied
 wg show "$interface" peers | grep -qx "$peer_key" || fail peer_not_applied
 
 printf 'hostinger_standby_wireguard_format=lemtel_inverse_wireguard_v1\n'

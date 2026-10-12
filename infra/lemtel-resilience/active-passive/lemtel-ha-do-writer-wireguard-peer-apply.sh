@@ -31,8 +31,10 @@ new_peer_endpoint="${LEMTEL_HOSTINGER_STANDBY_WIREGUARD_ENDPOINT:-}"
 interface='lemtel-ha0'
 config_path="/etc/wireguard/${interface}.conf"
 service="wg-quick@${interface}"
-expected_address='10.253.47.1/30'
-expected_allowed_ip='10.253.47.2/32'
+# DigitalOcean was promoted from the former standby. Its tunnel address remains
+# .2. The reconstructed Hostinger node is the new passive peer at .1.
+expected_address='10.253.47.2/30'
+expected_allowed_ip='10.253.47.1/32'
 
 require_key "$new_peer_key" || fail invalid_hostinger_standby_public_key
 endpoint_ip="${new_peer_endpoint%:*}"
@@ -45,8 +47,8 @@ systemctl is-active --quiet "$service" || fail writer_tunnel_inactive
 ip -4 addr show dev "$interface" | grep -Fq "$expected_address" || fail unexpected_writer_tunnel_address
 
 mapfile -t old_peers < <(wg show "$interface" peers)
-[ "${#old_peers[@]}" -eq 1 ] || fail expected_exactly_one_former_peer
-old_peer="${old_peers[0]}"
+[ "${#old_peers[@]}" -le 1 ] || fail unexpected_writer_peer_count
+old_peer="${old_peers[0]:-}"
 [ "$old_peer" != "$new_peer_key" ] || fail hostinger_peer_already_active
 
 rollback_dir='/etc/lemtel-ha/rollback'
@@ -67,7 +69,14 @@ listen_port="$(wg show "$interface" listen-port)"
 require_key "$private_key" || fail writer_private_key_unavailable
 [[ "$listen_port" =~ ^[1-9][0-9]{0,4}$ ]] && [ "$listen_port" -le 65535 ] || fail writer_listen_port_unavailable
 
-wg set "$interface" peer "$old_peer" remove
+if [ -n "$old_peer" ]; then
+  wg set "$interface" peer "$old_peer" remove
+  former_peer_replaced=true
+else
+  # A promoted writer can already have no peer after fencing. Adding the clean
+  # standby is then safe and does not imply an automatic promotion path.
+  former_peer_replaced=false
+fi
 wg set "$interface" peer "$new_peer_key" allowed-ips "$expected_allowed_ip" endpoint "$new_peer_endpoint" persistent-keepalive 25
 
 umask 077
@@ -94,7 +103,7 @@ rm -f "$backup_runtime"
 
 printf 'do_writer_wireguard_peer_format=lemtel_inverse_wireguard_v1\n'
 printf 'declared_role=digitalocean_writer\n'
-printf 'former_peer_replaced=true\n'
+printf 'former_peer_replaced=%s\n' "$former_peer_replaced"
 printf 'private_tunnel_interface=healthy\n'
 printf 'private_database_listener_enabled=false\n'
 printf 'postgres_changed=false\n'

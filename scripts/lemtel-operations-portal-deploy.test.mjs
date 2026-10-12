@@ -14,6 +14,7 @@ test("Operations portal deployment is root-gated and transactionally bounded to 
     "tar -xf",
     "resolve_database_container",
     "database_container_unresolved",
+    "supabase\\/postgres(:|$)",
     "pg_is_in_recovery()::text",
     "lemtel_operational_status",
     "caddy adapt",

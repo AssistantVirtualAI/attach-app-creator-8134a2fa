@@ -10,6 +10,7 @@ on:
       - 'infra/lemtel-resilience/active-passive/operational-status-contract.json'
       - 'infra/lemtel-resilience/active-passive/operational-status-deployment-manifest.json'
       - 'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-*.sh'
+      - 'infra/lemtel-resilience/active-passive/OPERATIONAL_STATUS_DEPLOYMENT.md'
       - 'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-complete-first-password/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/**'
@@ -19,13 +20,20 @@ on:
       - 'apps/ava-softphone-desktop/src/components/SetupWizard.tsx'
       - 'src/components/lemtel/LemtelHostedOnboardingPanel.tsx'
       - 'src/pages/lemtel/LemtelCustomers.tsx'
+      - 'src/lemtel-portal-main.tsx'
+      - 'src/lemtel-portal-build.css'
+      - 'src/pages/lemtel/onboarding/**'
+      - 'lemtel-portal.html'
+      - 'vite.config.lemtel-portal.ts'
       - 'infra/lemtel-client-config/hostinger-staging.env.template'
       - 'scripts/lemtel-email-onboarding-contract.test.mjs'
       - 'scripts/lemtel-email-only-client-login.test.mjs'
       - 'scripts/lemtel-hostinger-client-config-filter.*'
       - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
       - 'scripts/lemtel-operational-status-contract.test.mjs'
+      - 'scripts/lemtel-operations-portal-build.test.mjs'
       - '.github/workflows/lemtel-email-only-onboarding.yml'
+      - '.github/workflows/lemtel-operations-portal-build.yml'
       - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
   push:
     branches: [lemtel/integration]
@@ -37,6 +45,7 @@ on:
       - 'infra/lemtel-resilience/active-passive/operational-status-contract.json'
       - 'infra/lemtel-resilience/active-passive/operational-status-deployment-manifest.json'
       - 'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-*.sh'
+      - 'infra/lemtel-resilience/active-passive/OPERATIONAL_STATUS_DEPLOYMENT.md'
       - 'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-complete-first-password/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/**'
@@ -46,13 +55,20 @@ on:
       - 'apps/ava-softphone-desktop/src/components/SetupWizard.tsx'
       - 'src/components/lemtel/LemtelHostedOnboardingPanel.tsx'
       - 'src/pages/lemtel/LemtelCustomers.tsx'
+      - 'src/lemtel-portal-main.tsx'
+      - 'src/lemtel-portal-build.css'
+      - 'src/pages/lemtel/onboarding/**'
+      - 'lemtel-portal.html'
+      - 'vite.config.lemtel-portal.ts'
       - 'infra/lemtel-client-config/hostinger-staging.env.template'
       - 'scripts/lemtel-email-onboarding-contract.test.mjs'
       - 'scripts/lemtel-email-only-client-login.test.mjs'
       - 'scripts/lemtel-hostinger-client-config-filter.*'
       - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
       - 'scripts/lemtel-operational-status-contract.test.mjs'
+      - 'scripts/lemtel-operations-portal-build.test.mjs'
       - '.github/workflows/lemtel-email-only-onboarding.yml'
+      - '.github/workflows/lemtel-operations-portal-build.yml'
       - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
 
 permissions:
@@ -77,7 +93,8 @@ jobs:
             scripts/lemtel-email-only-client-login.test.mjs \
             scripts/lemtel-hostinger-client-config-filter.test.mjs \
             scripts/lemtel-hostinger-client-test-builds.test.mjs \
-            scripts/lemtel-operational-status-contract.test.mjs
+            scripts/lemtel-operational-status-contract.test.mjs \
+            scripts/lemtel-operations-portal-build.test.mjs
       - name: Typecheck Lemtel onboarding Edge Functions
         run: |
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts

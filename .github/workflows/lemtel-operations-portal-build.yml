@@ -1,0 +1,64 @@
+name: Lemtel — private Operations portal build
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for this non-public Lemtel Operations portal build"
+        required: true
+        default: "Operational status portal deployment package"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-operations-portal-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-private-portal:
+    environment: lemtel-hostinger-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
+      VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved
+      VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      # Existing account administration remains read-only in this deployment.
+      VITE_LEMTEL_HOSTED_ONBOARDING: disabled
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Enforce the canonical Lemtel runtime configuration
+        run: node scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Validate Operations portal boundaries
+        run: |
+          npx vitest run src/pages/lemtel/onboarding/__tests__/lemtelPortalContract.test.ts
+          node --test scripts/lemtel-operations-portal-build.test.mjs
+      - name: Build the isolated Operations portal
+        run: npx vite build --config vite.config.lemtel-portal.ts
+      - name: Verify deployable subpath output
+        run: |
+          set -euo pipefail
+          test -s dist-lemtel-portal/lemtel-portal.html
+          grep -q '/lemtel-portal/assets/' dist-lemtel-portal/lemtel-portal.html
+          if grep -R -E 'gejxisrqtvxavbrfcoxz|planipret' dist-lemtel-portal; then
+            echo 'Legacy cross-product content detected in the Lemtel portal artifact.' >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-operations-portal-${{ github.run_id }}
+          path: dist-lemtel-portal
+          if-no-files-found: error
+          retention-days: 3

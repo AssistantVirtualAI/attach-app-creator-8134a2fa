@@ -59,7 +59,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
 
-      - name: Validate Lemtel-only iOS release boundary
+      - name: Validate Lemtel-only canonical iOS release boundary
         run: |
           node scripts/ios-native-readiness.test.mjs
           node ../../scripts/lemtel-hostinger-client-config-filter.mjs

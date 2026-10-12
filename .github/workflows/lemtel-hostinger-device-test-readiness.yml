@@ -1,4 +1,4 @@
-name: Lemtel Hostinger — device test readiness
+name: Lemtel active-passive — device test readiness
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
       reason:
         description: 'Reason for this private device-test readiness build'
         required: true
-        default: 'Hostinger device-test readiness'
+        default: 'Canonical active-passive device-test readiness'
         type: string
 
 permissions:
@@ -46,11 +46,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Enforce device-test contract and Hostinger profile
+      - name: Enforce device-test contract and canonical profile
         run: |
           node ../../scripts/lemtel-device-test-readiness.mjs
           node ../../scripts/lemtel-hostinger-client-config-filter.mjs
-      - name: Install locked mobile dependencies and build Hostinger web bundle
+      - name: Install locked mobile dependencies and build canonical web bundle
         run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
       - name: Compile private Android debug APK
         run: |
@@ -103,7 +103,7 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
-      - name: Enforce device-test contract and Hostinger profile
+      - name: Enforce device-test contract and canonical profile
         run: |
           node ../../scripts/lemtel-device-test-readiness.mjs
           node ../../scripts/lemtel-hostinger-client-config-filter.mjs
@@ -143,7 +143,7 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
-      - name: Enforce device-test contract and Hostinger profile
+      - name: Enforce device-test contract and canonical profile
         run: |
           node ../../scripts/lemtel-device-test-readiness.mjs
           node ../../scripts/lemtel-hostinger-client-config-filter.mjs

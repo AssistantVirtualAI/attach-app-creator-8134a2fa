@@ -1,19 +1,19 @@
 # Lemtel Softphone — release mobile contrôlée
 
-> **Portée :** Lemtel uniquement. Les builds utilisent le profil Hostinger approuvé et une copie privée identique est déposée sur le secours DigitalOcean. Ce mécanisme ne démarre pas le secours, ne change pas le DNS et ne crée pas de basculement automatique.
+> **Portée :** Lemtel uniquement. Les builds utilisent le profil actif-passif canonique `https://lemtel.assistantvirtualai.com`. Le routage est actuellement vérifié sur le runtime DigitalOcean promu du drill ; Hostinger est fencée et ne doit pas être redémarrée comme writer. Aucun basculement automatique n’est créé.
 
 ## 1. Préconditions de build
 
 - La branche source est `lemtel/integration`; aucune branche Planiprêt ne doit être fusionnée globalement.
 - Le profil de build Lemtel doit contenir uniquement `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_LEMTEL_TARGET` et `VITE_LEMTEL_EMAIL_ONLY_SIGNIN=approved`.
-- Les fonctions d’authentification Hostinger doivent avoir été vérifiées avec les méthodes HTTP attendues avant une recette authentifiée.
+- Les fonctions d’authentification accessibles via la route canonique doivent avoir été vérifiées avec les méthodes HTTP attendues avant une recette authentifiée.
 - Les paramètres SIP/WSS/TURN restent configurés séparément après réception et validation des données FusionPBX. Aucun endpoint PBX n’est introduit par ce guide.
 
-## 2. Builds privés Hostinger + DigitalOcean
+## 2. Builds privés actif-passif
 
-Chaque merge Lemtel touchant le mobile lance **Lemtel Hostinger — private test builds** :
+Chaque merge Lemtel touchant le mobile lance les **builds privés Lemtel actif-passif** :
 
-1. la WebView Android/iOS est construite avec le profil Hostinger;
+1. la WebView Android/iOS est construite avec le profil canonique actif-passif;
 2. un APK Android de débogage et un `.app` iOS non signé sont produits pour contrôle;
 3. le même bundle chiffrable est déposé sur Hostinger primaire puis sur DigitalOcean standby;
 4. aucun artefact iOS n’est distribué aux utilisateurs et aucune app n’est installée à cette étape.
@@ -31,7 +31,7 @@ Secrets requis dans cet environnement :
 | `APPSTORE_CERTIFICATES_FILE_BASE64` | Certificat **Apple Distribution** exporté au format `.p12`, encodé Base64 |
 | `APPSTORE_CERTIFICATES_PASSWORD`    | Mot de passe du `.p12`                                                    |
 | `APPSTORE_API_PRIVATE_KEY`          | Contenu de la clé App Store Connect `AuthKey_*.p8`                        |
-| `VITE_SUPABASE_PUBLISHABLE_KEY`     | Clé publique Lemtel Hostinger                                             |
+| `VITE_SUPABASE_PUBLISHABLE_KEY`     | Clé publique Lemtel protégée                                              |
 
 Variables requises :
 
@@ -41,7 +41,7 @@ Variables requises :
 | `APPSTORE_ISSUER_ID`            | Issuer ID App Store Connect           |
 | `APPSTORE_API_KEY_ID`           | Key ID App Store Connect              |
 | `VITE_LEMTEL_TARGET`            | Cible Lemtel approuvée                |
-| `VITE_SUPABASE_URL`             | URL HTTPS Hostinger Lemtel            |
+| `VITE_SUPABASE_URL`             | URL HTTPS canonique Lemtel            |
 | `VITE_LEMTEL_PRIVATE_DIRECTORY` | Indicateur de répertoire privé Lemtel |
 | `VITE_LEMTEL_AUTH_REDIRECT_URL` | URL de retour autorisée Lemtel        |
 

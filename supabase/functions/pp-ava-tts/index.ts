@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
     if ("error" in auth) return auth.error;
     if (auth.authMode !== "jwt") return j({ error: "user_session_required" }, 403);
     if (!hasValidAiConsent(auth.profile)) return j({ error: "ai_consent_required" }, 403);
-    const { text, voiceId = "EXAVITQu4vr4xnSDxMaL", language = "fr" } = await req.json();
+    const { text, voiceId = "UJCi4DDncuo0VJDSIegj", language = "fr" } = await req.json();
     if (!text || typeof text !== "string") return j({ error: "text_required" }, 400);
     if (text.length > 4000) return j({ error: "text_too_long" }, 400);
     const key = Deno.env.get("ELEVENLABS_API_KEY");

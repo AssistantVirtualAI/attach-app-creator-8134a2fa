@@ -36,7 +36,7 @@ async function provisionBrokerAgent(
         },
         tts: {
           model_id: "eleven_turbo_v2_5",
-          voice_id: prof.ava_voice_id || "EXAVITQu4vr4xnSDxMaL",
+          voice_id: prof.ava_voice_id || "UJCi4DDncuo0VJDSIegj",
           agent_output_audio_format: "pcm_16000",
           optimize_streaming_latency: 4,
           stability: 0.5, similarity_boost: 0.75, style: 0.4, use_speaker_boost: true,

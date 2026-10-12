@@ -16,6 +16,7 @@
   },
   "digitalocean": {
     "restricted_receiver": true,
+    "writer_artifact_stage": true,
     "runtime_apply": false,
     "containers_started": false,
     "ports_opened": false,

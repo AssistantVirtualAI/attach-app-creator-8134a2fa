@@ -12,6 +12,7 @@ test('artifact synchronization remains Lemtel-only and runtime-free', () => {
   assert.equal(contract.lovable_source_configured, false);
   assert.equal(contract.artifact.same_sha256_on_hostinger_and_digitalocean, true);
   assert.equal(contract.hostinger.runtime_apply, false);
+  assert.equal(contract.digitalocean.writer_artifact_stage, true);
   assert.equal(contract.digitalocean.runtime_apply, false);
   assert.equal(contract.digitalocean.containers_started, false);
   assert.deepEqual(contract.forbidden.sort(), ['Planipret_source_branch','Lovable_current_project_source','runtime_deployment','standby_start','database_exposure','dns_failover','FusionPBX_mutation','client_distribution'].sort());
@@ -20,5 +21,7 @@ test('artifact synchronization remains Lemtel-only and runtime-free', () => {
 test('workflow uses restricted secrets without storing addresses or runtime commands', () => {
   for (const required of ['LEMTEL_HOSTINGER_DEPLOY_KEY', 'LEMTEL_HOSTINGER_HOST', 'LEMTEL_HOSTINGER_KNOWN_HOSTS', 'LEMTEL_DIGITALOCEAN_DEPLOY_KEY', 'LEMTEL_DIGITALOCEAN_HOST', 'LEMTEL_DIGITALOCEAN_KNOWN_HOSTS', 'sha256sum', 'lemtelstorage@', 'lemtelstandbydeploy@']) assert.match(workflow, new RegExp(required));
   assert.match(workflow, /case "\$code" in 200\|401\)/);
+  assert.match(workflow, /Deposit same artifact on DigitalOcean restricted receiver without applying it/);
+  assert.doesNotMatch(workflow, /digitalocean-promoted-writer-boundary/);
   for (const forbidden of ['docker compose up', 'docker start', 'ufw allow', 'Planipret', 'lemtel/lovable-sync']) assert.doesNotMatch(workflow, new RegExp(forbidden, 'i'));
 });

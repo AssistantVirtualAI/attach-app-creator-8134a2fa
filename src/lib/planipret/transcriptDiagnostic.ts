@@ -17,8 +17,8 @@ type Evidence = {
 export function resolveTranscriptDiagnostic(response: Evidence = {}, call: {
   save_consent?: string | null; transcript_status?: string | null; transcript_pending?: boolean;
 } = {}): TranscriptDiagnostic {
-  const fallback = response.attempts?.findLast?.((a) => a.kind === "consented_audio_stt_fallback")
-    ?? response.attempts?.slice().reverse().find((a) => a.kind === "consented_audio_stt_fallback");
+  const fallback = Array.isArray(response.attempts)
+    ? response.attempts.slice().reverse().find((a) => a.kind === "consented_audio_stt_fallback") : undefined;
   const codes = [response.reason, response.error, response.status, fallback?.result, fallback?.error]
     .filter((v): v is string => typeof v === "string").map((v) => v.toLowerCase());
   const has = (...values: string[]) => codes.some((code) => values.includes(code));
@@ -28,7 +28,7 @@ export function resolveTranscriptDiagnostic(response: Evidence = {}, call: {
   if (has("no_audio", "audio_missing", "recording_not_found", "transcript_unavailable", "call_not_connected")) return result("audio_missing");
   if (has("transcribing", "processing", "transcription_processing") || response.pending === true) return result("processing", true, true);
   if (has("transcription_failed", "audio_stt_failed", "stt_failed") || fallback?.error || (fallback?.status && fallback.status >= 500)) return result("stt_failed");
-  if (has("native_unavailable", "transcript_not_available", "transcript_not_available", "ns_not_configured")) return result("native_unavailable");
+  if (has("native_unavailable", "transcript_not_available", "ns_not_configured")) return result("native_unavailable");
   // Persisted evidence applies only when the current response supplied no diagnostic.
   if (!codes.length) {
     if (call.transcript_status === "no_audio") return result("audio_missing");

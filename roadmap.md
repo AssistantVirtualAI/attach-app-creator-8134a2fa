@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Replace generic Planiprêt transcript errors with evidence-based diagnostics in both web source trees; verify retry/privacy states without changing native code or call routing.
+
 - [x] Restore Sandra and all brokers' own Maestro tasks across portal/mobile using usage-specific identities and the owner-scoped synchronized projection; Sandra's authenticated endpoint now returns 230 tasks and 57 focused task/commission tests pass.
 
 - [x] Split broker mobile commissions into bilingual Pending/Paid panels with portal-parity colored monthly/quarterly reports; both web-mobile trees are identical and 31 focused tests pass in French and English; authenticated panel switching verified, no native edits or publication.

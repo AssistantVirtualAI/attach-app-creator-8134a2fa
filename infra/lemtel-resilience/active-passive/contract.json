@@ -1,26 +1,26 @@
 {
-  "contract_version": "lemtel_active_passive_foundation_v6",
-  "scope": "verified_active_passive_rollout_without_telephony",
+  "contract_version": "lemtel_active_passive_controlled_drill_v1",
+  "scope": "verified_active_passive_controlled_failover_drill_without_telephony",
   "source_branch": "lemtel/integration",
   "authorization": {
     "active_passive_implementation_authorized": true,
     "fusionpbx_or_sip_activation_authorized": false,
     "planipret_data_in_scope": false,
-    "client_cutover_authorized": false
+    "client_cutover_authorized": true
   },
   "topology": {
-    "primary": "hostinger_primary",
-    "standby": "digitalocean_warm_standby",
-    "writer_policy": "single_writer_hostinger",
-    "database_replication": "postgres_physical_streaming_with_replication_slot",
-    "storage_replication": "inventory_required_before_backend_specific_replication",
+    "primary": "digitalocean_promoted_writer_during_controlled_drill",
+    "standby": "hostinger_fenced_former_primary",
+    "writer_policy": "single_writer_digitalocean_during_controlled_drill",
+    "database_replication": "postgres_promoted_writer_with_former_primary_fenced",
+    "storage_replication": "storage_integrity_verified_at_drill_cutover_no_reverse_sync",
     "runtime_delivery": "immutable_artifact_same_digest_on_both_hosts",
     "traffic_routing": "external_health_checked_active_passive",
     "canonical_public_hostname": "lemtel.assistantvirtualai.com",
     "routing_provider": "cloudflare",
-    "routing_state": "canonical_primary_route_live_no_failover",
+    "routing_state": "canonical_digitalocean_route_live_controlled_drill",
     "commit_acknowledgement_policy": "availability_first_async_streaming_with_measured_lag",
-    "recovery_point_policy": "no_fixed_rpo_until_controlled_drill_measures_lag_and_recovery"
+    "recovery_point_policy": "controlled_drill_completed_without_numeric_rpo_commitment"
   },
   "required_evidence": {
     "hostinger_admin_ssh_verified": true,
@@ -32,8 +32,9 @@
     "storage_integrity_monitoring_verified": true,
     "standby_runtime_config_staged": true,
     "external_health_routing_verified": true,
-    "fencing_verified": false,
-    "failover_drill_verified": false,
+    "fencing_verified": true,
+    "promoted_writer_readwrite_verified": true,
+    "failover_drill_verified": true,
     "failback_drill_verified": false
   },
   "safety_boundaries": {
@@ -44,8 +45,8 @@
     "fusionpbx_or_sip_change": false
   },
   "implementation_state": {
-    "remote_runtime_enabled": false,
-    "dns_failover_enabled": false,
+    "remote_runtime_enabled": true,
+    "dns_failover_enabled": true,
     "automatic_failover_enabled": false
   }
 }

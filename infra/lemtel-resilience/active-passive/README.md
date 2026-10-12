@@ -1,16 +1,16 @@
-# Lemtel — Hostinger primary / DigitalOcean warm standby
+# Lemtel — drill contrôlé : DigitalOcean writer temporaire
 
-This package tracks the approved **availability-first** rollout for the Lemtel active–passive architecture. Hostinger is the only writer. DigitalOcean is a warm, read-only PostgreSQL standby over the private WireGuard path.
+This package tracks the approved **availability-first** rollout for the Lemtel active–passive architecture. Following the verified controlled drill, **DigitalOcean is the only promoted writer and public runtime**. Hostinger is the fenced former primary and must not be restarted as a writer.
 
-The owner selected **availability-first** on 2026-10-09. PostgreSQL commits on Hostinger must not wait for DigitalOcean. Replication lag will be measured and alerted, and no numeric RPO is promised until the controlled failover drill records actual recovery point and recovery time.
+The owner selected **availability-first** on 2026-10-09. PostgreSQL commits did not wait for DigitalOcean while Hostinger was primary. The drill proves a controlled cutover path, but no numeric RPO/RTO is promised and no automatic promotion is enabled.
 
 ## Confirmed facts
 
 - Restricted non-root administration access is verified on both Hostinger and DigitalOcean.
 - Hostinger runs a self-hosted Supabase stack with PostgreSQL 17 and local Storage mounted in the Storage container.
-- DigitalOcean runs only the PostgreSQL warm standby required for physical streaming replication. A Storage runtime and public application listener are not started there.
+- DigitalOcean was promoted only after Hostinger was fenced. It now runs the Lemtel Supabase runtime and Storage with the database kept private; no host or public PostgreSQL listener is enabled.
 - Lemtel source artifacts already arrive with one immutable digest on both hosts. That delivery does not deploy or start a runtime.
-- Cloudflare is the Lemtel routing authority. The canonical hostname `lemtel.assistantvirtualai.com` is now a direct DNS-only route to Hostinger, Caddy has been reloaded from its validated candidate, and the authenticated-route reachability check succeeds. This is a **primary-only route**, not a standby cutover or automatic failover route.
+- Cloudflare is the Lemtel routing authority. The canonical hostname `lemtel.assistantvirtualai.com` is a direct DNS-only route to the promoted DigitalOcean runtime for this drill (TTL 120 seconds). Strict TLS, root HTTPS and Auth reachability are verified. This is a **manual controlled cutover**, not automatic failover.
 - The two public server endpoints can reach each other over SSH. They do not share a private provider network, so the replication path must use an authenticated encrypted tunnel.
 
 ## Preflight evidence completed
@@ -60,10 +60,12 @@ The encrypted runtime envelope explicitly includes the four Envoy bind-mounted f
 
 The activation cleanup also removes the stopped, Compose-labelled application containers it just attempted to create. The reset helper independently removes only stopped containers bearing the exact `lemtel-ha-standby` Compose label, then removes an empty residual runtime network. It refuses to proceed if an unknown network endpoint, any running application container, or the separately managed promoted database is encountered.
 
-## Remaining controlled implementation
+## Current drill state and remaining work
 
-1. Prove the matching dormant runtime path on DigitalOcean under controlled promotion conditions; it must remain inactive until the fenced drill.
-2. Execute the prepared primary fencing, standby promotion, runtime activation, DNS cutover and documented failback drill in a maintenance window. The standby will not auto-promote until fencing prevents split brain.
+1. **Verified drill path**: Hostinger was fenced; DigitalOcean was promoted as the single PostgreSQL writer; the separately staged runtime and Storage were activated; the canonical DNS-only record was manually moved to DigitalOcean. Strict TLS, Auth, Storage, REST and the authenticated session-bootstrap route are reachable on the canonical hostname.
+2. **Do not restart Hostinger as a writer.** A controlled failback requires rebuilding or resynchronizing Hostinger as a standby, validating replication and Storage direction, then a separately approved cutover window. This has not been executed.
+3. **Client tests remain**: use the existing email/password test account on iOS TestFlight 1.1 (5), Android and Desktop v2.5.20. Confirm sign-in, forced-password/reset path where applicable, Home, Chats, Contacts, Calls-disabled policy, Daylight/Dark contrast, language switching and notification preference UI.
+4. **Telephony remains blocked**: FusionPBX/SIP/WSS/TURN, actual calling, push/background ringing, device audio and connectivity tests await the approved Kenny/Phil details.
 
 PostgreSQL documents streaming replication as asynchronous by default and recommends a dedicated replication account, `wal_level=replica`, adequate sender/slot settings, a base backup and a replication slot or WAL retention policy. [PostgreSQL warm standby](https://www.postgresql.org/docs/current/warm-standby.html)
 Supabase documents database state and Storage objects as separate operational components, so Storage requires its own replication procedure. [Supabase self-hosted restore](https://supabase.com/docs/guides/self-hosting/restore-from-platform)
@@ -72,6 +74,6 @@ Supabase documents database state and Storage objects as separate operational co
 
 - No Planiprêt data is queried, copied or used as a replication source.
 - No FusionPBX, SIP, WSS, TURN, call routing or incoming-call configuration is changed.
-- No public DigitalOcean application or database listener is enabled during preflight or tunnel creation.
-- No automatic promotion, DNS switch or client cutover happens before fencing, health evidence and a documented drill.
+- The public DigitalOcean **application** runtime is enabled only because the fenced, approved controlled drill completed; PostgreSQL remains private.
+- No automatic promotion, DNS switch or client cutover is enabled. The current DNS route is a manually recorded drill cutover.
 - A call in progress cannot be guaranteed to survive primary loss. This architecture protects persisted Lemtel data and enables recovery for new requests after a controlled cutover.

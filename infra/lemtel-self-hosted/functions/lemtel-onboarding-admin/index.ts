@@ -405,14 +405,24 @@ export function redactedOperationalStatusFromRow(row: unknown) {
     overall: redactedHealth(row.overall_status),
     topology: {
       writer: topology.writer === "digitalocean_promoted_writer" ? "digitalocean_promoted_writer" as const : "unknown" as const,
-      standby: topology.standby === "hostinger_fenced_rebuild_required" ? "hostinger_fenced_rebuild_required" as const : "unknown" as const,
+      standby: topology.standby === "hostinger_streaming_standby"
+        ? "hostinger_streaming_standby" as const
+        : topology.standby === "hostinger_fenced_rebuild_required"
+          ? "hostinger_fenced_rebuild_required" as const
+          : "unknown" as const,
       route: topology.route === "canonical_digitalocean_live" ? "canonical_digitalocean_live" as const : "unknown" as const,
       automaticFailover: topology.automatic_failover === true,
     },
     services: { runtime: redactedHealth(services.runtime), database: redactedHealth(services.database), auth: redactedHealth(services.auth), rest: redactedHealth(services.rest), storage: redactedHealth(services.storage) },
     replication: {
-      database: replication.database === "rebuild_required" ? "rebuild_required" as const : "unknown" as const,
-      storage: replication.storage === "rebuild_required" ? "rebuild_required" as const : "unknown" as const,
+      database: replication.database === "streaming" ? "streaming" as const : replication.database === "rebuild_required" ? "rebuild_required" as const : "unknown" as const,
+      storage: replication.storage === "integrity_verified"
+        ? "integrity_verified" as const
+        : replication.storage === "sync_attention"
+          ? "sync_attention" as const
+          : replication.storage === "rebuild_required"
+            ? "rebuild_required" as const
+            : "unknown" as const,
     },
   };
 }

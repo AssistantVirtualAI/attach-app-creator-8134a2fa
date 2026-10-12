@@ -139,12 +139,15 @@ export type LemtelOperationalStatus = {
   overall: OperationalHealth;
   topology: {
     writer: "digitalocean_promoted_writer" | "unknown";
-    standby: "hostinger_fenced_rebuild_required" | "unknown";
+    standby: "hostinger_streaming_standby" | "hostinger_fenced_rebuild_required" | "unknown";
     route: "canonical_digitalocean_live" | "unknown";
     automaticFailover: boolean;
   };
   services: { runtime: OperationalHealth; database: OperationalHealth; auth: OperationalHealth; rest: OperationalHealth; storage: OperationalHealth };
-  replication: { database: "rebuild_required" | "unknown"; storage: "rebuild_required" | "unknown" };
+  replication: {
+    database: "streaming" | "rebuild_required" | "unknown";
+    storage: "integrity_verified" | "sync_attention" | "rebuild_required" | "unknown";
+  };
 };
 
 export function buildCreateOrganizationBody(input: {

@@ -29,6 +29,7 @@ rest_container='supabase-rest'
 storage_container='supabase-storage'
 caddy_container='supabase-caddy'
 edge_container='supabase-edge-functions'
+storage_attestation='/var/lib/lemtel-ha/storage-sync-manifests/last-success'
 
 container_health() {
   local name="$1"
@@ -45,9 +46,15 @@ for container in "$db_container" "$auth_container" "$rest_container" "$storage_c
 done
 
 postgres=degraded
+replication_database=unknown
+standby=unknown
 if [ "$(container_health "$db_container")" = healthy ]; then
   writer_state="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_is_in_recovery()::text"' 2>/dev/null || true)"
-  [ "$writer_state" = false ] && postgres=healthy
+  if [ "$writer_state" = false ]; then
+    postgres=healthy
+    replication_database="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_stat_replication WHERE state = '\''streaming'\'') THEN '\''streaming'\'' ELSE '\''unknown'\'' END"' 2>/dev/null || true)"
+    if [ "$replication_database" = streaming ]; then standby=hostinger_streaming_standby; else replication_database=unknown; fi
+  fi
 fi
 
 auth=degraded
@@ -60,24 +67,39 @@ if [ "$(container_health "$auth_container")" = healthy ]; then
   case "$auth_http_status" in 200|204|401|403) auth=healthy ;; esac
 fi
 
+storage_replication=unknown
+if [ -r "$storage_attestation" ]; then
+  storage_stamp="$(sed -n 's/^sync_timestamp_utc=//p' "$storage_attestation" | sed -n '1p')"
+  if [[ "$storage_stamp" =~ ^[0-9]{8}T[0-9]{6}Z$ ]]; then
+    storage_epoch="$(date -u -d "$storage_stamp" +%s 2>/dev/null || true)"
+    now_epoch="$(date -u +%s)"
+    if [[ "$storage_epoch" =~ ^[0-9]+$ ]] && [ "$storage_epoch" -le "$now_epoch" ] && [ $((now_epoch - storage_epoch)) -le 900 ]; then
+      storage_replication=integrity_verified
+    else
+      storage_replication=sync_attention
+    fi
+  fi
+fi
+
 rest="$(container_health "$rest_container")"
 storage="$(container_health "$storage_container")"
 overall=healthy
 for state in "$runtime" "$postgres" "$auth" "$rest" "$storage"; do [ "$state" = healthy ] || overall=degraded; done
+[ "$replication_database" = streaming ] && [ "$storage_replication" = integrity_verified ] || overall=degraded
 
 checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-payload="$(python3 - "$checked_at" "$overall" "$runtime" "$postgres" "$auth" "$rest" "$storage" <<'PY'
+payload="$(python3 - "$checked_at" "$overall" "$runtime" "$postgres" "$auth" "$rest" "$storage" "$standby" "$replication_database" "$storage_replication" <<'PY'
 import json
 import sys
-observed_at, overall, runtime, database, auth, rest, storage = sys.argv[1:]
+observed_at, overall, runtime, database, auth, rest, storage, standby, database_replication, storage_replication = sys.argv[1:]
 print(json.dumps({
   "version": "lemtel_operational_status_v1",
   "observed_at": observed_at,
   "overall": overall,
   "topology": {
     "writer": "digitalocean_promoted_writer",
-    "standby": "unknown",
-    "route": "unknown",
+    "standby": standby,
+    "route": "canonical_digitalocean_live",
     "automatic_failover": False,
   },
   "services": {
@@ -88,8 +110,8 @@ print(json.dumps({
     "storage": storage,
   },
   "replication": {
-    "database": "unknown",
-    "storage": "unknown",
+    "database": database_replication,
+    "storage": storage_replication,
   },
 }, separators=(",", ":")))
 PY

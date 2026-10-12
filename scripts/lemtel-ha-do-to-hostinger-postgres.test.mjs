@@ -7,8 +7,9 @@ const root = resolve(import.meta.dirname, '..');
 const relay = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-private-postgres-relay-enable.sh'), 'utf8');
 const writer = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-postgres-streaming-prepare.sh'), 'utf8');
 const standby = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-hostinger-standby-postgres-basebackup.sh'), 'utf8');
+const recovery = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-replication-secret-recover.sh'), 'utf8');
 
-for (const [label, source] of [['relay', relay], ['writer', writer], ['standby', standby]]) {
+for (const [label, source] of [['relay', relay], ['writer', writer], ['standby', standby], ['recovery', recovery]]) {
   test(`${label} inverse PostgreSQL component is root-only and explicitly role-gated`, () => {
     assert.match(source, /^#!\/usr\/bin\/env bash/mu);
     assert.match(source, /\[ "\$\(id -u\)" -eq 0 \]/u);
@@ -62,4 +63,17 @@ test('Hostinger standby uses pg_basebackup over WireGuard without a host or publ
   assert.match(standby, /public_database_listener_enabled=false/u);
   assert.match(standby, /passfile=\/var\/lib\/postgresql\/data\/lemtel-ha-replication\.pgpass/u);
   assert.doesNotMatch(standby, /(?:--publish|docker run -d[\s\S]{0,500}-p\s*5432|pg_promote|docker\s+compose\s+up|\brsync\b|\brestic\b)/imu);
+});
+
+test('DO recovery rotates an orphaned secret only after it proves no replication is active', () => {
+  assert.match(recovery, /recover_orphaned_do_writer_replication_secret/u);
+  assert.match(recovery, /active_replication_present/u);
+  assert.match(recovery, /replication_role_session_present/u);
+  assert.match(recovery, /replication_slot_active_or_invalid/u);
+  assert.match(recovery, /ALTER ROLE %s WITH LOGIN REPLICATION PASSWORD/u);
+  assert.match(recovery, /age -r "\$age_recipient"/u);
+  assert.match(recovery, /orphaned_role_confirmed=true/u);
+  assert.match(recovery, /replication_secret_rotated=true/u);
+  assert.match(recovery, /plaintext_secret_replication=false/u);
+  assert.doesNotMatch(recovery, /(?:pg_promote|--publish|-p\s*5432|docker\s+compose\s+up|\brsync\b|\brestic\b)/imu);
 });

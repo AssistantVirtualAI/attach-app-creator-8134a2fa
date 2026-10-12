@@ -991,8 +991,7 @@ Deno.serve(async (req) => {
     });
     if (!validation.validated) return json({ error: "Les commissions déboursées n'ont pas passé le contrôle final. La dernière version validée reste affichée.", validation }, 200);
 
-    return json({
-
+    const payload = {
       ok: true,
       year,
       month,

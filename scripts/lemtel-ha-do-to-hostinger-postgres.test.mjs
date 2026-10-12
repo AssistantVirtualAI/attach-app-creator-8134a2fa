@@ -67,6 +67,10 @@ test('Hostinger standby uses pg_basebackup over WireGuard without a host or publ
 
 test('DO recovery rotates an orphaned secret only after it proves no replication is active', () => {
   assert.match(recovery, /recover_orphaned_do_writer_replication_secret/u);
+  assert.match(recovery, /COALESCE\(\(SELECT rolcanlogin::text/u);
+  assert.match(recovery, /COALESCE\(\(SELECT rolreplication::text/u);
+  assert.match(recovery, /read -r recovery role_can_login role_can_replicate active_replicas/u);
+  assert.doesNotMatch(recovery, /rolcanlogin::text \|\| rolreplication::text/u);
   assert.match(recovery, /active_replication_present/u);
   assert.match(recovery, /replication_role_session_present/u);
   assert.match(recovery, /replication_slot_active_or_invalid/u);

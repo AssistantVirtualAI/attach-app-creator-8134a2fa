@@ -20,6 +20,9 @@ test("Lemtel Operations portal has its own deployable entrypoint", () => {
 test("private Operations portal build uses only the canonical Lemtel configuration", () => {
   const workflow = read(".github/workflows/lemtel-operations-portal-build.yml");
   for (const expected of [
+    "branches: [lemtel/integration]",
+    "src/lemtel-portal-main.tsx",
+    "src/pages/lemtel/onboarding/**",
     "workflow_dispatch",
     "environment: lemtel-hostinger-staging",
     "VITE_LEMTEL_TARGET",

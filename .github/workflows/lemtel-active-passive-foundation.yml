@@ -14,6 +14,7 @@ on:
       - "scripts/lemtel-ha-canonical-caddy-apply.test.mjs"
       - "scripts/lemtel-ha-primary-fencing-scripts.test.mjs"
       - "scripts/lemtel-ha-standby-promotion-scripts.test.mjs"
+      - "scripts/lemtel-ha-do-to-hostinger-storage.test.mjs"
       - ".github/workflows/lemtel-active-passive-foundation.yml"
   push:
     branches: [lemtel/integration]
@@ -29,6 +30,7 @@ on:
       - "scripts/lemtel-ha-canonical-caddy-apply.test.mjs"
       - "scripts/lemtel-ha-primary-fencing-scripts.test.mjs"
       - "scripts/lemtel-ha-standby-promotion-scripts.test.mjs"
+      - "scripts/lemtel-ha-do-to-hostinger-storage.test.mjs"
       - ".github/workflows/lemtel-active-passive-foundation.yml"
 
 permissions:
@@ -45,7 +47,7 @@ jobs:
           node-version: "22"
       - name: Validate controlled drill record and its safety boundaries
         run: |
-          node --test scripts/lemtel-active-passive-foundation.test.mjs scripts/lemtel-automatic-failover-target.test.mjs scripts/lemtel-immutable-artifact-parity.test.mjs scripts/lemtel-ha-preflight-scripts.test.mjs scripts/lemtel-ha-wireguard-scripts.test.mjs scripts/lemtel-ha-standby-docker-bootstrap.test.mjs scripts/lemtel-ha-standby-runtime-scripts.test.mjs scripts/lemtel-ha-canonical-caddy-scripts.test.mjs scripts/lemtel-ha-canonical-caddy-apply.test.mjs scripts/lemtel-ha-primary-fencing-scripts.test.mjs scripts/lemtel-ha-standby-promotion-scripts.test.mjs
+          node --test scripts/lemtel-active-passive-foundation.test.mjs scripts/lemtel-automatic-failover-target.test.mjs scripts/lemtel-immutable-artifact-parity.test.mjs scripts/lemtel-ha-preflight-scripts.test.mjs scripts/lemtel-ha-wireguard-scripts.test.mjs scripts/lemtel-ha-standby-docker-bootstrap.test.mjs scripts/lemtel-ha-standby-runtime-scripts.test.mjs scripts/lemtel-ha-canonical-caddy-scripts.test.mjs scripts/lemtel-ha-canonical-caddy-apply.test.mjs scripts/lemtel-ha-primary-fencing-scripts.test.mjs scripts/lemtel-ha-standby-promotion-scripts.test.mjs scripts/lemtel-ha-do-to-hostinger-storage.test.mjs
           node scripts/lemtel-active-passive-foundation.mjs | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x = JSON.parse(s); if (x.status !== "active_passive_controlled_failover_drill_verified" || !x.implementation_authorized || !x.client_cutover_authorized || x.commit_acknowledgement_policy !== "availability_first_async_streaming_with_measured_lag" || x.automatic_failover_enabled || x.fusionpbx_or_sip_change_authorized) process.exit(1) })'
           node scripts/lemtel-automatic-failover-target.mjs | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const x = JSON.parse(s); if (x.status !== "synchronous_automatic_failover_target_prepared" || x.activation_authorized || x.automatic_failover_enabled) process.exit(1) })'
       - name: Confirm inventory helper is read-only and redacted

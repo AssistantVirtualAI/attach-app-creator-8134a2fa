@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { BACKEND_URL } from './backendOrigin';
+import { BACKEND_STORAGE_SUFFIX, BACKEND_URL } from './backendOrigin';
 
-const KEY = 'lemtel.creds.v1';
+const KEY = `lemtel.creds.v1${BACKEND_STORAGE_SUFFIX}`;
 const sample = { email: 'a@b.co', extension: '300', displayName: 'X' };
 const scopedSample = { ...sample, backendOrigin: BACKEND_URL };
 

@@ -1,6 +1,6 @@
 // Lemtel-only private-directory adapter. It remains inert unless a future
 // self-hosted build explicitly enables it; this file never changes the backend origin.
-import { BACKEND_URL, LEGACY_BACKEND_URL } from './backendOrigin';
+import { BACKEND_URL, LEMTEL_CANONICAL_BACKEND_URL } from './backendOrigin';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 const APPROVAL_VALUE = 'approved';
@@ -11,7 +11,7 @@ export type LemtelPrivateDirectoryFunction =
   | 'lemtel-wss-diagnostics';
 
 export function resolveLemtelPrivateDirectoryEnabled(backendUrl: string, rawApproval: unknown): boolean {
-  return backendUrl !== LEGACY_BACKEND_URL && rawApproval === APPROVAL_VALUE;
+  return backendUrl === LEMTEL_CANONICAL_BACKEND_URL && rawApproval === APPROVAL_VALUE;
 }
 
 function privateDirectoryApproval(): unknown {

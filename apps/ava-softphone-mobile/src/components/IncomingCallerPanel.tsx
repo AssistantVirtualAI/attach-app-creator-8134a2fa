@@ -1,8 +1,8 @@
 /**
  * Rich identity panel rendered above the Accept/Decline buttons on an
  * incoming call. Falls back to the raw number while the caller-id lookup
- * is in flight, then upgrades with name + CRM context + photo when the
- * `pp-caller-lookup` edge function responds.
+ * is in flight, then upgrades with name + directory context + photo when
+ * the approved Lemtel private lookup responds.
  */
 import React from 'react';
 import { colors, font, radius } from '../lib/theme';
@@ -17,7 +17,7 @@ interface Props {
 function sourceLabel(s: CallerLookup['source'], fr: boolean): string | null {
   switch (s) {
     case 'maestro': return fr ? 'Client Maestro' : 'Maestro client';
-    case 'broker': return fr ? 'Collègue Planiprêt' : 'Planiprêt colleague';
+    case 'broker': return fr ? 'Collègue Lemtel' : 'Lemtel colleague';
     case 'microsoft': return fr ? 'Contact Microsoft' : 'Microsoft contact';
     case 'device': return fr ? 'Contact téléphone' : 'Phone contact';
     default: return null;

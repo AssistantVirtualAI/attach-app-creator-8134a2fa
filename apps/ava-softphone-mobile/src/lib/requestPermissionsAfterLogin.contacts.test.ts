@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
-  backendUrl: 'https://api.lemtel.example',
+  backendUrl: 'https://lemtel.assistantvirtualai.com',
   get: vi.fn(), set: vi.fn(), hasConsent: vi.fn(), requestContacts: vi.fn(),
   addListener: vi.fn(), checkPush: vi.fn(), requestPush: vi.fn(), register: vi.fn(),
 }));
 vi.mock('./backendOrigin', () => ({
   get BACKEND_URL() { return h.backendUrl; },
-  LEGACY_BACKEND_URL: 'https://gejxisrqtvxavbrfcoxz.supabase.co',
+  LEMTEL_CANONICAL_BACKEND_URL: 'https://lemtel.assistantvirtualai.com',
 }));
 vi.mock('./contactsConsent', () => ({ hasConsent: h.hasConsent }));
 vi.mock('@capacitor/core', () => ({ Capacitor: {
@@ -24,39 +24,29 @@ vi.mock('@capacitor-community/contacts', () => ({ Contacts: { requestPermissions
 
 beforeEach(() => {
   vi.resetModules(); vi.clearAllMocks();
-  h.backendUrl = 'https://api.lemtel.example';
+  h.backendUrl = 'https://lemtel.assistantvirtualai.com';
   h.get.mockResolvedValue({ value: null });
   h.set.mockResolvedValue(undefined);
-  h.hasConsent.mockResolvedValue(true); // ancien consentement accordé
+  h.hasConsent.mockResolvedValue(true);
   h.checkPush.mockResolvedValue({ receive: 'denied' });
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe('première connexion iOS : permission Contacts', () => {
-  it('ne charge pas le plugin du carnet sur un nouvel émetteur malgré un consentement historique', async () => {
+describe('première connexion iOS Lemtel : permissions contacts', () => {
+  it('ne charge pas le plugin du carnet malgré un consentement historique', async () => {
     const { requestPermissionsAfterLogin } = await import('./requestPermissionsAfterLogin');
     await requestPermissionsAfterLogin();
     expect(h.hasConsent).not.toHaveBeenCalled();
     expect(h.requestContacts).not.toHaveBeenCalled();
   });
 
-  it('ne demande pas Contacts à une installation historique sans consentement explicite', async () => {
-    h.backendUrl = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
-    h.hasConsent.mockResolvedValue(false);
+  it('reste fermé même si un test injecte une origine non approuvée', async () => {
+    h.backendUrl = 'https://unapproved.example';
     vi.resetModules();
     const { requestPermissionsAfterLogin } = await import('./requestPermissionsAfterLogin');
     await requestPermissionsAfterLogin();
-    expect(h.hasConsent).toHaveBeenCalled();
+    expect(h.hasConsent).not.toHaveBeenCalled();
     expect(h.requestContacts).not.toHaveBeenCalled();
-  });
-
-  it('conserve le chemin historique iOS après consentement explicite', async () => {
-    h.backendUrl = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
-    vi.resetModules();
-    const { requestPermissionsAfterLogin } = await import('./requestPermissionsAfterLogin');
-    await requestPermissionsAfterLogin();
-    expect(h.hasConsent).toHaveBeenCalled();
-    expect(h.requestContacts).toHaveBeenCalledTimes(1);
   });
 });

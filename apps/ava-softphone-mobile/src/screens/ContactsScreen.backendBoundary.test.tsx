@@ -7,7 +7,7 @@ const h = vi.hoisted(() => ({
 }));
 vi.mock('../lib/backendOrigin', () => ({
   BACKEND_URL: 'https://api.lemtel.example',
-  LEGACY_BACKEND_URL: 'https://gejxisrqtvxavbrfcoxz.supabase.co',
+  LEMTEL_CANONICAL_BACKEND_URL: 'https://lemtel.assistantvirtualai.com',
 }));
 vi.mock('../hooks/useMobileCredentials', () => ({
   useMobileCredentials: () => ({ loading: false, accessToken: 'test-token', domainUuid: 'd1', organizationId: 'o1', sipDomain: 'example.test', userId: 'u1' }),

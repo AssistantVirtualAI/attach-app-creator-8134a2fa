@@ -4,7 +4,6 @@ import { colors, font, radius } from '../lib/theme';
 import { Card } from './ui/Primitives';
 import { getLastSync, runContactsSync, type SyncReport } from '../lib/contactsSync';
 import { useT } from '../lib/i18n';
-import { BACKEND_URL, LEGACY_BACKEND_URL } from '../lib/backendOrigin';
 
 function fmtAgo(at: number | null, fr: boolean): string {
   if (!at) return fr ? 'jamais' : 'never';
@@ -38,7 +37,7 @@ export default function ContactsSyncCard() {
   };
 
   const native = Capacitor.isNativePlatform();
-  const serviceAvailable = BACKEND_URL === LEGACY_BACKEND_URL;
+  const serviceAvailable = false;
 
   return (
     <Card padded={true} accent="blue" style={{ marginBottom: 12 }}>

@@ -1,11 +1,6 @@
-/**
- * Caller-ID lookup helper. The historical backend uses its legacy endpoint;
- * a self-hosted build falls back to the number until a Lemtel-only service exists.
- */
-import { supabase } from '../mobileSupabase';
+/** Caller-ID lookup uses only the separately flagged Lemtel private directory. */
 import { normalizePhone, formatDisplay } from '../phoneNormalize';
 import { txStatic } from '../i18n';
-import { BACKEND_URL, LEGACY_BACKEND_URL } from '../backendOrigin';
 import { invokeLemtelPrivateDirectory } from '../lemtelPrivateDirectory';
 
 export interface CallerLookup {
@@ -51,25 +46,8 @@ export async function lookupCaller(rawNumber: string): Promise<CallerLookup> {
   const hit = cache.get(normalized);
   if (hit && Date.now() - hit.at < TTL) return hit.v;
 
-  // Existing installations retain their historical product endpoint. A future
-  // Lemtel build can use only the separately flagged private directory adapter.
-  if (BACKEND_URL !== LEGACY_BACKEND_URL) {
-    const data = await invokeLemtelPrivateDirectory<CallerLookup>('lemtel-caller-lookup', { phone: normalized });
-    if (!isLemtelLookup(data)) return fallback;
-    cache.set(normalized, { at: Date.now(), v: data });
-    return data;
-  }
-
-  try {
-    const { data, error } = await supabase.functions.invoke('pp-caller-lookup', {
-      body: { phone: rawNumber },
-    });
-    if (error || !data) return fallback;
-    const v = data as CallerLookup;
-    cache.set(normalized, { at: Date.now(), v });
-    return v;
-  } catch (e) {
-    console.warn('[callerLookup] failed', (e as any)?.message);
-    return fallback;
-  }
+  const data = await invokeLemtelPrivateDirectory<CallerLookup>('lemtel-caller-lookup', { phone: normalized });
+  if (!isLemtelLookup(data)) return fallback;
+  cache.set(normalized, { at: Date.now(), v: data });
+  return data;
 }

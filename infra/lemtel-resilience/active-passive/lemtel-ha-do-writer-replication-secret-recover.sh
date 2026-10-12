@@ -78,6 +78,7 @@ sql_file="$(mktemp /root/lemtel-ha-replication-recovery.XXXXXX.sql)"
 chmod 0600 "$sql_file"
 printf "ALTER ROLE %s WITH LOGIN REPLICATION PASSWORD '%s';\n" "$replication_role" "$password" > "$sql_file"
 docker cp "$sql_file" "${db_container}:/tmp/lemtel-ha-replication-recovery.sql"
+docker exec -u 0 "$db_container" sh -eu -c 'chown postgres:postgres /tmp/lemtel-ha-replication-recovery.sql; chmod 0600 /tmp/lemtel-ha-replication-recovery.sql'
 docker exec -u postgres "$db_container" sh -eu -c 'psql -X -v ON_ERROR_STOP=1 -d postgres -f /tmp/lemtel-ha-replication-recovery.sql >/dev/null; rm -f /tmp/lemtel-ha-replication-recovery.sql'
 unset password
 age -r "$age_recipient" -o "$envelope_file" "$secret_file"

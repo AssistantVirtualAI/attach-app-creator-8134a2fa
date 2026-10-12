@@ -7,7 +7,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const DEFAULT_AGENT_ID = Deno.env.get("ELEVENLABS_DEFAULT_AGENT_ID") ?? "";
-const DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
+const DEFAULT_VOICE_ID = "UJCi4DDncuo0VJDSIegj";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

@@ -23,7 +23,8 @@ publisher_source="$bundle/lemtel-ha-promoted-writer-status-publish.sh"
 timer_source="$bundle/lemtel-ha-promoted-writer-status-timer-enable.sh"
 resolve_database_container() {
   local -a candidates=()
-  mapfile -t candidates < <(docker ps -a --format '{{.Names}}|{{.Image}}' | awk -F'|' '$2 ~ /(^|\/)postgres(:|$)|supabase\/postgres/ { print $1 }')
+  # Match PostgreSQL itself, never the distinct postgres-meta sidecar.
+  mapfile -t candidates < <(docker ps -a --format '{{.Names}}|{{.Image}}' | awk -F'|' '$2 ~ /(^|\/)postgres(:|$)|supabase\/postgres(:|$)/ { print $1 }')
   [ "${#candidates[@]}" -eq 1 ] && printf '%s' "${candidates[0]}"
 }
 

@@ -32,6 +32,8 @@ on:
       - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
       - 'scripts/lemtel-operational-status-contract.test.mjs'
       - 'scripts/lemtel-operations-portal-build.test.mjs'
+      - 'scripts/lemtel-operations-portal-deploy.test.mjs'
+      - 'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-operations-portal-deploy.sh'
       - '.github/workflows/lemtel-email-only-onboarding.yml'
       - '.github/workflows/lemtel-operations-portal-build.yml'
       - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
@@ -67,6 +69,8 @@ on:
       - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
       - 'scripts/lemtel-operational-status-contract.test.mjs'
       - 'scripts/lemtel-operations-portal-build.test.mjs'
+      - 'scripts/lemtel-operations-portal-deploy.test.mjs'
+      - 'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-operations-portal-deploy.sh'
       - '.github/workflows/lemtel-email-only-onboarding.yml'
       - '.github/workflows/lemtel-operations-portal-build.yml'
       - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
@@ -94,7 +98,8 @@ jobs:
             scripts/lemtel-hostinger-client-config-filter.test.mjs \
             scripts/lemtel-hostinger-client-test-builds.test.mjs \
             scripts/lemtel-operational-status-contract.test.mjs \
-            scripts/lemtel-operations-portal-build.test.mjs
+            scripts/lemtel-operations-portal-build.test.mjs \
+            scripts/lemtel-operations-portal-deploy.test.mjs
       - name: Typecheck Lemtel onboarding Edge Functions
         run: |
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts

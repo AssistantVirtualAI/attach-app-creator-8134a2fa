@@ -1,0 +1,41 @@
+{
+  "contract_version": "lemtel_operational_status_v1",
+  "scope": "platform_admin_read_only_redacted_writer_status",
+  "deployment": {
+    "schema_apply_authorized": false,
+    "writer_publisher_enable_authorized": false,
+    "hostinger_rebuild_or_start_authorized": false,
+    "automatic_failover_enabled": false
+  },
+  "access": {
+    "viewer": "authenticated_lemtel_platform_administrator_only",
+    "browser_direct_host_access": false,
+    "edge_function_response": "redacted_enum_timestamp_snapshot_only"
+  },
+  "allowed_signals": [
+    "overall_health",
+    "observed_at",
+    "writer_role",
+    "standby_rebuild_state",
+    "canonical_route_state",
+    "runtime_health",
+    "database_writer_health",
+    "auth_health",
+    "rest_health",
+    "storage_health",
+    "replication_state"
+  ],
+  "forbidden": [
+    "ip_address",
+    "hostname",
+    "credential",
+    "secret",
+    "database_connection_string",
+    "temporary_password",
+    "user_data",
+    "recording",
+    "telephony_configuration",
+    "automatic_promotion",
+    "automatic_dns_change"
+  ]
+}

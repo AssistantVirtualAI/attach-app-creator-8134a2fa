@@ -20,6 +20,7 @@ type RequestBody =
   | { action: "revoke_invitation"; organizationId: string; recipientUserId: string }
   | { action: "list_organizations" }
   | { action: "get_config" }
+  | { action: "get_operational_status" }
   | { action: "list_people"; organizationId: string }
   | { action: "list_invitations"; organizationId: string }
   | { action: "list_activity"; organizationId: string };
@@ -69,7 +70,7 @@ function userList(value: unknown, allowOwner: boolean): UserInput[] | Failure {
 
 export function validateBody(raw: unknown): RequestBody | Failure {
   if (!plainObject(raw) || typeof raw.action !== "string") return fail("invalid_body", 400);
-  if (raw.action === "list_organizations" || raw.action === "get_config") {
+  if (raw.action === "list_organizations" || raw.action === "get_config" || raw.action === "get_operational_status") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
   if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity") {
@@ -367,6 +368,66 @@ function portalConfig() {
   return { downloads: { desktop: value("LEMTEL_DOWNLOAD_DESKTOP_URL"), ios: value("LEMTEL_DOWNLOAD_IOS_URL"), android: value("LEMTEL_DOWNLOAD_ANDROID_URL") }, ...(supportContact ? { supportContact } : {}) };
 }
 
+type OperationalHealth = "healthy" | "degraded" | "unknown";
+
+function redactedHealth(value: unknown): OperationalHealth {
+  return value === "healthy" || value === "degraded" ? value : "unknown";
+}
+
+function redactedObject(value: unknown): Record<string, unknown> {
+  return plainObject(value) ? value : {};
+}
+
+export function emptyOperationalStatus() {
+  return {
+    telemetry: "not_configured" as const,
+    overall: "unknown" as const,
+    topology: { writer: "unknown" as const, standby: "unknown" as const, route: "unknown" as const, automaticFailover: false },
+    services: { runtime: "unknown" as const, database: "unknown" as const, auth: "unknown" as const, rest: "unknown" as const, storage: "unknown" as const },
+    replication: { database: "unknown" as const, storage: "unknown" as const },
+  };
+}
+
+/**
+ * Returns only a schema-checked, redacted snapshot. The browser never receives a
+ * hostname, address, credential, raw error, database metric, user data or telephony detail.
+ */
+/** Converts an untrusted database row into the exact browser-safe status shape. */
+export function redactedOperationalStatusFromRow(row: unknown) {
+  if (!plainObject(row)) return emptyOperationalStatus();
+  const payload = redactedObject(row.payload);
+  const topology = redactedObject(payload.topology);
+  const services = redactedObject(payload.services);
+  const replication = redactedObject(payload.replication);
+  return {
+    telemetry: "live" as const,
+    ...(typeof row.observed_at === "string" ? { observedAt: row.observed_at } : {}),
+    overall: redactedHealth(row.overall_status),
+    topology: {
+      writer: topology.writer === "digitalocean_promoted_writer" ? "digitalocean_promoted_writer" as const : "unknown" as const,
+      standby: topology.standby === "hostinger_fenced_rebuild_required" ? "hostinger_fenced_rebuild_required" as const : "unknown" as const,
+      route: topology.route === "canonical_digitalocean_live" ? "canonical_digitalocean_live" as const : "unknown" as const,
+      automaticFailover: topology.automatic_failover === true,
+    },
+    services: { runtime: redactedHealth(services.runtime), database: redactedHealth(services.database), auth: redactedHealth(services.auth), rest: redactedHealth(services.rest), storage: redactedHealth(services.storage) },
+    replication: {
+      database: replication.database === "rebuild_required" ? "rebuild_required" as const : "unknown" as const,
+      storage: replication.storage === "rebuild_required" ? "rebuild_required" as const : "unknown" as const,
+    },
+  };
+}
+
+async function operationalStatus(admin: any) {
+  const { data, error } = await admin
+    .from("lemtel_operational_status")
+    .select("observed_at,overall_status,payload")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (error) return fail("operational_status_unavailable", 503);
+  if (!data) return emptyOperationalStatus();
+  return redactedOperationalStatusFromRow(data);
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   if (req.method !== "POST") return respond({ error: "method_not_allowed" }, 405);
@@ -389,6 +450,11 @@ export async function handler(req: Request): Promise<Response> {
   if (request.action === "get_config") {
     if (!(await portalAccess(admin, actor))) return respond({ error: "forbidden" }, 403);
     return respond(portalConfig());
+  }
+  if (request.action === "get_operational_status") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await operationalStatus(admin);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
   if (request.action === "list_people" || request.action === "list_invitations" || request.action === "list_activity") {
     if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);

@@ -29,6 +29,7 @@ created_role=false
 created_slot=false
 created_secret=false
 created_envelope=false
+existing_envelope=false
 hba_modified=false
 completed=false
 
@@ -103,6 +104,10 @@ case "$role_state_before" in 'false|false'|'true|true') ;; *) fail unexpected_re
 install -d -m 0700 "$secret_dir" "$envelope_dir"
 if [ "$role_state_before" = 'false|false' ] && [ -f "$secret_file" ]; then fail existing_secret_without_replication_role; fi
 if [ "$role_state_before" = 'true|true' ] && [ ! -f "$secret_file" ]; then fail existing_replication_role_without_local_secret; fi
+if [ "$role_state_before" = 'true|true' ] && [ -f "$envelope_file" ]; then
+  [ -s "$envelope_file" ] || fail existing_encrypted_replication_envelope_empty
+  existing_envelope=true
+fi
 
 expected_hba_rule="host replication ${replication_role} ${standby_tunnel_address}/32 scram-sha-256"
 hba_rule_count="$(docker exec -u 0 "$db_container" sh -eu -c "grep -Fxc '${expected_hba_rule}' '${hba_path}' || true")"
@@ -128,6 +133,7 @@ if [ "$role_state_before" = 'false|false' ]; then
   chmod 0600 "$sql_file"
   printf "CREATE ROLE %s WITH LOGIN REPLICATION PASSWORD '%s';\n" "$replication_role" "$password" > "$sql_file"
   docker cp "$sql_file" "${db_container}:/tmp/lemtel-ha-hostinger-replication.sql"
+  docker exec -u 0 "$db_container" sh -eu -c 'chown postgres:postgres /tmp/lemtel-ha-hostinger-replication.sql; chmod 0600 /tmp/lemtel-ha-hostinger-replication.sql'
   docker exec -u postgres "$db_container" sh -eu -c 'psql -X -v ON_ERROR_STOP=1 -d postgres -f /tmp/lemtel-ha-hostinger-replication.sql >/dev/null; rm -f /tmp/lemtel-ha-hostinger-replication.sql'
   unset password
   created_role=true
@@ -140,10 +146,12 @@ fi
 
 [ "$(query_database "SELECT COALESCE((SELECT rolcanlogin::text || '|' || rolreplication::text FROM pg_roles WHERE rolname = '${replication_role}'), 'false|false')")" = 'true|true' ] || fail replication_role_postcondition
 [ "$(query_database "SELECT COALESCE((SELECT slot_type FROM pg_replication_slots WHERE slot_name = '${replication_slot}'), '')")" = physical ] || fail replication_slot_postcondition
-age -r "$age_recipient" -o "$envelope_file" "$secret_file"
-chmod 0600 "$envelope_file"
-chown lemtelops:lemtelops "$envelope_file"
-created_envelope=true
+if [ "$existing_envelope" = false ]; then
+  age -r "$age_recipient" -o "$envelope_file" "$secret_file"
+  chmod 0600 "$envelope_file"
+  chown lemtelops:lemtelops "$envelope_file"
+  created_envelope=true
+fi
 [ "$hba_modified" = true ] && docker exec -u 0 "$db_container" rm -f "$hba_backup"
 
 printf 'do_writer_streaming_prepare_format=lemtel_do_writer_streaming_prepare_v1\n'
@@ -155,6 +163,7 @@ printf 'replication_hba_rule_private_only=true\n'
 printf 'replication_role_created_or_verified=true\n'
 printf 'physical_replication_slot_created_or_verified=true\n'
 printf 'replication_secret_envelope_created=true\n'
+printf 'replication_secret_envelope_reused=%s\n' "$existing_envelope"
 printf 'rollback_on_failure_enabled=true\n'
 printf 'plaintext_secret_replication=false\n'
 printf 'database_public_listener_enabled=false\n'

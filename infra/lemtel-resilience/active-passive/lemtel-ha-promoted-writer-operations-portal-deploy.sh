@@ -66,7 +66,12 @@ function_target="$functions_source/lemtel-onboarding-admin/index.ts"
 [ -f "$caddyfile" ] || fail caddyfile_missing
 [ -f "$function_target" ] || fail onboarding_function_missing
 [ "$(grep -Fxc "{\$PROXY_DOMAIN}, $canonical_host {" "$caddyfile" || true)" = 1 ] || fail canonical_caddy_site_unexpected
-! grep -Fq "$portal_marker" "$caddyfile" || fail portal_route_already_present
+portal_route_present=false
+if grep -Fq "$portal_marker" "$caddyfile"; then
+  [ "$(grep -Fxc "$portal_marker" "$caddyfile" || true)" = 1 ] || fail portal_route_marker_unexpected
+  grep -Fq 'handle @lemtel_operations_portal {' "$caddyfile" || fail portal_route_incomplete
+  portal_route_present=true
+fi
 
 lock_file='/var/lock/lemtel-operations-portal.lock'
 exec 9>"$lock_file"
@@ -78,6 +83,13 @@ install -d -o root -g root -m 0700 "$backup_dir"
 backup_caddy="$backup_dir/Caddyfile"
 backup_function="$backup_dir/lemtel-onboarding-admin.index.ts"
 portal_dir="$caddy_source/lemtel-portal"
+deployment_mode=initial
+if [ "$portal_route_present" = true ]; then
+  deployment_mode=refresh
+  [ -d "$portal_dir" ] || fail portal_directory_missing
+else
+  [ ! -e "$portal_dir" ] || fail portal_directory_unexpected
+fi
 caddy_candidate="$(mktemp "${caddyfile}.lemtel-operations.XXXXXX")"
 caddy_temporary="$(mktemp "${caddyfile}.lemtel-live.XXXXXX")"
 function_temporary="$(mktemp "${function_target}.lemtel-live.XXXXXX")"
@@ -110,28 +122,31 @@ rollback() {
 }
 trap rollback ERR INT TERM
 
-awk -v marker="$portal_marker" '
-  $0 == "{$PROXY_DOMAIN}, lemtel.assistantvirtualai.com {" {
-    print
-    print "  " marker
-    print "  @lemtel_operations_portal path /lemtel-portal /lemtel-portal/*"
-    print "  handle @lemtel_operations_portal {"
-    print "    uri strip_prefix /lemtel-portal"
-    print "    root * /etc/caddy/lemtel-portal"
-    print "    try_files {path} /lemtel-portal.html"
-    print "    file_server"
-    print "  }"
-    next
-  }
-  { print }
-' "$caddyfile" > "$caddy_candidate"
+if [ "$portal_route_present" = true ]; then
+  cp -- "$caddyfile" "$caddy_candidate"
+else
+  awk -v marker="$portal_marker" '
+    $0 == "{$PROXY_DOMAIN}, lemtel.assistantvirtualai.com {" {
+      print
+      print "  " marker
+      print "  @lemtel_operations_portal path /lemtel-portal /lemtel-portal/*"
+      print "  handle @lemtel_operations_portal {"
+      print "    uri strip_prefix /lemtel-portal"
+      print "    root * /etc/caddy/lemtel-portal"
+      print "    try_files {path} /lemtel-portal.html"
+      print "    file_server"
+      print "  }"
+      next
+    }
+    { print }
+  ' "$caddyfile" > "$caddy_candidate"
+fi
 docker exec -i "$caddy_container" caddy adapt --config /dev/stdin --adapter caddyfile < "$caddy_candidate" >/dev/null || fail caddy_candidate_invalid
 
 cp --preserve=mode,ownership,timestamps -- "$caddyfile" "$backup_caddy"
 cp --preserve=mode,ownership,timestamps -- "$function_target" "$backup_function"
 tar -xf "$portal_archive" -C "$portal_stage"
 [ -s "$portal_stage/lemtel-portal.html" ] || fail portal_archive_invalid
-[ ! -e "$portal_dir" ] || fail portal_directory_already_exists
 
 # Schema has no business data and is idempotent. Existing data is never modified.
 docker exec -i "$db_container" sh -eu -c 'export PSQLRC=/dev/null; psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$migration"
@@ -145,6 +160,7 @@ function_replaced=true
 docker restart --time 30 "$edge_container" >/dev/null
 [ "$(docker inspect --format '{{.State.Running}}' "$edge_container")" = true ] || fail edge_runtime_not_running_after_restart
 
+if [ -e "$portal_dir" ]; then mv "$portal_dir" "$backup_dir/lemtel-portal"; fi
 mv "$portal_stage" "$portal_dir"
 portal_replaced=true
 cp -- "$caddy_candidate" "$caddy_temporary"
@@ -170,6 +186,7 @@ trap - ERR INT TERM
 rm -f "$caddy_candidate"
 printf 'operations_portal_deploy_format=lemtel_operations_portal_deploy_v1\n'
 printf 'writer=digitalocean_promoted_writer\n'
+printf 'deployment_mode=%s\n' "$deployment_mode"
 printf 'portal_route=deployed\n'
 printf 'schema_migration=applied\n'
 printf 'onboarding_function=deployed\n'

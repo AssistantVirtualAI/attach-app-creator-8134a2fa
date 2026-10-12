@@ -38,6 +38,10 @@ test("Operations portal deployment never controls topology, DNS, Hostinger or te
   assert.match(source, /fusionpbx_or_sip_contacted=false/);
 });
 
+test("Operations portal deployment supports a bounded transactional refresh", () => {
+  for (const expected of ["portal_route_present=false", "portal_route_marker_unexpected", "deployment_mode=refresh", "portal_directory_missing", "mv \"$portal_dir\" \"$backup_dir/lemtel-portal\""]) assert.match(source, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
 test("Operations portal deployment has an automatic rollback for static and function files", () => {
   for (const expected of ["rollback()", "backup_caddy", "backup_function", "portal_replaced", "systemctl disable --now"]) assert.match(source, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });

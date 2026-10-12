@@ -89,7 +89,7 @@ jobs:
           node-version: '22'
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version: v2.5.4
       - name: Validate disabled onboarding contract and client boundary
         run: |
           node --test \

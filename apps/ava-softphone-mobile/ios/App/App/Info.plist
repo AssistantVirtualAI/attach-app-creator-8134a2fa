@@ -66,11 +66,11 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 
-	<!-- Hostinger Auth is explicitly allowed. SIP/PBX endpoints remain unchanged until FusionPBX test details are approved. -->
-	<key>WKAppBoundDomains</key>
-	<array>
-		<string>lemtel.avastatistic.ca</string>
-		<string>pbxnode.lemtel.tel</string>
+		<!-- The canonical Lemtel route is explicitly allowed. SIP/PBX endpoints remain unchanged until FusionPBX test details are approved. -->
+		<key>WKAppBoundDomains</key>
+		<array>
+			<string>lemtel.assistantvirtualai.com</string>
+			<string>pbxnode.lemtel.tel</string>
 		<string>lemtel.lemtel.tel</string>
 		<string>node.lemtelcloud.net</string>
 	</array>

@@ -32,6 +32,8 @@ Le retour vers Hostinger est une **nouvelle** opération approuvée. Il doit sui
 5. fencer DO, promouvoir Hostinger et basculer Cloudflare manuellement après validation ;
 6. vérifier les services publics, puis consigner le résultat et les mesures RPO/RTO.
 
+Le déroulé transactionnel détaillé est préparé dans [`CONTROLLED_FAILBACK_RUNBOOK.md`](./CONTROLLED_FAILBACK_RUNBOOK.md). Il est non exécutable sans fenêtre de maintenance, preuves de synchronisation et confirmation explicite.
+
 > Ne jamais relancer le conteneur PostgreSQL Hostinger, le timer Storage Hostinger ou le DNS vers Hostinger comme raccourci de failback. Cela pourrait créer deux writers et perdre les modifications reçues sur DigitalOcean.
 
 ## Travail restant avant test utilisateur complet

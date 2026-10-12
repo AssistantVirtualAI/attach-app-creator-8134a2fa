@@ -1,4 +1,4 @@
-name: Lemtel Hostinger client configuration filter
+name: Lemtel canonical client configuration filter
 
 on:
   pull_request:
@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 jobs:
-  validate-hostinger-staging-profile:
+  validate-canonical-active-passive-profile:
     environment: lemtel-hostinger-staging
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Reject all non-Lemtel or non-Hostinger build profiles
+      - name: Reject all non-Lemtel or non-canonical build profiles
         run: node scripts/lemtel-hostinger-client-config-filter.mjs
       - name: Run filter unit tests without printing build configuration
         run: node --test scripts/lemtel-hostinger-client-config-filter.test.mjs

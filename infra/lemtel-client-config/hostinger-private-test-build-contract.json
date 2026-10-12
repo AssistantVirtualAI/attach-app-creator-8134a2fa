@@ -1,6 +1,6 @@
 {
-  "contract_version": "lemtel_hostinger_private_test_builds_v1",
-  "profile": "hostinger-staging",
+  "contract_version": "lemtel_active_passive_private_test_builds_v2",
+  "profile": "lemtel-active-passive",
   "clients": ["desktop", "android_debug", "ios_unsigned"],
   "private_artifact_retention_days": 3,
   "distribution": false,

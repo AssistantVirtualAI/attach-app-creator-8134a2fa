@@ -19,9 +19,9 @@ test("iOS presents Lemtel while retaining AVA attribution", () => {
   assert.doesNotMatch(info, /<string>AVA Softphone<\/string>/);
 });
 
-test("iOS release metadata permits Hostinger Auth without hard-coding a PBX change", () => {
+test("iOS release metadata permits canonical Lemtel Auth without hard-coding a PBX change", () => {
   const info = read("ios/App/App/Info.plist");
-  assert.match(info, /<string>lemtel\.avastatistic\.ca<\/string>/);
+  assert.match(info, /<string>lemtel\.assistantvirtualai\.com<\/string>/);
   assert.doesNotMatch(info, /<key>UIRequiresPersistentWiFi<\/key>/);
 
   const capacitor = read("capacitor.config.ts");

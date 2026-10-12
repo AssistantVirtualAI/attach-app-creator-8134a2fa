@@ -1,9 +1,9 @@
 {
-  "contract_version": "lemtel_device_test_readiness_v1",
-  "profile": "hostinger-staging",
-  "purpose": "private_device_test_only",
+  "contract_version": "lemtel_device_test_readiness_v2",
+  "profile": "lemtel-active-passive",
+  "purpose": "controlled_authenticated_client_test_only",
   "backend": {
-    "origin_must_be": "https://lemtel.avastatistic.ca",
+    "origin_must_be": "https://lemtel.assistantvirtualai.com",
     "configuration_filter_required": "lemtel-hostinger-client-config-filter.mjs"
   },
   "android": {
@@ -13,9 +13,9 @@
     "public_distribution": false
   },
   "ios": {
-    "artifact": "unsigned_device_compile",
-    "physical_installation_blocked_until": ["apple_development_or_distribution_signing", "provisioning_profile", "named_test_device_or_testflight"],
-    "app_store_upload": false
+    "artifact": "testflight_internal_beta",
+    "physical_installation_blocked_until": ["testflight_internal_group_assignment", "named_internal_tester"],
+    "app_store_upload": true
   },
   "desktop_macos": {
     "artifact": "unsigned_private_package",
@@ -30,8 +30,7 @@
     "call_test_plan"
   ],
   "forbidden": [
-    "Planipret", "Lovable_current_project", "production_release", "release_signing",
-    "app_store_or_play_store_upload", "desktop_auto_update", "FusionPBX_mutation",
-    "DNS_change", "DigitalOcean_standby_start"
+    "Planipret", "Lovable_current_project", "desktop_auto_update", "FusionPBX_mutation",
+    "automatic_failover", "public_postgres_listener", "Hostinger_writer_restart"
   ]
 }

@@ -10,7 +10,7 @@ export const WHITELABEL = {
   logoType: 'lemtel' as 'lemtel' | 'ava' | 'custom',
   portalUrl: 'https://avastatistic.ca',
   providerName: 'Lemtel Communications',
-  providerUrl: 'https://lemtel.avastatistic.ca',
+  providerUrl: 'https://lemtel.assistantvirtualai.com',
   providerLogo: 'lemtel',
   supabaseUrl: BACKEND_URL,
   supabaseAnonKey:

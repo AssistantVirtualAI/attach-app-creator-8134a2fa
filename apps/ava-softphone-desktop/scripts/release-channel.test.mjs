@@ -42,7 +42,7 @@ test("Windows release preserves explicit signing state and a working unsigned pa
   assert.match(workflow, /needs\.build-windows\.result == 'success'/);
 });
 
-test("Public macOS and Windows releases require the approved Hostinger profile", () => {
+test("Public macOS and Windows releases require the approved canonical profile", () => {
   const macBlock = workflow.slice(
     workflow.indexOf("  build-mac:"),
     workflow.indexOf("  build-windows:"),

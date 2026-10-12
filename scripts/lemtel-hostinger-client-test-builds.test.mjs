@@ -5,8 +5,8 @@ import test from 'node:test';
 const contract = JSON.parse(fs.readFileSync('infra/lemtel-client-config/hostinger-private-test-build-contract.json', 'utf8'));
 const workflow = fs.readFileSync('.github/workflows/lemtel-hostinger-client-test-builds.yml', 'utf8');
 
-test('private Hostinger test build contract rejects distribution', () => {
-  assert.equal(contract.profile, 'hostinger-staging');
+test('private active-passive test build contract rejects distribution', () => {
+  assert.equal(contract.profile, 'lemtel-active-passive');
   assert.equal(contract.distribution, false);
   assert.equal(contract.release_signing, false);
   assert.equal(contract.app_store_upload, false);

@@ -1,4 +1,4 @@
-name: Lemtel Hostinger — private test builds
+name: Lemtel active-passive — private test builds
 
 on:
   push:
@@ -14,9 +14,9 @@ on:
   workflow_dispatch:
     inputs:
       reason:
-        description: 'Reason for this non-distributed staging build'
+        description: 'Reason for this non-distributed canonical build'
         required: true
-        default: 'Hostinger staging validation'
+        default: 'Canonical active-passive validation'
         type: string
 
 permissions:
@@ -51,7 +51,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Enforce approved Lemtel Hostinger configuration
+      - name: Enforce approved Lemtel canonical configuration
         run: node scripts/lemtel-hostinger-client-config-filter.mjs
       - name: Build Lemtel web mobile bundle
         working-directory: apps/ava-softphone-mobile
@@ -94,7 +94,7 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
-      - name: Enforce approved Lemtel Hostinger configuration
+      - name: Enforce approved Lemtel canonical configuration
         run: node scripts/lemtel-hostinger-client-config-filter.mjs
       - name: Build and compile iOS device app without signing
         working-directory: apps/ava-softphone-mobile

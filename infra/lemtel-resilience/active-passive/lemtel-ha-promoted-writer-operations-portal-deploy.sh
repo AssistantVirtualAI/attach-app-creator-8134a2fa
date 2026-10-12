@@ -16,7 +16,7 @@ fail() {
 
 bundle="${LEMTEL_OPERATIONS_PORTAL_BUNDLE:-/home/lemtelops/lemtel-operations-deployment}"
 manifest="$bundle/manifest.sha256"
-portal_artifact="$bundle/portal"
+portal_archive="$bundle/portal.tar"
 migration="$bundle/0006_lemtel_operational_status.sql"
 function_source="$bundle/lemtel-onboarding-admin.index.ts"
 publisher_source="$bundle/lemtel-ha-promoted-writer-status-publish.sh"
@@ -31,7 +31,7 @@ backup_root='/var/lib/lemtel-ha/operations-portal/backups'
 for required in "$manifest" "$migration" "$function_source" "$publisher_source" "$timer_source"; do
   [ -s "$required" ] || fail "bundle_file_missing"
 done
-[ -d "$portal_artifact" ] && [ -s "$portal_artifact/lemtel-portal.html" ] || fail portal_artifact_missing
+[ -s "$portal_archive" ] || fail portal_artifact_missing
 
 verify_digest() {
   local expected path actual
@@ -41,11 +41,7 @@ verify_digest() {
   actual="$(sha256sum "$path" | awk '{print $1}')"
   [ "$actual" = "$expected" ] || fail manifest_digest_mismatch
 }
-for source in "$migration" "$function_source" "$publisher_source" "$timer_source"; do verify_digest "$source"; done
-artifact_expected="$(awk '$2 == "portal.tar" { print $1 }' "$manifest")"
-[ -n "$artifact_expected" ] || fail portal_manifest_entry_missing
-artifact_actual="$(tar -C "$portal_artifact" -cf - . | sha256sum | awk '{print $1}')"
-[ "$artifact_actual" = "$artifact_expected" ] || fail portal_artifact_digest_mismatch
+for source in "$migration" "$function_source" "$publisher_source" "$timer_source" "$portal_archive"; do verify_digest "$source"; done
 
 for container in "$db_container" "$caddy_container" "$edge_container"; do
   docker inspect "$container" >/dev/null 2>&1 || fail container_missing
@@ -125,7 +121,8 @@ docker exec -i "$caddy_container" caddy adapt --config /dev/stdin --adapter cadd
 
 cp --preserve=mode,ownership,timestamps -- "$caddyfile" "$backup_caddy"
 cp --preserve=mode,ownership,timestamps -- "$function_target" "$backup_function"
-cp -a "$portal_artifact"/. "$portal_stage"/
+tar -xf "$portal_archive" -C "$portal_stage"
+[ -s "$portal_stage/lemtel-portal.html" ] || fail portal_archive_invalid
 [ ! -e "$portal_dir" ] || fail portal_directory_already_exists
 
 # Schema has no business data and is idempotent. Existing data is never modified.

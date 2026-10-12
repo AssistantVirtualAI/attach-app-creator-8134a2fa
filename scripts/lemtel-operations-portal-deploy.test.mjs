@@ -10,6 +10,8 @@ test("Operations portal deployment is root-gated and transactionally bounded to 
     "deploy_verified_operations_portal",
     "digitalocean_promoted_writer",
     "FRESH_ENCRYPTED_WRITER_BACKUP_VERIFIED",
+    "portal_archive",
+    "tar -xf",
     "pg_is_in_recovery()::text",
     "lemtel_operational_status",
     "caddy adapt",

@@ -16,11 +16,20 @@ test('remote artifact delivery fails closed unless the active writer role is dec
   }
 });
 
-test('a promoted DigitalOcean writer never receives a former-standby SSH deposit', () => {
-  for (const { path, text } of workflows) {
-    assert.match(text, /if: \$\{\{ needs\.active-writer-role-gate\.outputs\.active_writer == 'hostinger' \}\}/, `${path} must gate the DO receiver on a Hostinger writer`);
-    assert.match(text, /digitalocean-promoted-writer-boundary:/, `${path} must declare the promoted-writer boundary`);
-    assert.match(text, /if: \$\{\{ needs\.active-writer-role-gate\.outputs\.active_writer == 'digitalocean' \}\}/, `${path} must route a promoted DO writer to the boundary job`);
-    assert.match(text, /former standby SSH receiver is intentionally not contacted/, `${path} must preserve the writer safety boundary`);
-  }
+test('the immutable source artifact reaches the restricted DigitalOcean receiver for either declared writer role', () => {
+  const sourceArtifact = workflows.find(({ path }) => path.endsWith('lemtel-github-artifact-sync.yml'));
+  assert.ok(sourceArtifact);
+  assert.match(sourceArtifact.text, /digitalocean-artifact:/);
+  assert.match(sourceArtifact.text, /DigitalOcean restricted receiver without applying it/);
+  assert.match(sourceArtifact.text, /Artifact synchronized only; no container, port, DNS or failover action is performed/);
+  assert.doesNotMatch(sourceArtifact.text, /digitalocean-promoted-writer-boundary:/);
+  assert.doesNotMatch(sourceArtifact.text, /if: \$\{\{ needs\.active-writer-role-gate\.outputs\.active_writer == 'hostinger' \}\}/);
+});
+
+test('private client-test bundles preserve the promoted-writer boundary', () => {
+  const clientBuilds = workflows.find(({ path }) => path.endsWith('lemtel-hostinger-client-test-builds.yml'));
+  assert.ok(clientBuilds);
+  assert.match(clientBuilds.text, /if: \$\{\{ needs\.active-writer-role-gate\.outputs\.active_writer == 'hostinger' \}\}/);
+  assert.match(clientBuilds.text, /digitalocean-promoted-writer-boundary:/);
+  assert.match(clientBuilds.text, /former standby SSH receiver is intentionally not contacted/);
 });

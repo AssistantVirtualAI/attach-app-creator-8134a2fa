@@ -38,11 +38,12 @@ Cette approbation ne couvre **pas** Hostinger, DNS/Cloudflare, PostgreSQL public
 3. Produire l’artefact statique avec le workflow manuel `.github/workflows/lemtel-operations-portal-build.yml`. Il injecte les variables canoniques seulement dans GitHub Actions, construit exclusivement l’entrée Lemtel à la base `/lemtel-portal/`, exclut les fichiers publics Planiprêt et ne déploie rien lui-même.
 4. Appliquer la migration Lemtel `0006` sur la base privée du writer. Elle crée une unique ligne d’état avec RLS et retire tout accès navigateur direct.
 5. Déployer ensemble la fonction Edge `lemtel-onboarding-admin` et l’artefact privé du portail contenant la page **Exploitation**, à partir du manifeste spécifique `operational-status-deployment-manifest.json`. Le manifeste historique `edge-functions/deployment-manifest.json` reste réservé au package mobile-config et ne doit pas être détourné.
-6. Configurer uniquement une route statique authentifiée `/lemtel-portal/` dans le Caddy déjà actif, avec fallback SPA limité à ce préfixe. Ne pas modifier la route API existante, DNS ou Cloudflare.
-7. Installer le publieur `lemtel-ha-promoted-writer-status-publish.sh` et activer son minuteur uniquement sur DO avec le rôle `digitalocean_promoted_writer`.
-8. Vérifier qu’un administrateur de plateforme authentifié obtient un instantané redacted avec horodatage récent ; vérifier qu’un administrateur d’organisation non plateforme reçoit un refus contrôlé.
-9. Vérifier que la page affiche les liens de distribution configurés, sans créer de paiement, abonnement ou checkout.
-10. Consigner l’horodatage de la première observation et laisser les alertes existantes surveiller l’état.
+6. Utiliser exclusivement `lemtel-ha-promoted-writer-operations-portal-deploy.sh` : il revalide le writer, l’attestation de sauvegarde et les empreintes du package, applique la migration idempotente, sauvegarde Caddy et la fonction existante, puis annule automatiquement les fichiers/runtimes si une étape postérieure échoue.
+7. Configurer uniquement une route statique authentifiée `/lemtel-portal/` dans le Caddy déjà actif, avec fallback SPA limité à ce préfixe. Ne pas modifier la route API existante, DNS ou Cloudflare.
+8. Installer le publieur `lemtel-ha-promoted-writer-status-publish.sh` et activer son minuteur uniquement sur DO avec le rôle `digitalocean_promoted_writer`.
+9. Vérifier qu’un administrateur de plateforme authentifié obtient un instantané redacted avec horodatage récent ; vérifier qu’un administrateur d’organisation non plateforme reçoit un refus contrôlé.
+10. Vérifier que la page affiche les liens de distribution configurés, sans créer de paiement, abonnement ou checkout.
+11. Consigner l’horodatage de la première observation et laisser les alertes existantes surveiller l’état.
 
 ## Plan d’annulation
 

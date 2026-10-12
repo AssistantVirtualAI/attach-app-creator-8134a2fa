@@ -44,6 +44,12 @@ test('DO writer creates a WireGuard-only replication policy and encrypted Hostin
   assert.match(writer, /host replication \$\{replication_role\} \$\{standby_tunnel_address\}\/32 scram-sha-256/u);
   assert.match(writer, /pg_create_physical_replication_slot/u);
   assert.match(writer, /age -r "\$age_recipient"/u);
+  assert.match(writer, /existing_envelope=false/u);
+  assert.match(writer, /existing_encrypted_replication_envelope_empty/u);
+  assert.match(writer, /if \[ "\$existing_envelope" = false \]; then/u);
+  assert.match(writer, /replication_secret_envelope_reused=%s/u);
+  assert.match(writer, /chown postgres:postgres \/tmp\/lemtel-ha-hostinger-replication\.sql/u);
+  assert.match(writer, /chmod 0600 \/tmp\/lemtel-ha-hostinger-replication\.sql/u);
   assert.match(writer, /docker port "\$db_container" \| grep -q \./u);
   assert.match(writer, /pg_reload_conf/u);
   assert.match(writer, /rollback\(\)/u);

@@ -62,7 +62,8 @@ describe("Lemtel portal contract", () => {
   it("uses absolute fallback routes so malformed operations URLs cannot recurse", () => {
     const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
     expect(source).toContain('path="operations/*" element={<Navigate to={`${BASE}/operations`} replace />}');
-    expect(source).toContain('Route path="*" element={<Navigate to={`${BASE}/overview`} replace />}');
+    expect(source).toContain('Route index element={<Navigate to={`${BASE}/operations`} replace />}');
+    expect(source).toContain('Route path="*" element={<Navigate to={`${BASE}/operations`} replace />}');
     expect(source).not.toContain('Route path="*" element={<Navigate to="overview" replace />}');
   });
 });

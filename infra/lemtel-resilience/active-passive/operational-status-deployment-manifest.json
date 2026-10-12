@@ -7,7 +7,7 @@
   "sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "eb3eda6b33126d360ecf6d8fe6d488e00c240c43e47aeb3f7198eb89dc64d4e0"
+      "sha256": "9718e43855fd43ca2cff5cba905f2f8deef62b3c313b39cc38cc041c4fbd1516"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
@@ -19,7 +19,7 @@
     },
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh",
-      "sha256": "6f8031e4ca6df3e6178efd5d6a49ada71c2d20e08931427fbd77c400768ee610"
+      "sha256": "8b839fd547dbe0568abb1e81a07641f7740f814eade77e57673da972d4fb85c1"
     },
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-timer-enable.sh",

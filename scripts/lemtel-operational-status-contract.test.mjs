@@ -60,9 +60,11 @@ test('writer publisher emits only locally verified redacted health and never con
   assert.match(publisher, /resolve_database_container/);
   assert.match(publisher, /supabase\\\/postgres\(:\|\$\)/);
   assert.match(publisher, /database_container_unresolved/);
-  assert.match(publisher, /"standby": "unknown"/);
-  assert.match(publisher, /"route": "unknown"/);
-  assert.match(publisher, /"database": "unknown"/);
+  assert.match(publisher, /hostinger_streaming_standby/);
+  assert.match(publisher, /"route": "canonical_digitalocean_live"/);
+  assert.match(publisher, /pg_stat_replication/);
+  assert.match(publisher, /storage-sync-manifests\/last-success/);
+  assert.match(publisher, /integrity_verified/);
   assert.match(publisher, /redacted_snapshot_written=true/);
   assert.match(publisher, /2>\/dev\/null/);
   assert.match(publisher, /automatic_promotion_enabled=false/);

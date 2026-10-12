@@ -37,6 +37,7 @@ jobs:
           scripts/lemtel-two-vps-delivery-gate.test.mjs
           scripts/lemtel-github-release-readiness.test.mjs
           scripts/lemtel-hostinger-client-config-filter.test.mjs
+          scripts/lemtel-promoted-writer-delivery-boundary.test.mjs
       - id: package
         name: Build one immutable Lemtel source artifact
         shell: bash
@@ -64,8 +65,32 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  active-writer-role-gate:
+    environment: lemtel-digitalocean-standby
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      active_writer: ${{ steps.role.outputs.active_writer }}
+    steps:
+      - id: role
+        name: Fail closed unless the current writer role is declared
+        env:
+          LEMTEL_ACTIVE_WRITER: ${{ vars.LEMTEL_ACTIVE_WRITER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$LEMTEL_ACTIVE_WRITER" in
+            hostinger|digitalocean)
+              printf 'active_writer=%s\n' "$LEMTEL_ACTIVE_WRITER" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo 'Missing or unsupported Lemtel active-writer role; refusing remote artifact delivery.' >&2
+              exit 1
+              ;;
+          esac
+
   hostinger-artifact:
-    needs: package
+    needs: [package, active-writer-role-gate]
     environment: lemtel-hostinger-primary
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -79,7 +104,7 @@ jobs:
           set -euo pipefail
           actual=$(sha256sum lemtel-artifact.tgz | awk '{print $1}')
           test "$actual" = "${{ needs.package.outputs.sha256 }}"
-      - name: Deposit verified artifact on Hostinger
+      - name: Deposit verified artifact on Hostinger recovery receiver without applying it
         env:
           HOST: ${{ secrets.LEMTEL_HOSTINGER_HOST }}
           KEY: ${{ secrets.LEMTEL_HOSTINGER_DEPLOY_KEY }}
@@ -104,7 +129,8 @@ jobs:
           case "$code" in 200|401) ;; *) echo "unexpected canonical health status: $code" >&2; exit 1;; esac
 
   digitalocean-artifact:
-    needs: [package, hostinger-artifact]
+    needs: [package, hostinger-artifact, active-writer-role-gate]
+    if: ${{ needs.active-writer-role-gate.outputs.active_writer == 'hostinger' }}
     environment: lemtel-digitalocean-standby
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -118,7 +144,7 @@ jobs:
           set -euo pipefail
           actual=$(sha256sum lemtel-artifact.tgz | awk '{print $1}')
           test "$actual" = "${{ needs.package.outputs.sha256 }}"
-      - name: Deposit same artifact on DigitalOcean cold standby
+      - name: Deposit same artifact on DigitalOcean standby receiver
         env:
           HOST: ${{ secrets.LEMTEL_DIGITALOCEAN_HOST }}
           KEY: ${{ secrets.LEMTEL_DIGITALOCEAN_DEPLOY_KEY }}
@@ -134,3 +160,13 @@ jobs:
           cat lemtel-artifact.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemtelstandbydeploy@$HOST" "receive $SHA256"
       - name: Assert no standby runtime action
         run: echo 'Artifact synchronized only; no container, port, DNS or failover action is performed.'
+
+  digitalocean-promoted-writer-boundary:
+    needs: [package, hostinger-artifact, active-writer-role-gate]
+    if: ${{ needs.active-writer-role-gate.outputs.active_writer == 'digitalocean' }}
+    environment: lemtel-digitalocean-standby
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Preserve the promoted writer boundary
+        run: echo 'DigitalOcean is the declared promoted writer; its former standby SSH receiver is intentionally not contacted and no runtime action is performed.'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, toLemtelErrorKey } from "../lemtelHostedApi";
+import { buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, portalApi, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
@@ -51,5 +51,9 @@ describe("Lemtel portal contract", () => {
     expect(toLemtelErrorKey("Edge Function returned a non-2xx status code", 500)).toBe("unavailable");
     expect(toLemtelErrorKey("first_password_change_not_required", 409)).toBe("already_personalized");
     expect(toLemtelErrorKey("TypeError: Failed to fetch")).toBe("network");
+  });
+
+  it("keeps operational status behind the authoritative portal API", () => {
+    expect(typeof portalApi.getOperationalStatus).toBe("function");
   });
 });

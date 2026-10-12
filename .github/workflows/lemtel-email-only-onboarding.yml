@@ -5,7 +5,11 @@ on:
     paths:
       - 'infra/lemtel-self-hosted/migrations/0003_lemtel_email_onboarding.sql'
       - 'infra/lemtel-self-hosted/migrations/0004_lemtel_temporary_password_recovery.sql'
+      - 'infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql'
       - 'infra/lemtel-self-hosted/email-onboarding-contract.json'
+      - 'infra/lemtel-resilience/active-passive/operational-status-contract.json'
+      - 'infra/lemtel-resilience/active-passive/operational-status-deployment-manifest.json'
+      - 'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-*.sh'
       - 'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-complete-first-password/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/**'
@@ -20,6 +24,7 @@ on:
       - 'scripts/lemtel-email-only-client-login.test.mjs'
       - 'scripts/lemtel-hostinger-client-config-filter.*'
       - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
+      - 'scripts/lemtel-operational-status-contract.test.mjs'
       - '.github/workflows/lemtel-email-only-onboarding.yml'
       - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
   push:
@@ -27,7 +32,11 @@ on:
     paths:
       - 'infra/lemtel-self-hosted/migrations/0003_lemtel_email_onboarding.sql'
       - 'infra/lemtel-self-hosted/migrations/0004_lemtel_temporary_password_recovery.sql'
+      - 'infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql'
       - 'infra/lemtel-self-hosted/email-onboarding-contract.json'
+      - 'infra/lemtel-resilience/active-passive/operational-status-contract.json'
+      - 'infra/lemtel-resilience/active-passive/operational-status-deployment-manifest.json'
+      - 'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-*.sh'
       - 'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-complete-first-password/**'
       - 'infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/**'
@@ -42,6 +51,7 @@ on:
       - 'scripts/lemtel-email-only-client-login.test.mjs'
       - 'scripts/lemtel-hostinger-client-config-filter.*'
       - 'scripts/lemtel-hostinger-client-test-builds.test.mjs'
+      - 'scripts/lemtel-operational-status-contract.test.mjs'
       - '.github/workflows/lemtel-email-only-onboarding.yml'
       - '.github/workflows/lemtel-hostinger-client-test-builds.yml'
 
@@ -66,10 +76,12 @@ jobs:
             scripts/lemtel-email-onboarding-contract.test.mjs \
             scripts/lemtel-email-only-client-login.test.mjs \
             scripts/lemtel-hostinger-client-config-filter.test.mjs \
-            scripts/lemtel-hostinger-client-test-builds.test.mjs
+            scripts/lemtel-hostinger-client-test-builds.test.mjs \
+            scripts/lemtel-operational-status-contract.test.mjs
       - name: Typecheck Lemtel onboarding Edge Functions
         run: |
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts
+          deno test --no-prompt --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.test.ts
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-complete-first-password/index.ts
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-password-reset-request/index.ts

@@ -1,0 +1,46 @@
+{
+  "package_version": "lemtel_operational_status_deployment_v1",
+  "scope": "offline_promoted_writer_operational_status_package",
+  "deployment_authorized": false,
+  "hostinger_rebuild_or_start_authorized": false,
+  "automatic_failover_enabled": false,
+  "sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
+      "sha256": "eb3eda6b33126d360ecf6d8fe6d488e00c240c43e47aeb3f7198eb89dc64d4e0"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
+      "sha256": "3100e92a25a68322d13a4ca18fcd2daea5f66f053e87be503bc01255b3c6ddbf"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql",
+      "sha256": "a0e47137ccd6b03ccb67467466715195686d3b83166163c39fb9aaae247d821c"
+    },
+    {
+      "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh",
+      "sha256": "effedd2214faf9a0dee08aee13f915303c69110bc544d0cd768c3cf1364f80a8"
+    },
+    {
+      "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-timer-enable.sh",
+      "sha256": "7647a62401e4fbf194cf66669e688aa9a4e025bfa413acb537d2d36fb1f257f3"
+    }
+  ],
+  "required_preconditions": [
+    "fresh_encrypted_writer_backup_verified",
+    "digitalocean_is_verified_single_writer",
+    "hostinger_remains_fenced",
+    "approved_private_schema_write",
+    "approved_edge_function_deployment",
+    "platform_admin_rbac_read_test",
+    "redacted_snapshot_read_test"
+  ],
+  "forbidden_actions": [
+    "hostinger_start_or_rebuild",
+    "dns_change",
+    "postgres_public_listener",
+    "automatic_promotion",
+    "automatic_dns_change",
+    "fusionpbx_or_sip_change"
+  ]
+}

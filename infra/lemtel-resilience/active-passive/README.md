@@ -62,6 +62,12 @@ The activation cleanup also removes the stopped, Compose-labelled application co
 
 ## Current drill state and remaining work
 
+## Operational status portal (prepared, not deployed)
+
+The Lemtel portal contains a platform-administrator-only **Operations** page. It is designed to consume a redacted snapshot written locally by the promoted writer: locally verified health enums, an observation timestamp, writer state, and application service state. A remote standby or canonical-route state is displayed only after its own approved redacted probe; until then it is explicitly **unknown**, never inferred. The browser cannot read either server directly and the response deliberately excludes addresses, hostnames, credentials, users, recordings, raw errors and telephony data.
+
+The current source package is intentionally not an authorization to write the new status schema, deploy the Edge function, or enable the promoted-writer status timer. Those actions require the separate, narrow approval and sequence in [OPERATIONAL_STATUS_DEPLOYMENT.md](OPERATIONAL_STATUS_DEPLOYMENT.md). It never starts Hostinger, changes DNS, promotes a database, exposes PostgreSQL or enables automatic failover.
+
 1. **Verified drill path**: Hostinger was fenced; DigitalOcean was promoted as the single PostgreSQL writer; the separately staged runtime and Storage were activated; the canonical DNS-only record was manually moved to DigitalOcean. Strict TLS, Auth, Storage, REST and the authenticated session-bootstrap route are reachable on the canonical hostname.
 2. **Do not restart Hostinger as a writer.** A controlled failback requires rebuilding or resynchronizing Hostinger as a standby, validating replication and Storage direction, then a separately approved cutover window. This has not been executed.
 3. **Client tests remain**: use the existing email/password test account on iOS TestFlight 1.1 (5), Android and Desktop v2.5.20. Confirm sign-in, forced-password/reset path where applicable, Home, Chats, Contacts, Calls-disabled policy, Daylight/Dark contrast, language switching and notification preference UI.

@@ -132,6 +132,20 @@ export type PortalInvitation = {
 };
 export type PortalActivity = { id: string; at: string; action: string };
 export type PortalConfig = { downloads: { desktop?: string; ios?: string; android?: string }; supportContact?: string };
+export type OperationalHealth = "healthy" | "degraded" | "unknown";
+export type LemtelOperationalStatus = {
+  telemetry: "live" | "not_configured";
+  observedAt?: string;
+  overall: OperationalHealth;
+  topology: {
+    writer: "digitalocean_promoted_writer" | "unknown";
+    standby: "hostinger_fenced_rebuild_required" | "unknown";
+    route: "canonical_digitalocean_live" | "unknown";
+    automaticFailover: boolean;
+  };
+  services: { runtime: OperationalHealth; database: OperationalHealth; auth: OperationalHealth; rest: OperationalHealth; storage: OperationalHealth };
+  replication: { database: "rebuild_required" | "unknown"; storage: "rebuild_required" | "unknown" };
+};
 
 export function buildCreateOrganizationBody(input: {
   displayName: string;
@@ -162,6 +176,7 @@ export function buildResendWelcomeBody(organizationId: string, recipientUserId: 
 export const portalApi = {
   listOrganizations: () => invoke<{ organizations: PortalOrganization[] }>("lemtel-onboarding-admin", { action: "list_organizations" }),
   getConfig: () => invoke<PortalConfig>("lemtel-onboarding-admin", { action: "get_config" }),
+  getOperationalStatus: () => invoke<LemtelOperationalStatus>("lemtel-onboarding-admin", { action: "get_operational_status" }),
   listPeople: (organizationId: string) => invoke<{ people: PortalPerson[] }>("lemtel-onboarding-admin", { action: "list_people", organizationId }),
   listInvitations: (organizationId: string) => invoke<{ invitations: PortalInvitation[] }>("lemtel-onboarding-admin", { action: "list_invitations", organizationId }),
   listActivity: (organizationId: string) => invoke<{ events: PortalActivity[] }>("lemtel-onboarding-admin", { action: "list_activity", organizationId }),

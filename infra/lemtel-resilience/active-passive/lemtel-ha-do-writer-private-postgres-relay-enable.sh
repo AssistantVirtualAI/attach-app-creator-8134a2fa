@@ -25,9 +25,22 @@ created_script=false
 relay_started=false
 completed=false
 
-valid_private_container_ip() {
-  local ip="$1"
-  [[ "$ip" =~ ^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]]
+resolve_database_backend_target() {
+  local mode container_ip sockets
+  mode="$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$db_container")"
+  case "$mode" in
+    host)
+      sockets="$(ss -H -ltn 'sport = :5432' || true)"
+      printf '%s\n' "$sockets" | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]|\[::\]:):5432$' && return 1
+      printf '%s\n' "$sockets" | awk '{print $4}' | grep -Fqx '127.0.0.1:5432' || return 1
+      printf '%s\n' '127.0.0.1:5432'
+      ;;
+    *)
+      container_ip="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$db_container")"
+      [[ "$container_ip" =~ ^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || return 1
+      printf '%s:5432\n' "$container_ip"
+      ;;
+  esac
 }
 
 ufw_rule_present() {
@@ -71,8 +84,7 @@ docker inspect "$db_container" >/dev/null 2>&1 || fail database_container_missin
 [ "$(docker inspect --format '{{.Config.Image}}' "$db_container")" = 'supabase/postgres:17.6.1.136' ] || fail unexpected_database_image
 docker inspect --format '{{.State.Running}}' "$db_container" | grep -qx true || fail database_not_running
 if docker port "$db_container" | grep -q .; then fail database_port_already_published; fi
-container_ip="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$db_container")"
-valid_private_container_ip "$container_ip" || fail database_private_network_missing
+database_backend_target="$(resolve_database_backend_target)" || fail database_backend_private_target_missing
 
 render_relay_script() {
   cat <<'RELAY'
@@ -80,12 +92,23 @@ render_relay_script() {
 set -euo pipefail
 container='lemtel-postgres-standby'
 writer_tunnel_address='10.253.47.2'
-container_ip="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$container")"
-case "$container_ip" in
-  172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|10.*|192.168.*) ;;
-  *) exit 1 ;;
+mode="$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container")"
+case "$mode" in
+  host)
+    sockets="$(ss -H -ltn 'sport = :5432' || true)"
+    printf '%s\n' "$sockets" | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]|\[::\]:):5432$' && exit 1
+    printf '%s\n' "$sockets" | awk '{print $4}' | grep -Fqx '127.0.0.1:5432' || exit 1
+    database_backend_target='127.0.0.1:5432'
+    ;;
+  *)
+    container_ip="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$container")"
+    case "$container_ip" in
+      172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|10.*|192.168.*) database_backend_target="${container_ip}:5432" ;;
+      *) exit 1 ;;
+    esac
+    ;;
 esac
-exec /usr/bin/socat "TCP-LISTEN:5432,bind=${writer_tunnel_address},reuseaddr,fork" "TCP:${container_ip}:5432"
+exec /usr/bin/socat "TCP-LISTEN:5432,bind=${writer_tunnel_address},reuseaddr,fork" "TCP:${database_backend_target}"
 RELAY
 }
 

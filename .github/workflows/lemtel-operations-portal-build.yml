@@ -1,6 +1,16 @@
 name: Lemtel — private Operations portal build
 
 on:
+  push:
+    branches: [lemtel/integration]
+    paths:
+      - 'src/lemtel-portal-main.tsx'
+      - 'src/lemtel-portal-build.css'
+      - 'src/pages/lemtel/onboarding/**'
+      - 'lemtel-portal.html'
+      - 'vite.config.lemtel-portal.ts'
+      - 'scripts/lemtel-operations-portal-build.test.mjs'
+      - '.github/workflows/lemtel-operations-portal-build.yml'
   workflow_dispatch:
     inputs:
       reason:

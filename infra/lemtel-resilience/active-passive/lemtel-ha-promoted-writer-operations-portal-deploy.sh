@@ -21,7 +21,14 @@ migration="$bundle/0006_lemtel_operational_status.sql"
 function_source="$bundle/lemtel-onboarding-admin.index.ts"
 publisher_source="$bundle/lemtel-ha-promoted-writer-status-publish.sh"
 timer_source="$bundle/lemtel-ha-promoted-writer-status-timer-enable.sh"
-db_container='supabase-db'
+resolve_database_container() {
+  local -a candidates=()
+  mapfile -t candidates < <(docker ps -a --format '{{.Names}}|{{.Image}}' | awk -F'|' '$2 ~ /(^|\/)postgres(:|$)|supabase\/postgres/ { print $1 }')
+  [ "${#candidates[@]}" -eq 1 ] && printf '%s' "${candidates[0]}"
+}
+
+db_container="$(resolve_database_container || true)"
+[ -n "$db_container" ] || fail database_container_unresolved
 caddy_container='supabase-caddy'
 edge_container='supabase-edge-functions'
 canonical_host='lemtel.assistantvirtualai.com'

@@ -187,7 +187,7 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519
-          cat lemtel-hostinger-test-builds.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemteldeploy@$HOST" "receive $SHA256"
+          cat lemtel-hostinger-test-builds.tgz | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "lemtelstorage@$HOST" "receive $SHA256"
 
   digitalocean-standby-drop:
     needs: [bundle-and-sync, hostinger-staging-drop, active-writer-role-gate]

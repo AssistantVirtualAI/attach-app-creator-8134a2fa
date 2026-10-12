@@ -16,7 +16,7 @@ test('private active-passive test build contract rejects distribution', () => {
 });
 
 test('workflow builds only test artifacts and gates the same bundle by writer role', () => {
-  for (const expected of ['workflow_dispatch', 'assembleDebug', 'CODE_SIGNING_ALLOWED=NO', 'npm run build', 'lemteldeploy@', 'lemtelstandbydeploy@', 'lemtel-hostinger-client-config-filter.mjs', 'VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved', 'retention-days: 3']) assert.match(workflow, new RegExp(expected));
+  for (const expected of ['workflow_dispatch', 'assembleDebug', 'CODE_SIGNING_ALLOWED=NO', 'npm run build', 'lemtelstorage@', 'lemtelstandbydeploy@', 'lemtel-hostinger-client-config-filter.mjs', 'VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved', 'retention-days: 3']) assert.match(workflow, new RegExp(expected));
   assert.match(workflow, /\(cd android && \.\/gradlew :app:assembleDebug --no-daemon\)/);
   assert.match(workflow, /push:\n    branches: \[lemtel\/integration\]/);
   assert.match(workflow, /active-writer-role-gate:/);

@@ -31,17 +31,17 @@ const accentGradient = (a: Accent) =>
 
 // Desktop-parity palette
 const C = {
-  bg: '#0A1429',
-  bgCard: 'rgba(16,26,48,0.78)',
-  border: 'rgba(255,255,255,0.08)',
-  text: '#E8EEFB',
-  textIce: '#F4F8FF',
-  textSub: 'rgba(232,238,251,0.78)',
-  textDim: 'rgba(232,238,251,0.66)',
+  bg: 'var(--auth-page-bg)',
+  bgCard: 'var(--auth-card)',
+  border: 'var(--auth-border)',
+  text: 'var(--auth-ink)',
+  textIce: 'var(--auth-ink-strong)',
+  textSub: 'var(--auth-ink-muted)',
+  textDim: 'var(--auth-ink-dim)',
   gold: '#FFD700',
   cyan: '#0BB5D6',
   green: '#22C55E',
-  red: '#EF4444',
+  red: 'var(--auth-error-ink)',
 };
 
 const SUPABASE_URL = BACKEND_URL;
@@ -85,13 +85,14 @@ function authenticatedCreds(pending: PendingFirstPassword, session: Pick<Pending
   };
 }
 
-const mapAuthError = (raw: string): string => {
+export const mapAuthError = (raw: string): string => {
   const m = (raw || '').toLowerCase();
   if (m.includes('invalid_credentials') || m.includes('invalid login')) return tx('Adresse e-mail ou mot de passe incorrect.', 'Incorrect email or password.');
   if (m.includes('first_password_change_required')) return tx('Choisissez votre mot de passe personnel pour continuer.', 'Choose your personal password to continue.');
   if (m.includes('lemtel_account_not_active')) return tx('Ce compte Lemtel n’est pas encore activé. Communiquez avec votre administrateur.', 'This Lemtel account is not active yet. Contact your administrator.');
   if (m.includes('bootstrap_invalid_response')) return tx('Les informations sécurisées du compte sont incomplètes. Réessayez dans un instant.', 'The secure account information is incomplete. Please try again shortly.');
   if (m.includes('bootstrap_service_unavailable') || m.includes('password_update_failed') || m.includes('server_not_configured')) return tx('Le service sécurisé de mot de passe est temporairement indisponible. Réessayez dans un instant.', 'The secure password service is temporarily unavailable. Please try again shortly.');
+  if (m.includes('unexpected_failure') || m.includes('database error') || m.includes('querying schema')) return tx("Le service de connexion Lemtel est temporairement indisponible. Votre mot de passe n’a pas été modifié. Réessayez plus tard.", 'The Lemtel sign-in service is temporarily unavailable. Your password was not changed. Please try again later.');
   if (m.includes('bootstrap_network_error')) return tx('Erreur réseau — vérifiez votre connexion puis réessayez.', 'Network error — check your connection and try again.');
   if (m.includes('new_session_failed')) return tx('Votre mot de passe a été mis à jour. Reconnectez-vous avec votre nouveau mot de passe.', 'Your password was updated. Sign in again with your new password.');
   if (m.includes('rate') && m.includes('limit')) return tx('Trop de tentatives. Veuillez patienter avant de réessayer.', 'Too many attempts. Please wait before trying again.');
@@ -235,7 +236,7 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
               {tx('Mot de passe oublié ?', 'Forgot password?')}
             </button>
 
-            <div style={{ fontSize: 10.5, color: C.textDim, lineHeight: 1.5, textAlign: 'center', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5, textAlign: 'center', marginTop: 2 }}>
               {tx("Connectez-vous seulement avec l’adresse e-mail et le mot de passe Lemtel reçus. Vos paramètres de téléphonie sont chargés de façon sécurisée après connexion.", 'Sign in only with the Lemtel email address and password you received. Your telephony settings load securely after sign-in.')}
             </div>
           </form>
@@ -609,16 +610,17 @@ function AccentSwitch({ accent, onChange, readOnly }: { accent: Accent; onChange
 
 function ErrorBanner({ children, failure }: { children: React.ReactNode; failure?: AuthFailure | null }) {
   const [open, setOpen] = useState(false);
+  const showDiagnostics = Boolean((import.meta as any).env?.DEV);
   return (
     <div role="alert" style={{
       fontSize: 12, color: C.red,
       padding: '10px 14px', borderRadius: 10,
-      background: 'rgba(239,68,68,0.10)',
-      border: '1px solid rgba(239,68,68,0.22)',
+      background: 'var(--auth-error-bg)',
+      border: '1px solid var(--auth-error-border)',
       display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       <div>{children}</div>
-      {failure && (
+      {showDiagnostics && failure && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
           <span style={chipStyle('step')}>{tx('étape', 'step')} : {failure.step}</span>
           <span style={chipStyle('code')}>{tx('code', 'code')} : {failure.code}</span>
@@ -630,7 +632,7 @@ function ErrorBanner({ children, failure }: { children: React.ReactNode; failure
           )}
         </div>
       )}
-      {open && failure?.detail && (
+      {showDiagnostics && open && failure?.detail && (
         <pre style={{
           margin: 0, padding: 8, borderRadius: 8,
           background: 'rgba(0,0,0,0.35)', color: '#FCA5A5',
@@ -671,7 +673,7 @@ function Field({ label, value, onChange, type = 'text', autoFocus, placeholder, 
 }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 10, color: C.textSub, textTransform: 'uppercase', letterSpacing: 1.6, fontWeight: 700 }}>{label}</span>
+      <span style={{ fontSize: 11.5, color: C.textSub, textTransform: 'uppercase', letterSpacing: 1.1, fontWeight: 800 }}>{label}</span>
       <input
         className="lemtel-input"
         type={type}
@@ -690,7 +692,7 @@ function Field({ label, value, onChange, type = 'text', autoFocus, placeholder, 
 
 const wrap: React.CSSProperties = {
   display: 'flex', flexDirection: 'column', minHeight: '100vh',
-  background: `radial-gradient(900px 600px at 50% -10%, rgba(11,181,214,0.10), transparent 60%), ${C.bg}`,
+  background: C.bg,
   color: C.text,
   paddingTop: 'var(--safe-top)',
   position: 'relative', overflow: 'hidden',

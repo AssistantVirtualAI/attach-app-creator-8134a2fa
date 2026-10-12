@@ -15,6 +15,20 @@
   --danger: #ff5577;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --auth-page-bg: radial-gradient(900px 600px at 50% -10%, rgba(11,181,214,0.10), transparent 60%), #0A1429;
+  --auth-card: rgba(16,26,48,0.92);
+  --auth-border: rgba(255,255,255,0.16);
+  --auth-ink: #e8eefb;
+  --auth-ink-strong: #f8fbff;
+  --auth-ink-muted: #d2ddf5;
+  --auth-ink-dim: #b7c6e5;
+  --auth-input-bg: rgba(255,255,255,0.08);
+  --auth-input-border: rgba(255,255,255,0.24);
+  --auth-input-ink: #f8fbff;
+  --auth-input-placeholder: rgba(232,238,251,0.68);
+  --auth-error-ink: #ffb4bd;
+  --auth-error-bg: rgba(160,20,42,0.30);
+  --auth-error-border: rgba(255,135,150,0.48);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -123,15 +137,15 @@ textarea, input { user-select: text; }
 }
 .lemtel-input {
   height: 48px; padding: 0 14px; border-radius: 12px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.10);
-  color: #E8EEFB; font-size: 15px; outline: none;
+  background: var(--auth-input-bg);
+  border: 1px solid var(--auth-input-border);
+  color: var(--auth-input-ink); font-size: 15px; outline: none;
   transition: border-color .15s ease, background .15s ease;
 }
-.lemtel-input::placeholder { color: rgba(232,238,251,0.35); }
+.lemtel-input::placeholder { color: var(--auth-input-placeholder); opacity: 1; }
 .lemtel-input:focus {
   border-color: rgba(255,215,0,0.55);
-  background: rgba(255,255,255,0.06);
+  background: var(--auth-input-bg);
 }
 .lemtel-btn-primary {
   border: none; color: #0b1530; font-weight: 800; letter-spacing: 0.4px;
@@ -162,6 +176,20 @@ textarea, input { user-select: text; }
   --surface-hover: #f5f7ff;
   --accent: #0023e6;
   --accent-light: #e8eeff;
+  --auth-page-bg: radial-gradient(900px 600px at 50% -10%, rgba(0,35,230,0.14), transparent 62%), linear-gradient(180deg, #f7faff 0%, #eaf1ff 100%);
+  --auth-card: rgba(255,255,255,0.98);
+  --auth-border: rgba(22,39,75,0.20);
+  --auth-ink: #17213b;
+  --auth-ink-strong: #08102a;
+  --auth-ink-muted: #344560;
+  --auth-ink-dim: #526681;
+  --auth-input-bg: #ffffff;
+  --auth-input-border: rgba(22,39,75,0.28);
+  --auth-input-ink: #08102a;
+  --auth-input-placeholder: #687895;
+  --auth-error-ink: #9f1239;
+  --auth-error-bg: #fff1f2;
+  --auth-error-border: #fda4af;
 }
 
 body[data-theme="light"] {

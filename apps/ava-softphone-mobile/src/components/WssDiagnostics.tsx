@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { buildWssFallbackList, type SIPConfig } from '../lib/sip/jssipProvider';
-import { supabase } from '../lib/mobileSupabase';
-import { BACKEND_URL, LEGACY_BACKEND_URL } from '../lib/backendOrigin';
 import { reportLemtelWssFallback } from '../lib/lemtelPrivateDirectory';
 
 type Result = {
@@ -64,20 +62,8 @@ async function logFallback(primary: Result, fallback: Result, all: Result[]) {
       at: new Date().toISOString(),
       primary_reason: primary.reason,
     });
-    if (BACKEND_URL === LEGACY_BACKEND_URL) {
-      await supabase.functions.invoke('pp-wss-fallback-log', {
-        body: {
-          primary_url: primary.url,
-          fallback_url: fallback.url,
-          primary_reason: primary.reason ?? null,
-          results: all.map((r) => ({ url: r.url, state: r.state, ms: r.ms, at: r.at, reason: r.reason })),
-        },
-      });
-      return;
-    }
-
-    // A Lemtel build can opt in through a separate build flag. The adapter
-    // never receives URLs or free-form diagnostics: only ordinal IDs/outcomes.
+    // The Lemtel adapter never receives URLs or free-form diagnostics: only
+    // ordinal IDs and bounded outcomes.
     const primaryIndex = all.indexOf(primary);
     const fallbackIndex = all.indexOf(fallback);
     if (primaryIndex < 0 || fallbackIndex < 0) return;
@@ -184,9 +170,7 @@ export default function WssDiagnostics({
 
       <div style={{ padding: '0 16px 12px', fontSize: 12, opacity: 0.8 }}>
         Tests each known SIP WebSocket endpoint. Port {PRIMARY_PORT} is the primary;
-        {BACKEND_URL === LEGACY_BACKEND_URL
-          ? ' fallback events are logged with your user ID and timestamp.'
-          : ' fallback results stay on this device; server logging is not configured.'}
+        fallback telemetry is reduced to opaque outcome data and remains disabled until Lemtel provisioning is configured.
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>

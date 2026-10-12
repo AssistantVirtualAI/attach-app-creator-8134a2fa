@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
-  backendUrl: 'https://api.lemtel.example',
+  backendUrl: 'https://lemtel.assistantvirtualai.com',
   credentials: { organizationId: '11111111-1111-4111-8111-111111111111' } as any,
   invoke: vi.fn(),
 }));
 
 vi.mock('./backendOrigin', () => ({
   get BACKEND_URL() { return h.backendUrl; },
-  LEGACY_BACKEND_URL: 'https://gejxisrqtvxavbrfcoxz.supabase.co',
+  LEMTEL_CANONICAL_BACKEND_URL: 'https://lemtel.assistantvirtualai.com',
 }));
 vi.mock('./creds', () => ({ getCredentials: vi.fn(() => Promise.resolve(h.credentials)) }));
 vi.mock('./mobileSupabase', () => ({ supabase: { functions: { invoke: h.invoke } } }));
@@ -16,17 +16,17 @@ vi.mock('./mobileSupabase', () => ({ supabase: { functions: { invoke: h.invoke }
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
-  h.backendUrl = 'https://api.lemtel.example';
+  h.backendUrl = 'https://lemtel.assistantvirtualai.com';
   h.credentials = { organizationId: '11111111-1111-4111-8111-111111111111' };
   vi.stubEnv('VITE_LEMTEL_PRIVATE_DIRECTORY', '');
 });
 
 describe('Lemtel private-directory adapter', () => {
-  it('requires a separate approved self-hosted build flag and never treats legacy as enabled', async () => {
+  it('requires the canonical origin and a separate approved build flag', async () => {
     const module = await import('./lemtelPrivateDirectory');
-    expect(module.resolveLemtelPrivateDirectoryEnabled('https://api.lemtel.example', 'approved')).toBe(true);
-    expect(module.resolveLemtelPrivateDirectoryEnabled('https://api.lemtel.example', undefined)).toBe(false);
-    expect(module.resolveLemtelPrivateDirectoryEnabled('https://gejxisrqtvxavbrfcoxz.supabase.co', 'approved')).toBe(false);
+    expect(module.resolveLemtelPrivateDirectoryEnabled('https://lemtel.assistantvirtualai.com', 'approved')).toBe(true);
+    expect(module.resolveLemtelPrivateDirectoryEnabled('https://lemtel.assistantvirtualai.com', undefined)).toBe(false);
+    expect(module.resolveLemtelPrivateDirectoryEnabled('https://unapproved.example', 'approved')).toBe(false);
   });
 
   it('is inert in current builds and does not invoke a Lemtel function or read a stored organization', async () => {

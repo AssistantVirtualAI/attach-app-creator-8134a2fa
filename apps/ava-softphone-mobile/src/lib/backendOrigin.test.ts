@@ -1,47 +1,63 @@
-import { describe, expect, it } from 'vitest';
-import { BACKEND_URL, LEGACY_BACKEND_URL, resolveBackendConfig, resolveBackendOrigin, resolveResetRedirect } from './backendOrigin';
+import { describe, expect, it, vi } from 'vitest';
 
-describe('Lemtel mobile backend origin (offline phase 31A)', () => {
-  it('keeps existing installs on their current backend until an explicit cutover build', () => {
-    expect(resolveBackendOrigin(undefined, undefined)).toBe(LEGACY_BACKEND_URL);
-    expect(BACKEND_URL).toBe(LEGACY_BACKEND_URL);
+vi.hoisted(() => {
+  process.env.VITE_SUPABASE_URL = 'https://lemtel.assistantvirtualai.com';
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test';
+  process.env.VITE_LEMTEL_AUTH_REDIRECT_URL = 'https://lemtel.assistantvirtualai.com/reset-password';
+});
+
+import { BACKEND_URL, LEMTEL_CANONICAL_BACKEND_URL, resolveBackendConfig, resolveBackendOrigin, resolveResetRedirect } from './backendOrigin';
+
+const CANONICAL_KEY = 'sb_publishable_test';
+
+describe('Lemtel mobile canonical backend origin', () => {
+  it('requires the explicit canonical route for every Lemtel build', () => {
+    expect(BACKEND_URL).toBe(LEMTEL_CANONICAL_BACKEND_URL);
+    expect(() => resolveBackendOrigin(undefined, undefined)).toThrow(/canonical backend URL/);
   });
 
-  it('selects a stable HTTPS origin when paired with its own publishable key', () => {
-    expect(resolveBackendOrigin('https://api.lemtel.example/', 'sb_publishable_test')).toBe('https://api.lemtel.example');
+  it('accepts only the canonical HTTPS origin paired with a publishable key', () => {
+    expect(resolveBackendOrigin('https://lemtel.assistantvirtualai.com/', CANONICAL_KEY)).toBe(LEMTEL_CANONICAL_BACKEND_URL);
   });
 
-  it.each(['http://api.lemtel.example', 'https://api.lemtel.example/v1',
-    'https://api.lemtel.example?redirect=1', 'https://user:pass@api.lemtel.example',
-    'not-an-origin'])('rejects an insecure or ambiguous API origin: %s', (origin) => {
-    expect(() => resolveBackendOrigin(origin, 'sb_publishable_test')).toThrow();
+  it.each([
+    'http://lemtel.assistantvirtualai.com',
+    'https://lemtel.assistantvirtualai.com/v1',
+    'https://lemtel.assistantvirtualai.com?redirect=1',
+    'https://user:pass@lemtel.assistantvirtualai.com',
+    'https://gejxisrqtvxavbrfcoxz.supabase.co',
+    'https://api.lemtel.example',
+    'not-an-origin',
+  ])('rejects an insecure, ambiguous, or non-canonical origin: %s', (origin) => {
+    expect(() => resolveBackendOrigin(origin, CANONICAL_KEY)).toThrow(/canonical backend URL|Invalid Lemtel backend URL/);
   });
 
-  it('fails closed without a matching new publishable key', () => {
-    expect(() => resolveBackendOrigin('https://api.lemtel.example', undefined)).toThrow(/publishable key/);
-    expect(() => resolveBackendOrigin('https://api.lemtel.example', '')).toThrow(/publishable key/);
+  it('fails closed without an explicit publishable key', () => {
+    expect(() => resolveBackendOrigin(LEMTEL_CANONICAL_BACKEND_URL, undefined)).toThrow(/publishable key/);
+    expect(() => resolveBackendOrigin(LEMTEL_CANONICAL_BACKEND_URL, '')).toThrow(/publishable key/);
   });
 
-  it('separates historic and cutover SDK sessions and requires an explicitly new key', () => {
-    expect(resolveBackendConfig({}).storageSuffix).toBe('');
+  it('keeps storage scoped to the canonical origin and rejects legacy environment fields', () => {
+    expect(() => resolveBackendConfig({})).toThrow(/canonical backend URL/);
     expect(() => resolveBackendConfig({
-      VITE_SUPABASE_URL: 'https://api.lemtel.example',
-      VITE_SUPABASE_ANON_KEY: 'old-compatible-key',
-    })).toThrow(/publishable key/);
-    const selected = resolveBackendConfig({
-      VITE_SUPABASE_URL: 'https://api.lemtel.example',
-      VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_new',
-      VITE_SUPABASE_ANON_KEY: 'old-compatible-key',
+      VITE_SUPABASE_URL: 'https://gejxisrqtvxavbrfcoxz.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'legacy-compatible-key',
+    })).toThrow(/canonical backend URL/);
+
+    expect(resolveBackendConfig({
+      VITE_SUPABASE_URL: LEMTEL_CANONICAL_BACKEND_URL,
+      VITE_SUPABASE_PUBLISHABLE_KEY: CANONICAL_KEY,
+    })).toEqual({
+      url: LEMTEL_CANONICAL_BACKEND_URL,
+      key: CANONICAL_KEY,
+      storageSuffix: `:${encodeURIComponent(LEMTEL_CANONICAL_BACKEND_URL)}`,
     });
-    expect(selected).toEqual({ url: 'https://api.lemtel.example', key: 'sb_publishable_new',
-      storageSuffix: `:${encodeURIComponent('https://api.lemtel.example')}` });
   });
 
-  it('does not redirect new Auth reset links to the historical marketing site', () => {
-    expect(resolveResetRedirect(LEGACY_BACKEND_URL, undefined)).toBe('https://avastatistic.ca/reset-password');
-    expect(() => resolveResetRedirect('https://api.lemtel.example', undefined)).toThrow();
-    expect(resolveResetRedirect('https://api.lemtel.example', 'https://auth.lemtel.example/reset-password'))
-      .toBe('https://auth.lemtel.example/reset-password');
-    expect(() => resolveResetRedirect('https://api.lemtel.example', 'http://auth.lemtel.example/reset-password')).toThrow();
+  it('accepts only the canonical password-reset URL', () => {
+    expect(resolveResetRedirect(LEMTEL_CANONICAL_BACKEND_URL, 'https://lemtel.assistantvirtualai.com/reset-password'))
+      .toBe('https://lemtel.assistantvirtualai.com/reset-password');
+    expect(() => resolveResetRedirect(LEMTEL_CANONICAL_BACKEND_URL, 'https://avastatistic.ca/reset-password')).toThrow();
+    expect(() => resolveResetRedirect('https://api.lemtel.example', 'https://lemtel.assistantvirtualai.com/reset-password')).toThrow();
   });
 });

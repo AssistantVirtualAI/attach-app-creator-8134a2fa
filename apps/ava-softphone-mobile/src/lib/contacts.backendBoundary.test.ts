@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
-  backendUrl: 'https://api.lemtel.example',
+  backendUrl: 'https://lemtel.assistantvirtualai.com',
   get: vi.fn(), set: vi.fn(), remove: vi.fn(),
   check: vi.fn(), request: vi.fn(), read: vi.fn(),
   from: vi.fn(),
 }));
 vi.mock('./backendOrigin', () => ({
   get BACKEND_URL() { return h.backendUrl; },
-  LEGACY_BACKEND_URL: 'https://gejxisrqtvxavbrfcoxz.supabase.co',
+  LEMTEL_CANONICAL_BACKEND_URL: 'https://lemtel.assistantvirtualai.com',
 }));
 vi.mock('./mobileSupabase', () => ({ supabase: { from: h.from } }));
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
@@ -21,15 +21,15 @@ beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
   sessionStorage.clear();
-  h.backendUrl = 'https://api.lemtel.example';
+  h.backendUrl = 'https://lemtel.assistantvirtualai.com';
   h.get.mockResolvedValue({ value: JSON.stringify({ given: true, version: '1.0', timestamp: '2026-10-01' }) });
   h.check.mockResolvedValue({ contacts: 'granted' });
   h.read.mockResolvedValue({ contacts: [{ contactId: 'c1', name: { display: 'Old account' }, phones: [{ number: '+15145550123' }] }] });
 });
 afterEach(() => sessionStorage.clear());
 
-describe('carnet local sur un nouvel émetteur auto-hébergé', () => {
-  it('refuse un consentement Planiprêt hérité et son cache même avec permission OS déjà accordée', async () => {
+describe('carnet local sur le client Lemtel canonique', () => {
+  it('refuse tout consentement et cache hérités même avec permission OS déjà accordée', async () => {
     sessionStorage.setItem('lemtel-device-contacts', JSON.stringify([{ id: 'c1', name: 'Old account', numbers: ['+15145550123'] }]));
     const consent = await import('./contactsConsent');
     const contacts = await import('./contacts');
@@ -49,26 +49,12 @@ describe('carnet local sur un nouvel émetteur auto-hébergé', () => {
     expect(h.from).not.toHaveBeenCalled();
   });
 
-  it('refuse de supprimer des lignes du serveur Planiprêt depuis le nouvel émetteur', async () => {
+  it('refuse de supprimer des lignes d’un autre produit depuis Lemtel', async () => {
     const { deleteServerContacts, setConsent } = await import('./contactsConsent');
     await setConsent(true);
     expect(await deleteServerContacts('user-a')).toMatchObject({ ok: false, error: 'lemtel-contacts-service-not-configured' });
     expect(h.get).not.toHaveBeenCalled();
     expect(h.set).not.toHaveBeenCalled();
     expect(h.from).not.toHaveBeenCalled();
-  });
-});
-
-describe('carnet des installations historiques', () => {
-  it('conserve le consentement existant et le carnet local sans changer les clés historiques', async () => {
-    h.backendUrl = 'https://gejxisrqtvxavbrfcoxz.supabase.co';
-    vi.resetModules();
-    const consent = await import('./contactsConsent');
-    const contacts = await import('./contacts');
-    expect(await consent.hasConsent()).toBe(true);
-    expect((await contacts.syncDeviceContacts())[0]?.name).toBe('Old account');
-    expect(contacts.loadCachedContacts()[0]?.id).toBe('c1');
-    expect(h.get).toHaveBeenCalledWith({ key: 'contacts_consent_v1' });
-    expect(h.read).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,5 +1,7 @@
 # Project Architecture Rules
 
+- Planipret transcript diagnostics use one mirrored frontend evidence mapper and notice; native/CDR absence never proves missing audio, and provider hints never replace the actual fallback outcome.
+
 - Planipret APNs alert, background and VoIP pushes use one server-only persisted provider-token cache with atomic renewal and local single-flight reuse; independent worker signing triggers Apple's refresh limits.
 
 - Planipret call and recording transcripts share the speaker-message renderer in both web source trees; speaker identity comes only from explicit source labels, never inferred dialogue turns.

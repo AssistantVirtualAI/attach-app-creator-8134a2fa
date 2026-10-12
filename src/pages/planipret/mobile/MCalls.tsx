@@ -1,5 +1,7 @@
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
+import { TranscriptDiagnosticNotice } from "@/components/planipret/mobile/call/TranscriptDiagnosticNotice";
+import { resolveTranscriptDiagnostic, transcriptDiagnosticLabel, type TranscriptDiagnostic } from "@/lib/planipret/transcriptDiagnostic";
 import { TranscriptConversation, normalizeTranscriptTurns } from "@/components/planipret/mobile/call/TranscriptConversation";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
@@ -872,7 +874,8 @@ type TxStatus = {
   fetchedAt?: string | null;
   lastAttemptAt?: string | null;
 };
-function TranscriptStatusBanner({ s, has }: { s?: TxStatus; has: boolean }) {
+function TranscriptStatusBanner({ s, has, diagnostic }: { s?: TxStatus; has: boolean; diagnostic?: TranscriptDiagnostic }) {
+  const { lang } = useMplanipretLang();
   if (!s) return null;
   const src = (s.source || "").toLowerCase();
   const label = src.includes("netsapiens")
@@ -880,7 +883,7 @@ function TranscriptStatusBanner({ s, has }: { s?: TxStatus; has: boolean }) {
     : src.includes("whisper") || src.includes("stt") || src.includes("audio")
       ? "audio_stt_fallback"
       : has ? (s.source || "source inconnue") : "en attente";
-  const isPending = !has || s.pending || label === "en attente";
+  const isPending = !has && (diagnostic?.processing ?? !!s.pending);
   const fmt = (v?: string | null) => (v ? new Date(v).toLocaleString("fr-CA") : null);
   const history = [
     fmt(s.fetchedAt) ? `Transcrit le ${fmt(s.fetchedAt)}` : null,
@@ -899,7 +902,7 @@ function TranscriptStatusBanner({ s, has }: { s?: TxStatus; has: boolean }) {
             color: isPending ? "var(--pp-warning, #F5A623)" : "var(--pp-brand-accent)",
           }}
         >
-          {isPending ? "⏳ en attente" : `✅ ${label}`}
+          {has ? `✅ ${label}` : `${isPending ? "⏳" : "⚠️"} ${transcriptDiagnosticLabel(diagnostic?.code ?? "unknown", lang)}`}
         </span>
         <span style={{ color: "var(--pp-text-secondary)" }}>{tr("Source de transcription", "Transcription source")}</span>
       </div>
@@ -913,7 +916,7 @@ function TranscriptStatusBanner({ s, has }: { s?: TxStatus; has: boolean }) {
 }
 function TranscriptView({
   segments, transcript, loading, preparing = false, attempt = 0, onFetch, onAnalyze, aiLoading, analyzed, t, filenameHint, status,
-  unavailableReason, unavailableHint,
+  diagnostic,
 }: {
   segments: Seg[] | null;
   transcript: string | null;
@@ -926,8 +929,7 @@ function TranscriptView({
   analyzed: boolean;
   t: (k: string) => string;
   filenameHint?: string;
-  unavailableReason?: string | null;
-  unavailableHint?: string | null;
+  diagnostic: TranscriptDiagnostic;
   status?: TxStatus;
 }) {
   const has = (segments && segments.length > 0) || !!(transcript && transcript.trim());
@@ -943,55 +945,18 @@ function TranscriptView({
 
 
 
-  if ((loading || preparing) && !has) {
-    return (
-      <div className="space-y-3">
-      <TranscriptStatusBanner s={status} has={false} />
-      <div className="pp-card p-4 space-y-3">
-
-        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--pp-text-primary)" }}>
-          <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--pp-brand-accent)" }} />
-          {preparing
-            ? `⏳ Transcription en cours de préparation${attempt > 0 ? ` (tentative ${attempt + 1})` : ""}…`
-            : "Chargement de la transcription…"}
-        </div>
-        {preparing && (
-          <div className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
-            NetSapiens génère la transcription. Nouvelle vérification automatique dans quelques secondes.
-          </div>
-        )}
-        <div className="space-y-2 pt-1">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className={`flex ${i % 2 === 0 ? "justify-start" : "justify-end"}`}>
-              <div className="h-10 rounded-2xl animate-pulse" style={{ width: "60%", background: "var(--pp-bg-surface)" }} />
-            </div>
-          ))}
-        </div>
-      </div>
-      </div>
-    );
-  }
-
   if (!has) {
     return (
       <div className="space-y-3">
-      <TranscriptStatusBanner s={status} has={false} />
-      <div className="pp-card p-4 space-y-3">
-
-        <div className="text-xs" style={{ color: "var(--pp-warning, #F5A623)" }}>
-          ⚠️ {unavailableReason || t("calls.transcriptUnavailable") || "Transcription non disponible."}
-        </div>
-        <div className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
-          {unavailableHint || "La transcription apparaît quelques minutes après la fin de l'appel."}
-        </div>
-        <button onClick={() => onFetch()} className="w-full py-2 rounded-lg text-xs font-semibold"
-          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}>
-          <RefreshCw className="w-3.5 h-3.5 inline mr-1" /> {tr("Réessayer", "Retry")}
-        </button>
-      </div>
+        <TranscriptStatusBanner s={status} has={false} diagnostic={diagnostic} />
+        <TranscriptDiagnosticNotice
+          diagnostic={diagnostic}
+          lang={tr("fr", "en")}
+          busy={loading || preparing}
+          onRetry={() => void onFetch()}
+        />
       </div>
     );
-
   }
 
   const segs = normalizeTranscriptTurns(segments, transcript);
@@ -1191,7 +1156,7 @@ function CallDetailSheet({
   const [txLoading, setTxLoading] = useState(false);
   const [txPreparing, setTxPreparing] = useState(false);
   const [txAttempt, setTxAttempt] = useState(0);
-  const [txReason, setTxReason] = useState<{ message?: string | null; hint?: string | null } | null>(null);
+  const [txReason, setTxReason] = useState<TranscriptDiagnostic | null>(null);
   const txRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (txRetryTimerRef.current) clearTimeout(txRetryTimerRef.current); }, []);
   useEffect(() => {
@@ -1302,32 +1267,28 @@ function CallDetailSheet({
   // Retry backoff (ms) for transient transcription failures (still being generated NS-side)
   const TX_BACKOFF = [4000, 10000, 25000, 60000];
 
-  const isTransientTxError = (res: any): boolean => {
-    if (!res) return true;
-    const attempts: Array<{ status: number }> = Array.isArray(res.attempts) ? res.attempts : [];
-    // Retry when NS returned 404/202/425 or nothing usable yet — the CDR exists but transcript not ready.
-    if (attempts.length && attempts.every((a) => [0, 202, 404, 425, 408, 500, 502, 503, 504].includes(a.status))) return true;
-    // Explicit hints from the edge function
-    const hay = `${res.error ?? ""} ${res.hint ?? ""}`.toLowerCase();
-    if (hay.includes("en cours") || hay.includes("prépar") || hay.includes("processing")) return true;
-    return false;
-  };
-
   const runTranscriptOnce = async () => {
-    const { data, error } = await supabase.functions.invoke("ns-get-transcription", {
-      body: { call_db_id: call.id, ns_callid: call.ns_callid ?? call.ns_call_id },
-    });
-    const res = (data ?? {}) as any;
-    const ok = !error && res.success !== false && (res.transcript || (Array.isArray(res.segments) && res.segments.length));
-    return { ok, res, error };
+    try {
+      const { data, error } = await supabase.functions.invoke("ns-get-transcription", {
+        body: { call_db_id: call.id, ns_callid: call.ns_callid ?? call.ns_call_id },
+      });
+      // Non-2xx responses may carry a usable, structured privacy/diagnostic code.
+      const detail = error?.context instanceof Response
+        ? await error.context.clone().json().catch(() => ({})) : {};
+      const res = (data ?? detail ?? {}) as any;
+      const ok = !error && res.success !== false && (res.transcript || (Array.isArray(res.segments) && res.segments.length));
+      return { ok, res };
+    } catch {
+      return { ok: false, res: {} };
+    }
   };
 
   const fetchTranscript = async (attempt = 0): Promise<void> => {
     if (txRetryTimerRef.current) { clearTimeout(txRetryTimerRef.current); txRetryTimerRef.current = null; }
     setTxAttempt(attempt);
-    if (attempt === 0) setTxLoading(true); else setTxPreparing(true);
+    if (attempt === 0) { setTxLoading(true); setTxPreparing(false); setTxReason({ code: "processing", processing: true, retryable: true }); } else setTxPreparing(true);
 
-    const { ok, res, error } = await runTranscriptOnce();
+    const { ok, res } = await runTranscriptOnce();
 
     if (ok) {
       setTxLoading(false); setTxPreparing(false); setTxAttempt(0); setTxReason(null);
@@ -1344,10 +1305,9 @@ function CallDetailSheet({
       return;
     }
 
-    if (Array.isArray(res.attempts)) console.warn("ns-get-transcription attempts:", res.attempts);
-
-    const transient = isTransientTxError(res);
-    if (transient && attempt < TX_BACKOFF.length) {
+    const diagnostic = resolveTranscriptDiagnostic(res, call);
+    setTxReason(diagnostic);
+    if (diagnostic.processing && attempt < TX_BACKOFF.length) {
       setTxLoading(false);
       setTxPreparing(true);
       const delay = TX_BACKOFF[attempt];
@@ -1355,12 +1315,8 @@ function CallDetailSheet({
       return;
     }
 
-    // Give up — show real error
     setTxLoading(false); setTxPreparing(false); setTxAttempt(0);
-    const msg = res.message ?? res.error ?? error?.message ?? t("calls.transcriptUnavailable");
-    const hint = res.hint ?? res.action_required ?? "";
-    setTxReason({ message: msg, hint });
-    toast.error(hint ? `${msg} — ${hint}` : msg);
+    if (!diagnostic.processing) toast.error(transcriptDiagnosticLabel(diagnostic.code, lang));
   };
 
   const analyzeAI = async () => {
@@ -1563,8 +1519,7 @@ function CallDetailSheet({
               loading={txLoading}
               preparing={txPreparing}
               attempt={txAttempt}
-              unavailableReason={txReason?.message ?? null}
-              unavailableHint={txReason?.hint ?? null}
+              diagnostic={txReason ?? resolveTranscriptDiagnostic({}, call)}
               onFetch={() => fetchTranscript(0)}
               onAnalyze={analyzeAI}
               aiLoading={aiLoading}

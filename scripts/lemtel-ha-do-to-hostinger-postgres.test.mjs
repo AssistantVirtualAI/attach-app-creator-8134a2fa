@@ -75,6 +75,8 @@ test('DO recovery rotates an orphaned secret only after it proves no replication
   assert.match(recovery, /replication_role_session_present/u);
   assert.match(recovery, /replication_slot_active_or_invalid/u);
   assert.match(recovery, /ALTER ROLE %s WITH LOGIN REPLICATION PASSWORD/u);
+  assert.match(recovery, /chown postgres:postgres \/tmp\/lemtel-ha-replication-recovery\.sql/u);
+  assert.match(recovery, /chmod 0600 \/tmp\/lemtel-ha-replication-recovery\.sql/u);
   assert.match(recovery, /age -r "\$age_recipient"/u);
   assert.match(recovery, /orphaned_role_confirmed=true/u);
   assert.match(recovery, /replication_secret_rotated=true/u);

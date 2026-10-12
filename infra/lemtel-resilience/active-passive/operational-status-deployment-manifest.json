@@ -19,7 +19,7 @@
     },
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh",
-      "sha256": "effedd2214faf9a0dee08aee13f915303c69110bc544d0cd768c3cf1364f80a8"
+      "sha256": "6f8031e4ca6df3e6178efd5d6a49ada71c2d20e08931427fbd77c400768ee610"
     },
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-timer-enable.sh",

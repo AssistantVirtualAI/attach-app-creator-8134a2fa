@@ -1,19 +1,27 @@
 # Routage canonique Lemtel via Cloudflare
 
-Le nom public canonique approuvé pour Lemtel est **`lemtel.assistantvirtualai.com`**. La zone Cloudflare `assistantvirtualai.com` est active et une recherche lecture seule a confirmé qu’aucun enregistrement ne porte actuellement ce nom. Cette décision ne crée pas de DNS et ne déplace aucun trafic.
+Le nom public canonique Lemtel est **`lemtel.assistantvirtualai.com`** dans la zone Cloudflare `assistantvirtualai.com`.
 
-## Prévol primaire effectué
+## État réel — drill contrôlé exécuté
 
-Hostinger exécute Caddy et publie déjà les ports HTTPS nécessaires. Le proxy est configuré par variables d’environnement et l’URL primaire actuelle n’est pas encore le nom canonique. Ces faits établissent que le routage doit être appliqué par une procédure transactionnelle : sauvegarde de la configuration, ajout du nom à la configuration proxy, validation de Caddy, test HTTPS, puis seulement une configuration durable des URL Lemtel. `lemtel-ha-primary-canonical-caddy-prepare.sh` prépare et valide un candidat root-only qui conserve le nom existant ; il ne modifie pas le Caddyfile monté, ne recharge pas Caddy et ne crée aucun DNS. `lemtel-ha-primary-canonical-caddy-apply.sh` applique uniquement ce candidat après une confirmation explicite : verrou exclusif, sauvegarde, comparaison avec le Caddyfile actif, validation, hot reload, puis rollback automatique sur échec. Aucun changement de trafic n’a encore été fait dans cette phase.
+Le 11 octobre 2026, la procédure contrôlée et explicitement autorisée a été menée dans cet ordre :
 
-## Séquence contrôlée
+1. le writer Hostinger a été fencé avec une preuve liée à l’incident de drill ;
+2. PostgreSQL DigitalOcean a été promu comme **writer unique** ;
+3. le runtime Supabase et le Storage répliqué ont été activés sur DigitalOcean, tandis que PostgreSQL est resté non publié ;
+4. l’enregistrement A DNS-only du nom canonique a été déplacé manuellement vers l’origine DigitalOcean, avec un TTL de 120 secondes ;
+5. les sondes HTTPS strictes, Auth, Storage, REST et `lemtel-session-bootstrap` ont confirmé le chemin public sur DigitalOcean.
 
-1. Préparer un runtime Supabase/Edge chiffré mais inactif sur DigitalOcean. Il ne doit pas ouvrir de listener public ou démarrer Storage avant une promotion approuvée.
-2. Préparer Hostinger pour accepter le nom canonique tout en conservant le nom existant durant la migration. Vérifier Caddy et Auth via le nouveau nom.
-3. Créer l’enregistrement Cloudflare du nom canonique vers le primaire, avec le type de record déterminé depuis l’origine primaire et sans exposer d’adresse dans les scripts ou le dépôt. Confirmer TLS et Auth.
-4. Mettre à jour les builds Lemtel vers le nom canonique uniquement après validation du chemin primaire.
-5. Appliquer fencing, promotion manuelle et drill documenté avant de rendre un chemin DigitalOcean routable. Aucun Load Balancer ou basculement DNS automatique ne sera activé avant ces preuves.
+> Le routage actuel est un **cutover manuel de drill**. Ce n’est pas un mécanisme de bascule automatique ni un Cloudflare Load Balancer.
 
-## Limites
+## Garanties conservées
 
-Cloudflare DNS et un health check ne constituent pas un mécanisme de fencing. Une promotion sans isoler Hostinger pourrait produire deux writers PostgreSQL. Le routage reste donc désactivé sur DigitalOcean jusqu’au test de fencing et au drill approuvés. Aucune configuration FusionPBX, SIP, WSS, TURN ou téléphonie ne fait partie de ce document.
+- Le record est DNS-only : Cloudflare n’est pas utilisé comme proxy applicatif dans ce drill.
+- PostgreSQL DigitalOcean n’a aucun port hôte ou listener public.
+- Aucun FusionPBX, SIP, WSS, TURN, provisionnement d’extension ou téléphonie réelle n’a été changé.
+- Hostinger est le **former primary fenced**. Il ne doit jamais être relancé comme writer dans son état actuel.
+- Aucun failback, retour DNS ou reverse-replication vers Hostinger n’a été effectué.
+
+## Retour vers Hostinger
+
+Le failback est une opération distincte : il faut d’abord reconstruire/resynchroniser Hostinger comme standby à partir du writer DO, contrôler la réplication PostgreSQL et Storage dans le bon sens, puis approuver une nouvelle fenêtre avec fencing, cutover et validation. Un simple redémarrage Hostinger est interdit, car il pourrait créer deux writers.

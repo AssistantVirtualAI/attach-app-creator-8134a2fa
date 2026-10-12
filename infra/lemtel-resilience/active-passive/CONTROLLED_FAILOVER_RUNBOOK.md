@@ -1,43 +1,42 @@
 # Lemtel — runbook de failover contrôlé
 
-> **Statut : préparation uniquement.** Ce document ne constitue ni une autorisation de promotion ni une procédure de bascule automatique. Hostinger reste le writer unique tant qu’une approbation explicite de fenêtre de maintenance n’a pas été donnée.
+> **Statut : drill contrôlé exécuté et validé le 11 octobre 2026.** DigitalOcean est le writer et runtime public temporaire. Hostinger est le former primary fencé et ne doit pas être redémarré comme writer.
 
-## Objectif et limites
+## Résultat du drill
 
-L’architecture est active–passive, avec PostgreSQL en streaming physique asynchrone et Storage répliqué dans le sens Hostinger → DigitalOcean. Une panne du primaire peut donc impliquer une perte de données limitée à ce qui n’a pas encore atteint le standby. Aucun RPO/RTO chiffré ne doit être promis avant un drill contrôlé et mesuré.
+Le runbook a été exécuté dans l’ordre prévu avec le même identifiant d’incident :
 
-Le présent runbook s’applique seulement au backend Lemtel. Il n’autorise aucun changement Planiprêt, FusionPBX/SIP/WSS/TURN, DNS public, listener public PostgreSQL ou Storage, ni redirection client.
+1. Hostinger a été fencé : le conteneur PostgreSQL writer a été arrêté, son redémarrage automatique bloqué et l’absence de listener PostgreSQL confirmée.
+2. DigitalOcean a été promu comme writer PostgreSQL unique ; son état confirme `pg_is_in_recovery=false`.
+3. Le runtime Supabase configuré et le Storage indépendant ont été démarrés sur DigitalOcean. PostgreSQL est resté privé, sans port hôte ni listener public.
+4. Le record DNS-only Cloudflare de `lemtel.assistantvirtualai.com` a été déplacé manuellement vers DigitalOcean, TTL 120 secondes.
+5. HTTPS strict, Auth, Storage, REST et `lemtel-session-bootstrap` ont été validés sur la route canonique. Une vérification sans écriture métier a confirmé le mode PostgreSQL read-write promu.
 
-## Préconditions obligatoires avant une fenêtre de bascule
+## Garanties vérifiées
 
-1. Une alerte de santé persistante a été confirmée par un opérateur humain, sans se fonder sur un seul signal réseau.
-2. Le statut primaire, le dernier lag PostgreSQL connu et l’âge du dernier sync Storage ont été enregistrés dans le journal d’incident.
-3. Le prévol root-only du standby indique `standby_in_recovery=true`, `wal_receiver_status=streaming` au dernier état connu, et aucun port PostgreSQL hôte/public.
-4. L’équipe a explicitement confirmé la décision de basculer, l’impact attendu et le propriétaire de la fenêtre de maintenance.
-5. Le plan de **fencing** du primaire est prêt : `lemtel-ha-primary-fence.sh` rend `supabase-db` non-redémarrable puis l’arrête, enregistre son état root-only et vérifie l’absence de listener PostgreSQL. Il exige ses deux jetons explicites et doit être exécuté avant toute promotion. L’absence de réponse réseau ne suffit pas à prouver qu’il ne peut plus écrire.
-6. L’autorité DNS Cloudflare, le nom primaire canonique et la procédure de routage sont disponibles ; une approbation spécifique de changement DNS reste obligatoire pour la fenêtre de bascule.
+- Un seul writer PostgreSQL est actif : **DigitalOcean**.
+- Hostinger est fencé ; son retour comme writer est interdit sans reconstruction/failback contrôlé.
+- Le runtime public DO est actif, tandis que PostgreSQL ne possède aucun listener public.
+- Le DNS est sur DO uniquement pour ce drill ; il ne s’agit pas d’un basculement automatique.
+- Aucun FusionPBX, SIP, WSS, TURN, enregistrement d’appel ou configuration téléphonie n’a été modifié.
+- Aucun test d’écriture métier n’a été réalisé pendant le drill.
 
-## Séquence contrôlée — non exécutée aujourd’hui
+## Failback requis avant tout redémarrage Hostinger
 
-1. **Déclarer l’incident** et geler tout déploiement ou modification manuelle côté Hostinger et DO.
-2. **Fencer Hostinger** avec `lemtel-ha-primary-fence.sh`, puis enregistrer la preuve de ce fencing. Ne pas supposer qu’un timeout réseau constitue un fencing. Si et seulement si la bascule est abandonnée avant toute promotion et tout DNS cutover, restaurer Hostinger avec `lemtel-ha-primary-fence-abort-before-promotion.sh`; après une promotion, ne jamais redémarrer le primaire comme writer.
-3. **Capturer l’état DO** à l’aide de `lemtel-ha-standby-failover-preflight.sh`. Ce script est en lecture seule et n’exécute jamais `pg_promote`.
-4. **Promouvoir DO** avec `lemtel-ha-standby-postgres-promote.sh`, en passant le même identifiant d’incident et l’attestation de fencing exportée depuis Hostinger. Le script exige que le primaire privé ne soit plus joignable sur PostgreSQL, que le standby soit toujours en recovery et qu’aucun port PostgreSQL ne soit publié. Après le fencing, la disparition du WAL receiver est attendue : le script vérifie alors `standby.signal` et la présence de positions WAL reçue/rejouée au lieu d’exiger un flux impossible vers un primaire arrêté. La promotion est une action séparée, versionnée et observée ; elle n’est pas automatisée par ce package et ne démarre pas le runtime, Storage ou DNS.
-5. **Valider le writer promu** : intégrité, lecture/écriture contrôlée, absence de reprise de Hostinger comme writer, et protection contre un second writer.
-6. **Activer le runtime DO** avec `lemtel-ha-standby-runtime-activate-after-promotion.sh`. Il réutilise les données Storage déjà synchronisées, démarre le runtime configuré sur DO et impose l’absence de port PostgreSQL public. Il ne modifie pas DNS et ne démarre ni FusionPBX, ni SIP, ni WSS, ni TURN.
-7. **Routage DNS contrôlé** seulement après les contrôles précédents. Le changement et son TTL effectif doivent être consignés.
+Le retour vers Hostinger est une **nouvelle** opération approuvée. Il doit suivre ce déroulé :
 
-## Failback
+1. geler les changements applicatifs et déclarer une fenêtre de failback ;
+2. reconstruire ou resynchroniser Hostinger comme standby à partir du writer DO ;
+3. reprendre la réplication PostgreSQL et Storage dans le bon sens, puis prouver recovery, intégrité et lag ;
+4. prévoler le runtime Hostinger sans le transformer en second writer ;
+5. fencer DO, promouvoir Hostinger et basculer Cloudflare manuellement après validation ;
+6. vérifier les services publics, puis consigner le résultat et les mesures RPO/RTO.
 
-Le retour vers Hostinger est une nouvelle opération contrôlée, jamais un simple redémarrage. Il exige la collecte des modifications produites pendant la période DO, la reconstruction ou resynchronisation de l’ancien primaire comme standby, la validation de la réplication, puis une nouvelle fenêtre approuvée pour revenir au rôle primaire.
+> Ne jamais relancer le conteneur PostgreSQL Hostinger, le timer Storage Hostinger ou le DNS vers Hostinger comme raccourci de failback. Cela pourrait créer deux writers et perdre les modifications reçues sur DigitalOcean.
 
-## Evidence à conserver
+## Travail restant avant test utilisateur complet
 
-| Élément | À enregistrer |
-|---|---|
-| Santé primaire | Derniers états Health, Auth/HTTPS, réplication et Storage |
-| Fencing | Méthode, horodatage, opérateur, preuve que Hostinger ne peut plus écrire |
-| Standby | État recovery/WAL receiver avant promotion, absence de port hôte/public |
-| Données | Lag PostgreSQL mesuré, âge Storage, éventuel écart observé |
-| Routage | TTL, changement DNS, validation d’accessibilité après bascule |
-| Reprise | Décision de failback et résultats de resynchronisation |
+- Tests authentifiés email/mot de passe dans les trois clients : iOS TestFlight 1.1 (5), Android et Desktop v2.5.20.
+- Parcours de mot de passe temporaire / personnalisé et de réinitialisation, sans révéler de secret.
+- Contraste Dark/Daylight, bilinguisme, Home, Contacts, Chats, navigation et préférences/notifications visuelles.
+- Paramètres téléphonie et tests d’appel **seulement** après réception et approbation des détails Kenny/Phil : extension, SIP/WSS, TURN, scénarios, sécurité et procédure de test.

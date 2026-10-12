@@ -1,0 +1,47 @@
+{
+  "policy_version": "lemtel_synchronous_automatic_failover_target_v1",
+  "scope": "prepared_only_no_remote_activation",
+  "selected_strategy": {
+    "writer": "digitalocean",
+    "standby": "hostinger_rebuild_as_private_hot_standby",
+    "database_commit_policy": "synchronous_replication_required",
+    "storage_consistency_policy": "write_acknowledged_only_after_dual_durable_copies",
+    "artifact_policy": "immutable_digest_staged_on_writer_and_standby",
+    "traffic_routing": "cloudflare_load_balancer_priority_failover"
+  },
+  "arbitration_and_fencing": {
+    "independent_arbiter_required": true,
+    "digitalocean_provider_fence_required": true,
+    "hostinger_provider_fence_required": true,
+    "promotion_requires_verified_old_writer_fenced": true,
+    "promotion_on_ambiguous_health": false
+  },
+  "required_preflight": {
+    "provider_api_credentials_verified": false,
+    "independent_arbiter_deployed": false,
+    "hostinger_private_standby_rebuilt": false,
+    "postgres_synchronous_streaming_verified": false,
+    "storage_dual_durable_write_verified": false,
+    "runtime_digest_parity_verified": false,
+    "cloudflare_load_balancer_configured": false,
+    "digitalocean_fence_drill_verified": false,
+    "hostinger_promotion_drill_verified": false,
+    "reverse_failback_drill_verified": false,
+    "mobile_retry_test_verified": false
+  },
+  "activation": {
+    "user_selected_strategy": true,
+    "automatic_fencing_enabled": false,
+    "automatic_promotion_enabled": false,
+    "automatic_traffic_failover_enabled": false,
+    "automatic_failback_enabled": false
+  },
+  "boundaries": {
+    "single_writer_only": true,
+    "public_postgres_listener": false,
+    "fusionpbx_or_sip_change": false,
+    "planipret_data": false,
+    "unfenced_promotion": false,
+    "no_interruption_claim": false
+  }
+}

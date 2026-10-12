@@ -62,6 +62,12 @@ The activation cleanup also removes the stopped, Compose-labelled application co
 
 ## Current drill state and remaining work
 
+## Cible de failover automatique synchrone — préparée, non activée
+
+Le propriétaire a maintenant sélectionné la cible **DO writer → Hostinger hot standby privé**, avec réplication PostgreSQL synchrone, arbitre indépendant, fencing fournisseur et pools prioritaires Cloudflare Load Balancing. Cette sélection est enregistrée dans [automatic-failover-target-contract.json](automatic-failover-target-contract.json) et expliquée dans [SYNCHRONOUS_AUTOMATIC_FAILOVER_TARGET.md](SYNCHRONOUS_AUTOMATIC_FAILOVER_TARGET.md).
+
+Elle reste volontairement inactive : Hostinger doit d’abord être reconstruit depuis DO en standby privé, la durabilité Storage doit être renforcée au-delà de la copie périodique, les accès de fencing et l’arbitre indépendant doivent être validés, puis les drills DO → Hostinger et retour doivent réussir. Aucun service ne peut encore arrêter DO, promouvoir Hostinger ou modifier automatiquement le routage Cloudflare. La parité de version est traitée indépendamment dans [IMMUTABLE_ARTIFACT_PARITY.md](IMMUTABLE_ARTIFACT_PARITY.md) ; elle ne remplace pas la réplication des données.
+
 ## Operational status portal (prepared, not deployed)
 
 The Lemtel portal contains a platform-administrator-only **Operations** page. It is designed to consume a redacted snapshot written locally by the promoted writer: locally verified health enums, an observation timestamp, writer state, and application service state. A remote standby or canonical-route state is displayed only after its own approved redacted probe; until then it is explicitly **unknown**, never inferred. The browser cannot read either server directly and the response deliberately excludes addresses, hostnames, credentials, users, recordings, raw errors and telephony data.

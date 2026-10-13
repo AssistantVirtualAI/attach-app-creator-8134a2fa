@@ -3,8 +3,21 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const env = (import.meta as { env?: Record<string, unknown> }).env ?? {};
-const configuredUrl = String(env.VITE_SUPABASE_URL ?? "").replace(/\/+$/, "");
-const configuredKey = String(env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "");
+
+/**
+ * The Lemtel portal can be built beside Planiprêt, so it must never inherit the
+ * generic VITE_SUPABASE_* values from that application. Only namespaced public
+ * Lemtel variables can configure the Lemtel server.
+ */
+export function resolveLemtelPortalBackend(environment: Record<string, unknown>) {
+  const url = String(environment.VITE_LEMTEL_API_URL ?? "").replace(/\/+$/, "");
+  const publishableKey = String(
+    environment.VITE_LEMTEL_PUBLISHABLE_KEY ?? environment.VITE_LEMTEL_ANON_KEY ?? "",
+  );
+  return { url, publishableKey };
+}
+
+const { url: configuredUrl, publishableKey: configuredKey } = resolveLemtelPortalBackend(env);
 
 export const LEMTEL_API_URL = configuredUrl;
 export const LEMTEL_PUBLISHABLE_KEY = configuredKey;

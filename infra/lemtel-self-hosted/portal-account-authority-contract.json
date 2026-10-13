@@ -1,0 +1,34 @@
+{
+  "contract_version": "lemtel_portal_account_authority_v1",
+  "scope": "offline_schema_function_and_client_source_only",
+  "deployment": {
+    "migration_apply_authorized": false,
+    "edge_deployment_authorized": false,
+    "client_cutover_authorized": false,
+    "public_auth_signup_disable_verified": false
+  },
+  "authority": {
+    "enrollment": "portal_admin_server_side_only",
+    "client_access": "active_lemtel_email_only_auth_and_active_membership_and_active_organization",
+    "organization_selector": "server_session_bootstrap_only",
+    "password": "supabase_auth_hash_only_no_plaintext_replication",
+    "password_rotation": "server_sets_first_password_required_and_clients_reconcile",
+    "reconciliation": ["sign_in", "token_refresh", "mobile_foreground", "desktop_focus", "desktop_visibility_change"]
+  },
+  "data_boundaries": {
+    "chat": "organization_scoped_server_authorized",
+    "call_history": "own_extension_server_authorized",
+    "recordings": "own_extension_signed_access_only",
+    "voicemail": "own_extension_server_authorized"
+  },
+  "forbidden": [
+    "Planipret_data_or_auth",
+    "Lovable_current_project_change",
+    "public_client_signup",
+    "plaintext_password_storage",
+    "password_return_in_api_response",
+    "FusionPBX_mutation",
+    "SIP_password_in_client_login",
+    "automatic_production_delivery"
+  ]
+}

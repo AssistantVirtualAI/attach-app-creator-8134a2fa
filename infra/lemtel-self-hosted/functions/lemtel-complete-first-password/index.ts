@@ -37,6 +37,7 @@ export async function handler(req: Request): Promise<Response> {
   const nextAppMetadata = { ...(user.app_metadata ?? {}), lemtel_onboarding_required: false, lemtel_email_only_signin: true, lemtel_first_password_changed_at: new Date().toISOString() };
   const { error: updateError } = await admin.auth.admin.updateUserById(user.id, { password: body.newPassword, app_metadata: nextAppMetadata });
   if (updateError) return fail("password_update_failed", 503);
+  await admin.rpc("lemtel_bump_account_authority_revision", { p_organization_id: activeMembership.organization_id });
   await admin.from("lemtel_onboarding_audit").insert({ organization_id: activeMembership.organization_id, actor_id: user.id, subject_user_id: user.id, action: "first_password_changed", metadata: {} });
   return respond({ ok: true, password_change_required: false });
 }

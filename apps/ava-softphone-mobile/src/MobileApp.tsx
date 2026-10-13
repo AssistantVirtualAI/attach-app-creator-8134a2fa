@@ -1,5 +1,5 @@
 import { BACKEND_URL } from './lib/backendOrigin';
-import { Component, useEffect, useMemo, useRef, useState, Suspense, lazy, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy, type ReactNode } from 'react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
 import { requestPermissionsAfterLogin, navLog, setPermissionLogContext } from './lib/requestPermissionsAfterLogin';
@@ -37,6 +37,7 @@ import { useDeviceNotifications } from './hooks/useDeviceNotifications';
 import { initBackgroundSync } from './lib/backgroundSync';
 import { useNotificationCounts } from './hooks/useNotificationCounts';
 import { useStoredCreds, Creds, ensureStoredOrganizationId, hydrateSoftphoneCredentials, restoreSupabaseSession, getCredentialEpoch, isCurrentCredentialEpoch } from './lib/creds';
+import { reconcileLemtelMobileAuthority } from './lib/lemtelAuthorityReconciliation';
 import { gradients, colors } from './lib/theme';
 import { ThemeProvider } from './lib/ThemeContext';
 import { MobileI18nProvider } from './lib/i18n';
@@ -179,6 +180,33 @@ function AuthenticatedShell({
   creds, setCreds, tab, setTab, callsSub, callsFilter, onSignOut, onAccessBlocked, preferClickToCall, onTogglePreferC2C,
 }: { creds: Creds; setCreds: (c: Creds) => void; tab: Tab; setTab: (t: Tab) => void; callsSub?: 'recents' | 'recordings' | 'voicemail' | 'dial'; callsFilter?: 'all' | 'missed'; onSignOut: () => void; onAccessBlocked: () => void; preferClickToCall: boolean; onTogglePreferC2C: () => void }) {
 
+
+  const reconciliationInFlight = useRef(false);
+  const reconcileAccountAuthority = useCallback(async () => {
+    if (reconciliationInFlight.current) return;
+    reconciliationInFlight.current = true;
+    const epoch = getCredentialEpoch();
+    try {
+      const result = await reconcileLemtelMobileAuthority(creds);
+      if (!isCurrentCredentialEpoch(epoch)) return;
+      if (result.kind === 'denied') {
+        onAccessBlocked();
+        return;
+      }
+      if (result.kind === 'accepted' && (
+        result.credentials.organizationId !== creds.organizationId ||
+        result.credentials.organizationName !== creds.organizationName ||
+        result.credentials.displayName !== creds.displayName
+      )) {
+        setCreds(result.credentials);
+      }
+    } finally {
+      reconciliationInFlight.current = false;
+    }
+  }, [creds, onAccessBlocked, setCreds]);
+
+  // Every established Mobile session revalidates against the same portal authority.
+  useEffect(() => { void reconcileAccountAuthority(); }, [creds.userId, creds.accessToken]);
 
   // permissions handled natively after login
   const [profileOpen, setProfileOpen] = useState(false);
@@ -521,6 +549,7 @@ function AuthenticatedShell({
     // and only while the manifest allows telephony.
     onAppStateChange((active) => {
       if (!active) return;
+      void reconcileAccountAuthority();
       const cs = spRef.current?.snap?.callState;
       const busy = cs === 'active' || cs === 'held' || cs === 'ringing-in' || cs === 'ringing-out';
       if (!busy) void clientConfigRef.current.refresh();
@@ -531,7 +560,7 @@ function AuthenticatedShell({
 
     return () => { cancelled = true; unsub(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [creds.extension]);
+  }, [creds.extension, reconcileAccountAuthority]);
 
 
   const inCallNow =

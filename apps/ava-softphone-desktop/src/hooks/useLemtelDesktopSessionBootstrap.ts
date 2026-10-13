@@ -87,5 +87,20 @@ export function useLemtelDesktopSessionBootstrap(sessionToken: string | null | u
     void refresh();
   }, [sessionToken, refresh]);
 
+  // The same server bootstrap is re-read when Desktop returns to the foreground.
+  // It makes a portal suspension or password rotation visible without trusting a
+  // previously cached organization or role.
+  useEffect(() => {
+    if (!sessionToken || typeof window === 'undefined') return;
+    const onFocus = () => { void refresh(); };
+    const onVisibility = () => { if (document.visibilityState === 'visible') void refresh(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [sessionToken, refresh]);
+
   return { status, organizationId, telephonyEnabled: false, refresh };
 }

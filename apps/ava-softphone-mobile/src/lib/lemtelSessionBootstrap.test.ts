@@ -5,6 +5,7 @@ const userId = '11111111-2222-3333-4444-555555555555';
 const okBody = {
   user: { id: userId, email: 'member@example.test', displayName: 'Member Test' },
   organizations: [{ organizationId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', role: 'member', organization: { display_name: 'Lemtel Test' } }],
+  authority: { policy: 'portal_only_active_membership', revision: 7 },
   telephony: { status: 'not_provisioned' },
 };
 
@@ -22,7 +23,13 @@ describe('bootstrapLemtelMobileSession', () => {
       displayName: 'Member Test',
       organizationId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
       organizationName: 'Lemtel Test',
+      authorityRevision: 7,
     });
+  });
+
+  it('accepts a pre-revision bootstrap during a controlled server rollout', async () => {
+    const legacy = async () => new Response(JSON.stringify({ ...okBody, authority: undefined }), { status: 200 });
+    await expect(bootstrapLemtelMobileSession('access-token', userId, legacy)).resolves.toMatchObject({ authorityRevision: 0 });
   });
 
   it('fails closed for a server denial or a malformed organization response', async () => {

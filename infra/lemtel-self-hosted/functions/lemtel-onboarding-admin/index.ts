@@ -189,6 +189,11 @@ async function audit(admin: any, organizationId: string, actor: string, action: 
   await admin.from("lemtel_onboarding_audit").insert({ organization_id: organizationId, actor_id: actor, subject_user_id: subjectUserId, action, metadata });
 }
 
+/** Refreshes the server-owned account revision after a password/access change. */
+async function bumpAccountAuthorityRevision(admin: any, organizationId: string) {
+  await admin.rpc("lemtel_bump_account_authority_revision", { p_organization_id: organizationId });
+}
+
 async function createRecipient(admin: any, organizationId: string, recipient: UserInput) {
   const temporaryPassword = randomPassword();
   const { data, error } = await admin.auth.admin.createUser({
@@ -506,6 +511,8 @@ export async function handler(req: Request): Promise<Response> {
   const temporaryPassword = randomPassword();
   const { error: updateError } = await admin.auth.admin.updateUserById(request.recipientUserId, { password: temporaryPassword, app_metadata: { ...(authUser?.app_metadata ?? {}), lemtel_onboarding_required: true, lemtel_email_only_signin: true } });
   if (updateError) return respond({ error: "temporary_password_reset_failed" }, 503);
+  await bumpAccountAuthorityRevision(admin, request.organizationId);
+  await audit(admin, request.organizationId, actor, "temporary_password_rotated", request.recipientUserId, {});
   const recipient: UserInput = { email, displayName: String(authUser?.user_metadata?.full_name || email), role: membership.role as Role, locale: request.locale };
   const delivery = await deliverWelcome(admin, request.organizationId, actor, request.recipientUserId, recipient, temporaryPassword, "welcome_resend");
   return respond({ ok: true, delivered: delivery.delivered, ...(delivery.delivered ? {} : { error: delivery.reason }), email_delivery_required: true });

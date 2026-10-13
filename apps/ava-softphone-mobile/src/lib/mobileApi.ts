@@ -88,11 +88,6 @@ async function call<T>(path: string, init: RequestInit | undefined, mockData: T)
   const isGet = !init || !init.method || init.method.toUpperCase() === 'GET';
   const token = await getFreshToken();
   if (!token) {
-    if (isGet) {
-      // Soft-fail GETs so screens render an empty state instead of blanking.
-      emitAuthRequired();
-      return mockData;
-    }
     const err = new Error('Not authenticated') as Error & { code?: string };
     err.code = 'AUTH_REQUIRED';
     emitAuthRequired();

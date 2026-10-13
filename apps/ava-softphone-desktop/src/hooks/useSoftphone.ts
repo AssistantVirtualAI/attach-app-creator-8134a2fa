@@ -30,7 +30,6 @@ interface FetchedCreds {
 
 async function fetchSoftphoneCredentials(
   accessToken: string,
-  fallbackArgs?: { extension?: string; sipDomain?: string; wssUrl?: string },
 ): Promise<FetchedCreds | null> {
   // Retry transient DB / network errors before giving up.
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -54,24 +53,6 @@ async function fetchSoftphoneCredentials(
         if (data?.retryable) {
           await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
           continue;
-        }
-        // Mobile parity: SIP password == account password. When the backend has
-        // no separate SIP secret (HTTP 424 / NO_SIP_PASSWORD), fall back to the
-        // account password captured at sign-in.
-        if (res.status === 424 || data?.code === 'NO_SIP_PASSWORD') {
-          const local = localStorage.getItem('lemtel.sip_password');
-          if (local) {
-            // 424 body does NOT include sip_domain/wss_url — use fallbackArgs from creds
-            return {
-              extension: data?.extension || fallbackArgs?.extension || '',
-              display_name: data?.display_name || fallbackArgs?.extension || '',
-              sip_domain: data?.sip_domain || fallbackArgs?.sipDomain || 'lemtel.lemtel.tel',
-              wss_url: data?.wss_url || fallbackArgs?.wssUrl || 'wss://voice.ava-telecom.ca:9002',
-              password: local,
-              auth_username: data?.auth_username || fallbackArgs?.extension,
-              password_source: 'local_account_password',
-            } as FetchedCreds;
-          }
         }
         return null;
       }
@@ -101,7 +82,6 @@ export function useSoftphone(args: UseSoftphoneArgs) {
   const [manualStatus, setManualStatus] = useState<ManualStatus>('auto');
   const [retryTick, setRetryTick] = useState(0);
   const [recording, setRecording] = useState(false);
-  const [healedKey, setHealedKey] = useState<string>('');
   const allowNewActions = args.allowNewActions !== false;
   const allowRef = useRef(allowNewActions);
   allowRef.current = allowNewActions;
@@ -110,40 +90,6 @@ export function useSoftphone(args: UseSoftphoneArgs) {
   const manualRecordingAllowed = recordingPolicy === 'user_allowed';
   const manualRecRef = useRef(manualRecordingAllowed);
   manualRecRef.current = manualRecordingAllowed;
-
-  // Auto-heal: if PBX rejects registration (401/403/auth), force local password
-  // into PBX once per (cause) so the saved password becomes the source of truth.
-  useEffect(() => {
-    if (!allowNewActions) return;
-    if (snap.status !== 'error') return;
-    const cause = snap.errorCause || '';
-    if (!/401|403|forbidden|unauth|reject|auth/i.test(cause)) return;
-    const key = `${args.extension}:${cause}`;
-    if (healedKey === key) return;
-    setHealedKey(key);
-    (async () => {
-      try {
-        const { data: sess } = await supabase.auth.getSession();
-        if (!allowRef.current) return;
-        const token = sess.session?.access_token || args.accessToken;
-        if (!token) return;
-        const res = await fetch(`${SB_URL}/functions/v1/softphone-sync-password`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            apikey: SB_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ force_local_to_pbx: true }),
-        });
-        if (!res.ok) return;
-        // Phase 21B.1: access may have been revoked while the request was in flight.
-        if (!allowRef.current) return;
-        // Re-fetch creds and re-init SIP with the now-aligned password.
-        setRetryTick((n) => n + 1);
-      } catch { /* noop */ }
-    })();
-  }, [snap.status, snap.errorCause, args.extension, args.accessToken, healedKey, allowNewActions]);
 
   useEffect(() => {
     const unsub = sipProvider.subscribe(setSnap);
@@ -180,11 +126,7 @@ export function useSoftphone(args: UseSoftphoneArgs) {
           setCredError('No session token. Re-sign-in.');
           return;
         }
-        const fetched = await fetchSoftphoneCredentials(token, {
-          extension: args.extension,
-          sipDomain: args.sipDomain,
-          wssUrl: args.wssUrl,
-        });
+        const fetched = await fetchSoftphoneCredentials(token);
         // Phase 21B.1: re-check after the async credential fetch.
         if (cancelled || !allowRef.current) return;
         if (!fetched || !fetched.password) {

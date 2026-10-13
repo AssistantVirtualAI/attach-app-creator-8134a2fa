@@ -30,6 +30,16 @@ export type Creds = {
   permissions?: { admin: boolean; canManageNumbers?: boolean; canManageAgents?: boolean; canManageUsers?: boolean; canManageRouting?: boolean; canViewDomainReports?: boolean };
 };
 
+/**
+ * Device stores can retain sessions, never reusable calling credentials.  The
+ * account password is never represented in this object; a transient SIP secret
+ * may be returned by an authenticated server endpoint but is deliberately
+ * removed before the object reaches disk.
+ */
+function withoutPersistedSipPassword(value: Creds): Creds {
+  const { sipPassword: _discardedSipPassword, ...safe } = value;
+  return safe;
+}
 
 const KEY = `lemtel.creds.v1${BACKEND_STORAGE_SUFFIX}`;
 let legacyCleared = false;
@@ -105,13 +115,14 @@ export const Store = {
           const { value } = await Preferences.get({ key: KEY });
           if (value) {
             const parsed = JSON.parse(value) as Creds;
-            return !BACKEND_STORAGE_SUFFIX || parsed.backendOrigin === BACKEND_URL ? parsed : null;
+            const safe = withoutPersistedSipPassword(parsed);
+            return !BACKEND_STORAGE_SUFFIX || safe.backendOrigin === BACKEND_URL ? safe : null;
           }
         }
       } catch {}
       const v = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null;
       try {
-        const parsed = v ? JSON.parse(v) as Creds : null;
+        const parsed = v ? withoutPersistedSipPassword(JSON.parse(v) as Creds) : null;
         return parsed && BACKEND_STORAGE_SUFFIX && parsed.backendOrigin !== BACKEND_URL ? null : parsed;
       } catch { return null; }
     });
@@ -119,7 +130,7 @@ export const Store = {
   async set(c: Creds, expectedEpoch = credentialEpoch): Promise<void> {
     return ordered('storage', async () => {
       if (expectedEpoch !== credentialEpoch) return;
-      const v = JSON.stringify({ ...c, backendOrigin: BACKEND_URL });
+      const v = JSON.stringify({ ...withoutPersistedSipPassword(c), backendOrigin: BACKEND_URL });
       try {
         if ((Preferences as any)?.set) {
           await Preferences.set({ key: KEY, value: v });

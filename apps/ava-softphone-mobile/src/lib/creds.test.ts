@@ -38,6 +38,13 @@ describe('creds.ts — web localStorage fallback (Preferences unavailable)', () 
     expect(localStorage.getItem(KEY)).toBe(JSON.stringify(scopedSample));
     expect(await getCredentials()).toEqual(scopedSample);
   });
+
+  it('never writes an ephemeral SIP secret to local storage', async () => {
+    const { saveCredentials, getCredentials } = await import('./creds');
+    await saveCredentials({ ...sample, sipPassword: 'must-not-persist' } as any);
+    expect(localStorage.getItem(KEY)).not.toContain('must-not-persist');
+    expect(await getCredentials()).not.toHaveProperty('sipPassword');
+  });
 });
 
 describe('creds.ts — native Preferences storage', () => {

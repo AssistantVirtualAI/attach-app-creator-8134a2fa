@@ -93,3 +93,29 @@ export async function requestTemporaryPassword(email: string): Promise<void> {
     // Unknown email / other states → same generic confirmation.
   }
 }
+
+/**
+ * Single portal surface. Every portal read/write goes through here and through
+ * the existing `lemtel-onboarding-admin` actions only. No password is ever
+ * returned, stored or logged; writes stay blocked unless onboarding is enabled.
+ */
+export const portalApi = {
+  listOrganizations: () => onboarding<{ organizations?: any[] }>("list_organizations"),
+  listPeople: (organizationId: string) => onboarding<{ people?: any[] }>("list_people", { organization_id: organizationId }),
+  listInvitations: (organizationId?: string | null) => onboarding<{ invitations?: any[] }>("list_invitations", organizationId ? { organization_id: organizationId } : {}),
+  listActivity: (organizationId?: string | null) => onboarding<{ events?: any[] }>("list_activity", organizationId ? { organization_id: organizationId } : {}),
+  getConfig: () => onboarding<Record<string, unknown>>("get_config"),
+  /** Local, non-network status. Telephony stays not_provisioned by design. */
+  getOperationalStatus: () => ({
+    backendConfigured: LEMTEL_BACKEND_CONFIGURED,
+    onboardingEnabled: LEMTEL_ONBOARDING_ENABLED,
+    telephony: { status: "not_provisioned" as const },
+  }),
+  createOrganization: (payload: Record<string, unknown>) => onboarding("create_organization", payload),
+  inviteUser: (payload: Record<string, unknown>) => onboarding("invite_user", payload),
+  provisionUsers: (organizationId: string, users: unknown[], extra: Record<string, unknown> = {}) =>
+    onboarding<{ results?: any[] }>("bulk_invite", { ...extra, organization_id: organizationId, users }),
+  resendInvitation: (invitationId: string) => onboarding("resend_invitation", { invitation_id: invitationId }),
+  issueTemporaryPassword: (invitationId: string) => onboarding("replace_temporary_password", { invitation_id: invitationId }),
+  revokeAccess: (invitationId: string) => onboarding("revoke_invitation", { invitation_id: invitationId }),
+};

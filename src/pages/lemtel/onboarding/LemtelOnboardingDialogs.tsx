@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Download, Upload, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { onboarding, LemtelError, LEMTEL_ONBOARDING_ENABLED } from "./lemtelHostedApi";
+import { portalApi, LemtelError, LEMTEL_ONBOARDING_ENABLED } from "./lemtelHostedApi";
 import type { LemtelDict, Lang } from "./lemtelI18n";
 import { Field, Panel } from "./LemtelUi";
 import { LemtelEmailPreview, type DownloadLinks } from "./LemtelEmailPreview";
@@ -37,7 +37,7 @@ export function NewOrgDialog({ open, onClose, t, links, support, existingSlugs, 
   const submit = async () => {
     setBusy(true); setErr(null);
     try {
-      await onboarding("create_organization", {
+      await portalApi.createOrganization({
         name: f.name.trim(), slug: f.slug, default_language: f.lang,
         admin_full_name: f.adminName.trim(), admin_email: f.adminEmail.trim().toLowerCase(), brand_color: f.color || null,
       });
@@ -91,7 +91,7 @@ export function InviteDrawer({ open, onClose, t, orgId, onDone }: { open: boolea
     setTouched(true); if (Object.values(bad).some(Boolean) || !orgId) return;
     setBusy(true); setErr(null);
     try {
-      await onboarding("invite_user", {
+      await portalApi.inviteUser({
         organization_id: orgId, first_name: f.first.trim(), last_name: f.last.trim(), email: f.email.trim().toLowerCase(),
         language: f.lang === "inherit" ? null : f.lang, role: f.role, department: f.dept || null, title: f.title || null, send_now: f.sendNow,
       });
@@ -145,10 +145,9 @@ export function BulkInvite({ open, onClose, t, orgId, onDone }: { open: boolean;
   const run = async () => {
     if (!orgId) return; setBusy(true); setErr(null);
     try {
-      const res = await onboarding<{ results?: Result[] }>("bulk_invite", {
-        organization_id: orgId, send_now: sendNow,
-        users: good.map((r) => ({ ...r.data, language: r.data.language || null, department: r.data.department || null, title: r.data.title || null })),
-      });
+      const res = await portalApi.provisionUsers(orgId,
+        good.map((r) => ({ ...r.data, language: r.data.language || null, department: r.data.department || null, title: r.data.title || null })),
+        { send_now: sendNow }) as { results?: Result[] };
       const out = (res.results ?? []).map((x) => ({ email: String(x.email), status: x.status }));
       setResults(out); setStep("results"); onDone();
     } catch (e) { setErr(errText(t, e)); } finally { setBusy(false); }

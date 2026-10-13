@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { Activity, Bell, Building2, ChevronRight, Download, HelpCircle, LayoutDashboard, LogOut, Mail, Plus, Search, Shield, Smartphone, Upload, Users } from "lucide-react";
 import { toast } from "sonner";
 import "./lemtel-portal.css";
-import { lemtelClient, onboarding, LemtelError, LEMTEL_ONBOARDING_ENABLED, LEMTEL_BACKEND_CONFIGURED } from "./lemtelHostedApi";
+import { lemtelClient, portalApi, LemtelError, LEMTEL_ONBOARDING_ENABLED, LEMTEL_BACKEND_CONFIGURED } from "./lemtelHostedApi";
 import { useLemtelLang, type LemtelDict } from "./lemtelI18n";
 import { ConfirmDialog, EmptyState, LemtelMonogram } from "./LemtelUi";
 import { LemtelSignIn, needsPersonalPassword } from "./LemtelAuthScreens";
@@ -52,14 +52,14 @@ function Shell({ t, lang, setLang, readonly, onSignOut }: { t: LemtelDict; lang:
 
   const loadOrgs = useCallback(async () => {
     if (readonly) { setOrgs([]); return; }
-    try { const r = await onboarding<{ organizations?: Org[] }>("list_organizations"); setOrgs(r.organizations ?? []); }
+    try { const r = await portalApi.listOrganizations(); setOrgs(r.organizations ?? []); }
     catch (e) { setOrgs([]); toast.error(t.errors[e instanceof LemtelError ? e.key : "generic"]); }
   }, [readonly, t]);
 
   useEffect(() => { loadOrgs(); }, [loadOrgs]);
   useEffect(() => {
     if (readonly) return;
-    onboarding<Config>("get_config").then(setConfig).catch(() => null);
+    portalApi.getConfig().then((c) => setConfig(c as Config)).catch(() => null);
     lemtelClient()?.auth.getUser().then(({ data }) => setMe(data.user?.email ?? ""));
   }, [readonly]);
 
@@ -182,12 +182,12 @@ function Organizations({ t, orgs, reload, config, query, setOrgId }: Ctx) {
   );
 }
 
-function useList<T>(action: string, key: string, orgId: string | null, readonly: boolean, t: LemtelDict, needsOrg = false) {
+function useList<T>(action: "list_people" | "list_invitations" | "list_activity", key: string, orgId: string | null, readonly: boolean, t: LemtelDict, needsOrg = false) {
   const [items, setItems] = useState<T[] | null>(null);
   const load = useCallback(async () => {
     if (readonly || (needsOrg && !orgId)) { setItems([]); return; }
     setItems(null);
-    try { const r: any = await onboarding(action, orgId ? { organization_id: orgId } : {}); setItems(r[key] ?? []); }
+    try { const r: any = action === "list_people" ? await portalApi.listPeople(orgId!) : action === "list_invitations" ? await portalApi.listInvitations(orgId) : await portalApi.listActivity(orgId); setItems(r[key] ?? []); }
     catch (e) { setItems([]); toast.error(t.errors[e instanceof LemtelError ? e.key : "generic"]); }
   }, [action, key, orgId, readonly, t, needsOrg]);
   useEffect(() => { load(); }, [load]);
@@ -226,7 +226,7 @@ function Invitations({ t, orgId, readonly, query }: Ctx) {
   const chip = (s: string) => ["active", "delivered", "opened"].includes(s) ? "lt-chip-ok" : ["expired", "revoked"].includes(s) ? "lt-chip-bad" : s === "temp_pending" ? "lt-chip-warn" : "lt-chip-cyan";
   const run = async () => {
     if (!pending) return; setBusy(true);
-    try { await onboarding(pending.action, { invitation_id: pending.inv.id }); toast.success(t.done); setPending(null); load(); }
+    try { const id = pending.inv.id; await (pending.action === "resend_invitation" ? portalApi.resendInvitation(id) : pending.action === "replace_temporary_password" ? portalApi.issueTemporaryPassword(id) : portalApi.revokeAccess(id)); toast.success(t.done); setPending(null); load(); }
     catch (e) { toast.error(t.errors[e instanceof LemtelError ? e.key : "generic"]); } finally { setBusy(false); }
   };
   const msg = pending?.action === "resend_invitation" ? t.confirmResend : pending?.action === "replace_temporary_password" ? t.confirmReplace : t.confirmRevoke;

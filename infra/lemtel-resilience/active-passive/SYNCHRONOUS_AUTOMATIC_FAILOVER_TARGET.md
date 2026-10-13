@@ -1,6 +1,6 @@
 # Lemtel — cible de failover automatique synchrone
 
-> **Statut : cible sélectionnée et préparée, mais non activée.** DO reste le writer actif. Hostinger est un standby PostgreSQL privé en recovery/streaming : il ne doit jamais être redémarré ou promu comme writer hors du runbook contrôlé.
+> **Statut : cible sélectionnée et préparée, mais non activée.** L’abonnement Cloudflare Load Balancing est actif depuis le 13 octobre 2026, mais aucun Load Balancer, pool, moniteur ou routage n’a encore été créé. DO reste le writer actif. Hostinger est un standby PostgreSQL privé en recovery/streaming : il ne doit jamais être redémarré ou promu comme writer hors du runbook contrôlé.
 
 ## Objectif approuvé
 
@@ -26,6 +26,8 @@ Une simple perte réseau ne suffit jamais. Sans preuve de fencing, il n’y a ni
 6. **Versions applicatives** : conserver un digest immuable unique pour DO et Hostinger, puis vérifier que le runtime actif et le runtime préparé correspondent à ce digest avant de déclarer le standby prêt.
 7. **Routage** : créer deux pools Cloudflare, une sonde applicative qui ne retourne `200` que pour le writer réellement prêt, puis une règle de priorité DO → Hostinger. Hostinger restera non routable tant que promotion, runtime et santé ne sont pas confirmés.
 8. **Drills** : tester séparément le fencing DO, la promotion Hostinger, l’état public après bascule, puis la reconstruction inverse de DO comme standby. Aucun test ne touchera FusionPBX/SIP.
+
+L’abonnement Cloudflare couvre maintenant la future configuration avec deux endpoints inclus. Il ne crée aucun pool et ne modifie aucun DNS par lui-même : ces ressources restent non configurées tant que le fencing, l’arbitre, les prévols et la validation finale ne sont pas terminés.
 
 ## Activation finale
 

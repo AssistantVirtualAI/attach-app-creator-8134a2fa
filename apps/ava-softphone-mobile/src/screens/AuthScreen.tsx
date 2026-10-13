@@ -88,6 +88,7 @@ function authenticatedCreds(pending: PendingFirstPassword, session: Pick<Pending
 export const mapAuthError = (raw: string): string => {
   const m = (raw || '').toLowerCase();
   if (m.includes('invalid_credentials') || m.includes('invalid login')) return tx('Adresse e-mail ou mot de passe incorrect.', 'Incorrect email or password.');
+  if (m.includes('password_recovery_unavailable')) return tx("Le service de réinitialisation est temporairement indisponible. Votre mot de passe n’a pas été modifié. Réessayez plus tard ou communiquez avec votre administrateur.", 'Password recovery is temporarily unavailable. Your password was not changed. Please try again later or contact your administrator.');
   if (m.includes('first_password_change_required')) return tx('Choisissez votre mot de passe personnel pour continuer.', 'Choose your personal password to continue.');
   if (m.includes('lemtel_account_not_active')) return tx('Ce compte Lemtel n’est pas encore activé. Communiquez avec votre administrateur.', 'This Lemtel account is not active yet. Contact your administrator.');
   if (m.includes('bootstrap_invalid_response')) return tx('Les informations sécurisées du compte sont incomplètes. Réessayez dans un instant.', 'The secure account information is incomplete. Please try again shortly.');

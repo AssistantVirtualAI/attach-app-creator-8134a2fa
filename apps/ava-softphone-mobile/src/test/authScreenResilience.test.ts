@@ -12,6 +12,13 @@ describe('Lemtel authentication presentation', () => {
     expect(message).not.toMatch(/schema|unexpected_failure/i);
   });
 
+  it('never exposes the raw unavailable recovery code', () => {
+    const message = mapAuthError('password_recovery_unavailable');
+    expect(message).toContain('réinitialisation');
+    expect(message).toContain('mot de passe n’a pas été modifié');
+    expect(message).not.toMatch(/password_recovery_unavailable/i);
+  });
+
   it('keeps transport diagnostics out of production error banners', () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(join(here, '..', 'screens', 'AuthScreen.tsx'), 'utf8');

@@ -68,6 +68,8 @@ Le propriétaire a maintenant sélectionné la cible **DO writer → Hostinger h
 
 Elle reste volontairement inactive : Hostinger doit d’abord être reconstruit depuis DO en standby privé, la durabilité Storage doit être renforcée au-delà de la copie périodique, les accès de fencing et l’arbitre indépendant doivent être validés, puis les drills DO → Hostinger et retour doivent réussir. Aucun service ne peut encore arrêter DO, promouvoir Hostinger ou modifier automatiquement le routage Cloudflare. La parité de version est traitée indépendamment dans [IMMUTABLE_ARTIFACT_PARITY.md](IMMUTABLE_ARTIFACT_PARITY.md) ; elle ne remplace pas la réplication des données.
 
+Les accès API fournisseurs en **lecture seule** ont été vérifiés le 13 octobre 2026. Ils ne prouvent pas les permissions d’arrêt et ne déclenchent aucune mutation. L’ordre de fencing, les reçus attendus et les limites de l’arbitre sont préparés dans [PROVIDER_FENCING_READINESS.md](PROVIDER_FENCING_READINESS.md). Le contrat correspondant maintient explicitement toute action fournisseur, promotion, routage et téléphonie à `false`.
+
 ## Operational status portal (prepared, not deployed)
 
 The Lemtel portal contains a platform-administrator-only **Operations** page. It is designed to consume a redacted snapshot written locally by the promoted writer: locally verified health enums, an observation timestamp, writer state, and application service state. A remote standby or canonical-route state is displayed only after its own approved redacted probe; until then it is explicitly **unknown**, never inferred. The browser cannot read either server directly and the response deliberately excludes addresses, hostnames, credentials, users, recordings, raw errors and telephony data.

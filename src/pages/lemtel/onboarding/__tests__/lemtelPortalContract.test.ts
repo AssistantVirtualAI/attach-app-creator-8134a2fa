@@ -59,6 +59,12 @@ describe("Lemtel portal contract", () => {
     expect(typeof portalApi.getOperationalStatus).toBe("function");
   });
 
+  it("includes only a redacted account-recovery health signal in Operations", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelOperationalStatus.tsx"), "utf8");
+    expect(source).toContain("services.accountRecovery");
+    expect(source).not.toMatch(/resend_api_key|service_role_key|temporary_password/i);
+  });
+
   it("uses absolute fallback routes so malformed operations URLs cannot recurse", () => {
     const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
     expect(source).toContain('path="operations/*" element={<Navigate to={`${BASE}/operations`} replace />}');

@@ -50,7 +50,7 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
     return () => window.clearInterval(interval);
   }, [refresh]);
 
-  const services = data?.services ?? { runtime: "unknown", database: "unknown", auth: "unknown", rest: "unknown", storage: "unknown" };
+  const services = data?.services ?? { runtime: "unknown", database: "unknown", auth: "unknown", rest: "unknown", storage: "unknown", accountRecovery: "unknown" };
   const replication = data?.replication ?? { database: "unknown", storage: "unknown" };
   const clients = [
     { label: t.desktop, href: config.downloads.desktop },
@@ -84,6 +84,7 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
           <ServiceRow icon={WifiOff} label={t.operations.services.auth} value={services.auth} t={t} />
           <ServiceRow icon={Route} label={t.operations.services.rest} value={services.rest} t={t} />
           <ServiceRow icon={HardDrive} label={t.operations.services.storage} value={services.storage} t={t} />
+          <ServiceRow icon={ShieldCheck} label={t.operations.services.accountRecovery} value={services.accountRecovery} t={t} />
           <ServiceRow icon={AlertTriangle} label={t.operations.automaticFailover} value={data?.topology.automaticFailover ? "healthy" : "unknown"} t={t} override={data?.topology.automaticFailover ? t.operations.enabled : t.operations.disabled} />
         </div>
       </div>

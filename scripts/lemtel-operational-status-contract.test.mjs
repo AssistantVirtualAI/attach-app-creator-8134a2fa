@@ -14,7 +14,7 @@ const edge = read('infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/in
 const onboardingManifest = json('infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json');
 const deploymentManifest = json('infra/lemtel-resilience/active-passive/operational-status-deployment-manifest.json');
 
-const prohibited = /(?:pg_promote|nsupdate|docker\s+(?:run|compose\s+up)|\bturn\b|\bwss\b|password|credential|connection_string)/imu;
+const prohibited = /(?:pg_promote|nsupdate|docker\s+(?:run|compose\s+up)|\bturn\b|\bwss\b|temporary_password|credential|connection_string)/imu;
 
 test('operational status contract is redacted, platform-admin-only and does not authorize a topology change', () => {
   const contract = json('infra/lemtel-resilience/active-passive/operational-status-contract.json');
@@ -65,10 +65,14 @@ test('writer publisher emits only locally verified redacted health and never con
   assert.match(publisher, /pg_stat_replication/);
   assert.match(publisher, /storage-sync-manifests\/last-success/);
   assert.match(publisher, /integrity_verified/);
+  assert.match(publisher, /account_recovery/);
+  assert.match(publisher, /RESEND_API_KEY/);
+  assert.match(publisher, /lemtel_password_reset_delivery_attempts/);
   assert.match(publisher, /redacted_snapshot_written=true/);
   assert.match(publisher, /2>\/dev\/null/);
   assert.match(publisher, /automatic_promotion_enabled=false/);
   assert.match(publisher, /dns_failover_enabled=false/);
+  assert.doesNotMatch(publisher, /printf[^\n]*(?:RESEND_API_KEY|SUPABASE_SERVICE_ROLE_KEY|LEMTEL_WELCOME_FROM)/u);
   assert.doesNotMatch(publisher, prohibited);
 });
 
@@ -84,6 +88,7 @@ test('writer status timer is root-gated and carries no Hostinger start, promotio
 test('operational status is served only by the authoritative Lemtel edge function', () => {
   assert.match(edge, /get_operational_status/);
   assert.match(edge, /lemtel_operational_status/);
+  assert.match(edge, /accountRecovery/);
   assert.match(edge, /platformAdmin\(admin, actor\)/);
   assert.doesNotMatch(edge, /console\.log|planipret|pbx_/i);
   assert.equal(onboardingManifest.deployment_authorized, false);

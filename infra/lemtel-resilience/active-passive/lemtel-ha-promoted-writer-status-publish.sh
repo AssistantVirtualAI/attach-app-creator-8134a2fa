@@ -81,17 +81,45 @@ if [ -r "$storage_attestation" ]; then
   fi
 fi
 
+account_recovery=unknown
+if [ "$(container_health "$edge_container")" = healthy ]; then
+  # Consume environment names only; no secret value is printed or placed in the payload.
+  mapfile -t edge_environment_names < <(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$edge_container" | sed 's/=.*//')
+  has_edge_environment() {
+    local expected="$1" value
+    for value in "${edge_environment_names[@]}"; do [ "$value" = "$expected" ] && return 0; done
+    return 1
+  }
+  account_recovery_environment_ready=true
+  for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY RESEND_API_KEY LEMTEL_WELCOME_FROM; do
+    has_edge_environment "$name" || account_recovery_environment_ready=false
+  done
+  functions_source="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/home/deno/functions"}}{{.Source}}{{end}}{{end}}' "$edge_container")"
+  account_recovery_source_ready=false
+  if [ -n "$functions_source" ] \
+    && [ -s "$functions_source/lemtel-password-reset-request/index.ts" ] \
+    && grep -Fq 'lemtel_find_password_reset_recipient' "$functions_source/lemtel-password-reset-request/index.ts"; then
+    account_recovery_source_ready=true
+  fi
+  account_recovery_database_ready="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT CASE WHEN to_regclass('\''public.lemtel_password_reset_throttles'\'') IS NOT NULL AND to_regclass('\''public.lemtel_password_reset_delivery_attempts'\'') IS NOT NULL AND to_regprocedure('\''public.lemtel_find_password_reset_recipient(text)'\'') IS NOT NULL AND to_regprocedure('\''public.lemtel_claim_password_reset(uuid,uuid,text,integer)'\'') IS NOT NULL THEN '\''ready'\'' ELSE '\''missing'\'' END"' 2>/dev/null || true)"
+  if [ "$account_recovery_environment_ready" = true ] && [ "$account_recovery_source_ready" = true ] && [ "$account_recovery_database_ready" = ready ]; then
+    account_recovery=healthy
+  else
+    account_recovery=degraded
+  fi
+fi
+
 rest="$(container_health "$rest_container")"
 storage="$(container_health "$storage_container")"
 overall=healthy
-for state in "$runtime" "$postgres" "$auth" "$rest" "$storage"; do [ "$state" = healthy ] || overall=degraded; done
+for state in "$runtime" "$postgres" "$auth" "$rest" "$storage" "$account_recovery"; do [ "$state" = healthy ] || overall=degraded; done
 [ "$replication_database" = streaming ] && [ "$storage_replication" = integrity_verified ] || overall=degraded
 
 checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-payload="$(python3 - "$checked_at" "$overall" "$runtime" "$postgres" "$auth" "$rest" "$storage" "$standby" "$replication_database" "$storage_replication" <<'PY'
+payload="$(python3 - "$checked_at" "$overall" "$runtime" "$postgres" "$auth" "$rest" "$storage" "$account_recovery" "$standby" "$replication_database" "$storage_replication" <<'PY'
 import json
 import sys
-observed_at, overall, runtime, database, auth, rest, storage, standby, database_replication, storage_replication = sys.argv[1:]
+observed_at, overall, runtime, database, auth, rest, storage, account_recovery, standby, database_replication, storage_replication = sys.argv[1:]
 print(json.dumps({
   "version": "lemtel_operational_status_v1",
   "observed_at": observed_at,
@@ -108,6 +136,7 @@ print(json.dumps({
     "auth": auth,
     "rest": rest,
     "storage": storage,
+    "account_recovery": account_recovery,
   },
   "replication": {
     "database": database_replication,

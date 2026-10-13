@@ -16,6 +16,8 @@ test('synchronous automatic-failover target is selected but remains inactive', (
   assert.equal(value.selected_strategy.database_commit_policy, 'synchronous_replication_required');
   assert.equal(value.selected_strategy.storage_consistency_policy, 'write_acknowledged_only_after_dual_durable_copies');
   assert.equal(value.selected_strategy.traffic_routing, 'cloudflare_load_balancer_priority_failover');
+  assert.equal(value.required_preflight.cloudflare_load_balancing_subscription_active, true);
+  assert.equal(value.required_preflight.cloudflare_load_balancer_configured, false);
   assert.equal(value.activation.user_selected_strategy, true);
   assert.equal(value.activation.automatic_fencing_enabled, false);
   assert.equal(value.activation.automatic_promotion_enabled, false);
@@ -31,6 +33,7 @@ test('target rejects promotion or traffic routing before all preflights and acti
     (value) => { value.activation.automatic_failback_enabled = true; },
     (value) => { value.arbitration_and_fencing.promotion_on_ambiguous_health = true; },
     (value) => { value.arbitration_and_fencing.promotion_requires_verified_old_writer_fenced = false; },
+    (value) => { value.required_preflight.cloudflare_load_balancing_subscription_active = false; },
     (value) => { value.boundaries.unfenced_promotion = true; },
     (value) => { value.boundaries.public_postgres_listener = true; },
   ]) {
@@ -53,6 +56,7 @@ test('review explains the missing prerequisites without claiming activation', ()
   const review = reviewAutomaticFailoverTarget(policy());
   assert.equal(review.status, 'synchronous_automatic_failover_target_prepared');
   assert.equal(review.activation_authorized, false);
+  assert.equal(review.cloudflare_load_balancing_subscription_active, true);
   assert.equal(review.automatic_failover_enabled, false);
   assert.deepEqual(review.reasons, [
     'PROVIDER_FENCING_CREDENTIALS_REQUIRED',

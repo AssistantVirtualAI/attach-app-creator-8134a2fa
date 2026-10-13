@@ -10,7 +10,7 @@ export const POLICY_PATH = 'infra/lemtel-resilience/active-passive/automatic-fai
 const POLICY_KEYS = ['policy_version', 'scope', 'selected_strategy', 'arbitration_and_fencing', 'required_preflight', 'activation', 'boundaries'];
 const STRATEGY_KEYS = ['writer', 'standby', 'database_commit_policy', 'storage_consistency_policy', 'artifact_policy', 'traffic_routing'];
 const ARBITRATION_KEYS = ['independent_arbiter_required', 'digitalocean_provider_fence_required', 'hostinger_provider_fence_required', 'promotion_requires_verified_old_writer_fenced', 'promotion_on_ambiguous_health'];
-const PREFLIGHT_KEYS = ['provider_api_credentials_verified', 'independent_arbiter_deployed', 'hostinger_private_standby_rebuilt', 'postgres_synchronous_streaming_verified', 'storage_dual_durable_write_verified', 'runtime_digest_parity_verified', 'cloudflare_load_balancer_configured', 'digitalocean_fence_drill_verified', 'hostinger_promotion_drill_verified', 'reverse_failback_drill_verified', 'mobile_retry_test_verified'];
+const PREFLIGHT_KEYS = ['cloudflare_load_balancing_subscription_active', 'provider_api_credentials_verified', 'independent_arbiter_deployed', 'hostinger_private_standby_rebuilt', 'postgres_synchronous_streaming_verified', 'storage_dual_durable_write_verified', 'runtime_digest_parity_verified', 'cloudflare_load_balancer_configured', 'digitalocean_fence_drill_verified', 'hostinger_promotion_drill_verified', 'reverse_failback_drill_verified', 'mobile_retry_test_verified'];
 const ACTIVATION_KEYS = ['user_selected_strategy', 'automatic_fencing_enabled', 'automatic_promotion_enabled', 'automatic_traffic_failover_enabled', 'automatic_failback_enabled'];
 const BOUNDARY_KEYS = ['single_writer_only', 'public_postgres_listener', 'fusionpbx_or_sip_change', 'planipret_data', 'unfenced_promotion', 'no_interruption_claim'];
 
@@ -37,6 +37,7 @@ export function validateAutomaticFailoverTarget(policy) {
     policy.arbitration_and_fencing.promotion_requires_verified_old_writer_fenced === true &&
     policy.arbitration_and_fencing.promotion_on_ambiguous_health === false &&
     exactKeys(policy.required_preflight, PREFLIGHT_KEYS) && everyBoolean(policy.required_preflight) &&
+    policy.required_preflight.cloudflare_load_balancing_subscription_active === true &&
     exactKeys(policy.activation, ACTIVATION_KEYS) &&
     policy.activation.user_selected_strategy === true &&
     policy.activation.automatic_fencing_enabled === false &&
@@ -72,6 +73,7 @@ export function reviewAutomaticFailoverTarget(policy) {
     writer: 'digitalocean',
     standby: 'hostinger_rebuild_as_private_hot_standby',
     database_commit_policy: 'synchronous_replication_required',
+    cloudflare_load_balancing_subscription_active: true,
     automatic_failover_enabled: false,
     reasons,
   };

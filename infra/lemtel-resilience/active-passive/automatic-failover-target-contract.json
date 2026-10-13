@@ -17,6 +17,7 @@
     "promotion_on_ambiguous_health": false
   },
   "required_preflight": {
+    "cloudflare_load_balancing_subscription_active": true,
     "provider_api_credentials_verified": false,
     "independent_arbiter_deployed": false,
     "hostinger_private_standby_rebuilt": true,

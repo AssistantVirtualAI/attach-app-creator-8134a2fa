@@ -40,6 +40,7 @@
     "@fontsource/epilogue": "^5.2.8",
     "@fontsource/urbanist": "^5.2.7",
     "@hookform/resolvers": "^3.10.0",
+    "@lovable.dev/mcp-js": "^3.0.5",
     "@mozartec/capacitor-microphone": "^6.0.0",
     "@playwright/test": "^1.57.0",
     "@radix-ui/react-accordion": "^1.2.11",

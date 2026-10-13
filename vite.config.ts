@@ -5,6 +5,7 @@ import fs from "fs";
 import tailwindcss from "tailwindcss";
 import autoprefixer from "autoprefixer";
 import { componentTagger } from "lovable-tagger";
+import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/supabase/vite";
 
 const BUILD_ID = Date.now().toString(36);
 const BUILD_TIME = new Date().toISOString();
@@ -237,6 +238,7 @@ export default defineConfig(({ mode }) => {
 
   plugins: [
     react(),
+    mcpPlugin(),
     avaCacheBustPlugin(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_PUBLISHABLE_KEY),
     mode === "development" && componentTagger(),
   ].filter(Boolean),

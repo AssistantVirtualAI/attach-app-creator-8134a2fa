@@ -405,6 +405,7 @@ const queryClient = new QueryClient({
 });
 
 import { TrialExpiredGate } from "./components/billing/TrialExpiredGate";
+import OAuthConsent from "./pages/OAuthConsent";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -641,6 +642,7 @@ const App = () => (
                 
                 {/* Admin auth (legacy, redirects to /login) */}
                 <Route path="/auth" element={<Navigate to="/login" replace />} />
+                <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
                 {/* Planiprêt — auth via avastatistic.ca SSO */}
                 <Route path="/planipret" element={<Navigate to="/planipret/admin/overview" replace />} />

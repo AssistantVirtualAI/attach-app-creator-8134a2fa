@@ -193,6 +193,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
     close_ava: () => { onClose(); return { success: true }; },
   }), [navigate, onClose]);
 
+  const execConfirmedRef = useRef<(t: string, p: any, r: (v: any) => void, x: Record<string, any>) => void>(() => {});
   const handleTool = useCallback(async (toolName: string, params: any) => {
     if (toolName === "submit_feedback") {
       // Feedback needs a server-issued confirmation token. AVA does not capture
@@ -217,6 +218,11 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
     }
     // Confirmation gate for mutating server tools.
     if (CONFIRM_REQUIRED.has(toolName)) {
+      // Voice-only: AVA asked "tu confirmes ?" and the user said yes aloud.
+      if (params?.confirmed === true || params?.confirmed === "true") {
+        return new Promise((resolve) => execConfirmedRef.current(toolName, params ?? {}, resolve, {}))
+          .then((r: any) => r ?? { success: false, error: "user_cancelled" });
+      }
       return new Promise((resolve, reject) => {
         setPending({
           tool: toolName,
@@ -634,6 +640,10 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
     }
     const { tool, params, resolve } = pending;
     setPending(null);
+    execConfirmedRef.current(tool, params, resolve, patched);
+  };
+
+  function execConfirmed(tool: string, params: any, resolve: (v: any) => void, patched: Record<string, any> = {}) {
     if (tool === "make_call") {
       const number = String(params?.to_number ?? params?.to ?? params?.destination ?? params?.number ?? params?.phone ?? "").trim();
       if (!number || !onPlaceCall) {
@@ -660,7 +670,8 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
       return;
     }
     callServerTool(tool, { ...params, ...patched, confirmed: true }).then(resolve);
-  };
+  }
+  execConfirmedRef.current = execConfirmed;
 
   // ─── render ────────────────────────────────────────────────────
   const ToolIcon = currentTool ? TOOL_ICONS[currentTool] ?? Sparkles : null;

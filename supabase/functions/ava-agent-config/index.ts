@@ -5,7 +5,7 @@ import { authBroker, corsHeaders, jsonResponse } from "../_shared/ns-broker.ts";
 import { EXPECTED_TOOL_NAMES } from "../_shared/ava-tools.ts";
 
 const DEFAULT_AGENT_ID = Deno.env.get("ELEVENLABS_DEFAULT_AGENT_ID") ?? "";
-const DEFAULT_VOICE_ID = "UJCi4DDncuo0VJDSIegj"; // Amélie — voix féminine québécoise
+const DEFAULT_VOICE_ID = "bBRsDJSAcL1ubkrtJ3hM"; // Caroline — voix québécoise douce
 
 const TOOL_NAMES = EXPECTED_TOOL_NAMES;
 
@@ -52,6 +52,8 @@ Domaine NS: planipret.ca
 Maestro CRM: ${p.maestro_connected ? `Connecté (ID: ${p.maestro_broker_id ?? "?"})` : "Non connecté"}
 Microsoft 365: ${p.ms365_access_token ? "Connecté" : "Non connecté"}
 Mode autonomie: confirmation obligatoire
+CONFIRMATION VOCALE: avant une action sensible, demande « Est-ce que tu confirmes ? ». Si le courtier répond oui (oui, ok, vas-y, confirmé, c'est beau), rappelle l'outil avec confirmed=true : c'est une confirmation valide. Sinon, annule.
+FIN DE CONVERSATION: si le courtier dit qu'il a terminé (« c'est bon », « j'ai réglé », « rien d'autre », « merci, bye », « c'est tout »), dis au revoir en une phrase courte puis appelle end_call (ou close_ava) immédiatement. Ne relance pas la conversation.
 Date/heure: ${new Date().toLocaleString("fr-CA", { timeZone: "America/Toronto" })}
 
 ═══════════════════════════════════

@@ -383,7 +383,7 @@ export function emptyOperationalStatus() {
     telemetry: "not_configured" as const,
     overall: "unknown" as const,
     topology: { writer: "unknown" as const, standby: "unknown" as const, route: "unknown" as const, automaticFailover: false },
-    services: { runtime: "unknown" as const, database: "unknown" as const, auth: "unknown" as const, rest: "unknown" as const, storage: "unknown" as const },
+    services: { runtime: "unknown" as const, database: "unknown" as const, auth: "unknown" as const, rest: "unknown" as const, storage: "unknown" as const, accountRecovery: "unknown" as const },
     replication: { database: "unknown" as const, storage: "unknown" as const },
   };
 }
@@ -413,7 +413,7 @@ export function redactedOperationalStatusFromRow(row: unknown) {
       route: topology.route === "canonical_digitalocean_live" ? "canonical_digitalocean_live" as const : "unknown" as const,
       automaticFailover: topology.automatic_failover === true,
     },
-    services: { runtime: redactedHealth(services.runtime), database: redactedHealth(services.database), auth: redactedHealth(services.auth), rest: redactedHealth(services.rest), storage: redactedHealth(services.storage) },
+    services: { runtime: redactedHealth(services.runtime), database: redactedHealth(services.database), auth: redactedHealth(services.auth), rest: redactedHealth(services.rest), storage: redactedHealth(services.storage), accountRecovery: redactedHealth(services.account_recovery) },
     replication: {
       database: replication.database === "streaming" ? "streaming" as const : replication.database === "rebuild_required" ? "rebuild_required" as const : "unknown" as const,
       storage: replication.storage === "integrity_verified"

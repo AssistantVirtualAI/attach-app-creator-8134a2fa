@@ -143,7 +143,7 @@ export type LemtelOperationalStatus = {
     route: "canonical_digitalocean_live" | "unknown";
     automaticFailover: boolean;
   };
-  services: { runtime: OperationalHealth; database: OperationalHealth; auth: OperationalHealth; rest: OperationalHealth; storage: OperationalHealth };
+  services: { runtime: OperationalHealth; database: OperationalHealth; auth: OperationalHealth; rest: OperationalHealth; storage: OperationalHealth; accountRecovery: OperationalHealth };
   replication: {
     database: "streaming" | "rebuild_required" | "unknown";
     storage: "integrity_verified" | "sync_attention" | "rebuild_required" | "unknown";

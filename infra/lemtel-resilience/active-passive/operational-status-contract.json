@@ -23,6 +23,7 @@
     "auth_health",
     "rest_health",
     "storage_health",
+    "account_recovery_health",
     "database_streaming_state",
     "storage_integrity_attestation_state",
     "replication_state"

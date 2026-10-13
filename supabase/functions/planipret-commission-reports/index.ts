@@ -254,17 +254,22 @@ async function handler(req: Request): Promise<Response> {
 
     // ---- Agents (admin: tous ; broker: soi-même + son équipe, filtré par Maestro) ----
     if (action === "agents") {
-      const scope = resolveCommissionScope({
-        role: role as "admin" | "broker",
-        action,
-        requestedUsersId: filters.users_id,
-        ownUsersId: resolvedUsersId,
-        ownToken,
-        firmToken: firmToken.token,
-      });
+      const adminFallback = role === "admin" && !firmToken.token;
+      const scope = adminFallback
+        ? ({ ok: true, token: ownToken } as any)
+        : resolveCommissionScope({
+            role: role as "admin" | "broker",
+            action,
+            requestedUsersId: filters.users_id,
+            ownUsersId: resolvedUsersId,
+            ownToken,
+            firmToken: firmToken.token,
+          });
       if (!scope.ok) return scopeError(scope.error);
-      const r = await commissionGet("/api/main/commissions/reports/agents", scope.token, cid);
-      if (!r.ok) return upstream(r, cid);
+      const r = scope.token
+        ? await commissionGet("/api/main/commissions/reports/agents", scope.token, cid)
+        : ({ ok: true, data: [] } as any);
+      if (!r.ok && !adminFallback) return upstream(r, cid);
       const list = Array.isArray(r.data?.data) ? r.data.data : Array.isArray(r.data) ? r.data : [];
       const pick = (a: any) =>
         [a?.agent_name, a?.name, a?.full_name,

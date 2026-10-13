@@ -11,6 +11,12 @@ test('artifact synchronization remains Lemtel-only and runtime-free', () => {
   assert.equal(contract.source_branch, 'lemtel/integration');
   assert.equal(contract.lovable_source_configured, false);
   assert.equal(contract.artifact.same_sha256_on_hostinger_and_digitalocean, false);
+  assert.deepEqual(contract.artifact.source_subtrees, [
+    'apps/ava-softphone-mobile', 'apps/ava-softphone-desktop',
+    'src/pages/lemtel', 'src/pages/lemtel-uc', 'src/components/lemtel-uc',
+    'infra/lemtel-self-hosted', 'infra/lemtel-client-config', 'infra/lemtel-resilience', 'infra/lemtel-delivery',
+    'docs/lemtel-*', 'scripts/lemtel-*.mjs', '.github/workflows/lemtel-*.yml',
+  ]);
   assert.equal(contract.hostinger.runtime_apply, false);
   assert.equal(contract.digitalocean.writer_artifact_stage, false);
   assert.equal(contract.digitalocean.outbound_pull_controller_configured, false);
@@ -26,4 +32,14 @@ test('workflow uses restricted secrets without storing addresses or runtime comm
   assert.match(workflow, /Deposit same artifact on DigitalOcean standby receiver without applying it/);
   assert.match(workflow, /digitalocean-promoted-writer-boundary/);
   for (const forbidden of ['docker compose up', 'docker start', 'ufw allow', 'Planipret', 'lemtel/lovable-sync']) assert.doesNotMatch(workflow, new RegExp(forbidden, 'i'));
+});
+
+test('workflow synchronizes only approved Lemtel portal sources', () => {
+  for (const required of [
+    "'src/pages/lemtel/**'", "'src/pages/lemtel-uc/**'", "'src/components/lemtel-uc/**'",
+    'src/pages/lemtel', 'src/pages/lemtel-uc', 'src/components/lemtel-uc',
+    'lemtel_docs', 'lemtel_scripts', 'lemtel_workflows',
+  ]) assert.ok(workflow.includes(required), `missing ${required}`);
+  assert.doesNotMatch(workflow, /\n\s+scripts\s+\\/);
+  assert.doesNotMatch(workflow, /\n\s+\.github\/workflows\s+\\/);
 });

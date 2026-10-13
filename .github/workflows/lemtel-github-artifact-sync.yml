@@ -6,11 +6,18 @@ on:
     paths:
       - 'apps/ava-softphone-mobile/**'
       - 'apps/ava-softphone-desktop/**'
+      - 'src/pages/lemtel/**'
+      - 'src/pages/lemtel-uc/**'
+      - 'src/components/lemtel-uc/**'
       - 'infra/lemtel-self-hosted/**'
       - 'infra/lemtel-client-config/**'
       - 'infra/lemtel-resilience/**'
       - 'infra/lemtel-delivery/**'
+      - 'docs/lemtel-*/**'
+      - 'docs/lemtel-*.md'
       - 'scripts/lemtel-*.mjs'
+      - '.github/workflows/lemtel-*.yml'
+      - '.github/workflows/lemtel-*.yaml'
       - '.github/workflows/lemtel-github-artifact-sync.yml'
   workflow_dispatch:
 
@@ -43,15 +50,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mapfile -t lemtel_docs < <(git ls-tree -r --name-only "$GITHUB_SHA" -- docs | grep -E '^docs/lemtel-' || true)
+          mapfile -t lemtel_scripts < <(git ls-tree -r --name-only "$GITHUB_SHA" -- scripts | grep -E '^scripts/lemtel-.*\.mjs$' || true)
+          mapfile -t lemtel_workflows < <(git ls-tree -r --name-only "$GITHUB_SHA" -- .github/workflows | grep -E '^\.github/workflows/lemtel-.*\.ya?ml$' || true)
+          test "${#lemtel_scripts[@]}" -gt 0
+          test "${#lemtel_workflows[@]}" -gt 0
           git archive --format=tar.gz --prefix="lemtel-${GITHUB_SHA}/" "$GITHUB_SHA" \
             apps/ava-softphone-mobile \
             apps/ava-softphone-desktop \
+            src/pages/lemtel \
+            src/pages/lemtel-uc \
+            src/components/lemtel-uc \
             infra/lemtel-self-hosted \
             infra/lemtel-client-config \
             infra/lemtel-resilience \
             infra/lemtel-delivery \
-            scripts \
-            .github/workflows \
+            "${lemtel_docs[@]}" \
+            "${lemtel_scripts[@]}" \
+            "${lemtel_workflows[@]}" \
             > lemtel-artifact.tgz
           sha256sum lemtel-artifact.tgz | tee lemtel-artifact.sha256
           sha256=$(cut -d' ' -f1 lemtel-artifact.sha256)

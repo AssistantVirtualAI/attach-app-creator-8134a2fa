@@ -740,14 +740,20 @@ export async function handleTaskRequest(
       all = projected;
     } else if (token) {
       for (const candidate of ownerCandidates) {
-        const attempt = await deps.listFetch(candidate, { status, from, to });
-        if (!attempt.ok) continue;
+        const attempt = await deps.listFetch(candidate, { status, from, to, fullSync });
+        if (!attempt.ok) {
+          // The list layer spent its interactive budget. Trying another
+          // identity would repeat the same expensive scan and can exhaust the
+          // entire Edge invocation before a useful response reaches the phone.
+          if ((attempt as any).truncated) { upstream = attempt; break; }
+          continue;
+        }
         const rows = filterByAssignee(
           (attempt.tasks ?? []).map((t: any) => normalizeTask(t)),
           assigneeIds,
         );
         if (!upstream.ok) { upstream = attempt; all = rows; resolvedOwnerId = candidate; }
-        if (rows.length) { upstream = attempt; all = rows; resolvedOwnerId = candidate; break; }
+        if (rows.length || (attempt as any).truncated) { upstream = attempt; all = rows; resolvedOwnerId = candidate; break; }
       }
     }
 

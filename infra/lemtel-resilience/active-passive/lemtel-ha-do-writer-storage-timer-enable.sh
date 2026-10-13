@@ -43,7 +43,9 @@ ExecStart=/usr/local/sbin/lemtel-ha-do-writer-storage-sync
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+# The Docker Storage mount can resolve through the restricted receiver home.
+# Read-only access keeps the sync one-way while allowing source traversal.
+ProtectHome=read-only
 TimeoutStartSec=15min
 UNIT
 
@@ -69,7 +71,7 @@ systemctl enable --now lemtel-ha-do-writer-storage-sync.timer
 systemctl is-enabled --quiet lemtel-ha-do-writer-storage-sync.timer || fail timer_not_enabled
 systemctl is-active --quiet lemtel-ha-do-writer-storage-sync.timer || fail timer_not_active
 systemctl start lemtel-ha-do-writer-storage-sync.service
-systemctl is-active --quiet lemtel-ha-do-writer-storage-sync.service || fail initial_sync_not_complete
+[ "$(systemctl show -p Result --value lemtel-ha-do-writer-storage-sync.service)" = success ] || fail initial_sync_not_complete
 
 printf 'do_writer_storage_timer_format=lemtel_do_writer_storage_timer_v1\n'
 printf 'declared_role=digitalocean_writer\n'

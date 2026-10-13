@@ -56,7 +56,10 @@ test('DO Storage timer immediately verifies the first private sync then repeats 
   assert.match(timer, /digitalocean_writer/u);
   assert.match(timer, /OnUnitActiveSec=5min/u);
   assert.match(timer, /RandomizedDelaySec=30s/u);
+  assert.match(timer, /ProtectHome=read-only/u);
+  assert.doesNotMatch(timer, /ProtectHome=true/u);
   assert.match(timer, /systemctl start lemtel-ha-do-writer-storage-sync\.service/u);
+  assert.match(timer, /systemctl show -p Result --value lemtel-ha-do-writer-storage-sync\.service/u);
   assert.match(timer, /initial_sync_complete=true/u);
   assert.doesNotMatch(timer, prohibited);
 });

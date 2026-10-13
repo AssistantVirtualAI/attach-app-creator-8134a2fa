@@ -1,0 +1,37 @@
+{
+  "contract_version": "lemtel_provider_fencing_readiness_v1",
+  "scope": "provider_readonly_verification_and_fencing_design_no_actions",
+  "verification": {
+    "digitalocean_readonly_api_verified": true,
+    "hostinger_readonly_api_verified": true,
+    "digitalocean_fence_action_authorized": false,
+    "hostinger_fence_action_authorized": false,
+    "provider_mutation_executed": false,
+    "credential_values_emitted": false
+  },
+  "digitalocean_fencing": {
+    "graceful_action": "shutdown",
+    "hard_fallback_action": "power_off",
+    "action_completion_poll_required": true,
+    "terminal_power_state_confirmation_required": true
+  },
+  "hostinger_fencing": {
+    "power_action": "stop",
+    "action_receipt_required": true,
+    "terminal_power_state_confirmation_required": true
+  },
+  "arbitration": {
+    "independent_arbiter_required": true,
+    "fence_receipt_before_promotion_required": true,
+    "automatic_fencing_enabled": false,
+    "automatic_promotion_enabled": false,
+    "automatic_traffic_failover_enabled": false
+  },
+  "boundaries": {
+    "single_writer_only": true,
+    "no_provider_action_without_incident_authorization": true,
+    "no_dns_or_load_balancer_change": true,
+    "no_hostinger_runtime_start": true,
+    "no_telephony_change": true
+  }
+}

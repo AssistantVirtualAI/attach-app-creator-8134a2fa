@@ -1,6 +1,6 @@
 # Lemtel — cible de failover automatique synchrone
 
-> **Statut : cible sélectionnée et préparée, mais non activée.** DO reste le writer actif. Hostinger demeure fencée et ne doit jamais être redémarrée comme writer dans son état actuel.
+> **Statut : cible sélectionnée et préparée, mais non activée.** DO reste le writer actif. Hostinger est un standby PostgreSQL privé en recovery/streaming : il ne doit jamais être redémarré ou promu comme writer hors du runbook contrôlé.
 
 ## Objectif approuvé
 
@@ -20,7 +20,7 @@ Une simple perte réseau ne suffit jamais. Sans preuve de fencing, il n’y a ni
 
 1. **Accès de fencing** : connecter des jetons API restreints DigitalOcean et Hostinger. Le contrôleur devra être autorisé à lire l’état et à arrêter une VM uniquement dans le cadre d’un fencing approuvé.
 2. **Arbitre indépendant** : déployer un composant de décision hors des deux VPS. Il doit conserver un journal d’incident, utiliser des tokens à usage unique et ne promouvoir que si le fencing est confirmé.
-3. **Hostinger standby** : reconstruire son PostgreSQL depuis DO, démarrer uniquement en recovery, activer le streaming privé DO → Hostinger et vérifier que Hostinger ne publie aucun port PostgreSQL.
+3. **Hostinger standby** : PostgreSQL est reconstruit depuis DO, en recovery avec streaming privé, sans port PostgreSQL public. Il reste à vérifier le mode synchrone sur DO avant toute activation.
 4. **Durabilité synchrone** : après synchronisation initiale, configurer DO pour confirmer les écritures seulement après réception durable par Hostinger. Si Hostinger est indisponible, les écritures attendront : c’est le compromis retenu pour éviter la perte d’écritures confirmées.
 5. **Storage** : remplacer la simple copie périodique par une stratégie où une écriture n’est reconnue qu’après deux copies durables, ou utiliser un stockage durable partagé. Le rsync périodique seul ne remplit pas cette exigence.
 6. **Versions applicatives** : conserver un digest immuable unique pour DO et Hostinger, puis vérifier que le runtime actif et le runtime préparé correspondent à ce digest avant de déclarer le standby prêt.

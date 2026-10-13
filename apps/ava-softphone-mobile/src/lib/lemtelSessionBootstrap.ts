@@ -6,6 +6,7 @@ export type LemtelSessionBootstrap = {
   displayName: string;
   organizationId: string;
   organizationName: string;
+  authorityRevision: number;
 };
 
 export class LemtelSessionBootstrapError extends Error {
@@ -18,6 +19,10 @@ type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function revision(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
 /**
@@ -60,10 +65,12 @@ export async function bootstrapLemtelMobileSession(
   const displayName = text(user?.displayName);
   const organizationId = text(firstMembership?.organizationId);
   const organizationName = text(organization?.display_name);
+  const authority = (body as Record<string, unknown>)?.authority as Record<string, unknown> | undefined;
+  const authorityRevision = revision(authority?.revision);
 
   if (!userId || userId !== expectedUserId || !email || !displayName || !organizationId || !organizationName) {
     throw new LemtelSessionBootstrapError('bootstrap_invalid_response', response.status);
   }
 
-  return { userId, email, displayName, organizationId, organizationName };
+  return { userId, email, displayName, organizationId, organizationName, authorityRevision };
 }

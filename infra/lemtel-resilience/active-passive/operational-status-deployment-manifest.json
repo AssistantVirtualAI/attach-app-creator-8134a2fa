@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_operational_status_deployment_v1",
+  "package_version": "lemtel_operational_status_deployment_v2",
   "scope": "offline_promoted_writer_operational_status_package",
   "deployment_authorized": false,
   "hostinger_rebuild_or_start_authorized": false,
@@ -7,15 +7,19 @@
   "sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "43befc840f68901d90f3c42c8b3edab6fe2fc180c37fbb1c2a6b44cbf8c86434"
+      "sha256": "bc300f75033809693556bc0baf0cdb96c63ada1a7e2eb730e985af8375f9ffaf"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
-      "sha256": "3100e92a25a68322d13a4ca18fcd2daea5f66f053e87be503bc01255b3c6ddbf"
+      "sha256": "ab7116bc29b0886fa19379758c865be7c14b712444244c1030e0b767732462e0"
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql",
       "sha256": "a0e47137ccd6b03ccb67467466715195686d3b83166163c39fb9aaae247d821c"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0007_lemtel_portal_account_authority.sql",
+      "sha256": "bbeddc0bf135521ac8d0b0e291237007a58cdd260dc60bfaec5f25c3749971d8"
     },
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh",
@@ -31,6 +35,7 @@
     "digitalocean_is_verified_single_writer",
     "hostinger_remains_fenced",
     "approved_private_schema_write",
+    "approved_portal_account_authority_schema_write",
     "approved_edge_function_deployment",
     "platform_admin_rbac_read_test",
     "redacted_snapshot_read_test"

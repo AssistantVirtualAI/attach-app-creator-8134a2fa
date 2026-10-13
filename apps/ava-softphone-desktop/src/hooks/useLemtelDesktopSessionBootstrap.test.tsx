@@ -71,4 +71,13 @@ describe('useLemtelDesktopSessionBootstrap', () => {
     expect(result.current.telephonyEnabled).toBe(false);
     expect(fetchStub).not.toHaveBeenCalled();
   });
+
+  it('rechecks the authoritative portal session when Desktop regains focus', async () => {
+    edgeCall.mockResolvedValue({ status: 200, body: acceptedBootstrap });
+    renderHook(() => useLemtelDesktopSessionBootstrap('session-token'));
+
+    await waitFor(() => expect(fetchStub).toHaveBeenCalledTimes(1));
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await waitFor(() => expect(fetchStub).toHaveBeenCalledTimes(2));
+  });
 });

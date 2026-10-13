@@ -31,16 +31,22 @@ export async function handler(req: Request): Promise<Response> {
   const organizationIds = memberships.map((membership: Record<string, unknown>) => String(membership.organization_id));
   const { data: organizations, error: organizationError } = await admin
     .from("lemtel_organizations")
-    .select("id,display_name,slug,status")
+    .select("id,display_name,slug,status,account_authority_revision")
     .in("id", organizationIds)
     .eq("status", "active");
   if (organizationError || !organizations?.length) return respond({ error: "lemtel_active_organization_required" }, 403);
   const organizationById = new Map(organizations.map((organization: Record<string, unknown>) => [String(organization.id), organization]));
   const activeMemberships = memberships.filter((membership: Record<string, unknown>) => organizationById.has(String(membership.organization_id)));
   if (!activeMemberships.length) return respond({ error: "lemtel_active_organization_required" }, 403);
+  const authorityRevision = activeMemberships.reduce((current: number, membership: Record<string, unknown>) => {
+    const organization = organizationById.get(String(membership.organization_id));
+    const revision = Number((organization as Record<string, unknown> | undefined)?.account_authority_revision);
+    return Number.isSafeInteger(revision) && revision > current ? revision : current;
+  }, 0);
   return respond({
     user: { id: user.id, email: user.email, displayName: String(user.user_metadata?.full_name || user.email), locale: user.user_metadata?.locale === "en" ? "en" : "fr" },
     organizations: activeMemberships.map((membership: Record<string, unknown>) => ({ organizationId: membership.organization_id, role: membership.role, organization: organizationById.get(String(membership.organization_id)) })),
+    authority: { policy: "portal_only_active_membership", revision: authorityRevision },
     telephony: { status: "not_provisioned" },
   });
 }

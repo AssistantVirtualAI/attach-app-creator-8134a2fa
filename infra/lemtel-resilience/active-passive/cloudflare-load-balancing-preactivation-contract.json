@@ -1,0 +1,55 @@
+{
+  "contract_version": "lemtel_cloudflare_load_balancing_preactivation_v1",
+  "scope": "design_and_validation_only_no_cloudflare_mutation",
+  "subscription": {
+    "load_balancing_subscription_active": true,
+    "load_balancer_resource_configured": false,
+    "pools_configured": false,
+    "monitor_configured": false,
+    "canonical_routing_changed": false
+  },
+  "topology": {
+    "canonical_hostname": "lemtel.assistantvirtualai.com",
+    "strategy": "priority_active_passive",
+    "primary_pool_role": "digitalocean_current_writer_only",
+    "fallback_pool_role": "hostinger_promoted_writer_only",
+    "fallback_pool_enabled_before_verified_promotion": false,
+    "session_affinity_claimed": false
+  },
+  "writer_ready_monitor": {
+    "protocol": "https",
+    "method": "GET",
+    "path_contract": "redacted_writer_ready_endpoint",
+    "expected_status": 200,
+    "must_require": [
+      "single_postgresql_writer",
+      "runtime_ready",
+      "immutable_artifact_digest_verified",
+      "storage_freshness_verified",
+      "promotion_authorization_when_standby"
+    ],
+    "must_not_expose": [
+      "server_address",
+      "provider_identifier",
+      "database_state_detail",
+      "secret",
+      "customer_data"
+    ]
+  },
+  "activation_gates": {
+    "independent_arbiter_deployed": false,
+    "provider_fencing_drill_verified": false,
+    "postgres_synchronous_streaming_verified": false,
+    "storage_dual_durable_write_verified": false,
+    "hostinger_runtime_promotion_guard_verified": false,
+    "final_routing_window_approved": false
+  },
+  "boundaries": {
+    "cloudflare_monitor_must_not_promote_postgres": true,
+    "cloudflare_monitor_must_not_start_hostinger_runtime": true,
+    "no_automatic_route_before_all_gates": true,
+    "no_public_postgres": true,
+    "no_telephony_change": true,
+    "no_planipret_change": true
+  }
+}

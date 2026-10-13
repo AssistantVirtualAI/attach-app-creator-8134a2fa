@@ -50,7 +50,7 @@ export interface TaskDeps {
   /** Documented GET /api/main/tasks read-back. */
   listFetch: (
     telecomId: string,
-    opts: { status?: string | null; from?: string | null; to?: string | null; type?: "user" | "contract" | null; findTaskId?: string | null; scopeOnly?: boolean },
+    opts: { status?: string | null; from?: string | null; to?: string | null; type?: "user" | "contract" | null; findTaskId?: string | null; scopeOnly?: boolean; fullSync?: boolean },
   ) => Promise<UpstreamList>;
   /**
    * Client List API (`GET /users/{telecomId}/clients`). Each row may carry a
@@ -71,6 +71,8 @@ export interface TaskDeps {
   /** Ids this broker may assign a task to: self + authorized team assistants. */
   listAllowedAssignees?: () => Promise<string[]>;
   now?: () => Date;
+  /** True only for the service-role task synchronizer, never for an app request. */
+  allowFullSync?: boolean;
 }
 
 export function newCorrelationId() {
@@ -630,6 +632,9 @@ export async function handleTaskRequest(
     const status = body?.status ? String(body.status) : null;
     const from = body?.from ? String(body.from) : null;
     const to = body?.to ? String(body.to) : null;
+    // Only the protected scheduled synchronizer may use the broader bounded
+    // scan. Interactive mobile and portal lists stay inside a small Edge budget.
+    const fullSync = deps.allowFullSync === true && String(body?.source ?? "") === "tasks_sweeper";
 
     // Admins may inspect another broker's tasks (portal broker toggle).
     // Brokers are always locked to their own Maestro id.

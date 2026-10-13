@@ -474,7 +474,7 @@ describe("planipret task handler — list & isolation", () => {
     expect(out.body.error).toBe("tasks_unavailable");
   });
 
-  it("uses the API and mirrors it into the projection when the list works", async () => {
+  it("uses the API and mirrors it into the projection when no verified cache exists", async () => {
     const { deps } = makeDeps({
       admin: createMockAdmin(),
       listFetch: async () => ({

@@ -5,7 +5,7 @@ import { authBroker, corsHeaders, jsonResponse } from "../_shared/ns-broker.ts";
 import { EXPECTED_TOOL_NAMES } from "../_shared/ava-tools.ts";
 
 const DEFAULT_AGENT_ID = Deno.env.get("ELEVENLABS_DEFAULT_AGENT_ID") ?? "";
-const DEFAULT_VOICE_ID = "RCSF5YgDtAhZXpNZfGek"; // Andréa — voix québécoise multilingual v2
+const DEFAULT_VOICE_ID = "UJCi4DDncuo0VJDSIegj"; // Amélie — voix féminine québécoise
 
 const TOOL_NAMES = EXPECTED_TOOL_NAMES;
 

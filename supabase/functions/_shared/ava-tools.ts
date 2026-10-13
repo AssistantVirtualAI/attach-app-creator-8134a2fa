@@ -397,6 +397,7 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       duration_minutes: { type: "number", description: "Durée (défaut: 60)" },
       attendees: { type: "string", description: "Courriels séparés par virgule (optionnel)" },
       body: { type: "string", description: "Description (optionnel)" },
+      is_online: { type: "boolean", description: "Réunion Teams avec lien (défaut: true). L'invitation est envoyée par courriel aux participants." },
     }, ["subject", "start_datetime"]),
     mk("move_calendar_event", "Déplace un événement du calendrier M365.", {
       event_id: { type: "string", description: "ID de l'événement" },

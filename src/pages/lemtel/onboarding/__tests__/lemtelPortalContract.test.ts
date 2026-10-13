@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, portalApi, toLemtelErrorKey } from "../lemtelHostedApi";
+import { buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
@@ -15,6 +15,17 @@ describe("Lemtel portal contract", () => {
     expect(needsPersonalPassword({ app_metadata: { lemtel_onboarding_required: true, lemtel_email_only_signin: true } })).toBe(true);
     expect(needsPersonalPassword({ app_metadata: { must_change_password: true, lemtel_email_only_signin: true } })).toBe(false);
     expect(needsPersonalPassword({ app_metadata: { lemtel_onboarding_required: true, lemtel_email_only_signin: false } })).toBe(false);
+  });
+
+  it("uses only Lemtel-namespaced public backend variables", () => {
+    expect(resolveLemtelPortalBackend({
+      VITE_SUPABASE_URL: "https://planipret.example.invalid",
+      VITE_SUPABASE_PUBLISHABLE_KEY: "planipret-key",
+    })).toEqual({ url: "", publishableKey: "" });
+    expect(resolveLemtelPortalBackend({
+      VITE_LEMTEL_API_URL: "https://lemtel.example.invalid/",
+      VITE_LEMTEL_ANON_KEY: "lemtel-public-key",
+    })).toEqual({ url: "https://lemtel.example.invalid", publishableKey: "lemtel-public-key" });
   });
 
   it("uses only the exact create-organization body accepted by the Lemtel Edge function", () => {

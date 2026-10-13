@@ -15,6 +15,10 @@ Un compte est utilisable dans toute application seulement si le serveur confirme
 
 Un e-mail externe qui créerait malgré tout un compte Auth ne reçoit aucune adhésion et est donc refusé par le bootstrap Lemtel. La configuration runtime devra aussi désactiver l’inscription Auth publique (`GOTRUE_DISABLE_SIGNUP=true`) avant une mise en production.
 
+## Configuration isolée du portail
+
+Le portail peut coexister dans une base de code avec Planiprêt. Il lit donc uniquement les variables publiques Lemtel `VITE_LEMTEL_API_URL` et `VITE_LEMTEL_PUBLISHABLE_KEY` (ou la compatibilité `VITE_LEMTEL_ANON_KEY`). Les variables génériques `VITE_SUPABASE_*` sont délibérément ignorées afin qu’un portail Lemtel ne puisse jamais se connecter par erreur au backend Planiprêt. Les écritures restent fermées tant que `VITE_LEMTEL_HOSTED_ONBOARDING=approved` n’est pas fourni par le déploiement autorisé.
+
 ## Synchronisation réelle, sans mot de passe en clair
 
 | Élément | Source de vérité | Portail | iOS / Android / Desktop |

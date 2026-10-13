@@ -1214,7 +1214,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   async create_calendar_event(ctx, p) {
     // p: { subject, start_datetime, end_datetime OR duration_minutes, attendees?, body?, location?, is_online?, contact_name?, contact_email? }
     // Auto-resolve attendee by contact_name if not provided.
-    let attendees: string[] = Array.isArray(p.attendees) ? p.attendees.slice() : [];
+    let attendees: string[] = Array.isArray(p.attendees) ? p.attendees.slice() : typeof p.attendees === "string" ? p.attendees.split(/[,;\s]+/).map((x: string) => x.trim()).filter((x: string) => x.includes("@")) : [];
     if (p.attendee_email) attendees.push(p.attendee_email);
     if (p.contact_email) attendees.push(p.contact_email);
     if (!attendees.length && p.contact_name) {

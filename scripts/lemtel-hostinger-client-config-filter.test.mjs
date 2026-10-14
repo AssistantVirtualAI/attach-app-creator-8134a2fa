@@ -29,6 +29,7 @@ test('canonical build templates and workflows expose only namespaced Lemtel runt
   for (const source of [template, workflow]) {
     assert.match(source, /VITE_LEMTEL_API_URL/);
     assert.match(source, /VITE_LEMTEL_PUBLISHABLE_KEY/);
+    assert.match(source, /VITE_LEMTEL_HOSTED_ONBOARDING/);
     assert.doesNotMatch(source, /VITE_SUPABASE_URL:/);
     assert.doesNotMatch(source, /VITE_SUPABASE_PUBLISHABLE_KEY:/);
   }

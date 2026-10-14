@@ -10,7 +10,7 @@ import { ADMIN_REPORT_FILTERS_EVENT, periodLabel, periodToRange, rangeToPeriod, 
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { computeServiceFinance, computeTotals, fmtMoney, countPlans, type ServiceFinance } from "@/lib/planipret/pricing";
+import { computeServiceFinance, computeTotals, fmtMoney, countPlans, SERVICE_PRICES, type ServiceFinance } from "@/lib/planipret/pricing";
 import { FinancialKpiCard } from "@/components/planipret/admin/FinancialKpiCard";
 import { RevenueBreakdown } from "@/components/planipret/admin/RevenueBreakdown";
 
@@ -34,7 +34,7 @@ export default function PAReports() {
   const [avaFeedback, setAvaFeedback] = useState<Array<{ rating: string }>>([]);
   const [reminders, setReminders] = useState<any[]>([]);
   const [brokers, setBrokers] = useState<Record<string, string>>({});
-  const [brokerSnapshot, setBrokerSnapshot] = useState({ total: 0, mobile: 0, ai: 0, maestro: 0, ms365: 0, ns: 0 });
+  const [brokerSnapshot, setBrokerSnapshot] = useState<{ total: number; mobile: number; ai: number; maestro: number; ms365: number; ns: number; plans?: Record<"widget" | "mobile" | "ai", number> }>({ total: 0, mobile: 0, ai: 0, maestro: 0, ms365: 0, ns: 0 });
   const [exporting, setExporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -505,7 +505,7 @@ export default function PAReports() {
                     </td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>{f.users}</td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: DANGER }}>{fmtMoney(unitCost)}</td>
-                    <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>{fmtMoney(49.95)}</td>
+                    <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>{fmtMoney(SERVICE_PRICES[f.service])}</td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: DANGER }}>{fmtMoney(f.cost)}</td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: ACCENT }}>{fmtMoney(f.revenue)}</td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: SUCCESS }}>{fmtMoney(f.profit)}</td>

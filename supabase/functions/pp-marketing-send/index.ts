@@ -20,7 +20,7 @@ Deno.serve(async (req): Promise<Response> => {
   const b = await req.clone().json().catch(() => ({}));
   if (b?.action === "dispatch_due") return await dispatchDue();
   const ctx = await requireBroker(req);
-  if ("error" in ctx) return ctx.error;
+  if ("error" in ctx) return ctx.error as Response;
   const { admin, profile, userId } = ctx;
 
   if (b?.action === "cancel") {

@@ -8,11 +8,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";
 import { authorizeCallAccess, allowCallViewing } from "../_shared/planipret-call-access.ts";
 import { fetchTwinTranscript } from "./twin-lookup.ts";
+import { hasUsableAiKey } from "./ai-key-guard.ts";
 
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 
 const json = (p: any, s = 200) =>

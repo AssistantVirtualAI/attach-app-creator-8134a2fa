@@ -16,7 +16,7 @@ const BOUNDARY_KEYS = ['single_writer_only', 'public_postgres_listener', 'fusion
 
 const exactKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) &&
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
-const everyFalse = (value) => Object.values(value).every((entry) => entry === false);
+const validPreflight = (value) => Object.entries(value).every(([key, entry]) => entry === (key === 'postgres_synchronous_streaming_verified'));
 const everyBoolean = (value) => Object.values(value).every((entry) => typeof entry === 'boolean');
 
 export function validateAutomaticFailoverTarget(policy) {
@@ -62,7 +62,7 @@ export function reviewAutomaticFailoverTarget(policy) {
     !preflight.provider_api_credentials_verified && 'PROVIDER_FENCING_CREDENTIALS_REQUIRED',
     !preflight.independent_arbiter_deployed && 'INDEPENDENT_ARBITER_REQUIRED',
     !preflight.hostinger_private_standby_rebuilt && 'HOSTINGER_STANDBY_REBUILD_REQUIRED',
-    (!preflight.postgres_synchronous_streaming_verified || !preflight.storage_dual_durable_write_verified) && 'SYNCHRONOUS_DATABASE_AND_STORAGE_DURABILITY_REQUIRED',
+    (!preflight.postgres_synchronous_streaming_verified || !preflight.storage_dual_durable_write_verified) && 'STORAGE_DUAL_DURABILITY_REQUIRED',
     !preflight.cloudflare_load_balancer_configured && 'CLOUDFLARE_LOAD_BALANCER_NOT_CONFIGURED',
     (!preflight.digitalocean_fence_drill_verified || !preflight.hostinger_promotion_drill_verified || !preflight.reverse_failback_drill_verified) && 'FAILOVER_AND_FAILBACK_DRILLS_REQUIRED',
     'FINAL_ACTIVATION_CONFIRMATION_REQUIRED',

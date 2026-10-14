@@ -1,81 +1,29 @@
 # Lemtel — préparation du fencing fournisseur
 
-> **Statut : préparation vérifiée en lecture seule, aucune action fournisseur autorisée.** Ce document ne donne aucun identifiant de ressource, adresse, token, clé ou détail d’exploitation.
+> **État actuel :** lecture DigitalOcean attestée ; accès lecture Hostinger à réparer. Aucune action fournisseur, promotion, DNS, routage ou téléphonie n’est déclenchée par ce document.
 
-Le 13 octobre 2026, les APIs DigitalOcean et Hostinger ont répondu aux inventaires lecture seule. Cette preuve confirme les accès de consultation et les inventaires de VPS ; elle ne confirme **pas** le droit d’arrêter une machine, et elle ne lance aucune action.
+## Décision fail-closed
 
-## Décision de sécurité
+L’arbitre indépendant refuse toute promotion si l’un des éléments suivants manque : une lecture fournisseur cohérente, un reçu de fencing, la confirmation d’état terminal de l’ancien writer, le prévol local du standby, ou la santé applicative après promotion.
 
-Le fencing automatique reste désactivé. L’arbitre doit refuser une promotion dans les cas suivants :
+Une perte de réseau ne suffit jamais à promouvoir Hostinger. Cloudflare mesure la santé HTTP mais ne décide pas seul de la promotion PostgreSQL.
 
-- l’ancien writer est encore accessible ou son état fournisseur est ambigu ;
-- aucun reçu fournisseur n’atteste l’action de fencing ;
-- l’état terminal du VPS n’est pas confirmé ;
-- PostgreSQL/Storage/runtime du standby ne sont pas prêts ;
-- le Load Balancer Cloudflare n’est pas configuré et validé.
+## Ordre de fencing contractuel
 
-Une perte réseau seule est toujours insuffisante. Elle peut isoler l’arbitre du writer sans arrêter ses écritures : promouvoir le standby dans ce cas créerait deux writers.
+1. Ouvrir un incident unique et lire l’état du writer attendu.
+2. DigitalOcean : demander `shutdown`, attendre le résultat, puis utiliser `power_off` seulement si l’arrêt gracieux ne confirme pas l’état terminal.
+3. Hostinger : utiliser son action d’arrêt seulement lorsque l’accès VPS est de nouveau validé.
+4. Relire l’état terminal non actif, créer un reçu redacted à usage unique, puis seulement autoriser le garde local de promotion.
 
-## Ordre de fencing prévu — DigitalOcean
+## Préconditions restantes
 
-1. L’arbitre ouvre un incident unique et fige son identifiant.
-2. Il lit l’état du writer et confirme que la demande cible le writer attendu.
-3. Après l’autorisation explicite d’incident, il demande d’abord un arrêt gracieux `shutdown`.
-4. Il attend l’action renvoyée par le fournisseur jusqu’à l’état terminal.
-5. Si le délai approuvé expire sans arrêt confirmé, il demande `power_off`, puis attend de nouveau l’état terminal.
-6. Il relit l’état du VPS. La promotion reste bloquée tant que l’état ne confirme pas qu’il n’est plus actif.
-7. Il écrit un reçu redacted d’incident. Seul ce reçu, lié à l’identifiant d’incident, peut être présenté au garde de promotion Hostinger.
-
-DigitalOcean recommande précisément la séquence arrêt gracieux puis `power_off` en secours, et expose une action récupérable par son identifiant pour suivi. [1]
-
-## Ordre de fencing prévu — Hostinger
-
-Quand Hostinger serait le writer après un failover confirmé, le même principe s’inverse :
-
-1. l’arbitre lit l’état du VPS attendu ;
-2. il demande l’action `stop` uniquement après autorisation d’incident ;
-3. il conserve le reçu de l’action ;
-4. il relit le VPS jusqu’à l’état terminal non actif ;
-5. il écrit le reçu redacted avant toute promotion de DO.
-
-Hostinger documente `POST /api/vps/v1/virtual-machines/{virtualMachineId}/stop` et la lecture de l’état du VPS via `GET /api/vps/v1/virtual-machines/{virtualMachineId}`. [2] [3]
-
-## Arbitre indépendant : contrat minimal
-
-L’arbitre doit s’exécuter hors de DO et Hostinger. Il doit avoir son propre journal d’incidents et produire une décision **deny by default**. Sa chaîne de décision est :
-
-```text
-Sondes indépendantes + état fournisseur cohérent
-  → incident unique
-  → fencing fournisseur confirmé
-  → reçu redacted à usage unique
-  → prévol standby local
-  → promotion contrôlée
-  → démarrage runtime contrôlé
-  → routage uniquement après santé publique
-```
-
-Le Load Balancer Cloudflare ne décide jamais seul d’une promotion PostgreSQL. Sa fonction est de diriger les requêtes vers un pool sain **après** que le writer correspondant a été prouvé prêt. Cloudflare décrit l’active-passive comme deux pools, le secondaire n’étant choisi que lorsque le primaire passe sous son seuil de santé. [4]
-
-## Non inclus
-
-- aucun arrêt/démarrage VPS ;
-- aucun token ou identifiant fournisseur ;
-- aucun DNS, Cloudflare Load Balancing, pool ou monitor ;
-- aucune promotion PostgreSQL ou activation de runtime Hostinger ;
-- aucun changement téléphonie.
-
-## Étapes restantes avant activation
-
-1. Obtenir une autorisation explicite pour tester les permissions d’action fournisseur dans une fenêtre contrôlée ; ce test peut arrêter un writer, il n’est donc pas effectué ici.
-2. Déployer l’arbitre indépendant en observation seule et tester ses décisions de refus.
-3. Prouver la réplication PostgreSQL synchrone et la durabilité Storage double-écriture.
-4. Configurer et tester le Load Balancer Cloudflare après confirmation explicite du coût.
-5. Exécuter un drill complet de fencing, promotion, reprise de trafic et reconstruction inverse.
+- Réparer l’autorisation API VPS Hostinger : le dernier inventaire lecture seule a retourné un refus d’accès.
+- Déployer l’arbitre hors des deux VPS en observation/refus par défaut.
+- Prouver la durabilité Storage double-écriture, la parité runtime et les drills de fencing/promotion/failback.
+- Créer et tester le monitoring Cloudflare avant tout routage.
 
 ## Références
 
-[1]: https://docs.digitalocean.com/reference/api/reference/droplet-actions/ "DigitalOcean Droplet Actions"
-[2]: https://docs.hostinger.com/api-reference/endpoints/vps/virtual-machine/stop-virtual-machine "Hostinger Stop Virtual Machine"
-[3]: https://docs.hostinger.com/api-reference/endpoints/vps/virtual-machine/get-virtual-machine-details "Hostinger Get Virtual Machine Details"
-[4]: https://developers.cloudflare.com/load-balancing/load-balancers/common-configurations/ "Cloudflare Active-Passive Failover"
+- https://docs.digitalocean.com/reference/api/reference/droplet-actions/
+- https://docs.hostinger.com/api-reference/overview
+- https://developers.cloudflare.com/load-balancing/load-balancers/common-configurations/

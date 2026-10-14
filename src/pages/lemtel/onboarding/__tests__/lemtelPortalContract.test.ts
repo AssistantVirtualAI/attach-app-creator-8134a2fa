@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
+import { buildAssignExistingUserBody, buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, buildSetMembershipRoleBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
@@ -60,6 +60,28 @@ describe("Lemtel portal contract", () => {
     expect(buildResendWelcomeBody("11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "fr")).toEqual({
       action: "resend_welcome", organizationId: "11111111-1111-4111-8111-111111111111", recipientUserId: "22222222-2222-4222-8222-222222222222", locale: "fr",
     });
+  });
+
+  it("uses exact organization-scoped bodies for existing-account assignment and role changes", () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    const recipientUserId = "22222222-2222-4222-8222-222222222222";
+    expect(buildAssignExistingUserBody(organizationId, { email: " Existing@Example.com ", role: "member" })).toEqual({
+      action: "assign_existing_user", organizationId, user: { email: "existing@example.com", role: "member" },
+    });
+    expect(buildSetMembershipRoleBody(organizationId, recipientUserId, "admin")).toEqual({
+      action: "set_membership_role", organizationId, recipientUserId, role: "admin",
+    });
+    expect(typeof portalApi.assignExistingUser).toBe("function");
+    expect(typeof portalApi.setMembershipRole).toBe("function");
+  });
+
+  it("keeps user-domain access derived from organization membership", () => {
+    const governance = readFileSync(resolve(process.cwd(), "docs/lemtel-portal/TENANT_MEMBERSHIP_GOVERNANCE.md"), "utf8");
+    const memberControl = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelMembershipControls.tsx"), "utf8");
+    expect(governance).toContain("membership actif");
+    expect(governance).toContain("Il n’existe pas de liaison directe utilisateur–domaine");
+    expect(memberControl).toContain("t.membership.assignNotice");
+    expect(memberControl).not.toMatch(/fusionpbx|sip:|turn:|wss:/i);
   });
 
   it("validates Lemtel CSV rows without deprecated Lovable roles", () => {

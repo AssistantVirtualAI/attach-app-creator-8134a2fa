@@ -146,6 +146,8 @@ async function invoke<T>(functionName: string, body: unknown, options: { authent
 export type LemtelLocale = "fr" | "en";
 export type LemtelRole = "owner" | "admin" | "member";
 export type ProvisionedUser = { email: string; displayName: string; role: "admin" | "member"; locale: LemtelLocale };
+export type AssignableRole = "admin" | "member";
+export type ExistingLemtelUserAssignment = { email: string; role: AssignableRole };
 export type PortalOrganization = {
   id: string;
   displayName: string;
@@ -240,6 +242,14 @@ export function buildCreateDomainBody(organizationId: string, hostname: string) 
   return { action: "create_domain" as const, organizationId, domain: { hostname: hostname.trim().toLowerCase().replace(/\.$/, "") } };
 }
 
+export function buildAssignExistingUserBody(organizationId: string, user: ExistingLemtelUserAssignment) {
+  return { action: "assign_existing_user" as const, organizationId, user: { email: user.email.trim().toLowerCase(), role: user.role } };
+}
+
+export function buildSetMembershipRoleBody(organizationId: string, recipientUserId: string, role: AssignableRole) {
+  return { action: "set_membership_role" as const, organizationId, recipientUserId, role };
+}
+
 /**
  * Every object below uses the exact Lemtel Edge contract. There is intentionally
  * no generic action/payload wrapper and no legacy Planiprêt action name.
@@ -267,6 +277,10 @@ export const portalApi = {
     invoke<{ ok: true; domain: PortalDomain }>("lemtel-onboarding-admin", buildCreateDomainBody(organizationId, hostname), { write: true }),
   suspendDomain: (organizationId: string, domainId: string) =>
     invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "suspend_domain", organizationId, domainId }, { write: true }),
+  assignExistingUser: (organizationId: string, user: ExistingLemtelUserAssignment) =>
+    invoke<{ ok: true; membership: { status: "assigned" | "reactivated" | "unchanged" } }>("lemtel-onboarding-admin", buildAssignExistingUserBody(organizationId, user), { write: true }),
+  setMembershipRole: (organizationId: string, recipientUserId: string, role: AssignableRole) =>
+    invoke<{ ok: true; membership: { status: "updated" | "unchanged" } }>("lemtel-onboarding-admin", buildSetMembershipRoleBody(organizationId, recipientUserId, role), { write: true }),
   completeFirstPassword: (newPassword: string) =>
     invoke<{ ok: true; password_change_required: false }>("lemtel-complete-first-password", { newPassword }),
   requestTemporaryPassword: async (email: string): Promise<void> => {

@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_operational_status_deployment_v4",
+  "package_version": "lemtel_operational_status_deployment_v5",
   "scope": "offline_promoted_writer_operational_status_package",
   "deployment_authorized": false,
   "hostinger_rebuild_or_start_authorized": false,
@@ -7,7 +7,7 @@
   "sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "10ad2aa10fabbb721fbe0e6a2a3d655654221fe92369c72426cb6551675725ff"
+      "sha256": "2ec406c18a42d4b0bd17acf9c29d54ce5a346fdc4e4f3425a4e662ed62fb5546"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts",
@@ -15,7 +15,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
-      "sha256": "fd7b6021e5bdf1c2de7748502cd5821b42cd645f4427c0d88c03fa323fd33c8d"
+      "sha256": "424a2a79fb6019e11e2f5e2c115c5ea2c093f8697c49d4b43b8a37f98bace2d0"
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql",
@@ -28,6 +28,10 @@
     {
       "path": "infra/lemtel-self-hosted/migrations/0011_lemtel_operational_status_history.sql",
       "sha256": "7efd08b3fe2a7d69a7a357b4209e5d0ae303ab523db1e3dacff4bce4dfc7bf80"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0012_lemtel_membership_governance.sql",
+      "sha256": "fcfd35d72c8bb291f5d2ffa49030246159164cdd2d85d8f5134f08c3e663840a"
     },
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh",
@@ -48,7 +52,9 @@
     "platform_admin_rbac_read_test",
     "redacted_snapshot_read_test",
     "approved_lemtel_operational_status_history_schema_write",
-    "approved_telephony_readiness_catalog_deployment"
+    "approved_telephony_readiness_catalog_deployment",
+    "approved_lemtel_membership_governance_schema_write",
+    "synthetic_membership_assignment_and_role_rbac_test"
   ],
   "forbidden_actions": [
     "hostinger_start_or_rebuild",

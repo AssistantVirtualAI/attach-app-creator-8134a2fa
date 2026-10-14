@@ -38,6 +38,7 @@ test('operational status has its own immutable offline deployment package', () =
     'infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql',
     'infra/lemtel-self-hosted/migrations/0007_lemtel_portal_account_authority.sql',
     'infra/lemtel-self-hosted/migrations/0011_lemtel_operational_status_history.sql',
+    'infra/lemtel-self-hosted/migrations/0012_lemtel_membership_governance.sql',
     'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh',
     'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-timer-enable.sh',
   ]);

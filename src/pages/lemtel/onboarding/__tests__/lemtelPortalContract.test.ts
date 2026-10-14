@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAssignExistingUserBody, buildCreateOrganizationBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetMembershipRoleBody, buildTransferOrganizationOwnershipBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
+import { buildAssignExistingUserBody, buildCreateOrganizationBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetClientSessionAccessBody, buildSetMembershipRoleBody, buildTransferOrganizationOwnershipBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
@@ -83,6 +83,15 @@ describe("Lemtel portal contract", () => {
     expect(buildTransferOrganizationOwnershipBody(organizationId, recipientUserId)).toEqual({ action: "transfer_organization_ownership", organizationId, recipientUserId });
     expect(typeof portalApi.reactivateDomain).toBe("function");
     expect(typeof portalApi.transferOrganizationOwnership).toBe("function");
+  });
+
+  it("uses an exact server-side client-session access body", () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    const recipientUserId = "22222222-2222-4222-8222-222222222222";
+    expect(buildSetClientSessionAccessBody(organizationId, recipientUserId, "desktop", "revoked")).toEqual({
+      action: "set_client_session_access", organizationId, recipientUserId, clientKind: "desktop", accessState: "revoked",
+    });
+    expect(typeof portalApi.setClientSessionAccess).toBe("function");
   });
 
   it("keeps user-domain access derived from organization membership", () => {

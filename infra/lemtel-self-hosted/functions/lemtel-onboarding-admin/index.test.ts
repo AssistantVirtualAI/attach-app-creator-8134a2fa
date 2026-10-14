@@ -61,6 +61,16 @@ Deno.test("ownership transfer and domain reactivation require exact tenant-scope
   assertEquals(validateBody({ action: "reactivate_domain", organizationId, domainId, ignored: true }), { error: "invalid_body", status: 400 });
 });
 
+Deno.test("client session controls require exact bounded state", () => {
+  const organizationId = "11111111-1111-4111-8111-111111111111";
+  const recipientUserId = "22222222-2222-4222-8222-222222222222";
+  assertEquals(validateBody({ action: "set_client_session_access", organizationId, recipientUserId, clientKind: "desktop", accessState: "revoked" }), {
+    action: "set_client_session_access", organizationId, recipientUserId, clientKind: "desktop", accessState: "revoked",
+  });
+  assertEquals(validateBody({ action: "set_client_session_access", organizationId, recipientUserId, clientKind: "portal", accessState: "revoked" }), { error: "invalid_client_kind", status: 400 });
+  assertEquals(validateBody({ action: "set_client_session_access", organizationId, recipientUserId, clientKind: "desktop", accessState: "unknown" }), { error: "invalid_access_state", status: 400 });
+});
+
 Deno.test("operational status accepts only the exact platform read action", () => {
   assertEquals(validateBody({ action: "get_operational_status" }), { action: "get_operational_status" });
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });

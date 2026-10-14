@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import test from 'node:test';
 import { validateLemtelActivePassiveConfig } from './lemtel-hostinger-client-config-filter.mjs';
 
@@ -18,6 +19,18 @@ test('filter accepts only the canonical active-passive profile with the server p
   crypto.createHash = () => ({ update: () => ({ digest: () => 'aa5b9711b893de44' }) });
   assert.equal(validateLemtelActivePassiveConfig(base).ok, true);
   crypto.createHash = original;
+});
+
+test('canonical build templates and workflows expose only namespaced Lemtel runtime variables', () => {
+  const root = new URL('..', import.meta.url);
+  const template = fs.readFileSync(new URL('./infra/lemtel-client-config/hostinger-staging.env.template', root), 'utf8');
+  const workflow = fs.readFileSync(new URL('./.github/workflows/lemtel-hostinger-client-config-filter.yml', root), 'utf8');
+  for (const source of [template, workflow]) {
+    assert.match(source, /VITE_LEMTEL_API_URL/);
+    assert.match(source, /VITE_LEMTEL_PUBLISHABLE_KEY/);
+    assert.doesNotMatch(source, /VITE_SUPABASE_URL:/);
+    assert.doesNotMatch(source, /VITE_SUPABASE_PUBLISHABLE_KEY:/);
+  }
 });
 
 test('filter denies Planipret, the former Hostinger route, unapproved flags and malformed origins', () => {

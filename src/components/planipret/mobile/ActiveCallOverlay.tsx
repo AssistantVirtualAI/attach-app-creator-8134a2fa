@@ -112,7 +112,7 @@ export default function ActiveCallOverlay({ callId, onClosed }: { callId: string
   const toggleSpeaker = async () => {
     const next = !speaker;
     setSpeaker(next);
-    try { await audioRouter.setRoute(next ? "speaker" : "earpiece"); } catch {}
+    try { await audioRouter.chooseRoute(next ? "speaker" : "earpiece"); } catch {}
   };
   const sendDtmf = async (d: string) => { setDtmfBuffer((b) => (b + d).slice(-16)); await invoke("dtmf", { digit: d }); };
   const doTransfer = async () => {

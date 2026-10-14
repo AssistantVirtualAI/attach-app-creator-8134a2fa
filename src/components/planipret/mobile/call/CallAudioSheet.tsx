@@ -67,7 +67,7 @@ export default function CallAudioSheet({ open, onClose, stream, onMuteChange }: 
 
   useEffect(() => { vad.current?.setAutoMute(autoMute); }, [autoMute]);
 
-  const setRouteAnd = async (r: AudioRoute) => { await audioRouter.setRoute(r); setRoute(r); };
+  const setRouteAnd = async (r: AudioRoute) => { await audioRouter.chooseRoute(r); setRoute(r); };
   const pickNc = (m: NCMode) => { localStorage.setItem("pp_nc_mode", m); setNcMode(m); };
   const pickAutoMute = (m: VadAutoMute) => { localStorage.setItem("pp_auto_mute", m); setAutoMute(m); };
 

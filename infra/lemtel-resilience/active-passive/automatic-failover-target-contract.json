@@ -18,7 +18,7 @@
   },
   "required_preflight": {
     "cloudflare_load_balancing_subscription_active": true,
-    "provider_api_credentials_verified": false,
+    "provider_api_credentials_verified": true,
     "independent_arbiter_deployed": false,
     "hostinger_private_standby_rebuilt": true,
     "postgres_synchronous_streaming_verified": true,

@@ -43,6 +43,7 @@ const CANCEL_RE = /^(non|annule|annuler|stop|cancel|cancelled?|no|n\b)/i;
 export default function MAvaChat() {
   const [userId, setUserId] = useState<string | null>(null);
   const [voiceAgentAllowed, setVoiceAgentAllowed] = useState(false);
+  const [chatAllowed, setChatAllowed] = useState(true);
   const [aiConsent, setAiConsentState] = useState<boolean>(() => hasAiConsent());
   const [mode, setMode] = useState<"chat" | "voice">(() => (localStorage.getItem("ava_mode") as any) || "chat");
   const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
@@ -76,10 +77,11 @@ export default function MAvaChat() {
       setUserId(data.user.id);
       const { data: prof } = await supabase
         .from("planipret_profiles")
-        .select("voice_agent_enabled")
+        .select("voice_agent_enabled, ava_chat_enabled")
         .eq("user_id", data.user.id)
         .maybeSingle();
       setVoiceAgentAllowed(!!(prof as any)?.voice_agent_enabled);
+      setChatAllowed((prof as any)?.ava_chat_enabled !== false);
       const { data: s } = await supabase
         .from("planipret_ava_chat_sessions")
         .select("id,title,last_message_at")
@@ -89,6 +91,24 @@ export default function MAvaChat() {
       if (s?.[0]) setSessionId(s[0].id);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    const ch = supabase.channel(`pp-ava-access-${userId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "planipret_profiles", filter: `user_id=eq.${userId}` }, (p: any) => {
+        const r = p?.new ?? {};
+        if ("voice_agent_enabled" in r) setVoiceAgentAllowed(!!r.voice_agent_enabled);
+        if ("ava_chat_enabled" in r) setChatAllowed(r.ava_chat_enabled !== false);
+      })
+      .subscribe();
+    const onFocus = async () => {
+      const { data: prof } = await supabase.from("planipret_profiles").select("voice_agent_enabled, ava_chat_enabled").eq("user_id", userId).maybeSingle();
+      if (prof) { setVoiceAgentAllowed(!!(prof as any).voice_agent_enabled); setChatAllowed((prof as any).ava_chat_enabled !== false); }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => { supabase.removeChannel(ch); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); };
+  }, [userId]);
 
   useEffect(() => {
     if (!sessionId) { setMessages([]); return; }
@@ -368,6 +388,13 @@ export default function MAvaChat() {
   };
 
   const currentTitle = useMemo(() => sessions.find((s) => s.id === sessionId)?.title ?? t("avaChat.newChatShort"), [sessions, sessionId]);
+
+  if (userId && !chatAllowed && !voiceAgentAllowed) {
+    return <AvaAccessLocked lang={lang} what="both" />;
+  }
+  if (userId && mode === "chat" && !chatAllowed) {
+    return <AvaAccessLocked lang={lang} what="chat" onSwitch={voiceAgentAllowed ? () => switchMode("voice") : undefined} />;
+  }
 
   if (mode === "voice" && voiceAgentAllowed && userId) {
     return (
@@ -675,4 +702,26 @@ function parseAvaReply(raw: string, suggestions: AvaSuggestion[]): { text: strin
     text: cleanReply(raw),
     suggestions: suggestions.length ? suggestions : found,
   };
+}
+
+
+function AvaAccessLocked({ lang, what, onSwitch }: { lang: string; what: "chat" | "voice" | "both"; onSwitch?: () => void }) {
+  const en = lang === "en";
+  const name = what === "both" ? "AVA Chat / AVA Voice" : what === "chat" ? "AVA Chat" : (en ? "AVA Voice" : "AVA Voix");
+  return (
+    <div className="flex flex-col items-center justify-center text-center px-6 py-16 gap-3" style={{ minHeight: 400 }}>
+      <div className="text-4xl">🔒</div>
+      <div className="font-semibold text-base" style={{ color: "var(--pp-text-primary)" }}>
+        {en ? `${name} is not enabled on your account` : `${name} n'est pas activé sur votre compte`}
+      </div>
+      <div className="text-sm" style={{ color: "var(--pp-text-muted)" }}>
+        {en ? "Contact your administrator to activate this feature." : "Contactez votre administrateur pour activer cette fonctionnalité."}
+      </div>
+      {onSwitch && (
+        <button onClick={onSwitch} className="mt-2 px-4 py-2 rounded-full text-sm font-semibold" style={{ background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", color: "#fff" }}>
+          {en ? "Use AVA Voice" : "Utiliser AVA Voix"}
+        </button>
+      )}
+    </div>
+  );
 }

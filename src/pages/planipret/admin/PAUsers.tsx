@@ -24,7 +24,7 @@ const DANGER = "#E84C4C";
 type Profile = PlanipretBrokerRow & {
   user_id: string; email: string; full_name: string; extension: string;
   ns_extension?: string | null;
-  mobile_app_enabled: boolean; voice_agent_enabled: boolean;
+  mobile_app_enabled: boolean; voice_agent_enabled: boolean; ava_chat_enabled?: boolean | null;
   ns_domain: string; elevenlabs_agent_id: string | null;
   updated_at: string; created_at: string;
   dnd_enabled?: boolean;
@@ -221,7 +221,8 @@ const DICT = {
     colExt: "Ext.",
     colDid: "Numéros DID",
     colApp: "App",
-    colAgent: "Agent IA",
+    colAgent: "AVA Voix",
+    colChat: "AVA Chat",
     colDnd: "DND",
     colCallsMonth: "Appels mois",
     colMaestroId: "Maestro ID",
@@ -394,7 +395,8 @@ const DICT = {
     colExt: "Ext.",
     colDid: "DID numbers",
     colApp: "App",
-    colAgent: "AI agent",
+    colAgent: "AVA Voice",
+    colChat: "AVA Chat",
     colDnd: "DND",
     colCallsMonth: "Calls this month",
     colMaestroId: "Maestro ID",
@@ -760,8 +762,8 @@ export default function PAUsers() {
   const paged = filtered.slice((effectivePage - 1) * pageSize, effectivePage * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
-  const toggleField = async (u: Profile, field: "mobile_app_enabled" | "voice_agent_enabled") => {
-    const next = !u[field];
+  const toggleField = async (u: Profile, field: "mobile_app_enabled" | "voice_agent_enabled" | "ava_chat_enabled") => {
+    const next = field === "ava_chat_enabled" ? u.ava_chat_enabled === false : !u[field];
     setSavingId(u.user_id ?? `ext:${u.extension ?? u.ns_extension ?? ""}`);
 
     // ns_only broker → no Planiprêt profile yet. Provision one on the fly so
@@ -801,11 +803,11 @@ export default function PAUsers() {
     // Resync from DB so the UI reflects the persisted value (defensive).
     const { data: fresh } = await supabase
       .from("planipret_profiles")
-      .select("mobile_app_enabled, voice_agent_enabled")
+      .select("mobile_app_enabled, voice_agent_enabled, ava_chat_enabled")
       .eq("user_id", u.user_id)
       .maybeSingle();
     if (fresh) {
-      setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, mobile_app_enabled: !!fresh.mobile_app_enabled, voice_agent_enabled: !!fresh.voice_agent_enabled } : r));
+      setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, mobile_app_enabled: !!fresh.mobile_app_enabled, voice_agent_enabled: !!fresh.voice_agent_enabled, ava_chat_enabled: (fresh as any).ava_chat_enabled !== false } : r));
     }
     // Propagate to phone system: any toggle change re-provisions the NS user
     // (recording config + mobile access are derived from these flags).
@@ -819,10 +821,11 @@ export default function PAUsers() {
         body: { user_id: u.user_id },
       }).catch(() => null);
     }
+    if (field === "ava_chat_enabled") { toast.success(next ? "AVA Chat activé" : "AVA Chat désactivé"); return; }
     toast.success(next ? (field === "mobile_app_enabled" ? t.mobileEnabledMsg : t.agentEnabledMsg) : (field === "mobile_app_enabled" ? t.mobileDisabledMsg : t.agentDisabledMsg));
   };
 
-  const bulkToggle = async (field: "mobile_app_enabled" | "voice_agent_enabled", value: boolean) => {
+  const bulkToggle = async (field: "mobile_app_enabled" | "voice_agent_enabled" | "ava_chat_enabled", value: boolean) => {
     const ids = Array.from(selected);
     for (const id of ids) {
       await supabase.functions.invoke("pp-admin-user", { body: { action: "update", payload: { user_id: id, updates: { [field]: value } } } });
@@ -967,6 +970,9 @@ export default function PAUsers() {
           <span style={{ fontSize: 13, color: "var(--pp-text-primary)" }}>{t.selectedBrokers(selected.size)}</span>
           <div className="flex gap-2">
             <button onClick={() => bulkToggle("voice_agent_enabled", true)} className="px-3 py-1.5 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>{t.enableAgent}</button>
+            <button onClick={() => bulkToggle("ava_chat_enabled", true)} className="px-3 py-1.5 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>💬 AVA Chat on</button>
+            <button onClick={() => bulkToggle("ava_chat_enabled", false)} className="px-3 py-1.5 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>💬 AVA Chat off</button>
+            <button onClick={() => bulkToggle("voice_agent_enabled", false)} className="px-3 py-1.5 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>🎙️ AVA Voix off</button>
             <button onClick={bulkDelete} className="px-3 py-1.5 rounded-lg text-xs text-white" style={{ background: DANGER }}>{t.deleteBtn}</button>
           </div>
         </div>
@@ -988,6 +994,7 @@ export default function PAUsers() {
                 <th className="p-3">{t.colEmail}</th>
                 <th className="p-3">{t.colExt}</th>
                 <th className="p-3">{t.colDid}</th>
+                <th className="p-3">{(t as any).colChat}</th>
                 <th className="p-3">{t.colAgent}</th>
                 <th className="p-3">{t.colDnd}</th>
                 <th className="p-3">{t.colCallsMonth}</th>
@@ -1001,14 +1008,14 @@ export default function PAUsers() {
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
                     <td className="p-3"><div className="w-4 h-4 animate-pulse rounded" style={{ background: "var(--pp-bg-elevated)" }} /></td>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="p-3"><div className="h-3 w-3/4 animate-pulse rounded" style={{ background: "var(--pp-bg-elevated)" }} /></td>
                     ))}
                     <td className="p-3"><div className="h-6 w-10 rounded-full animate-pulse" style={{ background: "var(--pp-bg-elevated)" }} /></td>
                   </tr>
                 ))
               ) : paged.length === 0 ? (
-                <tr><td colSpan={12} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>{t.noBroker}</td></tr>
+                <tr><td colSpan={13} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>{t.noBroker}</td></tr>
               ) : paged.map((u) => (
                 <tr key={u.user_id || u.email || u.extension} className="hover:bg-white/[0.02] transition"
                   style={{
@@ -1042,6 +1049,7 @@ export default function PAUsers() {
                       );
                     })()}
                   </td>
+                  <td className="p-3"><Toggle on={u.ava_chat_enabled !== false} loading={!!(u.user_id && savingId === u.user_id)} onChange={() => toggleField(u, "ava_chat_enabled")} /></td>
                   <td className="p-3"><Toggle on={!!u.voice_agent_enabled} loading={!!(u.user_id && savingId === u.user_id)} onChange={() => toggleField(u, "voice_agent_enabled")} /></td>
                   <td className="p-3">
                     {u.dnd_enabled ? (

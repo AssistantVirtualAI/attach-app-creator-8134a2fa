@@ -8,11 +8,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";
 import { authorizeCallAccess, allowCallViewing } from "../_shared/planipret-call-access.ts";
 import { fetchTwinTranscript } from "./twin-lookup.ts";
+import { hasUsableAiKey } from "./ai-key-guard.ts";
 
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 
 const json = (p: any, s = 200) =>
@@ -52,7 +54,7 @@ Réponds STRICTEMENT en JSON valide, sans markdown, avec ce schéma:
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (!ANTHROPIC_API_KEY && !ANTHROPIC_API_KEY) return json({ error: "No AI key configured (ANTHROPIC_API_KEY or ANTHROPIC_API_KEY)" }, 500);
+  if (!hasUsableAiKey({ anthropic: ANTHROPIC_API_KEY, openai: OPENAI_API_KEY })) return json({ error: "No AI key configured (ANTHROPIC_API_KEY or OPENAI_API_KEY)" }, 500);
 
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }

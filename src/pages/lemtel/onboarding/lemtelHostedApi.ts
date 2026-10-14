@@ -144,6 +144,7 @@ export type PortalInvitation = {
   sentAt?: string;
 };
 export type PortalActivity = { id: string; at: string; action: string };
+export type PortalDomain = { id: string; hostname: string; status: "active" | "suspended"; verificationStatus: "verified" | "unverified"; createdAt?: string };
 export type PortalConfig = { downloads: { desktop?: string; ios?: string; android?: string }; supportContact?: string };
 export type OperationalHealth = "healthy" | "degraded" | "unknown";
 export type LemtelOperationalStatus = {
@@ -185,6 +186,10 @@ export function buildResendWelcomeBody(organizationId: string, recipientUserId: 
   return { action: "resend_welcome" as const, organizationId, recipientUserId, locale };
 }
 
+export function buildCreateDomainBody(organizationId: string, hostname: string) {
+  return { action: "create_domain" as const, organizationId, domain: { hostname: hostname.trim().toLowerCase().replace(/\.$/, "") } };
+}
+
 /**
  * Every object below uses the exact Lemtel Edge contract. There is intentionally
  * no generic action/payload wrapper and no legacy Planiprêt action name.
@@ -196,6 +201,7 @@ export const portalApi = {
   listPeople: (organizationId: string) => invoke<{ people: PortalPerson[] }>("lemtel-onboarding-admin", { action: "list_people", organizationId }),
   listInvitations: (organizationId: string) => invoke<{ invitations: PortalInvitation[] }>("lemtel-onboarding-admin", { action: "list_invitations", organizationId }),
   listActivity: (organizationId: string) => invoke<{ events: PortalActivity[] }>("lemtel-onboarding-admin", { action: "list_activity", organizationId }),
+  listDomains: (organizationId: string) => invoke<{ domains: PortalDomain[] }>("lemtel-onboarding-admin", { action: "list_domains", organizationId }),
   createOrganization: (input: Parameters<typeof buildCreateOrganizationBody>[0]) =>
     invoke<{ ok: true; organization: { id: string } }>("lemtel-onboarding-admin", buildCreateOrganizationBody(input), { write: true }),
   provisionUsers: (organizationId: string, users: ProvisionedUser[]) =>
@@ -204,6 +210,10 @@ export const portalApi = {
     invoke<{ ok: true; delivered: boolean }>("lemtel-onboarding-admin", buildResendWelcomeBody(organizationId, recipientUserId, locale), { write: true }),
   revokeAccess: (organizationId: string, recipientUserId: string) =>
     invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "revoke_invitation", organizationId, recipientUserId }, { write: true }),
+  createDomain: (organizationId: string, hostname: string) =>
+    invoke<{ ok: true; domain: PortalDomain }>("lemtel-onboarding-admin", buildCreateDomainBody(organizationId, hostname), { write: true }),
+  suspendDomain: (organizationId: string, domainId: string) =>
+    invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "suspend_domain", organizationId, domainId }, { write: true }),
   completeFirstPassword: (newPassword: string) =>
     invoke<{ ok: true; password_change_required: false }>("lemtel-complete-first-password", { newPassword }),
   requestTemporaryPassword: async (email: string): Promise<void> => {

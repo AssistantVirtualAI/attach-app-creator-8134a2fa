@@ -13,6 +13,8 @@ type Locale = "fr" | "en";
 type Failure = { error: string; status: number };
 type UserInput = { email: string; displayName: string; role: Role; locale: Locale };
 type OrganizationInput = { displayName: string; slug: string; defaultLocale: Locale };
+type DomainInput = { hostname: string };
+const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 type RequestBody =
   | { action: "create_organization"; organization: OrganizationInput; owner: UserInput; users: UserInput[] }
   | { action: "provision_users"; organizationId: string; users: UserInput[] }
@@ -23,7 +25,10 @@ type RequestBody =
   | { action: "get_operational_status" }
   | { action: "list_people"; organizationId: string }
   | { action: "list_invitations"; organizationId: string }
-  | { action: "list_activity"; organizationId: string };
+  | { action: "list_activity"; organizationId: string }
+  | { action: "list_domains"; organizationId: string }
+  | { action: "create_domain"; organizationId: string; domain: DomainInput }
+  | { action: "suspend_domain"; organizationId: string; domainId: string };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -73,10 +78,26 @@ export function validateBody(raw: unknown): RequestBody | Failure {
   if (raw.action === "list_organizations" || raw.action === "get_config" || raw.action === "get_operational_status") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
-  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity") {
+  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains") {
     if (!exactKeys(raw, ["action", "organizationId"])) return fail("invalid_body", 400);
     const parsedOrganizationId = organizationId(raw.organizationId);
     return isFailure(parsedOrganizationId) ? parsedOrganizationId : { action: raw.action, organizationId: parsedOrganizationId } as RequestBody;
+  }
+  if (raw.action === "create_domain") {
+    if (!exactKeys(raw, ["action", "organizationId", "domain"]) || !plainObject(raw.domain)) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const hostname = typeof raw.domain.hostname === "string" ? raw.domain.hostname.trim().toLowerCase().replace(/\.$/, "") : "";
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (!exactKeys(raw.domain, ["hostname"]) || !HOSTNAME_RE.test(hostname)) return fail("invalid_domain", 400);
+    return { action: "create_domain", organizationId: parsedOrganizationId, domain: { hostname } };
+  }
+  if (raw.action === "suspend_domain") {
+    if (!exactKeys(raw, ["action", "organizationId", "domainId"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedDomainId = organizationId(raw.domainId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedDomainId)) return parsedDomainId;
+    return { action: "suspend_domain", organizationId: parsedOrganizationId, domainId: parsedDomainId };
   }
   if (raw.action === "create_organization") {
     if (!exactKeys(raw, ["action", "organization", "owner", "users"]) || !plainObject(raw.organization)) return fail("invalid_body", 400);
@@ -367,6 +388,17 @@ async function listActivity(admin: any, organizationId: string) {
   return error ? fail("activity_lookup_failed", 503) : { events: (data ?? []).map((row: any) => ({ id: row.id, at: row.created_at, action: row.action })) };
 }
 
+async function listDomains(admin: any, organizationId: string) {
+  const { data, error } = await admin.from("lemtel_organization_domains")
+    .select("id,hostname,status,verification_status,created_at")
+    .eq("organization_id", organizationId)
+    .order("hostname");
+  return error ? fail("domain_lookup_failed", 503) : { domains: (data ?? []).map((row: any) => ({
+    id: row.id, hostname: row.hostname, status: row.status === "suspended" ? "suspended" : "active",
+    verificationStatus: row.verification_status === "verified" ? "verified" : "unverified", createdAt: row.created_at,
+  })) };
+}
+
 function portalConfig() {
   const value = (name: string) => Deno.env.get(name)?.trim() || undefined;
   const supportContact = value("LEMTEL_SUPPORT_CONTACT");
@@ -471,14 +503,38 @@ export async function handler(req: Request): Promise<Response> {
     const result = await operationalStatus(admin);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
-  if (request.action === "list_people" || request.action === "list_invitations" || request.action === "list_activity") {
+  if (request.action === "list_people" || request.action === "list_invitations" || request.action === "list_activity" || request.action === "list_domains") {
     if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
     const result = request.action === "list_people"
       ? await listPeople(admin, request.organizationId)
       : request.action === "list_invitations"
         ? await listInvitations(admin, request.organizationId)
-        : await listActivity(admin, request.organizationId);
+        : request.action === "list_domains"
+          ? await listDomains(admin, request.organizationId)
+          : await listActivity(admin, request.organizationId);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+
+  if (request.action === "create_domain") {
+    if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const { data: domain, error } = await admin.from("lemtel_organization_domains")
+      .insert({ organization_id: request.organizationId, hostname: request.domain.hostname, created_by: actor })
+      .select("id,hostname,status,verification_status,created_at").single();
+    if (error || !domain?.id) return respond({ error: "domain_create_failed" }, 409);
+    await audit(admin, request.organizationId, actor, "domain_created", null, { hostname: request.domain.hostname });
+    return respond({ ok: true, domain: { id: domain.id, hostname: domain.hostname, status: domain.status, verificationStatus: domain.verification_status, createdAt: domain.created_at } }, 201);
+  }
+
+  if (request.action === "suspend_domain") {
+    if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const { data: domain, error } = await admin.from("lemtel_organization_domains")
+      .update({ status: "suspended", suspended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", request.domainId).eq("organization_id", request.organizationId).eq("status", "active")
+      .select("id").maybeSingle();
+    if (error) return respond({ error: "domain_suspend_failed" }, 503);
+    if (!domain?.id) return respond({ error: "domain_not_found" }, 404);
+    await audit(admin, request.organizationId, actor, "domain_suspended", null, { domain_id: request.domainId });
+    return respond({ ok: true });
   }
 
   if (request.action === "create_organization") {

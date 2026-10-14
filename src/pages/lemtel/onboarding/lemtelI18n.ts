@@ -6,7 +6,7 @@ export type Lang = "fr" | "en";
 
 const fr = {
   brand: "Lemtel", tagline: "Communications privées et intelligentes",
-  nav: { overview: "Aperçu", operations: "Exploitation", organizations: "Organisations", people: "Personnes", invitations: "Accès et invitations", devices: "Applications", security: "Sécurité", activity: "Activité" },
+  nav: { overview: "Aperçu", operations: "Exploitation", organizations: "Organisations", domains: "Domaines", people: "Personnes", invitations: "Accès et invitations", devices: "Applications", communications: "Communications", security: "Sécurité", activity: "Activité" },
   search: "Rechercher", help: "Aide", notifications: "Notifications", signOut: "Se déconnecter", allOrgs: "Toutes les organisations",
   readonlyTitle: "Mode consultation", readonlyBody: "Le backend Lemtel n'est pas activé pour l'administration depuis cette version. Aucune modification n'est envoyée.",
   empty: { orgs: "Aucune organisation pour l'instant.", people: "Aucune personne dans cette organisation.", invites: "Aucun accès à gérer.", activity: "Aucune activité récente." },
@@ -25,6 +25,8 @@ const fr = {
   downloads: "Télécharger", desktop: "macOS / Bureau", ios: "iOS", android: "Android", notConfigured: "Lien non configuré",
   securityPage: ["Connexion par courriel et mot de passe seulement.", "Les mots de passe temporaires ne sont jamais affichés ni conservés dans le portail.", "Chaque personne choisit son mot de passe à la première connexion.", "L'accès applicatif est vérifié par le serveur et l'appartenance Lemtel."], support: "Contact de soutien",
   overviewStats: { orgs: "Organisations", people: "Personnes", pending: "Mots de passe temporaires" },
+  domains: { title: "Domaines", subtitle: "Domaines d’accès gérés par l’organisation Lemtel.", add: "Ajouter un domaine", hostname: "Nom de domaine", empty: "Aucun domaine n’est encore associé à cette organisation.", active: "Actif", suspended: "Suspendu", verified: "Vérifié", unverified: "À vérifier", suspend: "Suspendre", confirmSuspend: "Suspendre ce domaine? Aucun routage DNS ni service téléphonique n’est modifié.", created: "Domaine ajouté. La vérification DNS reste une étape distincte.", noOrganization: "Sélectionnez une organisation pour gérer ses domaines." },
+  communications: { title: "Communications", subtitle: "Modules administratifs préparés, sans téléphonie provisionnée.", notProvisioned: "Non provisionné", protected: "Ce module reste indisponible jusqu’au provisionnement serveur approuvé et aux tests réels.", voicemail: "Boîtes vocales", recordings: "Enregistrements", callHistory: "Historique d’appels", messages: "Messages et conversations" },
   operations: {
     title: "Exploitation et résilience", subtitle: "Vue administrateur des indicateurs Lemtel, sans données réseau ou secrets.", refresh: "Actualiser",
     liveHealth: "État en direct", writer: "Writer actif", standby: "Secours", route: "Routage canonique", observedAt: "Dernière observation", noSnapshot: "Aucune télémétrie reçue", writerDetail: "Un seul writer est autorisé.", routeDetail: "La route publique reste contrôlée.",
@@ -44,7 +46,7 @@ const fr = {
 
 const en: typeof fr = {
   brand: "Lemtel", tagline: "Private, intelligent communications",
-  nav: { overview: "Overview", operations: "Operations", organizations: "Organizations", people: "People", invitations: "Access & invitations", devices: "Apps", security: "Security", activity: "Activity" },
+  nav: { overview: "Overview", operations: "Operations", organizations: "Organizations", domains: "Domains", people: "People", invitations: "Access & invitations", devices: "Apps", communications: "Communications", security: "Security", activity: "Activity" },
   search: "Search", help: "Help", notifications: "Notifications", signOut: "Sign out", allOrgs: "All organizations",
   readonlyTitle: "Read-only mode", readonlyBody: "The Lemtel backend is not enabled for administration from this build. No change is sent.",
   empty: { orgs: "No organizations yet.", people: "No people in this organization.", invites: "No access records to manage.", activity: "No recent activity." },
@@ -63,6 +65,8 @@ const en: typeof fr = {
   downloads: "Download", desktop: "macOS / Desktop", ios: "iOS", android: "Android", notConfigured: "Link not configured",
   securityPage: ["Email and password sign-in only.", "Temporary passwords are never displayed or stored in the portal.", "Every person chooses their own password on first sign-in.", "App access is verified by the server and Lemtel membership."], support: "Support contact",
   overviewStats: { orgs: "Organizations", people: "People", pending: "Temporary passwords" },
+  domains: { title: "Domains", subtitle: "Access domains managed by the Lemtel organization.", add: "Add domain", hostname: "Domain name", empty: "No domains are associated with this organization yet.", active: "Active", suspended: "Suspended", verified: "Verified", unverified: "Needs verification", suspend: "Suspend", confirmSuspend: "Suspend this domain? No DNS routing or telephony service is changed.", created: "Domain added. DNS verification remains a separate step.", noOrganization: "Select an organization to manage its domains." },
+  communications: { title: "Communications", subtitle: "Administrative modules are prepared, with telephony still unprovisioned.", notProvisioned: "Not provisioned", protected: "This module remains unavailable until approved server provisioning and real-world tests are complete.", voicemail: "Voicemail", recordings: "Recordings", callHistory: "Call history", messages: "Messages & conversations" },
   operations: {
     title: "Operations & resilience", subtitle: "Administrator view of Lemtel indicators, without network details or secrets.", refresh: "Refresh",
     liveHealth: "Live health", writer: "Active writer", standby: "Standby", route: "Canonical routing", observedAt: "Last observation", noSnapshot: "No telemetry received", writerDetail: "Only one writer is permitted.", routeDetail: "The public route remains controlled.",

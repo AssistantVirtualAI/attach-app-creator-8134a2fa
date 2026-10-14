@@ -13,6 +13,7 @@ export function validateLemtelActivePassiveConfig(env) {
   if (env.VITE_SUPABASE_URL || env.VITE_SUPABASE_PUBLISHABLE_KEY) return fail('GENERIC_RUNTIME_KEYS_DENIED');
   if (env.VITE_LEMTEL_PRIVATE_DIRECTORY !== 'approved') return fail('PRIVATE_DIRECTORY_FLAG_REQUIRED');
   if (env.VITE_LEMTEL_EMAIL_ONLY_SIGNIN !== 'approved') return fail('EMAIL_ONLY_SIGNIN_FLAG_REQUIRED');
+  if (env.VITE_LEMTEL_HOSTED_ONBOARDING !== 'approved') return fail('HOSTED_ONBOARDING_FLAG_REQUIRED');
   if (env.VITE_LEMTEL_AUTH_REDIRECT_URL !== `${LEMTEL_CANONICAL_ORIGIN}/reset-password`) return fail('RESET_REDIRECT_MUST_BE_CANONICAL');
   const key = env.VITE_LEMTEL_PUBLISHABLE_KEY;
   if (typeof key !== 'string' || !key.trim() || key.includes('__INJECT_')) return fail('LEMTEL_PUBLISHABLE_KEY_REQUIRED');

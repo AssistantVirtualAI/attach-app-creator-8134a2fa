@@ -20,3 +20,14 @@ describe("confirmation vocale AVA", () => {
     }
   });
 });
+
+describe("confirmation vocale AVA — réponses naturelles", () => {
+  it("accepte les oui courants", () => {
+    for (const v of ["Ouais", "Oui, vas-y", "Oui oui", "Oui c'est correct", "oui merci", "parfait"]) {
+      expect(voiceConfirmationDecision(v)).toBe("confirm");
+    }
+  });
+  it("un refus l'emporte", () => {
+    expect(voiceConfirmationDecision("non merci")).toBe("cancel");
+  });
+});

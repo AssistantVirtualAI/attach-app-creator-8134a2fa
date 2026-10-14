@@ -212,11 +212,15 @@ async function loadProjection(admin: any, userId: string) {
     .eq("user_id", userId)
     .is("deleted_at", null)
     .order("due_at", { ascending: asc });
-  const [{ data: open }, { data: done }] = await Promise.all([
-    base().neq("status", "complete").limit(500),
-    base(false).eq("status", "complete").limit(100),
-  ]);
-  return [...(open ?? []), ...(done ?? [])].map((r: any) => normalizeTask(r.payload));
+  // Page past the 1 000-row response cap so large accounts see every open task.
+  const open: any[] = [];
+  for (let from = 0; from < 10_000; from += 1000) {
+    const { data } = await base().neq("status", "complete").range(from, from + 999);
+    open.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  const { data: done } = await base(false).eq("status", "complete").limit(100);
+  return [...open, ...(done ?? [])].map((r: any) => normalizeTask(r.payload));
 }
 
 /** Admin only: every broker's mirrored tasks (deduped by task id). */
@@ -735,7 +739,9 @@ export async function handleTaskRequest(
     // pages even when an assignee filter is ignored upstream, exhausting the
     // edge CPU budget before the broker sees any task. Mutations still use the
     // documented live read-back paths below.
-    const projected = overrideBroker ? [] : await loadProjection(admin, userId).catch(() => []);
+    // The hourly sweeper must always read Maestro live; serving the projection
+    // to it froze large accounts at the first interactive mirror (400 rows).
+    const projected = overrideBroker || fullSync ? [] : await loadProjection(admin, userId).catch(() => []);
     if (projected.length) {
       all = projected;
     } else if (token) {
@@ -789,7 +795,8 @@ export async function handleTaskRequest(
       // Large accounts (4 000+ tasks) exceeded the edge CPU budget when the
       // whole list was diffed and mirrored inline. The hourly sweeper owns the
       // full mirror; the interactive list only refreshes open tasks (capped).
-      const openOnly = all.filter((t: any) => String(t?.status ?? "").toLowerCase() !== "complete").slice(0, 500);
+      const openAll = all.filter((t: any) => String(t?.status ?? "").toLowerCase() !== "complete");
+      const openOnly = fullSync ? openAll : openAll.slice(0, 500);
       if (!overrideBroker) {
         await syncProjection(admin, userId, openOnly, { full: false }).catch(() => {});
       } else {

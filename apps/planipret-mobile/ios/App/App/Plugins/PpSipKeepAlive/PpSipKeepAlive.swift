@@ -347,11 +347,16 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         switch preferredRoute {
         case "speaker":
           try? s.setPreferredInput(nil)
+          // Mode mains-libres calibré (sans toucher la catégorie CallKit) :
+          // `.voiceChat` rend le haut-parleur bas.
+          if s.mode != .videoChat { try? s.setMode(.videoChat) }
           try? s.overrideOutputAudioPort(.speaker)
         case "bluetooth":
+          if s.mode != .voiceChat { try? s.setMode(.voiceChat) }
           try? s.overrideOutputAudioPort(.none)
           if let bt = bluetoothInput() { try? s.setPreferredInput(bt) }
         default:
+          if s.mode != .voiceChat { try? s.setMode(.voiceChat) }
           try? s.overrideOutputAudioPort(.none)
           if let bt = bluetoothInput() { try? s.setPreferredInput(bt) }
         }

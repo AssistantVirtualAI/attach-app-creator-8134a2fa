@@ -667,8 +667,27 @@ final class PjsipEngine {
         }
     }
 
+    /// Gain de lecture (correspondant → appareil). En mains-libres, iOS
+    /// atténue fortement la voix d'un appel VoIP : on amplifie le flux reçu
+    /// côté PJSIP pour approcher le volume du haut-parleur natif.
+    private func applyPlaybackGain(slot: pjsua_conf_port_id) {
+        guard slot >= 0 else { return }
+        _ = pjsua_conf_adjust_rx_level(slot, speakerOn ? 2.2 : 1.0)
+    }
+
     func setSpeaker(_ enabled: Bool) {
         speakerOn = enabled
+        if activeCall >= 0 {
+            thread.run { [weak self] in
+                guard let self = self else { return }
+                self.scheduleOnPjsipThread {
+                    guard self.activeCall >= 0 else { return }
+                    var info = pjsua_call_info()
+                    pjsua_call_get_info(self.activeCall, &info)
+                    self.applyPlaybackGain(slot: info.conf_slot)
+                }
+            }
+        }
         // Un seul propriétaire de la session audio : PpSipKeepAlive. Deux
         // modules qui appellent overrideOutputAudioPort avec des modes
         // différents = haut-parleur bas et étouffé. On délègue.
@@ -902,6 +921,7 @@ final class PjsipEngine {
         guard audioSessionReady else { return }
         if attachedAudioSlot == slot {
             if muted { _ = pjsua_conf_adjust_tx_level(slot, 0.0) }
+            applyPlaybackGain(slot: slot)
             return
         }
         // A reattach changes only conference links. Calling
@@ -915,6 +935,7 @@ final class PjsipEngine {
             emit("audioError", ["reason": "conf_remote_to_device_failed", "status": Int(remoteToDevice)])
             return
         }
+        applyPlaybackGain(slot: slot)
         let deviceToRemote = pjsua_conf_connect(0, slot)
         guard deviceToRemote == pj_status_t(0) else {
             _ = pjsua_conf_disconnect(slot, 0)

@@ -500,7 +500,7 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     try {
       await admin.channel("call-analysis").send({
         type: "broadcast", event: "analysis_error",
-        payload: { call_id, error: e?.message ?? "unknown" },
+        payload: { call_id, error: "internal_error" },
       });
     } catch (_) { /* best-effort */ }
     console.error("[pp-coach-call] internal error"); return json({ error: "Internal error", code: "internal_error" }, 500);

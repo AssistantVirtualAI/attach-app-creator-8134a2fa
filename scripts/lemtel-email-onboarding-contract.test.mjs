@@ -71,6 +71,19 @@ test('temporary-password recovery is Lemtel-only, generic and server-throttled',
   assert.match(manifest.forbidden.join(' '), /temporary_password_database_storage/);
 });
 
+test('temporary-password recovery preserves the active credential when provider delivery fails', () => {
+  const source = read('infra/lemtel-self-hosted/functions/lemtel-password-reset-request/index.ts');
+  const providerRequest = source.indexOf('fetch("https://api.resend.com/emails"');
+  const providerFailureReturn = source.indexOf('await setDeliveryState(admin, deliveryAttempt, "failed", "provider_delivery_failed")');
+  const authUpdate = source.indexOf('await admin.auth.admin.updateUserById');
+  const providerSuccessAudit = source.indexOf('await setDeliveryState(admin, deliveryAttempt, "sent", undefined, providerMessageId)');
+  assert.ok(providerRequest >= 0);
+  assert.ok(providerFailureReturn > providerRequest);
+  assert.ok(authUpdate > providerFailureReturn);
+  assert.ok(providerSuccessAudit > authUpdate);
+  assert.match(source, /auth_password_rotation_failed_after_provider_accepted/);
+});
+
 test('Desktop and mobile use the Lemtel recovery endpoint instead of a reset-link flow', () => {
   const desktop = read('apps/ava-softphone-desktop/src/components/SetupWizard.tsx');
   const mobile = read('apps/ava-softphone-mobile/src/screens/AuthScreen.tsx');

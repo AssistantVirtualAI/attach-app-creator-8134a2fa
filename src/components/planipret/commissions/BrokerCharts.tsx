@@ -1,5 +1,5 @@
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from "recharts";
-import { CHART_COLORS } from "./ui/chartColors";
+import { CHART_COLORS } from "./ui/chartTheme";
 
 type B = { broker: string; brokerKey?: string; firstName?: string; lastName?: string; volume?: number; deals?: number; commission?: number; avgDeal?: number };
 

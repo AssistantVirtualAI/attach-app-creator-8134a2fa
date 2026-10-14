@@ -13,6 +13,7 @@ import BrokerLeaderboard from "./BrokerLeaderboard";
 import BrokerTopSellers from "./BrokerTopSellers";
 import BrokerYearMatrix from "./BrokerYearMatrix";
 import BrokerDrilldown from "./BrokerDrilldown";
+import BrokerCharts from "./BrokerCharts";
 import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
 import { exportNodePng, exportDashboardPdf } from "@/lib/planipret/exportVisuals";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
@@ -944,6 +945,10 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
                 </Section>
               </div>
 
+              <Section title={isFr ? "Vue globale par courtier" : "Global view by broker"}>
+                <BrokerCharts lang={lang} brokers={(data.brokers ?? []) as any} onSelect={(b) => { setDrillData(null); setDrillAgent(b); }} />
+              </Section>
+
               <Section title={isFr ? "Notes de lecture" : "Reading notes"}>
                 <ul style={{ fontSize: 12, color: "var(--pp-text-secondary)", lineHeight: 1.65, paddingLeft: 16, listStyle: "disc" }}>
                   <li>{isFr ? "La courbe cumulée compare le rythme de l'année courante à celui de l'année précédente sur la même fenêtre." : "The cumulative curve compares the current year pace to the prior year over the same window."}</li>
@@ -1036,6 +1041,8 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
                   </div>
                 </div>
               )}
+
+              <BrokerCharts lang={lang} brokers={(data.brokers ?? []) as any} onSelect={(b) => { setDrillData(null); setDrillAgent(b); }} />
 
               <BrokerTopSellers
                 lang={lang}

@@ -3,7 +3,6 @@ import { Hourglass, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PendingCommissionsCard from "./PendingCommissionsCard";
 import RegisterCommissions from "./RegisterCommissions";
-import PaidDepositsCard from "./PaidDepositsCard";
 
 export default function CommissionSections({ lang, scope }: { lang: "fr" | "en"; scope: "admin" | "broker" }) {
   const [section, setSection] = useState("pending");
@@ -18,7 +17,6 @@ export default function CommissionSections({ lang, scope }: { lang: "fr" | "en";
         <PendingCommissionsCard lang={lang} cacheScope={scope} />
       </div>
       <div role="tabpanel" id="commission-paid-panel" aria-labelledby="commission-paid-tab" hidden={section !== "paid"}>
-        {section === "paid" && <PaidDepositsCard lang={lang} scope={scope} />}
         <h2 className="flex items-center gap-2 text-xl font-bold mt-6 mb-4"><WalletCards className="h-5 w-5 text-primary" />{fr ? "Analyse détaillée" : "Detailed analysis"}</h2>
         <RegisterCommissions lang={lang} scope={scope} />
       </div>

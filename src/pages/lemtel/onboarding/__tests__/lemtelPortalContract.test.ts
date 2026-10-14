@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAssignExistingUserBody, buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, buildSetMembershipRoleBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
+import { buildAssignExistingUserBody, buildCreateOrganizationBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetMembershipRoleBody, buildTransferOrganizationOwnershipBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
@@ -73,6 +73,16 @@ describe("Lemtel portal contract", () => {
     });
     expect(typeof portalApi.assignExistingUser).toBe("function");
     expect(typeof portalApi.setMembershipRole).toBe("function");
+  });
+
+  it("uses exact tenant-scoped bodies for domain reactivation and ownership transfer", () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    const recipientUserId = "22222222-2222-4222-8222-222222222222";
+    const domainId = "33333333-3333-4333-8333-333333333333";
+    expect(buildReactivateDomainBody(organizationId, domainId)).toEqual({ action: "reactivate_domain", organizationId, domainId });
+    expect(buildTransferOrganizationOwnershipBody(organizationId, recipientUserId)).toEqual({ action: "transfer_organization_ownership", organizationId, recipientUserId });
+    expect(typeof portalApi.reactivateDomain).toBe("function");
+    expect(typeof portalApi.transferOrganizationOwnership).toBe("function");
   });
 
   it("keeps user-domain access derived from organization membership", () => {

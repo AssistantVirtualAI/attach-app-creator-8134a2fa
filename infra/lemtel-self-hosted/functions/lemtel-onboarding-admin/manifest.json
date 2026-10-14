@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_email_onboarding_portal_admin_v7",
+  "package_version": "lemtel_email_onboarding_portal_admin_v8",
   "scope": "offline_function_source_only",
   "deployment_authorized": false,
   "client_cutover_authorized": false,
@@ -20,7 +20,9 @@
     "authenticated_portal_telephony_readiness_read",
     "assign_existing_lemtel_user_to_organization",
     "organization_membership_role_update",
-    "organization_membership_reactivation"
+    "organization_membership_reactivation",
+    "organization_domain_reactivation",
+    "atomic_organization_ownership_transfer"
   ],
   "explicitly_excluded": [
     "planipret_import",
@@ -69,6 +71,8 @@
     "approved_edge_deployment",
     "approved_telephony_readiness_catalog_deployment",
     "approved_lemtel_membership_governance_migration",
-    "synthetic_membership_assignment_and_role_rbac_test"
+    "synthetic_membership_assignment_and_role_rbac_test",
+    "approved_lemtel_organization_ownership_transfer_migration",
+    "synthetic_owner_transfer_and_domain_reactivation_rbac_test"
   ]
 }

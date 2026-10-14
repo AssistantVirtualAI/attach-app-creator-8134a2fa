@@ -47,6 +47,20 @@ Deno.test("membership assignment and role updates require strict Lemtel-scoped b
   assertEquals(validateBody({ action: "set_membership_role", organizationId, recipientUserId, role: "member", ignored: true }), { error: "invalid_body", status: 400 });
 });
 
+Deno.test("ownership transfer and domain reactivation require exact tenant-scoped bodies", () => {
+  const organizationId = "11111111-1111-4111-8111-111111111111";
+  const recipientUserId = "22222222-2222-4222-8222-222222222222";
+  const domainId = "33333333-3333-4333-8333-333333333333";
+  assertEquals(validateBody({ action: "transfer_organization_ownership", organizationId, recipientUserId }), {
+    action: "transfer_organization_ownership", organizationId, recipientUserId,
+  });
+  assertEquals(validateBody({ action: "transfer_organization_ownership", organizationId, recipientUserId, ignored: true }), { error: "invalid_body", status: 400 });
+  assertEquals(validateBody({ action: "reactivate_domain", organizationId, domainId }), {
+    action: "reactivate_domain", organizationId, domainId,
+  });
+  assertEquals(validateBody({ action: "reactivate_domain", organizationId, domainId, ignored: true }), { error: "invalid_body", status: 400 });
+});
+
 Deno.test("operational status accepts only the exact platform read action", () => {
   assertEquals(validateBody({ action: "get_operational_status" }), { action: "get_operational_status" });
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });

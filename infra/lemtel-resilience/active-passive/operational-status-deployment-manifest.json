@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_operational_status_deployment_v5",
+  "package_version": "lemtel_operational_status_deployment_v6",
   "scope": "offline_promoted_writer_operational_status_package",
   "deployment_authorized": false,
   "hostinger_rebuild_or_start_authorized": false,
@@ -7,7 +7,7 @@
   "sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "2ec406c18a42d4b0bd17acf9c29d54ce5a346fdc4e4f3425a4e662ed62fb5546"
+      "sha256": "350f645523c2b562800e168470a5340536fe25978c25c541c613e1510ebe92e6"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts",
@@ -15,7 +15,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
-      "sha256": "424a2a79fb6019e11e2f5e2c115c5ea2c093f8697c49d4b43b8a37f98bace2d0"
+      "sha256": "5a219f7751dd3d5c89e1a4e096826ae010f05804574b22398d393469374643f8"
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql",
@@ -32,6 +32,10 @@
     {
       "path": "infra/lemtel-self-hosted/migrations/0012_lemtel_membership_governance.sql",
       "sha256": "fcfd35d72c8bb291f5d2ffa49030246159164cdd2d85d8f5134f08c3e663840a"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0013_lemtel_organization_ownership_transfer.sql",
+      "sha256": "e88bd34d5c8e9edefc6580f86f44d38fab33ab115bfbfc753a6c13d9954af8af"
     },
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh",
@@ -54,7 +58,9 @@
     "approved_lemtel_operational_status_history_schema_write",
     "approved_telephony_readiness_catalog_deployment",
     "approved_lemtel_membership_governance_schema_write",
-    "synthetic_membership_assignment_and_role_rbac_test"
+    "synthetic_membership_assignment_and_role_rbac_test",
+    "approved_lemtel_organization_ownership_transfer_schema_write",
+    "synthetic_owner_transfer_and_domain_reactivation_rbac_test"
   ],
   "forbidden_actions": [
     "hostinger_start_or_rebuild",

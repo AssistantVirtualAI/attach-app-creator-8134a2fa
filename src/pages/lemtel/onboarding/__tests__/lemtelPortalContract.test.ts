@@ -5,6 +5,7 @@ import { buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcom
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
+import { normalizeOperationalStatus } from "../LemtelOperationalStatus";
 
 describe("Lemtel portal contract", () => {
   it("loads the complete Lemtel-only portal module", () => {
@@ -32,6 +33,14 @@ describe("Lemtel portal contract", () => {
     const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtelHostedApi.ts"), "utf8");
     expect(source).toContain("import.meta.env.VITE_LEMTEL_HOSTED_ONBOARDING");
     expect(source).toContain('hostedOnboardingApproval === "approved"');
+  });
+
+  it("keeps the admin session only in browser session storage across a reload", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtelHostedApi.ts"), "utf8");
+    expect(source).toContain("window.sessionStorage");
+    expect(source).toContain('storageKey: "lemtel-portal-session"');
+    expect(source).not.toContain("localStorage");
+    expect(source).not.toContain("lemtel-portal-session-memory");
   });
 
   it("uses only the exact create-organization body accepted by the Lemtel Edge function", () => {
@@ -80,6 +89,16 @@ describe("Lemtel portal contract", () => {
     const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelOperationalStatus.tsx"), "utf8");
     expect(source).toContain("services.accountRecovery");
     expect(source).not.toMatch(/resend_api_key|service_role_key|temporary_password/i);
+  });
+
+  it("normalizes a partial Operations response into a safe, renderable status", () => {
+    expect(normalizeOperationalStatus({ telemetry: "live" })).toEqual({
+      telemetry: "live",
+      overall: "unknown",
+      topology: { writer: "unknown", standby: "unknown", route: "unknown", automaticFailover: false },
+      services: { runtime: "unknown", database: "unknown", auth: "unknown", rest: "unknown", storage: "unknown", accountRecovery: "unknown" },
+      replication: { database: "unknown", storage: "unknown" },
+    });
   });
 
   it("uses absolute fallback routes so malformed operations URLs cannot recurse", () => {

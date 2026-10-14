@@ -17,7 +17,7 @@ fail() {
 caddy_container='supabase-caddy'
 db_container='supabase-db'
 auth_container='supabase-auth'
-storage_timer='lemtel-ha-storage-sync.timer'
+storage_timer='lemtel-ha-do-writer-storage-sync.timer'
 storage_attestation='/var/lib/lemtel-ha/storage-sync-manifests/last-success'
 max_storage_freshness_seconds=900
 marker_name='lemtel-lb-ready'

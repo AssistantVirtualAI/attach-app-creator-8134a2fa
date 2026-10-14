@@ -29,6 +29,23 @@ test('organization domains remain Lemtel-owned and require the authoritative edg
   assert.doesNotMatch(client, /VITE_SUPABASE_URL/);
 });
 
+test('domain migration preserves legacy Lemtel audit actions while adding domain actions', () => {
+  const sql = read('infra/lemtel-self-hosted/migrations/0008_lemtel_organization_domains.sql');
+  for (const action of [
+    'organization_created',
+    'user_provisioned',
+    'welcome_sent',
+    'welcome_failed',
+    'welcome_resent',
+    'first_password_changed',
+    'temporary_password_rotated',
+    'user_access_suspended',
+    'domain_created',
+    'domain_suspended',
+    'domain_reactivated',
+  ]) assert.match(sql, new RegExp(`'${action}'`));
+});
+
 test('portal UI keeps unprovisioned communications read-only and does not imply a PBX connection', () => {
   const portal = read('src/pages/lemtel/onboarding/LemtelPortalApp.tsx');
   assert.match(portal, /t\.communications/);

@@ -42,6 +42,7 @@ ALTER TABLE public.lemtel_onboarding_audit
     'welcome_sent',
     'welcome_failed',
     'welcome_resent',
+    'first_password_changed',
     'temporary_password_rotated',
     'user_access_suspended',
     'domain_created',

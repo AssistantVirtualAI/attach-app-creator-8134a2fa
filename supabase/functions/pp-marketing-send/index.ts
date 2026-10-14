@@ -14,7 +14,7 @@ async function graphToken(admin: any, profile: any): Promise<string | null> {
   return await refreshMicrosoftAccessToken(admin, profile);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   const b = await req.clone().json().catch(() => ({}));

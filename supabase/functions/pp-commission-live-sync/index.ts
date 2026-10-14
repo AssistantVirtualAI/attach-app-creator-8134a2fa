@@ -34,6 +34,17 @@ const dedupeKey = (r: { number?: unknown; date_trans?: unknown; amount?: unknown
     String(r.commission_type ?? "").trim().toLowerCase(),
   ].join("|");
 
+/**
+ * pg_cron cannot supply a user JWT. It instead sends the dedicated Vault
+ * secret, which this service-role client verifies through a role-restricted
+ * RPC. The comparison and the secret value never enter Edge code or logs.
+ */
+async function isInternalCron(admin: any, candidate: string): Promise<boolean> {
+  if (candidate.length < 48 || candidate.length > 256) return false;
+  const { data, error } = await admin.rpc("pp_verify_internal_trigger_secret", { _candidate: candidate });
+  return !error && data === true;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -42,11 +53,10 @@ Deno.serve(async (req) => {
   const admin = createClient(url, key, { auth: { persistSession: false } });
   const cid = crypto.randomUUID().slice(0, 8);
 
-  // --- authorization: cron secret, or a signed-in Planiprêt admin -----------
+  // --- authorization: Vault-backed internal cron, or a signed-in admin -------
   let trigger = "cron";
-  const cronSecret = Deno.env.get("PP_CRON_TOKEN") ?? Deno.env.get("PP_CRON_SECRET") ?? "";
-  const provided = req.headers.get("x-pp-cron-secret") ?? req.headers.get("x-cron-secret");
-  if (!(cronSecret && provided && provided === cronSecret)) {
+  const internalSecret = req.headers.get("X-Planipret-Internal-Trigger")?.trim() ?? "";
+  if (!(await isInternalCron(admin, internalSecret))) {
     const authz = req.headers.get("Authorization") ?? "";
     const jwt = authz.replace(/^Bearer\s+/i, "");
     const { data: { user } } = await admin.auth.getUser(jwt);

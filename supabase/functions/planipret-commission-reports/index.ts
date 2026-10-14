@@ -892,6 +892,12 @@ Deno.serve(async (req) => {
 
   // Fifteen-minute warm-up (service key only): refresh recently used snapshots.
   if (action === "warm_snapshots") {
+    // This reads stored snapshots for several authorized users, so it must
+    // never be callable by an ordinary authenticated browser or mobile JWT.
+    // pp-row-push reaches it only after its independent Vault-secret check.
+    if (!SERVICE_KEY || jwt !== SERVICE_KEY) {
+      return json({ error: "service_role_required" }, 403);
+    }
     // Safe to trigger from the scheduler: it only refreshes existing, already
     // authorized snapshots older than ~14 min, bounded to 12 per run.
     const cutoff = new Date(Date.now() - FRESH_MS + 60_000).toISOString();

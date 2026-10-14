@@ -14,10 +14,24 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RECENT_MS = 2 * 3_600_000; // never alert on backfilled history
 const INSERT_RECENT_MS = 30 * 60_000;
 
-const Body = z.object({
+const RowEvent = z.object({
   table: z.enum(["planipret_phone_messages", "planipret_phone_calls", "planipret_voicemails"]),
   id: z.string().uuid(),
 });
+const CommissionWarm = z.object({ action: z.literal("warm_commission_snapshots") });
+const Body = z.union([RowEvent, CommissionWarm]);
+
+/**
+ * Database triggers and pg_cron cannot carry a user JWT.  Their Vault secret
+ * is validated through this service-role-only RPC, never compared in code or
+ * logged.  Regular mobile sessions therefore cannot produce a lock-screen
+ * push merely by knowing a row id.
+ */
+async function isInternalTrigger(admin: any, candidate: string) {
+  if (candidate.length < 48 || candidate.length > 256) return false;
+  const { data, error } = await admin.rpc("pp_verify_internal_trigger_secret", { _candidate: candidate });
+  return !error && data === true;
+}
 
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -27,16 +41,35 @@ const recent = (iso?: string | null, max = RECENT_MS) => !!iso && Date.now() - n
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-  // Internal database trigger only. Gateway JWT validation is enabled as a first
-  // barrier; this explicit comparison prevents an ordinary authenticated user
-  // from turning a known row id into another broker's lock-screen alert.
-  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!SERVICE_KEY || bearer !== SERVICE_KEY) return json({ error: "service_role_required" }, 403);
+  if (!SUPABASE_URL || !SERVICE_KEY) {
+    console.error("[pp-row-push] internal configuration is unavailable");
+    return json({ error: "internal_trigger_unavailable" }, 503);
+  }
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+  // This endpoint intentionally has no gateway JWT requirement because it is
+  // invoked by Postgres.  The custom Vault secret is checked server-side via a
+  // service-role-only RPC before parsing or reading any event row.
+  const internalSecret = req.headers.get("X-Planipret-Internal-Trigger")?.trim() ?? "";
+  if (!(await isInternalTrigger(admin, internalSecret))) {
+    return json({ error: "internal_trigger_required" }, 403);
+  }
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return json({ error: "invalid_body" }, 400);
-  const { table, id } = parsed.data;
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
+  if ("action" in parsed.data) {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/planipret-commission-reports`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "warm_snapshots" }),
+    });
+    if (!res.ok) {
+      console.error(`[pp-row-push] commission warm failed [${res.status}]`);
+      return json({ error: "commission_warm_failed", status: res.status }, 502);
+    }
+    return json({ ok: true, category: "commission_warm" });
+  }
+
+  const { table, id } = parsed.data;
   const { data: row } = await admin.from(table).select("*").eq("id", id).maybeSingle();
   if (!row?.user_id) return json({ skipped: "no_row" });
 

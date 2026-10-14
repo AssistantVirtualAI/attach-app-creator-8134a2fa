@@ -16,7 +16,7 @@ export function voiceConfirmationDecision(value: unknown): "confirm" | "cancel" 
   // Any negation anywhere wins: "oui mais non", "non merci", "pas maintenant".
   if (/\b(non|no|nope|annule|annuler|arrete|stop|cancel|attends|attend|pas maintenant|ne le fais pas|laisse faire)\b/.test(text)) return "cancel";
   if (words.length > 6) return null;
-  const yes = /^(oui|ouais|ouep|yep|yes|yeah|confirme|confirm|je confirme|vas y|go|d'accord|d accord|daccord|okay|ok|parfait|exact|exactement|correct|c'est correct|c est correct|c'est bon|c est bon|absolument|certainement|bien sur|envoie|envoie le|fais le|sure)\b/;
+  const yes = /^(oui|ouais|ouep|yep|yes|yeah|confirme|confirm|je confirme|vas y|go|d'accord|d accord|daccord|okay|ok|parfait|exact|exactement|correct|c'est correct|c est correct|absolument|certainement|bien sur|envoie|envoie le|fais le|sure)\b/;
   if (yes.test(text)) return "confirm";
   return null;
 }

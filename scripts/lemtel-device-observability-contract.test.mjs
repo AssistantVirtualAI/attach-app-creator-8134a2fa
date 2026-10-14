@@ -29,7 +29,8 @@ test('client presence is minimal, server-written and unavailable to browser role
 test('session bootstrap records a bounded presence marker but never uses it for authorization', () => {
   assert.match(bootstrap, /X-Lemtel-Client/);
   assert.match(bootstrap, /lemtel_record_client_connection/);
-  assert.match(bootstrap, /\.catch\(\(\) => undefined\)/);
+  assert.match(bootstrap, /try \{\s+await admin\.rpc\("lemtel_record_client_connection"/);
+  assert.match(bootstrap, /Presence remains best-effort and can never deny an otherwise valid session/);
   assert.match(bootstrap, /lemtel_session_bootstrap_context/);
   assert.doesNotMatch(bootstrap, forbidden);
 });

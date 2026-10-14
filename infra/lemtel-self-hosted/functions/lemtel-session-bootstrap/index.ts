@@ -34,10 +34,14 @@ export async function handler(req: Request): Promise<Response> {
   const clientKind = requestedClient === "mobile" || requestedClient === "desktop" || requestedClient === "portal"
     ? requestedClient
     : "client";
-  await admin.rpc("lemtel_record_client_connection", {
-    p_user_id: user.id,
-    p_client_kind: clientKind,
-  }).catch(() => undefined);
+  try {
+    await admin.rpc("lemtel_record_client_connection", {
+      p_user_id: user.id,
+      p_client_kind: clientKind,
+    });
+  } catch {
+    // Presence remains best-effort and can never deny an otherwise valid session.
+  }
   return respond({
     user: { id: user.id, email: user.email, displayName: String(user.user_metadata?.full_name || user.email), locale: user.user_metadata?.locale === "en" ? "en" : "fr" },
     organizations: context.map((entry: Record<string, unknown>) => ({

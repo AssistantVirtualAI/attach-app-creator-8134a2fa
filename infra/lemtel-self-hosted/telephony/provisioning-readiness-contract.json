@@ -1,0 +1,74 @@
+{
+  "package_version": "lemtel_telephony_provisioning_readiness_v1",
+  "scope": "offline_telephony_activation_preparation_only",
+  "telephony_enabled": false,
+  "activation_authorized": false,
+  "automatic_failover_enabled": false,
+  "topology": {
+    "writer": "digitalocean_only",
+    "standby": "hostinger_passive_only",
+    "public_database": false
+  },
+  "secret_handling": {
+    "accepted_channels": [
+      "owner_controlled_secret_store",
+      "runtime_environment_on_digitalocean_writer"
+    ],
+    "forbidden_channels": [
+      "git_repository",
+      "portal_bundle",
+      "mobile_or_desktop_client",
+      "chat_message",
+      "build_log",
+      "browser_local_storage"
+    ],
+    "emit_secret_values": false
+  },
+  "required_provider_inputs": [
+    "approved_provider_identity_and_tenant_scope",
+    "transport_profile_tls_srtp_wss",
+    "per_user_extension_mapping_contract",
+    "server_side_authentication_and_rotation_contract",
+    "turn_relay_and_network_policy",
+    "incoming_outbound_routing_and_emergency_policy",
+    "voicemail_retention_and_greeting_policy",
+    "recording_consent_retention_and_authorized_playback_policy",
+    "ios_pushkit_callkit_provisioning_evidence",
+    "android_fcm_provisioning_evidence",
+    "approved_test_tenant_and_test_extensions",
+    "provider_change_and_rollback_contact"
+  ],
+  "required_server_guards": [
+    "email_password_account_authority_ready",
+    "organization_membership_and_extension_authorization_server_enforced",
+    "recording_audio_authorized_proxy_only",
+    "voicemail_and_cdr_own_extension_scope_enforced",
+    "no_sip_or_turn_credentials_in_clients",
+    "redacted_observability_only",
+    "single_writer_fencing_verified"
+  ],
+  "required_evidence_before_activation": [
+    "all_provider_inputs_attested_without_secret_values",
+    "digitalocean_writer_backup_fresh",
+    "controlled_runtime_deployment_authorized",
+    "desktop_physical_device_call_test",
+    "ios_physical_device_callkit_push_test",
+    "android_physical_device_fcm_test",
+    "recording_authorization_negative_test",
+    "voicemail_authorization_negative_test",
+    "cross_organization_access_denial_test",
+    "rollback_test"
+  ],
+  "forbidden_actions_before_activation": [
+    "pbx_connection",
+    "sip_registration",
+    "wss_endpoint_exposure",
+    "turn_credential_delivery",
+    "push_credential_delivery",
+    "provider_write",
+    "dns_change",
+    "hostinger_runtime_start",
+    "automatic_promotion"
+  ],
+  "completion_rule": "telephony_enabled may become true only after every required input and evidence item is independently attested by the controlled writer deployment."
+}

@@ -13,6 +13,8 @@ test('portal authority deployment is writer-gated, digest-verified and transacti
     '0008_lemtel_organization_domains.sql',
     'lemtel_organization_domains',
     'lemtel-onboarding-admin/index.ts',
+    'lemtelTelephonyReadiness.ts',
+    'catalog_replaced',
     'portal_directory_missing',
     'rollback()',
     'portal_authority_deploy_status=complete',

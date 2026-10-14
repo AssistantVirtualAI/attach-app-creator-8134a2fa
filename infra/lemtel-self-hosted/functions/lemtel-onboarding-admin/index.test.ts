@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert@1.0.14";
 import { redactedOperationalStatusFromRow, validateBody } from "./index.ts";
+import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
 
 Deno.test("portal list action accepts only its exact body", () => {
   assertEquals(validateBody({ action: "list_organizations" }), { action: "list_organizations" });
@@ -35,6 +36,17 @@ Deno.test("revoke action requires an exact pair of Lemtel UUIDs", () => {
 Deno.test("operational status accepts only the exact platform read action", () => {
   assertEquals(validateBody({ action: "get_operational_status" }), { action: "get_operational_status" });
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });
+});
+
+Deno.test("telephony readiness is an organization-scoped, exact and fail-closed read", () => {
+  const organizationId = "11111111-1111-4111-8111-111111111111";
+  assertEquals(validateBody({ action: "get_telephony_readiness", organizationId }), { action: "get_telephony_readiness", organizationId });
+  assertEquals(validateBody({ action: "get_telephony_readiness", organizationId, ignored: true }), { error: "invalid_body", status: 400 });
+  const catalog = telephonyReadinessCatalog();
+  assert(catalog.some((item) => item.key === "extensions"));
+  assert(catalog.some((item) => item.key === "recordings"));
+  assert(catalog.every((item) => item.status === "not_provisioned"));
+  assert(catalog.every((item) => !JSON.stringify(item).match(/(?:secret|password|hostname|address|provider_config)/i)));
 });
 
 Deno.test("operational status removes unexpected and sensitive snapshot fields", () => {

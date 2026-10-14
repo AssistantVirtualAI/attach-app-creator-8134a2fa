@@ -33,6 +33,7 @@ test('operational status has its own immutable offline deployment package', () =
   assert.equal(deploymentManifest.automatic_failover_enabled, false);
   assert.deepEqual(deploymentManifest.sources.map((entry) => entry.path), [
     'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts',
+    'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts',
     'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json',
     'infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql',
     'infra/lemtel-self-hosted/migrations/0007_lemtel_portal_account_authority.sql',
@@ -90,6 +91,7 @@ test('writer status timer is root-gated and carries no Hostinger start, promotio
 
 test('operational status is served only by the authoritative Lemtel edge function', () => {
   assert.match(edge, /get_operational_status/);
+  assert.match(edge, /telephonyReadinessCatalog/);
   assert.match(edge, /get_operational_trend/);
   assert.match(publisher, /lemtel_operational_status_history/);
   assert.match(edge, /lemtel_operational_status/);

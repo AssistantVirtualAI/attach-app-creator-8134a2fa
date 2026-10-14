@@ -18,6 +18,7 @@ Le package ne change pas DNS, Cloudflare, le standby, un rôle PostgreSQL, une p
 - `portal.tar` (racine contenant `lemtel-portal.html` et `assets/`)
 - `0008_lemtel_organization_domains.sql`
 - `lemtel-onboarding-admin.index.ts`
+- `lemtelTelephonyReadiness.ts` (catalogue de préparation, sans appel fournisseur)
 - `lemtel-ha-do-writer-portal-authority-deploy.sh`
 
 ## Validation après déploiement

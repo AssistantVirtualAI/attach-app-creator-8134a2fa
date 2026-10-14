@@ -11,6 +11,8 @@ test("Operations portal deployment is root-gated and transactionally bounded to 
     "digitalocean_promoted_writer",
     "FRESH_ENCRYPTED_WRITER_BACKUP_VERIFIED",
     "portal_archive",
+    "lemtelTelephonyReadiness.ts",
+    "catalog_replaced",
     "tar -xf",
     "resolve_database_container",
     "database_container_unresolved",

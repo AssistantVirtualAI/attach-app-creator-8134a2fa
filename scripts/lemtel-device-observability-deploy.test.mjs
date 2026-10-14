@@ -17,6 +17,7 @@ test("the Lemtel observability deployer is fail-closed and writer-only", () => {
     "manifest.sha256",
     "pg_is_in_recovery()::text",
     "lemtel-onboarding-admin.index.ts",
+    "lemtelTelephonyReadiness.ts",
     "lemtel-session-bootstrap.index.ts",
     "lemtel_organization_domains",
     "lemtel_client_connection_presence",

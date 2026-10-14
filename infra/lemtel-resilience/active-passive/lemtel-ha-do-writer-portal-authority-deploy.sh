@@ -62,7 +62,17 @@ function_target="$functions_source/lemtel-onboarding-admin/index.ts"
 [ -f "$caddyfile" ] || fail caddyfile_missing
 [ -f "$function_target" ] || fail function_target_missing
 [ -d "$portal_dir" ] || fail portal_directory_missing
-[ "$(grep -Fxc "$portal_marker" "$caddyfile" || true)" = 1 ] || fail existing_portal_route_required
+portal_marker_summary="$(awk -v marker="$portal_marker" '
+  index($0, marker) { contains += 1 }
+  {
+    candidate = $0
+    sub(/^[[:space:]]+/, "", candidate)
+    sub(/[[:space:]]+$/, "", candidate)
+    if (candidate == marker) normalized += 1
+  }
+  END { print (contains + 0) ":" (normalized + 0) }
+' "$caddyfile")"
+[ "$portal_marker_summary" = '1:1' ] || fail existing_portal_route_required
 
 lock_file='/var/lock/lemtel-portal-authority.lock'
 exec 9>"$lock_file"

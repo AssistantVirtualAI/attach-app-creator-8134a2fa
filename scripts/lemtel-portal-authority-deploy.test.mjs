@@ -19,6 +19,13 @@ test('portal authority deployment is writer-gated, digest-verified and transacti
   ]) assert.match(source, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
+test('portal route marker accepts surrounding whitespace but remains unique and isolated', () => {
+  assert.match(source, /portal_marker_summary=/);
+  assert.match(source, /candidate == marker/);
+  assert.match(source, /'1:1'/);
+  assert.doesNotMatch(source, /grep -Fxc/);
+});
+
 test('portal authority deployment never changes topology, DNS, provider or telephony', () => {
   for (const forbidden of [
     /cloudflare/i,

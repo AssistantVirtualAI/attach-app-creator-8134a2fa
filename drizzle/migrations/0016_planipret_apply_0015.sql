@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION public.pp_run_commission_live_sync() IS 'Vault-backed bridge for the 30-minute commission live sync; no credentials in cron.';

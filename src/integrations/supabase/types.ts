@@ -18319,6 +18319,7 @@ export type Database = {
         Returns: boolean
       }
       pp_norm_name: { Args: { t: string }; Returns: string }
+      pp_run_commission_live_sync: { Args: never; Returns: undefined }
       pp_verify_internal_trigger_secret: {
         Args: { _candidate: string }
         Returns: boolean

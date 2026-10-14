@@ -113,6 +113,13 @@
       "when": 1791954554641,
       "tag": "0015_planipret_secure_commission_live_sync_cron",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791955962589,
+      "tag": "0016_planipret_apply_0015",
+      "breakpoints": true
     }
   ]
 }

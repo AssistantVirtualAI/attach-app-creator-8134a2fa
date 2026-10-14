@@ -202,6 +202,15 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [insightsViewerId, setInsightsViewerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (active) setInsightsViewerId(data.user?.id ?? null);
+    }).catch(() => { if (active) setInsightsViewerId(null); });
+    return () => { active = false; };
+  }, []);
 
   // Export (PNG / PDF) + mobile filter drawer
   const exportRootRef = useRef<HTMLDivElement>(null);
@@ -431,14 +440,14 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
     ].join("|");
   }, [data]);
 
-  // ---- AI insights (Claude), auto-refreshed on every new Maestro payload ----
+  // ---- AI insights — once per selected period/filter per 24 h, or manually ----
   const [ai, setAi] = useState<{ summary: string; insights: any[] } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
   const generateInsights = async (force = false) => {
-    if (!data || data.rowCount === 0) return;
-    const cacheKey = `pp-register-insights:${isAdminView ? "admin" : (data.brokerName ?? "me")}:${agent || "all"}:${year}:${granularity}:${periodIndex}:${lang}:${tab}:${dataSignature}`;
+    if (!data || data.rowCount === 0 || !insightsViewerId) return;
+    const cacheKey = `pp-register-insights:v2:${insightsViewerId}:${isAdminView ? "admin" : "broker"}:${agent || "all"}:${year}:${granularity}:${periodIndex}:${lender || "all"}:${lang}`;
     if (!force) {
       try {
         const raw = localStorage.getItem(cacheKey);
@@ -454,7 +463,7 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
         lang, scope: isAdminView && !agent ? "admin" : "broker", source: "maestro",
-        focus: tab, focusLabel: tabLabel,
+        force,
         metrics: {
           year, period: data.periodLabel, granularity, window: data.window,
           agent: agent || (isAdminView ? "all brokers" : data.brokerName),
@@ -494,13 +503,14 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
     }
   };
 
-  // Auto-run: regenerates whenever the visible slice or the underlying
-  // Maestro data changes (signature), never waiting for a manual click.
+  // Reloads the cached insight when data/filter changes; it does not generate a
+  // new model response until the 24 h expiry. The visible button is the opt-in
+  // manual refresh path.
   useEffect(() => {
     setAi(null);
     if (data && data.rowCount > 0) void generateInsights(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataSignature, year, granularity, periodIndex, agent, tab]);
+  }, [insightsViewerId, dataSignature, year, granularity, periodIndex, agent, lender, isAdminView]);
 
   const tabs: { key: TabKey; label: string; count?: number | null; tone?: "gold" | "warn" }[] = [
     { key: "overview", label: isFr ? "Vue d'ensemble" : "Overview" },
@@ -752,7 +762,7 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
           <div className="mb-3">
             <CommissionInsights
               lang={lang}
-              context={tabLabel}
+              context={isFr ? "période sélectionnée" : "selected period"}
               summary={ai?.summary ?? ""}
               insights={(ai?.insights ?? []) as any}
               loading={aiLoading}

@@ -31,7 +31,7 @@ import {
 } from "../_shared/commission-reports.ts";
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
 import { resolveCommissionScope } from "../_shared/commission-scope.ts";
-import { validateCommissionOutput, profileRows } from "../_shared/commission-validation.ts";
+import { isCommissionAiAuditFresh, validateCommissionOutput, profileRows } from "../_shared/commission-validation.ts";
 
 const json = (body: unknown, status = 200, cid?: string) =>
   new Response(JSON.stringify(body), {
@@ -146,12 +146,15 @@ async function handler(req: Request): Promise<Response> {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "summary");
-    // Claude analyses every live read (with the previous read for drift) and each analysis is audited.
+    // Arithmetic reconciliation runs on every live read. The advisory model pass
+    // is intentionally limited to one run per source/broker every 24 hours.
     const gate = async (source: string, brokerId: string, input: any) => {
       const { data: prev } = await admin.from("planipret_commission_ai_audit").select("headline, created_at")
         .eq("broker_id", brokerId).eq("source", source).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const previous = prev?.headline ? { ...(prev.headline as any), fetched_at: prev.created_at } : null;
-      const v = await validateCommissionOutput({ ...input, previous });
+      const skipAi = isCommissionAiAuditFresh(prev?.created_at);
+      const v = await validateCommissionOutput({ ...input, previous, skipAi });
+      if (skipAi) return v;
       const h = input.current ?? {};
       admin.from("planipret_commission_ai_audit").insert({
         user_id: user.id, broker_id: brokerId, source, status: v.status, ai_status: v.ai_status, summary: v.summary,

@@ -1,6 +1,8 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { claudeText } from "../_shared/anthropic.ts";
 import { insightsCacheKey, readInsightsCache, writeInsightsCache } from "../_shared/insights-cache.ts";
+import { COMMISSION_INSIGHTS_TTL_MS, commissionInsightsCacheScope } from "../_shared/commission-insights-cache.ts";
 
 /**
  * AI insights for the commissions dashboard.
@@ -54,26 +56,47 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   try {
-    if (!req.headers.get("Authorization")) return j({ success: false, error: "unauthorized" }, 401);
+    const authorization = req.headers.get("Authorization");
+    if (!authorization) return j({ success: false, error: "unauthorized" }, 401);
+    const jwt = authorization.replace(/^Bearer\s+/i, "").trim();
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const { data: userRes, error: userErr } = await admin.auth.getUser(jwt);
+    const viewerId = userErr ? null : userRes?.user?.id;
+    if (!viewerId) return j({ success: false, error: "unauthorized" }, 401);
 
     const body = await req.json().catch(() => ({}));
     const lang = body?.lang === "en" ? "en" : "fr";
     const metrics = body?.metrics;
+    const force = body?.force === true;
     if (!metrics || typeof metrics !== "object") return j({ success: false, error: "metrics manquants" }, 400);
+    const scope = body?.scope === "admin" ? "admin" : "broker";
 
     const userText = [
       `Langue de réponse: ${lang}`,
-      `Portée: ${body?.scope === "admin" ? "agence (tous les courtiers)" : "courtier individuel"}`,
+      `Portée: ${scope === "admin" ? "agence (tous les courtiers)" : "courtier individuel"}`,
       `Source des données: ${body?.source ?? "maestro"} (synchronisation Maestro)`,
-      body?.focusLabel
-        ? `Onglet affiché à l'utilisateur: ${body.focusLabel} (clé: ${body?.focus ?? ""}). Concentre l'analyse sur ce qui est visible dans cet onglet et explique comment lire ces chiffres.`
-        : "",
       "Métriques (JSON):",
       JSON.stringify(metrics).slice(0, 18000),
     ].join("\n");
 
-    const cacheKey = await insightsCacheKey("commissions-insights", userText);
-    const cached = await readInsightsCache(cacheKey);
+    // The server-side hash partitions the cache by authenticated viewer without
+    // storing the identity. Data values are intentionally omitted from the key:
+    // selected period/filter + manual refresh govern the once-daily AI cadence.
+    const viewerKey = await insightsCacheKey("commission-viewer", viewerId);
+    const cacheScope = commissionInsightsCacheScope({
+      userId: viewerKey,
+      lang,
+      scope,
+      source: body?.source,
+      year: metrics.year,
+      period: metrics.period,
+      granularity: metrics.granularity,
+      window: metrics.window,
+      agent: metrics.agent,
+      lenderFilter: metrics.lenderFilter,
+    });
+    const cacheKey = await insightsCacheKey("commissions-insights", cacheScope);
+    const cached = force ? null : await readInsightsCache(cacheKey, COMMISSION_INSIGHTS_TTL_MS);
     if (cached) return j({ ...(cached as object), cached: true });
 
     const text = await claudeText(SYSTEM, userText, {

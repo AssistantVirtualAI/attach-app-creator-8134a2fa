@@ -12,10 +12,19 @@ export interface CommissionValidation {
   checks: Array<{ key: string; expected_cents: number; actual_cents: number; delta_cents: number; ok: boolean }>;
   anomalies: Array<{ type: string; severity: "info" | "warning" | "critical"; detail: string }>;
   summary: string;
-  ai_status: "ok" | "warnings" | "blocked" | "unavailable";
+  ai_status: "ok" | "warnings" | "blocked" | "unavailable" | "cached";
 }
 
 const cents = (value: unknown) => Math.round(num(value) * 100);
+export const COMMISSION_AI_REFRESH_MS = 24 * 60 * 60 * 1000;
+
+/** A data reconciliation always runs; the advisory Claude pass runs at most daily. */
+export function isCommissionAiAuditFresh(createdAt: string | null | undefined, now = Date.now()): boolean {
+  if (!createdAt) return false;
+  const timestamp = new Date(createdAt).getTime();
+  const age = now - timestamp;
+  return Number.isFinite(timestamp) && age >= 0 && age < COMMISSION_AI_REFRESH_MS;
+}
 
 function check(key: string, expected: unknown, actual: unknown) {
   const expected_cents = cents(expected);
@@ -168,6 +177,8 @@ export async function validateCommissionOutput(input: {
   dataQuality?: DataQuality | null;
   previous?: { total_cents: number; files: number; volume_cents: number; fetched_at: string } | null;
   current?: { files: number; volume: number; total: number } | null;
+  /** Skip only the advisory model call; arithmetic reconciliation remains mandatory. */
+  skipAi?: boolean;
 }): Promise<CommissionValidation> {
   const checks = input.source === "paid_deposits"
     ? deterministicPaidChecks(input.rows, input.summary as CommissionSummary)
@@ -187,14 +198,16 @@ export async function validateCommissionOutput(input: {
       ? { commission_cents: cents(input.summary?.total_commission), volume_cents: cents(input.summary?.total_loan_volume), deals: input.summary?.deal_count ?? 0 }
       : { official_total_cents: cents(input.officialTotal), categories: (input.official ?? []).map((item) => ({ type: item.type, amount_cents: cents(item.amount) })) },
   };
-  const text = await claudeText(SYSTEM, JSON.stringify(payload), {
+  const text = input.skipAi ? null : await claudeText(SYSTEM, JSON.stringify(payload), {
     model: "claude-sonnet-4-5-20250929",
     max_tokens: 1000,
     temperature: 0.1,
     label: `commission-gate-${input.source}`,
   });
   const ai = parseAi(text);
-  const aiStatus = ai && ["ok", "warnings", "blocked"].includes(String(ai.status)) ? String(ai.status) as "ok" | "warnings" | "blocked" : "unavailable";
+  const aiStatus = input.skipAi
+    ? "cached"
+    : ai && ["ok", "warnings", "blocked"].includes(String(ai.status)) ? String(ai.status) as "ok" | "warnings" | "blocked" : "unavailable";
   const anomalies = Array.isArray(ai?.anomalies) ? ai.anomalies.slice(0, 12).map((item: any) => ({
     type: String(item?.type ?? "inconsistent").slice(0, 80),
     severity: (["info", "warning", "critical"].includes(String(item?.severity)) ? String(item.severity) : "warning") as "info" | "warning" | "critical",
@@ -202,7 +215,7 @@ export async function validateCommissionOutput(input: {
   })) : [];
   // Claude est consultatif : seul le rapprochement arithmétique déterministe bloque.
   const blocked = deterministicBlocked;
-  const warning = !blocked && (aiStatus !== "ok" || checks.some((item) => !item.ok) || anomalies.length > 0);
+  const warning = !blocked && ((aiStatus !== "ok" && aiStatus !== "cached") || checks.some((item) => !item.ok) || anomalies.length > 0);
   return {
     source: input.source,
     status: blocked ? "BLOCKED" : warning ? "WARNING" : "MATCH",

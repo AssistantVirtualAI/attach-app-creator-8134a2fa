@@ -56,7 +56,7 @@ export default function CommissionInsights({
               {T("Insights IA", "AI insights")}{context ? ` — ${context}` : ""}
             </h3>
             <p style={{ fontSize: 10.5, color: "var(--pp-text-faint)" }}>
-              {T("Analyse générée automatiquement par Claude à partir de vos données Maestro", "Generated automatically by Claude from your Maestro data")}
+              {T("Mise à jour au plus une fois par jour à partir des données Maestro", "Updated at most once daily from Maestro data")}
             </p>
           </div>
         </div>
@@ -67,7 +67,7 @@ export default function CommissionInsights({
           style={{ background: "linear-gradient(120deg,#2E9BDC,#9B7FE8)" }}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          {loading ? T("Analyse…", "Analyzing…") : T("Actualiser", "Refresh")}
+          {loading ? T("Analyse…", "Analyzing…") : T("Actualiser maintenant", "Refresh now")}
         </button>
       </div>
 

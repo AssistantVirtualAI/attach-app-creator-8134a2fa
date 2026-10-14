@@ -19,6 +19,7 @@ test('synchronous automatic-failover target is selected but remains inactive', (
   assert.equal(value.required_preflight.cloudflare_load_balancing_subscription_active, true);
   assert.equal(value.required_preflight.cloudflare_load_balancer_configured, false);
   assert.equal(value.required_preflight.provider_api_credentials_verified, true);
+  assert.equal(value.required_preflight.independent_arbiter_deployed, true);
   assert.equal(value.required_preflight.postgres_synchronous_streaming_verified, true);
   assert.equal(value.activation.user_selected_strategy, true);
   assert.equal(value.activation.automatic_fencing_enabled, false);
@@ -61,7 +62,6 @@ test('review explains the missing prerequisites without claiming activation', ()
   assert.equal(review.cloudflare_load_balancing_subscription_active, true);
   assert.equal(review.automatic_failover_enabled, false);
   assert.deepEqual(review.reasons, [
-    'INDEPENDENT_ARBITER_REQUIRED',
     'STORAGE_DUAL_DURABILITY_REQUIRED',
     'CLOUDFLARE_LOAD_BALANCER_NOT_CONFIGURED',
     'FAILOVER_AND_FAILBACK_DRILLS_REQUIRED',

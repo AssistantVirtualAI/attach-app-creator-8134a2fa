@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION public.pp_verify_internal_trigger_secret(text) IS 'Verifies the Vault-only internal trigger secret; service_role only.';

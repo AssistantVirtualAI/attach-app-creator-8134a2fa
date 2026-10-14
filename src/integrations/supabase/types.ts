@@ -18319,6 +18319,11 @@ export type Database = {
         Returns: boolean
       }
       pp_norm_name: { Args: { t: string }; Returns: string }
+      pp_verify_internal_trigger_secret: {
+        Args: { _candidate: string }
+        Returns: boolean
+      }
+      pp_warm_commission_snapshots: { Args: never; Returns: undefined }
       read_planipret_sip_secret: { Args: { _name: string }; Returns: string }
       reconcile_pbx_call_records: { Args: { _org_id: string }; Returns: Json }
       relink_my_softphone_user: { Args: never; Returns: Json }

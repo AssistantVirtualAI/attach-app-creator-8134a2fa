@@ -12,7 +12,13 @@ export function voiceConfirmationDecision(value: unknown): "confirm" | "cancel" 
     .trim();
 
   if (!text) return null;
-  if (/^(non|no|annule|annuler|arrete|stop|cancel|pas maintenant|ne le fais pas)$/.test(text)) return "cancel";
-  if (/^(oui|oui confirme|yes|yes confirm|confirme|je confirme|vas y|go|d'accord|d accord|okay|ok)$/.test(text)) return "confirm";
+  const words = text.split(" ");
+  // Hesitation keeps the proposal pending.
+  if (/\b(mais|attends|attend|minute|sais pas)\b/.test(text)) return null;
+  // Any negation anywhere wins: "oui mais non", "non merci", "pas maintenant".
+  if (/\b(non|no|nope|annule|annuler|arrete|stop|cancel|pas maintenant|ne le fais pas|laisse faire)\b/.test(text)) return "cancel";
+  if (words.length > 6) return null;
+  const yes = /^(oui|ouais|ouep|yep|yes|yeah|confirme|confirm|je confirme|vas y|go|d'accord|d accord|daccord|okay|ok|parfait|exact|exactement|correct|c'est correct|c est correct|absolument|certainement|bien sur|envoie|envoie le|fais le|sure)\b/;
+  if (yes.test(text)) return "confirm";
   return null;
 }

@@ -33,6 +33,20 @@ Deno.test("revoke action requires an exact pair of Lemtel UUIDs", () => {
   assertEquals(validateBody({ action: "revoke_invitation", organizationId: "bad", recipientUserId: "bad" }), { error: "invalid_organization_id", status: 400 });
 });
 
+Deno.test("membership assignment and role updates require strict Lemtel-scoped bodies", () => {
+  const organizationId = "11111111-1111-4111-8111-111111111111";
+  const recipientUserId = "22222222-2222-4222-8222-222222222222";
+  assertEquals(validateBody({ action: "assign_existing_user", organizationId, user: { email: " Existing@Example.com ", role: "member" } }), {
+    action: "assign_existing_user", organizationId, user: { email: "existing@example.com", role: "member" },
+  });
+  assertEquals(validateBody({ action: "assign_existing_user", organizationId, user: { email: "existing@example.com", role: "owner" } }), { error: "invalid_user", status: 400 });
+  assertEquals(validateBody({ action: "set_membership_role", organizationId, recipientUserId, role: "admin" }), {
+    action: "set_membership_role", organizationId, recipientUserId, role: "admin",
+  });
+  assertEquals(validateBody({ action: "set_membership_role", organizationId, recipientUserId, role: "owner" }), { error: "invalid_role", status: 400 });
+  assertEquals(validateBody({ action: "set_membership_role", organizationId, recipientUserId, role: "member", ignored: true }), { error: "invalid_body", status: 400 });
+});
+
 Deno.test("operational status accepts only the exact platform read action", () => {
   assertEquals(validateBody({ action: "get_operational_status" }), { action: "get_operational_status" });
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });

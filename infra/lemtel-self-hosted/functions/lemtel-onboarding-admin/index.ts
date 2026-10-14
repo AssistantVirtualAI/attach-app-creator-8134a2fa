@@ -10,6 +10,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,62}$/;
 const ROLES = ["owner", "admin", "member"] as const;
 type Role = typeof ROLES[number];
+type AssignableRole = Exclude<Role, "owner">;
 type Locale = "fr" | "en";
 type Failure = { error: string; status: number };
 type UserInput = { email: string; displayName: string; role: Role; locale: Locale };
@@ -32,7 +33,9 @@ type RequestBody =
   | { action: "list_client_connections"; organizationId: string }
   | { action: "get_telephony_readiness"; organizationId: string }
   | { action: "create_domain"; organizationId: string; domain: DomainInput }
-  | { action: "suspend_domain"; organizationId: string; domainId: string };
+  | { action: "suspend_domain"; organizationId: string; domainId: string }
+  | { action: "assign_existing_user"; organizationId: string; user: ExistingUserInput }
+  | { action: "set_membership_role"; organizationId: string; recipientUserId: string; role: AssignableRole };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -102,6 +105,24 @@ export function validateBody(raw: unknown): RequestBody | Failure {
     if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
     if (isFailure(parsedDomainId)) return parsedDomainId;
     return { action: "suspend_domain", organizationId: parsedOrganizationId, domainId: parsedDomainId };
+  }
+  if (raw.action === "assign_existing_user") {
+    if (!exactKeys(raw, ["action", "organizationId", "user"]) || !plainObject(raw.user) || !exactKeys(raw.user, ["email", "role"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const email = typeof raw.user.email === "string" ? raw.user.email.trim().toLowerCase() : "";
+    const role = raw.user.role;
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (!EMAIL_RE.test(email) || email.length > 254 || (role !== "admin" && role !== "member")) return fail("invalid_user", 400);
+    return { action: "assign_existing_user", organizationId: parsedOrganizationId, user: { email, role } };
+  }
+  if (raw.action === "set_membership_role") {
+    if (!exactKeys(raw, ["action", "organizationId", "recipientUserId", "role"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedRecipientUserId = organizationId(raw.recipientUserId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedRecipientUserId)) return parsedRecipientUserId;
+    if (raw.role !== "admin" && raw.role !== "member") return fail("invalid_role", 400);
+    return { action: "set_membership_role", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId, role: raw.role };
   }
   if (raw.action === "create_organization") {
     if (!exactKeys(raw, ["action", "organization", "owner", "users"]) || !plainObject(raw.organization)) return fail("invalid_body", 400);
@@ -312,6 +333,18 @@ async function portalOrganizationAdmin(admin: any, userId: string, organizationI
   return (await platformAdmin(admin, userId)) || (await organizationAdmin(admin, userId, organizationId));
 }
 
+async function userByEmail(admin: any, email: string): Promise<any | null> {
+  const canonicalEmail = email.trim().toLowerCase();
+  for (let page = 1; page <= 100; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) return null;
+    const user = (data?.users ?? []).find((candidate: any) => String(candidate?.email ?? "").trim().toLowerCase() === canonicalEmail);
+    if (user) return user;
+    if ((data?.users ?? []).length < 1000) break;
+  }
+  return null;
+}
+
 async function usersById(admin: any, ids: string[]): Promise<Map<string, any>> {
   const needed = new Set(ids);
   const users = new Map<string, any>();
@@ -337,6 +370,62 @@ function userName(user: any): string {
 
 function userLocale(user: any): Locale {
   return user?.user_metadata?.locale === "en" ? "en" : "fr";
+}
+
+async function assignExistingUser(admin: any, organizationId: string, actor: string, input: ExistingUserInput) {
+  const existingUser = await userByEmail(admin, input.email);
+  if (!existingUser?.id) return fail("existing_user_not_found", 404);
+  const { data: membership, error: lookupError } = await admin.from("lemtel_organization_memberships")
+    .select("role,status")
+    .eq("organization_id", organizationId)
+    .eq("user_id", existingUser.id)
+    .maybeSingle();
+  if (lookupError) return fail("membership_lookup_failed", 503);
+  if (!membership) {
+    const { error } = await admin.from("lemtel_organization_memberships")
+      .insert({ organization_id: organizationId, user_id: existingUser.id, role: input.role, status: "active" });
+    if (error) return fail("membership_assign_failed", 409);
+    await audit(admin, organizationId, actor, "membership_assigned", existingUser.id, { role: input.role });
+    return { status: "assigned" as const };
+  }
+  if (membership.role === "owner") return fail("owner_membership_protected", 400);
+  if (membership.status !== "active") {
+    const { error } = await admin.from("lemtel_organization_memberships")
+      .update({ role: input.role, status: "active", suspended_at: null })
+      .eq("organization_id", organizationId)
+      .eq("user_id", existingUser.id);
+    if (error) return fail("membership_reactivate_failed", 503);
+    await audit(admin, organizationId, actor, "membership_reactivated", existingUser.id, { role: input.role });
+    return { status: "reactivated" as const };
+  }
+  if (membership.role !== input.role) {
+    const { error } = await admin.from("lemtel_organization_memberships")
+      .update({ role: input.role })
+      .eq("organization_id", organizationId)
+      .eq("user_id", existingUser.id);
+    if (error) return fail("membership_role_change_failed", 503);
+    await audit(admin, organizationId, actor, "membership_role_changed", existingUser.id, { role: input.role });
+  }
+  return { status: "unchanged" as const };
+}
+
+async function setMembershipRole(admin: any, organizationId: string, actor: string, recipientUserId: string, role: AssignableRole) {
+  const { data: membership, error: lookupError } = await admin.from("lemtel_organization_memberships")
+    .select("role,status")
+    .eq("organization_id", organizationId)
+    .eq("user_id", recipientUserId)
+    .maybeSingle();
+  if (lookupError) return fail("membership_lookup_failed", 503);
+  if (!membership) return fail("recipient_not_found", 404);
+  if (membership.role === "owner") return fail("owner_membership_protected", 400);
+  if (membership.role === role) return { status: "unchanged" as const };
+  const { error } = await admin.from("lemtel_organization_memberships")
+    .update({ role })
+    .eq("organization_id", organizationId)
+    .eq("user_id", recipientUserId);
+  if (error) return fail("membership_role_change_failed", 503);
+  await audit(admin, organizationId, actor, "membership_role_changed", recipientUserId, { role, membership_status: membership.status });
+  return { status: "updated" as const };
 }
 
 async function listOrganizations(admin: any, actor: string) {
@@ -587,6 +676,18 @@ export async function handler(req: Request): Promise<Response> {
             ? await listClientConnections(admin, request.organizationId)
             : await listActivity(admin, request.organizationId);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+
+  if (request.action === "assign_existing_user") {
+    if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const result = await assignExistingUser(admin, request.organizationId, actor, request.user);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, membership: result });
+  }
+
+  if (request.action === "set_membership_role") {
+    if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const result = await setMembershipRole(admin, request.organizationId, actor, request.recipientUserId, request.role);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, membership: result });
   }
 
   if (request.action === "create_domain") {

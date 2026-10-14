@@ -1069,6 +1069,23 @@ Deno.serve(async (req) => {
       refreshing_until: null,
     });
     return json({ ...payload, cache: { cached: false, stale: false, fetched_at: payload.syncedAt } });
+  };
+
+    if (staleSnap) {
+      const until = staleSnap.refreshing_until ? new Date(staleSnap.refreshing_until).getTime() : 0;
+      if (until < Date.now()) {
+        await admin.from("planipret_commission_snapshots").update({
+          refreshing_until: new Date(Date.now() + 3 * 60_000).toISOString(),
+          last_accessed_at: new Date().toISOString(),
+        }).eq("cache_key", cacheKey);
+        const bg = compute().catch((e) => console.warn("[pp-commission-stats] background refresh failed", e));
+        // deno-lint-ignore no-explicit-any
+        const rt = (globalThis as any).EdgeRuntime;
+        if (rt?.waitUntil) rt.waitUntil(bg);
+      }
+      return json({ ...staleSnap.payload, cache: { cached: true, stale: true, fetched_at: staleSnap.fetched_at } });
+    }
+    return await compute();
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

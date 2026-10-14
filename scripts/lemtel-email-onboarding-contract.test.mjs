@@ -99,9 +99,11 @@ test('Desktop and mobile use the Lemtel recovery endpoint instead of a reset-lin
 test('session bootstrap exposes no telephony secrets before provisioning', () => {
   const source = read('infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts');
   const sql = read('infra/lemtel-self-hosted/migrations/0009_lemtel_session_bootstrap_authority.sql');
+  const clientControls = read('infra/lemtel-self-hosted/migrations/0014_lemtel_client_session_controls.sql');
   const executable = source.replace(/^\s*\/\/.*$/gm, '');
   assert.match(source, /first_password_change_required/);
-  assert.match(source, /rpc\("lemtel_session_bootstrap_context"/);
+  assert.match(source, /rpc\("lemtel_session_bootstrap_context_for_client"/);
+  assert.match(source, /rpc\("lemtel_record_authorized_client_connection"/);
   assert.match(sql, /ADD COLUMN IF NOT EXISTS account_authority_revision bigint NOT NULL DEFAULT 1/);
   assert.match(sql, /CREATE TRIGGER lemtel_membership_authority_revision_after_change/);
   assert.match(sql, /account_authority_revision = account_authority_revision \+ 1/);
@@ -109,6 +111,9 @@ test('session bootstrap exposes no telephony secrets before provisioning', () =>
   assert.match(sql, /SECURITY DEFINER/);
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.lemtel_session_bootstrap_context/);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.lemtel_session_bootstrap_context\(uuid\)\s+TO service_role/);
+  assert.match(clientControls, /CREATE OR REPLACE FUNCTION public\.lemtel_session_bootstrap_context_for_client/);
+  assert.match(clientControls, /COALESCE\(control\.access_state, 'active'\) = 'active'/);
+  assert.match(clientControls, /REVOKE ALL ON TABLE public\.lemtel_client_session_controls FROM PUBLIC, anon, authenticated/);
   assert.doesNotMatch(sql, /planipret|pbx|fusionpbx|sip_|wss/i);
   assert.match(source, /telephony: \{ status: "not_provisioned" \}/);
   assert.doesNotMatch(executable, /sip_password|wss_url|\bturn\b|fusionpbx/i);

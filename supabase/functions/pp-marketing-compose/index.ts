@@ -3,11 +3,11 @@ import { callAnthropic } from "../_shared/anthropic.ts";
 import { CLAUDE_DEFAULT_MODEL } from "../_shared/claude-compat.ts";
 import { brokerSignature, corsHeaders, json, renderEmailHtml, requireBroker } from "../_shared/pp-marketing.ts";
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   const ctx = await requireBroker(req);
-  if ("error" in ctx) return ctx.error;
+  if ("error" in ctx) return ctx.error as Response;
 
   const body = await req.json().catch(() => ({}));
   const prompt = String(body?.prompt ?? "").trim();

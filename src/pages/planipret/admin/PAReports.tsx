@@ -10,7 +10,7 @@ import { ADMIN_REPORT_FILTERS_EVENT, periodLabel, periodToRange, rangeToPeriod, 
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { computeServiceFinance, computeTotals, fmtMoney, type ServiceFinance } from "@/lib/planipret/pricing";
+import { computeServiceFinance, computeTotals, fmtMoney, countPlans, type ServiceFinance } from "@/lib/planipret/pricing";
 import { FinancialKpiCard } from "@/components/planipret/admin/FinancialKpiCard";
 import { RevenueBreakdown } from "@/components/planipret/admin/RevenueBreakdown";
 
@@ -104,6 +104,7 @@ export default function PAReports() {
         total: (directory as any).count ?? rows.length,
         mobile: rows.filter((x) => x.mobile_app_enabled).length,
         ai: rows.filter((x) => x.voice_agent_enabled).length,
+        plans: countPlans(rows),
         maestro: rows.filter((x) => x.maestro_connected).length,
         ms365: brokerStats.ms365_connected,
         ns: brokerStats.ns_linked || ((directory as any).count ?? rows.length),
@@ -194,10 +195,10 @@ export default function PAReports() {
 
   // Financial — same source of truth as /admin/vue-ensemble (planipret_broker_stats view).
   const finance = useMemo<ServiceFinance[]>(() => [
-    computeServiceFinance("mobile", brokerSnapshot.mobile || brokerStats.app_mobile_active),
-    computeServiceFinance("widget", brokerSnapshot.total || brokerStats.total_courtiers),
-    computeServiceFinance("ai", brokerSnapshot.ai || brokerStats.agent_ia_active),
-  ], [brokerStats.app_mobile_active, brokerStats.total_courtiers, brokerStats.agent_ia_active, brokerSnapshot.mobile, brokerSnapshot.total, brokerSnapshot.ai]);
+    computeServiceFinance("widget", (brokerSnapshot as any).plans?.widget ?? 0),
+    computeServiceFinance("mobile", (brokerSnapshot as any).plans?.mobile ?? 0),
+    computeServiceFinance("ai", (brokerSnapshot as any).plans?.ai ?? 0),
+  ], [brokerSnapshot]);
   const financeTotals = useMemo(() => computeTotals(finance), [finance]);
 
 

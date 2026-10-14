@@ -7,7 +7,7 @@
   "sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "33c994309d626bc5b2340e3179692f3dfd678cecc7c104a05b801bc6b46c2e13"
+      "sha256": "2ec406c18a42d4b0bd17acf9c29d54ce5a346fdc4e4f3425a4e662ed62fb5546"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts",

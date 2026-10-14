@@ -16,6 +16,7 @@ type Failure = { error: string; status: number };
 type UserInput = { email: string; displayName: string; role: Role; locale: Locale };
 type OrganizationInput = { displayName: string; slug: string; defaultLocale: Locale };
 type DomainInput = { hostname: string };
+type ExistingUserInput = { email: string; role: AssignableRole };
 const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 type RequestBody =
   | { action: "create_organization"; organization: OrganizationInput; owner: UserInput; users: UserInput[] }

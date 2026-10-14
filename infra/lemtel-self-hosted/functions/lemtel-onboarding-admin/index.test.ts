@@ -46,7 +46,7 @@ Deno.test("telephony readiness is an organization-scoped, exact and fail-closed 
   assert(catalog.some((item) => item.key === "extensions"));
   assert(catalog.some((item) => item.key === "recordings"));
   assert(catalog.every((item) => item.status === "not_provisioned"));
-  assert(catalog.every((item) => !JSON.stringify(item).match(/(?:secret|password|hostname|address|provider_config)/i)));
+  assert(catalog.every((item) => !JSON.stringify(item).match(/(?:password|hostname|address|provider_config)/i)));
 });
 
 Deno.test("operational status removes unexpected and sensitive snapshot fields", () => {

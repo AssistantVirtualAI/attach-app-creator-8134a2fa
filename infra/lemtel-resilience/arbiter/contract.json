@@ -1,0 +1,22 @@
+{
+  "contract_version": "lemtel_failover_arbiter_v1",
+  "hosting": "cloudflare_workers_independent_of_digitalocean_and_hostinger",
+  "mode": "deny_by_default_bootstrap",
+  "observation": "not_configured",
+  "provider_action": false,
+  "fencing": false,
+  "promotion": false,
+  "hostinger_runtime_start": false,
+  "cloudflare_traffic_routing": false,
+  "automatic_failback": false,
+  "telephony": false,
+  "required_before_decision_mode": [
+    "provider_readonly_observations",
+    "signed_one_time_fence_receipt",
+    "standby_local_preflight",
+    "storage_dual_durability",
+    "runtime_digest_parity",
+    "cloudflare_monitor_and_pools",
+    "controlled_fencing_promotion_failback_drills"
+  ]
+}

@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";
 import { authorizeCallAccess, allowCallViewing } from "../_shared/planipret-call-access.ts";
 import { fetchTwinTranscript } from "./twin-lookup.ts";
+import { callOpenAiFallback } from "./openai-fallback.ts";
 import { hasUsableAiKey } from "./ai-key-guard.ts";
 
 
@@ -502,6 +503,6 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
         payload: { call_id, error: e?.message ?? "unknown" },
       });
     } catch (_) { /* best-effort */ }
-    return json({ error: e?.message ?? "unknown error" }, 500);
+    console.error("[pp-coach-call] internal error"); return json({ error: "Internal error", code: "internal_error" }, 500);
   }
 });

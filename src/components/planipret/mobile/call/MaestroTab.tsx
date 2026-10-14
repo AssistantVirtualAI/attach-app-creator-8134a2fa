@@ -131,7 +131,6 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
 
   const nextActions = extractNextActions(call);
   const hasAiContent = !!(call.ai_summary || call.ai_summary_short || call.ai_analysis_json);
-  const hasTranscript = !!(call.transcript || (Array.isArray(call.transcript_segments) && call.transcript_segments.length > 0));
 
   const runAiAnalysis = async () => {
     setAnalyzing(true);

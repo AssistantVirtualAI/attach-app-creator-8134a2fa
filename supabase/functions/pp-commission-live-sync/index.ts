@@ -11,7 +11,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
-import { buildDepositQuery, commissionGet, type CommissionDepositRow } from "../_shared/commission-reports.ts";
+import {
+  buildDepositQuery,
+  commissionGet,
+  type CommissionDepositRow,
+} from "../_shared/commission-reports.ts";
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
 import { agentKey } from "../_shared/broker-identity.ts";
 
@@ -19,42 +23,79 @@ const MAX_PAGES = 15;
 const PER_PAGE = 200;
 
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 
 const num = (v: unknown) => {
-  const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[^0-9.-]/g, ""));
+  const n =
+    typeof v === "number"
+      ? v
+      : parseFloat(String(v ?? "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n : 0;
 };
 
-const dedupeKey = (r: { number?: unknown; date_trans?: unknown; amount?: unknown; commission_type?: unknown }) =>
+const dedupeKey = (r: {
+  number?: unknown;
+  date_trans?: unknown;
+  amount?: unknown;
+  commission_type?: unknown;
+}) =>
   [
-    String(r.number ?? "").trim().toUpperCase(),
+    String(r.number ?? "")
+      .trim()
+      .toUpperCase(),
     String(r.date_trans ?? "").slice(0, 10),
     num(r.amount).toFixed(2),
-    String(r.commission_type ?? "").trim().toLowerCase(),
+    String(r.commission_type ?? "")
+      .trim()
+      .toLowerCase(),
   ].join("|");
 
+/**
+ * pg_cron cannot supply a user JWT. It instead sends the dedicated Vault
+ * secret, which this service-role client verifies through a role-restricted
+ * RPC. The comparison and the secret value never enter Edge code or logs.
+ */
+async function isInternalCron(admin: any, candidate: string): Promise<boolean> {
+  if (candidate.length < 48 || candidate.length > 256) return false;
+  const { data, error } = await admin.rpc("pp_verify_internal_trigger_secret", {
+    _candidate: candidate,
+  });
+  return !error && data === true;
+}
+
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(url, key, { auth: { persistSession: false } });
   const cid = crypto.randomUUID().slice(0, 8);
 
-  // --- authorization: cron secret, or a signed-in Planiprêt admin -----------
+  // --- authorization: Vault-backed internal cron, or a signed-in admin -------
   let trigger = "cron";
-  const cronSecret = Deno.env.get("PP_CRON_TOKEN") ?? Deno.env.get("PP_CRON_SECRET") ?? "";
-  const provided = req.headers.get("x-pp-cron-secret") ?? req.headers.get("x-cron-secret");
-  if (!(cronSecret && provided && provided === cronSecret)) {
+  const internalSecret =
+    req.headers.get("X-Planipret-Internal-Trigger")?.trim() ?? "";
+  if (!(await isInternalCron(admin, internalSecret))) {
     const authz = req.headers.get("Authorization") ?? "";
     const jwt = authz.replace(/^Bearer\s+/i, "");
-    const { data: { user } } = await admin.auth.getUser(jwt);
+    const {
+      data: { user },
+    } = await admin.auth.getUser(jwt);
     if (!user) return json({ error: "unauthorized" }, 401);
     const { data: prof } = await admin
-      .from("planipret_profiles").select("role").eq("user_id", user.id).maybeSingle();
-    const { data: isSuper } = await admin.rpc("is_super_admin", { _user_id: user.id });
-    if (!(prof?.role === "admin" || isSuper === true)) return json({ error: "forbidden" }, 403);
+      .from("planipret_profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const { data: isSuper } = await admin.rpc("is_super_admin", {
+      _user_id: user.id,
+    });
+    if (!(prof?.role === "admin" || isSuper === true))
+      return json({ error: "forbidden" }, 403);
     trigger = "manual";
   }
 
@@ -66,7 +107,9 @@ Deno.serve(async (req) => {
 
   const { data: run } = await admin
     .from("planipret_commission_sync_runs")
-    .insert({ trigger_source: trigger }).select("id").maybeSingle();
+    .insert({ trigger_source: trigger })
+    .select("id")
+    .maybeSingle();
   const runId = run?.id ?? null;
 
   const adminTok = await getMaestroAdminAccessToken();
@@ -87,17 +130,33 @@ Deno.serve(async (req) => {
   // missing local IDs before fan-out so brokers do not remain permanently
   // classified as "not connected" merely because their ID was never cached.
   if (adminTok.token) {
-    const directory = await commissionGet("/api/main/commissions/reports/agents", adminTok.token, cid);
+    const directory = await commissionGet(
+      "/api/main/commissions/reports/agents",
+      adminTok.token,
+      cid,
+    );
     const agentRows: any[] = directory.ok
-      ? (Array.isArray(directory.data?.data) ? directory.data.data : Array.isArray(directory.data) ? directory.data : [])
+      ? Array.isArray(directory.data?.data)
+        ? directory.data.data
+        : Array.isArray(directory.data)
+          ? directory.data
+          : []
       : [];
     const byName = new Map<string, string>();
     const byEmail = new Map<string, string>();
     for (const a of agentRows) {
       const id = a?.users_id ?? a?.agent_name_id ?? a?.id;
       if (id == null) continue;
-      const name = String(a?.agent_name ?? a?.name ?? a?.full_name ?? [a?.first_name, a?.last_name].filter(Boolean).join(" ") ?? "").trim();
-      const email = String(a?.email ?? "").trim().toLowerCase();
+      const name = String(
+        a?.agent_name ??
+          a?.name ??
+          a?.full_name ??
+          [a?.first_name, a?.last_name].filter(Boolean).join(" ") ??
+          "",
+      ).trim();
+      const email = String(a?.email ?? "")
+        .trim()
+        .toLowerCase();
       const nk = agentKey(name);
       if (nk) byName.set(nk, String(id));
       if (email) byEmail.set(email, String(id));
@@ -105,17 +164,28 @@ Deno.serve(async (req) => {
     // On corrige AUSSI les identifiants déjà stockés mais erronés : un id qui
     // appartient en réalité à un autre courtier ferait voir à ce profil les
     // commissions d'un collègue.
-    const resolved: { user_id: string; maestro_broker_id: string | null }[] = [];
+    const resolved: { user_id: string; maestro_broker_id: string | null }[] =
+      [];
     for (const p of list as any[]) {
-      const id = byEmail.get(String(p.email ?? "").trim().toLowerCase())
-        ?? (agentKey(String(p.full_name ?? "")) ? byName.get(agentKey(String(p.full_name ?? "")) as string) : undefined);
+      const id =
+        byEmail.get(
+          String(p.email ?? "")
+            .trim()
+            .toLowerCase(),
+        ) ??
+        (agentKey(String(p.full_name ?? ""))
+          ? byName.get(agentKey(String(p.full_name ?? "")) as string)
+          : undefined);
       if (!id) continue;
       if (String(p.maestro_broker_id ?? "") === String(id)) continue;
       p.maestro_broker_id = id;
       resolved.push({ user_id: p.user_id, maestro_broker_id: id });
     }
     for (const p of resolved) {
-      await admin.from("planipret_profiles").update({ maestro_broker_id: p.maestro_broker_id }).eq("user_id", p.user_id);
+      await admin
+        .from("planipret_profiles")
+        .update({ maestro_broker_id: p.maestro_broker_id })
+        .eq("user_id", p.user_id);
     }
   }
   let connectedCount = 0;
@@ -126,7 +196,8 @@ Deno.serve(async (req) => {
   const profileByMaestroId = new Map<string, string>();
   const profileByNameKey = new Map<string, string>();
   for (const p of list as any[]) {
-    if (p.maestro_broker_id != null) profileByMaestroId.set(String(p.maestro_broker_id), p.user_id);
+    if (p.maestro_broker_id != null)
+      profileByMaestroId.set(String(p.maestro_broker_id), p.user_id);
     const nk = agentKey(String(p.full_name ?? ""));
     if (nk) profileByNameKey.set(nk, p.user_id);
   }
@@ -143,17 +214,32 @@ Deno.serve(async (req) => {
       let page = 1;
       while (page <= MAX_PAGES) {
         const qs = buildDepositQuery({
-          date_from: from, date_to: to, page, per_page: PER_PAGE, commission_type: ctype,
+          date_from: from,
+          date_to: to,
+          page,
+          per_page: PER_PAGE,
+          commission_type: ctype,
           ...(usersId ? { users_id: usersId } : {}),
         } as any);
-        const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
+        const r = await commissionGet(
+          `/api/main/commissions/reports/deposits?${qs}`,
+          token,
+          cid,
+        );
         if (!r.ok) {
-          const err = { status: r.status, message: String(r.data?.message ?? r.data?.error ?? `HTTP ${r.status}`) };
+          const err = {
+            status: r.status,
+            message: String(
+              r.data?.message ?? r.data?.error ?? `HTTP ${r.status}`,
+            ),
+          };
           if (ctype === "base") return { rows, error: err };
           firstError = firstError ?? err;
           break;
         }
-        const batch: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
+        const batch: CommissionDepositRow[] = Array.isArray(r.data?.data)
+          ? r.data.data
+          : [];
         for (const row of batch) {
           rows.push({
             ...row,
@@ -172,39 +258,66 @@ Deno.serve(async (req) => {
   for (const p of list as any[]) {
     const label = String(p.full_name ?? p.email ?? p.user_id);
     const attemptedAt = new Date().toISOString();
-    const mid = p.maestro_broker_id != null ? String(p.maestro_broker_id) : null;
+    const mid =
+      p.maestro_broker_id != null ? String(p.maestro_broker_id) : null;
 
     // Prefer the broker's own token (always correctly scoped); fall back to the
     // admin-scoped credential when the broker never connected.
-    let token: string | null = await getUserMaestroAccessToken(admin, p.user_id).catch(() => null);
+    let token: string | null = await getUserMaestroAccessToken(
+      admin,
+      p.user_id,
+    ).catch(() => null);
     let source: "broker_token" | "admin_token" = "broker_token";
-    if (!token && adminTok.token && mid) { token = adminTok.token; source = "admin_token"; }
+    if (!token && adminTok.token && mid) {
+      token = adminTok.token;
+      source = "admin_token";
+    }
 
     if (!token) {
       diagRows.push({
-        broker_user_id: p.user_id, broker_label: label, broker_email: p.email ?? null,
-        maestro_broker_id: mid, connected: false, status: "not_connected",
+        broker_user_id: p.user_id,
+        broker_label: label,
+        broker_email: p.email ?? null,
+        maestro_broker_id: mid,
+        connected: false,
+        status: "not_connected",
         reason: adminTok.token
-          ? (mid ? "no_broker_token_and_admin_lookup_failed" : "no_broker_token_and_no_maestro_broker_id")
+          ? mid
+            ? "no_broker_token_and_admin_lookup_failed"
+            : "no_broker_token_and_no_maestro_broker_id"
           : `maestro_not_connected (${adminTok.reason ?? "admin_scope_not_configured"})`,
-        http_status: null, rows_count: 0, source: null, last_attempt_at: attemptedAt,
+        http_status: null,
+        rows_count: 0,
+        source: null,
+        last_attempt_at: attemptedAt,
       });
       continue;
     }
 
-    const { rows, error } = await fetchPages(token, source === "admin_token" ? mid : null);
+    const { rows, error } = await fetchPages(
+      token,
+      source === "admin_token" ? mid : null,
+    );
     if (error) {
-      const reason = error.status >= 500
-        ? "maestro_upstream_temporarily_unavailable"
-        : `${source}:${error.message}`.slice(0, 400);
+      const reason =
+        error.status >= 500
+          ? "maestro_upstream_temporarily_unavailable"
+          : `${source}:${error.message}`.slice(0, 400);
       diagRows.push({
-        broker_user_id: p.user_id, broker_label: label, broker_email: p.email ?? null,
-        maestro_broker_id: mid, connected: source === "broker_token", status: "error",
+        broker_user_id: p.user_id,
+        broker_label: label,
+        broker_email: p.email ?? null,
+        maestro_broker_id: mid,
+        connected: source === "broker_token",
+        status: "error",
         // A 5xx means the broker token was accepted but Maestro was temporarily
         // unavailable. The scheduled 30-minute run retries it; never persist
         // raw proxy HTML in a diagnostic visible to brokers.
-        reason, http_status: error.status,
-        rows_count: 0, source, last_attempt_at: attemptedAt,
+        reason,
+        http_status: error.status,
+        rows_count: 0,
+        source,
+        last_attempt_at: attemptedAt,
       });
       continue;
     }
@@ -217,19 +330,25 @@ Deno.serve(async (req) => {
     // his colleagues' commissions in his own totals.
     const payload = rows.map((row) => {
       const date = row.date_trans ? String(row.date_trans).slice(0, 10) : null;
-      const rowMid = row.agent_name_id != null ? String(row.agent_name_id) : mid;
+      const rowMid =
+        row.agent_name_id != null ? String(row.agent_name_id) : mid;
       const rowName = String(row.agent_name ?? row.target_name ?? "").trim();
       // Le nom de l'agent Maestro prime : c'est la seule donnée qui reste juste
       // même si un profil porte un identifiant Maestro périmé ou erroné.
-      const owner = (agentKey(rowName) ? profileByNameKey.get(agentKey(rowName) as string) : null)
-        ?? (rowMid ? profileByMaestroId.get(rowMid) : null)
-        ?? (rowMid && mid && rowMid === mid ? p.user_id : null);
+      const owner =
+        (agentKey(rowName)
+          ? profileByNameKey.get(agentKey(rowName) as string)
+          : null) ??
+        (rowMid ? profileByMaestroId.get(rowMid) : null) ??
+        (rowMid && mid && rowMid === mid ? p.user_id : null);
       return {
         dedupe_key: dedupeKey(row as any),
         broker_user_id: owner ?? null,
         broker_label: label,
-        maestro_broker_id: row.agent_name_id != null ? String(row.agent_name_id) : mid,
-        agent_name: String(row.agent_name ?? row.target_name ?? label).trim() || label,
+        maestro_broker_id:
+          row.agent_name_id != null ? String(row.agent_name_id) : mid,
+        agent_name:
+          String(row.agent_name ?? row.target_name ?? label).trim() || label,
         date_trans: date,
         fiscal_year: date ? Number(date.slice(0, 4)) : null,
         row_data: {
@@ -263,27 +382,39 @@ Deno.serve(async (req) => {
     }
 
     diagRows.push({
-      broker_user_id: p.user_id, broker_label: label, broker_email: p.email ?? null,
-      maestro_broker_id: mid, connected: source === "broker_token", status: "ok",
-      reason: unique.length === 0 ? "connected_but_api_returned_no_deposits" : null,
-      http_status: 200, rows_count: unique.length, source,
-      last_ok_at: new Date().toISOString(), last_attempt_at: attemptedAt,
+      broker_user_id: p.user_id,
+      broker_label: label,
+      broker_email: p.email ?? null,
+      maestro_broker_id: mid,
+      connected: source === "broker_token",
+      status: "ok",
+      reason:
+        unique.length === 0 ? "connected_but_api_returned_no_deposits" : null,
+      http_status: 200,
+      rows_count: unique.length,
+      source,
+      last_ok_at: new Date().toISOString(),
+      last_attempt_at: attemptedAt,
     });
   }
 
   for (let i = 0; i < diagRows.length; i += 200) {
-    await admin.from("planipret_commission_sync_diag")
+    await admin
+      .from("planipret_commission_sync_diag")
       .upsert(diagRows.slice(i, i + 200), { onConflict: "broker_user_id" });
   }
 
   if (runId) {
-    await admin.from("planipret_commission_sync_runs").update({
-      finished_at: new Date().toISOString(),
-      brokers_total: list.length,
-      brokers_connected: connectedCount,
-      rows_upserted: upserted,
-      admin_token_used: adminTok.source !== "none",
-    }).eq("id", runId);
+    await admin
+      .from("planipret_commission_sync_runs")
+      .update({
+        finished_at: new Date().toISOString(),
+        brokers_total: list.length,
+        brokers_connected: connectedCount,
+        rows_upserted: upserted,
+        admin_token_used: adminTok.source !== "none",
+      })
+      .eq("id", runId);
   }
 
   return json({
@@ -292,6 +423,10 @@ Deno.serve(async (req) => {
     brokers_total: list.length,
     brokers_connected: connectedCount,
     rows_upserted: upserted,
-    admin_scope: { configured: adminTok.source !== "none", source: adminTok.source, reason: adminTok.reason ?? null },
+    admin_scope: {
+      configured: adminTok.source !== "none",
+      source: adminTok.source,
+      reason: adminTok.reason ?? null,
+    },
   });
 });

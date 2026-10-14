@@ -337,3 +337,8 @@ verify_jwt = true
 # RPC service-role. Une session utilisateur ne peut jamais l’invoquer.
 [functions.pp-row-push]
 verify_jwt = false
+
+# pg_cron uses the same Vault-backed internal-trigger proof as pp-row-push;
+# source code rejects every request without that proof before it starts a sync.
+[functions.pp-commission-live-sync]
+verify_jwt = false

@@ -102,6 +102,9 @@ test('session bootstrap exposes no telephony secrets before provisioning', () =>
   const executable = source.replace(/^\s*\/\/.*$/gm, '');
   assert.match(source, /first_password_change_required/);
   assert.match(source, /rpc\("lemtel_session_bootstrap_context"/);
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS account_authority_revision bigint NOT NULL DEFAULT 1/);
+  assert.match(sql, /CREATE TRIGGER lemtel_membership_authority_revision_after_change/);
+  assert.match(sql, /account_authority_revision = account_authority_revision \+ 1/);
   assert.match(sql, /INNER JOIN public\.lemtel_organizations/);
   assert.match(sql, /SECURITY DEFINER/);
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.lemtel_session_bootstrap_context/);

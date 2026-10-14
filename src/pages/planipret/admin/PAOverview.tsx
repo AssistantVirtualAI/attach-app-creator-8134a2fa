@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Phone, Users, MessageSquare, Bot, ArrowUpRight, ArrowDownLeft, X, Sparkles, Flame, Clock, TrendingUp, TrendingDown, RefreshCw, DollarSign } from "lucide-react";
 import { TEMP_COLORS, TEMP_EMOJI } from "@/components/planipret/leadHelpers";
-import { computeServiceFinance, computeTotals, fmtMoney, type ServiceFinance } from "@/lib/planipret/pricing";
+import { computeServiceFinance, computeTotals, fmtMoney, countPlans, SERVICE_PRICES, SERVICE_COSTS, type ServiceFinance } from "@/lib/planipret/pricing";
 import { FinancialKpiCard } from "@/components/planipret/admin/FinancialKpiCard";
 import { RevenueBreakdown } from "@/components/planipret/admin/RevenueBreakdown";
 import { getPlanipretBrokerDirectory } from "@/lib/planipret/adminDirectory";
@@ -253,7 +253,7 @@ export default function PAOverview() {
       supabase.from("planipret_phone_calls").select("direction, status").gte("started_at", periodIso),
       supabase.from("planipret_phone_calls").select("duration_seconds, direction, status").gte("started_at", periodIso),
       supabase.from("planipret_phone_calls").select("user_id, extension, metadata, planipret_profiles(full_name)").gte("started_at", periodIso),
-      supabase.from("planipret_profiles").select("full_name, email, ns_domain, mobile_app_enabled, voice_agent_enabled"),
+      supabase.from("planipret_profiles").select("full_name, email, ns_domain, mobile_app_enabled, voice_agent_enabled, ava_chat_enabled"),
       getPlanipretBrokerDirectory(),
       supabase.from("planipret_profiles").select("id", { count: "exact", head: true }).gte("updated_at", fiveMinAgo),
       supabase.from("planipret_reminders").select("id", { count: "exact", head: true }).eq("status", "pending").lt("scheduled_at", nowIsoEarly),
@@ -301,10 +301,12 @@ export default function PAOverview() {
     const isRealBroker = (p: { full_name: string | null; email: string | null; ns_domain: string | null }) =>
       p.ns_domain === "planipret.ca" && !isTest(p.full_name, p.email);
     const realBrokers = profilesAll.filter(isRealBroker);
-    const widgetN = brokerStats.total_courtiers || brokerTotal || realBrokers.length;
-    const mobileN = brokerStats.app_mobile_active || realBrokers.filter((p) => p.mobile_app_enabled).length || profilesAll.filter((p) => p.mobile_app_enabled).length;
-    const aiN = brokerStats.agent_ia_active || realBrokers.filter((p) => p.voice_agent_enabled).length || profilesAll.filter((p) => p.voice_agent_enabled).length;
-    setServiceCounts({ mobile: mobileN, widget: widgetN, ai: aiN });
+    const base = realBrokers.length ? realBrokers : profilesAll;
+    const plans = countPlans(base as any);
+    // Courtiers NS sans profil Planiprêt = forfait Widget seulement.
+    const totalN = brokerStats.total_courtiers || brokerTotal || base.length;
+    const extraWidget = Math.max(0, totalN - base.length);
+    setServiceCounts({ widget: plans.widget + extraWidget, mobile: plans.mobile, ai: plans.ai });
     setRecent(rec.data ?? []);
     setBrokers(nsBrokerList.slice(0, 10));
 
@@ -520,7 +522,7 @@ export default function PAOverview() {
                     </td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>{f.users}</td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: DANGER }}>{fmtMoney(unitCost)}</td>
-                    <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>{fmtMoney(49.95)}</td>
+                    <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>{fmtMoney(SERVICE_PRICES[f.service])}</td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: DANGER }}>{fmtMoney(f.cost)}</td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 12, color: ACCENT }}>{fmtMoney(f.revenue)}</td>
                     <td className="py-3 px-2 tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: SUCCESS }}>{fmtMoney(f.profit)}</td>
@@ -549,9 +551,9 @@ export default function PAOverview() {
           <p style={{ fontSize: 11, color: "var(--pp-text-faint)" }} className="mt-0.5">{t("overview.rulesSubtitle")}</p>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <RuleCard title={t("overview.svcWidget")} count={serviceCounts.widget} formula={`${serviceCounts.widget} × 18,99 $ = ${fmtMoney(serviceCounts.widget * 18.99)} / mois`} filter={t("overview.ruleWidget")} color={WARNING} />
-          <RuleCard title={t("overview.svcMobile")} count={serviceCounts.mobile} formula={`${serviceCounts.mobile} × 8,00 $ = ${fmtMoney(serviceCounts.mobile * 8)} / mois`} filter={t("overview.ruleMobile")} color={ACCENT} />
-          <RuleCard title={t("overview.svcAI")} count={serviceCounts.ai} formula={`${serviceCounts.ai} × 25,00 $ = ${fmtMoney(serviceCounts.ai * 25)} / mois`} filter={t("overview.ruleAi")} color={AGENT} />
+          <RuleCard title={t("overview.svcWidget")} count={serviceCounts.widget} formula={`${serviceCounts.widget} × ${SERVICE_PRICES.widget.toFixed(2).replace(".", ",")} $ − coût ${SERVICE_COSTS.widget.toFixed(2).replace(".", ",")} $ = profit ${fmtMoney(serviceCounts.widget * (SERVICE_PRICES.widget - SERVICE_COSTS.widget))} / mois`} filter={t("overview.ruleWidget")} color={WARNING} />
+          <RuleCard title={t("overview.svcMobile")} count={serviceCounts.mobile} formula={`${serviceCounts.mobile} × ${SERVICE_PRICES.mobile.toFixed(2).replace(".", ",")} $ − coût ${SERVICE_COSTS.mobile.toFixed(2).replace(".", ",")} $ = profit ${fmtMoney(serviceCounts.mobile * (SERVICE_PRICES.mobile - SERVICE_COSTS.mobile))} / mois`} filter={t("overview.ruleMobile")} color={ACCENT} />
+          <RuleCard title={t("overview.svcAI")} count={serviceCounts.ai} formula={`${serviceCounts.ai} × ${SERVICE_PRICES.ai.toFixed(2).replace(".", ",")} $ − coût ${SERVICE_COSTS.ai.toFixed(2).replace(".", ",")} $ = profit ${fmtMoney(serviceCounts.ai * (SERVICE_PRICES.ai - SERVICE_COSTS.ai))} / mois`} filter={t("overview.ruleAi")} color={AGENT} />
         </div>
       </div>
 

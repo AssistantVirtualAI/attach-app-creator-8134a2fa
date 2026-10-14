@@ -1325,7 +1325,14 @@ function CallDetailSheet({
       body: { call_id: call.id, transcript: call.transcript ?? null },
     });
     setAiLoading(false);
-    if (error) { toast.error(error.message ?? t("common.failed")); return; }
+    if (error) {
+      const detail: any = (error as any)?.context instanceof Response
+        ? await (error as any).context.clone().json().catch(() => ({})) : {};
+      toast.error(detail?.message ?? detail?.error ?? tr("Analyse IA indisponible, réessayez.", "AI analysis unavailable, try again."));
+      return;
+    }
+    const r: any = data ?? {};
+    if (r.success === false) { toast.error(r.message ?? tr("Analyse IA indisponible, réessayez.", "AI analysis unavailable, try again.")); return; }
     toast.success(t("calls.analysisDone"));
     await refreshCall();
     const { data: ins } = await supabase.from("planipret_ai_insights").select("*").eq("call_id", call.id).maybeSingle();

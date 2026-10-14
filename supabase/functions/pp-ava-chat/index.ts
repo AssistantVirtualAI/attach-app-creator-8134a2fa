@@ -271,8 +271,9 @@ Deno.serve(async (req) => {
     // Light Planipret context
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("id, user_id, full_name, role, extension, ms365_access_token, ms365_scopes, ms365_email, language, ai_consent_at, ai_consent_revoked_at")
+      .select("id, user_id, full_name, role, extension, ms365_access_token, ms365_scopes, ms365_email, language, ai_consent_at, ai_consent_revoked_at, ava_chat_enabled")
       .eq("user_id", u.user.id).maybeSingle();
+    if ((profile as any)?.ava_chat_enabled === false) return json({ error: "ava_chat_disabled", message: "AVA Chat n'est pas activé sur votre compte. Contactez votre administrateur." }, 403);
     const aiConsentGranted = !!(profile as any)?.ai_consent_at &&
       (!(profile as any)?.ai_consent_revoked_at || (profile as any).ai_consent_revoked_at < (profile as any).ai_consent_at);
     if (!aiConsentGranted) return json({ error: "ai_consent_required" }, 403);

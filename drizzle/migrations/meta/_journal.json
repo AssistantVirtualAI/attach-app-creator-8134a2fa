@@ -120,6 +120,13 @@
       "when": 1791955962589,
       "tag": "0016_planipret_apply_0015",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792015410364,
+      "tag": "0017_ava_chat_enabled",
+      "breakpoints": true
     }
   ]
 }

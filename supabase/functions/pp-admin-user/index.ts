@@ -525,7 +525,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       const allowed: any = {};
-      for (const k of ["full_name", "extension", "mobile_app_enabled", "voice_agent_enabled", "elevenlabs_agent_id"]) {
+      for (const k of ["full_name", "extension", "mobile_app_enabled", "voice_agent_enabled", "ava_chat_enabled", "elevenlabs_agent_id"]) {
         if (k in (updates ?? {})) allowed[k] = updates[k];
       }
       if ("extension" in allowed) {

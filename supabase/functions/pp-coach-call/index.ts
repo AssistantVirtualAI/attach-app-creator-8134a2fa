@@ -130,9 +130,34 @@ Deno.serve(async (req) => {
 
   try {
     // ── D: transcript ─────────────────────────────────────
-    const effectiveTranscript = (row.transcript && row.transcript.trim().length >= 20)
+    let effectiveTranscript: string | null = (row.transcript && row.transcript.trim().length >= 20)
       ? row.transcript
       : (bodyTranscript && bodyTranscript.trim().length >= 20 && (force || reprocess) ? bodyTranscript : null);
+    // The same call often exists as two legs (inbound + outbound) sharing the
+    // NetSapiens call id; the transcript may live only on the twin leg.
+    if (!effectiveTranscript) {
+      const ids = [row.ns_orig_callid, row.ns_callid, row.ns_call_id].filter((v: any) => typeof v === "string" && v.length > 5);
+      if (ids.length) {
+        const list = ids.map((v: string) => `"${v.replace(/"/g, "")}"`).join(",");
+        const { data: twins } = await admin.from("planipret_phone_calls")
+          .select("id,transcript,transcript_segments")
+          .neq("id", call_id)
+          .is("deleted_at", null)
+          .not("transcript", "is", null)
+          .or(`ns_orig_callid.in.(${list}),ns_callid.in.(${list}),ns_call_id.in.(${list})`)
+          .limit(3);
+        const twin = (twins ?? []).find((t: any) => String(t.transcript ?? "").trim().length >= 20);
+        if (twin) {
+          effectiveTranscript = twin.transcript;
+          row.transcript = twin.transcript;
+          await admin.from("planipret_phone_calls").update({
+            transcript: twin.transcript,
+            transcript_segments: twin.transcript_segments ?? null,
+            has_transcript: true,
+          }).eq("id", call_id);
+        }
+      }
+    }
 
     if (!effectiveTranscript) {
       // Release lock

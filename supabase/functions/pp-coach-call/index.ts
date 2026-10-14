@@ -151,6 +151,11 @@ Deno.serve(async (req) => {
         }).eq("id", call_id);
       }
     }
+    // Very short calls (a few words) are still analyzable: the prompt already
+    // handles "no substantial conversation". Only a truly empty transcript blocks.
+    if (!effectiveTranscript && row.transcript && row.transcript.trim().length > 0) {
+      effectiveTranscript = row.transcript;
+    }
 
     if (!effectiveTranscript) {
       // Release lock

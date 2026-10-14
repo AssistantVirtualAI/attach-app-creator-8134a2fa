@@ -54,7 +54,7 @@ Réponds STRICTEMENT en JSON valide, sans markdown, avec ce schéma:
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (!ANTHROPIC_API_KEY && !ANTHROPIC_API_KEY) return json({ error: "No AI key configured (ANTHROPIC_API_KEY or ANTHROPIC_API_KEY)" }, 500);
+  if (!hasUsableAiKey({ anthropic: ANTHROPIC_API_KEY, openai: OPENAI_API_KEY })) return json({ error: "No AI key configured (ANTHROPIC_API_KEY or OPENAI_API_KEY)" }, 500);
 
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }

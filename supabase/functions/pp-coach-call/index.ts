@@ -285,19 +285,29 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
       return { ok: true, content: j?.choices?.[0]?.message?.content ?? "" };
     }
 
-    let aiResult = await callClaude();
-    let usedProvider: "claude" | "lovable" = "claude";
+    let aiResult: { ok: boolean; content?: string; status?: number; error?: string } = await callClaude();
+    let usedProvider: "claude" | "openai" | "lovable" = "claude";
     if (!aiResult.ok) {
-      const fallback = await callLovable();
-      if (fallback.ok) { aiResult = fallback; usedProvider = "lovable"; }
+      const oa = await callOpenAiFallback({
+        apiKey: OPENAI_API_KEY,
+        model: Deno.env.get("PP_COACH_OPENAI_MODEL"),
+        systemPrompt: SYSTEM_PROMPT,
+        userPrompt,
+      });
+      if (oa.ok) { aiResult = { ok: true, content: oa.content }; usedProvider = "openai"; }
       else {
-        await admin.from("planipret_phone_calls").update({
-          analysis_in_progress: false, analysis_locked_at: null, analysis_locked_by: null,
-        }).eq("id", call_id);
-        const st = fallback.status ?? aiResult.status ?? 502;
-        if (st === 429) return json({ error: "AI rate-limited, réessayez plus tard" }, 429);
-        if (st === 402) return json({ error: "Crédits IA épuisés" }, 402);
-        return json({ error: "AI providers failed", claude: aiResult.error, lovable: fallback.error, status: st }, 502);
+        console.log("[pp-coach-call] openai fallback failed:", oa.error_code, oa.status ?? "");
+        const fallback = await callLovable();
+        if (fallback.ok) { aiResult = fallback; usedProvider = "lovable"; }
+        else {
+          await admin.from("planipret_phone_calls").update({
+            analysis_in_progress: false, analysis_locked_at: null, analysis_locked_by: null,
+          }).eq("id", call_id);
+          const st = oa.status ?? fallback.status ?? aiResult.status ?? 502;
+          if (st === 429) return json({ error: "AI rate-limited, réessayez plus tard", code: "ai_rate_limited" }, 429);
+          if (st === 402) return json({ error: "Crédits IA épuisés", code: "ai_credits" }, 402);
+          return json({ error: "AI providers failed", code: "ai_providers_failed" }, 502);
+        }
       }
     }
 
@@ -310,7 +320,7 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
       await admin.from("planipret_phone_calls").update({
         analysis_in_progress: false, analysis_locked_at: null, analysis_locked_by: null,
       }).eq("id", call_id);
-      return json({ error: "AI returned invalid JSON", provider: usedProvider, raw }, 502);
+      return json({ error: "AI returned invalid JSON", code: "ai_invalid_json", provider: usedProvider }, 502);
     }
 
     const hasText = (v: any) => typeof v === "string" && v.trim().length > 0;

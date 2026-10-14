@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { createElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { buildCreateOrganizationBody, buildProvisionUsersBody, buildResendWelcomeBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
@@ -10,6 +13,12 @@ import { normalizeOperationalStatus } from "../LemtelOperationalStatus";
 describe("Lemtel portal contract", () => {
   it("loads the complete Lemtel-only portal module", () => {
     expect(typeof LemtelPortalApp).toBe("function");
+  });
+
+  it("mounts an absolute overview route when the portal owns the browser root", async () => {
+    render(createElement(MemoryRouter, { initialEntries: ["/lemtel-portal/overview"] }, createElement(LemtelPortalApp)));
+    fireEvent.click(screen.getByRole("button", { name: /view the read-only portal|voir le portail en consultation/i }));
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeTruthy();
   });
 
   it("requires a personal password only from authoritative Lemtel metadata", () => {
@@ -103,9 +112,10 @@ describe("Lemtel portal contract", () => {
 
   it("uses absolute fallback routes so malformed operations URLs cannot recurse", () => {
     const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
-    expect(source).toContain('path="operations/*" element={<Navigate to={`${BASE}/operations`} replace />}');
-    expect(source).toContain('Route index element={<Navigate to={`${BASE}/operations`} replace />}');
-    expect(source).toContain('Route path="*" element={<Navigate to={`${BASE}/operations`} replace />}');
+    expect(source).toContain('path={`${BASE}/operations/*`} element={<Navigate to={`${BASE}/operations`} replace />}');
+    expect(source).toContain('Route path={BASE} element={<Navigate to={`${BASE}/operations`} replace />}');
+    expect(source).toContain('Route path={`${BASE}/*`} element={<Navigate to={`${BASE}/operations`} replace />}');
+    expect(source).toContain('Route path={`${BASE}/overview`} element={<Overview {...context} />}');
     expect(source).not.toContain('Route path="*" element={<Navigate to="overview" replace />}');
   });
 });

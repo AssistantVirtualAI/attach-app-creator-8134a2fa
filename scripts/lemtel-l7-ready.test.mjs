@@ -11,7 +11,7 @@ test('L7 readiness is writer-only and content-free',()=>{
   assert.doesNotMatch(refresh,/FUSIONPBX|SIP_|WSS|TURN|POSTGRES_PASSWORD|SERVICE_ROLE|Bearer/i);
 });
 test('route is exact, transactional and does not activate Cloudflare routing',()=>{
-  for (const expected of ['path /lemtel-lb-ready','root * /etc/caddy','rewrite * /lemtel-lb-ready','caddy reload','cloudflare_routing_changed=false','automatic_traffic_failover_enabled=false']) assert.match(deploy,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for (const expected of ['{$PROXY_DOMAIN}, lemtel.assistantvirtualai.com {','path /lemtel-lb-ready','root * /etc/caddy','rewrite * /lemtel-lb-ready','caddy reload','cloudflare_routing_changed=false','automatic_traffic_failover_enabled=false']) assert.match(deploy,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   assert.doesNotMatch(deploy,/cloudflare\.request|pg_ctl promote|fencing_executed=true/i);
   assert.match(timer,/OnUnitActiveSec=60/);
 });

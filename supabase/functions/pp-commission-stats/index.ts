@@ -126,18 +126,27 @@ Deno.serve(async (req) => {
     // validated `ok: true` payloads are ever stored; errors never get cached.
     const cacheKey = `stats:${user.id}:${year}:${month}:${scope}:${granularity}:${periodIndex}:${agent ?? ""}`;
     const FRESH_MS = 15 * 60_000; // register changes at most every 30 min
-    const { data: snap } = await admin
+    // Stale-while-revalidate: an older validated snapshot is shown instantly
+    // while a single background refresh rebuilds it (never a long wait).
+    const STALE_MS = 7 * 24 * 60 * 60_000;
+    const force = body?.force === true || body?.refresh === true;
+    const { data: snap } = force ? { data: null as any } : await admin
       .from("planipret_commission_snapshots")
-      .select("payload,fetched_at")
+      .select("payload,fetched_at,refreshing_until")
       .eq("cache_key", cacheKey)
       .maybeSingle();
+    let staleSnap: any = null;
     if (snap?.payload?.ok === true) {
       const age = Date.now() - new Date(snap.fetched_at).getTime();
       if (age < FRESH_MS) {
         admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", cacheKey).then(() => {});
         return json({ ...snap.payload, cache: { cached: true, stale: false, fetched_at: snap.fetched_at } });
       }
+      if (age < STALE_MS) staleSnap = snap;
     }
+
+  const compute = async (): Promise<Response> => {
+
 
     // Pull the years we need: PY, CY, and the season overlap year.
     // PostgREST caps a single response at 1000 rows, which silently truncated
@@ -1060,6 +1069,23 @@ Deno.serve(async (req) => {
       refreshing_until: null,
     });
     return json({ ...payload, cache: { cached: false, stale: false, fetched_at: payload.syncedAt } });
+  };
+
+    if (staleSnap) {
+      const until = staleSnap.refreshing_until ? new Date(staleSnap.refreshing_until).getTime() : 0;
+      if (until < Date.now()) {
+        await admin.from("planipret_commission_snapshots").update({
+          refreshing_until: new Date(Date.now() + 3 * 60_000).toISOString(),
+          last_accessed_at: new Date().toISOString(),
+        }).eq("cache_key", cacheKey);
+        const bg = compute().catch((e) => console.warn("[pp-commission-stats] background refresh failed", e));
+        // deno-lint-ignore no-explicit-any
+        const rt = (globalThis as any).EdgeRuntime;
+        if (rt?.waitUntil) rt.waitUntil(bg);
+      }
+      return json({ ...staleSnap.payload, cache: { cached: true, stale: true, fetched_at: staleSnap.fetched_at } });
+    }
+    return await compute();
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

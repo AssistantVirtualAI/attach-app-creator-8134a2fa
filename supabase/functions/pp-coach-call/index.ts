@@ -83,17 +83,27 @@ Deno.serve(async (req) => {
     });
   }
 
+  // An analysis already running (auto pipeline, other device) is not an
+  // error for the user: wait for it and return its result.
+  const waitForRunning = async () => {
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const { data: cur } = await admin.from("planipret_phone_calls")
+        .select("analyzed_at,ai_summary,ai_coaching,lead_score,coaching_score,analysis_in_progress")
+        .eq("id", call_id).maybeSingle();
+      if (cur?.analyzed_at) {
+        return json({ success: true, cached: true, call_id, summary: cur.ai_summary, coaching: cur.ai_coaching,
+          score: cur.lead_score, coaching_score: cur.coaching_score, analyzed_at: cur.analyzed_at });
+      }
+      if (!cur?.analysis_in_progress) break;
+    }
+    return json({ success: false, locked: true, message: "Analyse en cours, réessayez dans un instant." }, 200);
+  };
+
   // ── B: vérifier verrou existant ─────────────────────────
   if (row.analysis_in_progress && !reprocess) {
     const lockedAt = new Date(row.analysis_locked_at || 0).getTime();
-    if (Date.now() - lockedAt < 120_000) {
-      return json({
-        success: false, locked: true,
-        locked_by: row.analysis_locked_by,
-        locked_at: row.analysis_locked_at,
-        message: "Analyse déjà en cours sur un autre appareil",
-      }, 409);
-    }
+    if (Date.now() - lockedAt < 120_000) return await waitForRunning();
   }
 
   // ── C: acquérir le verrou ───────────────────────────────
@@ -108,13 +118,7 @@ Deno.serve(async (req) => {
     .or(`analysis_in_progress.eq.false,analysis_in_progress.is.null,analysis_locked_at.is.null,analysis_locked_at.lt.${staleBefore}`)
     .select("id")
     .maybeSingle();
-  if (lockError || !locked?.id) {
-    return json({
-      success: false,
-      locked: true,
-      message: "Analyse déjà en cours ou consentement révoqué.",
-    }, 409);
-  }
+  if (lockError || !locked?.id) return await waitForRunning();
 
   // Broadcast started
   try {

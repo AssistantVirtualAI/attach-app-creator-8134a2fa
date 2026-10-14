@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION public.pp_warm_commission_snapshots() IS 'Only Planipret commission warmer; scheduled every 15 minutes.';

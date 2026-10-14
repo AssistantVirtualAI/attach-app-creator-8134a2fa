@@ -19,7 +19,7 @@
   "required_preflight": {
     "cloudflare_load_balancing_subscription_active": true,
     "provider_api_credentials_verified": true,
-    "independent_arbiter_deployed": false,
+    "independent_arbiter_deployed": true,
     "hostinger_private_standby_rebuilt": true,
     "postgres_synchronous_streaming_verified": true,
     "storage_dual_durable_write_verified": false,

@@ -1,0 +1,1 @@
+ALTER TABLE public.planipret_profiles ADD COLUMN IF NOT EXISTS ava_chat_enabled boolean NOT NULL DEFAULT true;

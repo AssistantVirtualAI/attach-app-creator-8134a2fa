@@ -12756,6 +12756,7 @@ export type Database = {
           ai_consent_version: string | null
           auth_method: string | null
           ava_autonomy_mode: string
+          ava_chat_enabled: boolean
           ava_chat_mode: string
           ava_last_session_at: string | null
           ava_learned_preferences: string | null
@@ -12868,6 +12869,7 @@ export type Database = {
           ai_consent_version?: string | null
           auth_method?: string | null
           ava_autonomy_mode?: string
+          ava_chat_enabled?: boolean
           ava_chat_mode?: string
           ava_last_session_at?: string | null
           ava_learned_preferences?: string | null
@@ -12980,6 +12982,7 @@ export type Database = {
           ai_consent_version?: string | null
           auth_method?: string | null
           ava_autonomy_mode?: string
+          ava_chat_enabled?: boolean
           ava_chat_mode?: string
           ava_last_session_at?: string | null
           ava_learned_preferences?: string | null

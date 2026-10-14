@@ -1,5 +1,6 @@
 // Lemtel-only client for the authoritative self-hosted Lemtel backend.
-// This module never imports the Planiprêt client and never stores a session on disk.
+// This module never imports the Planiprêt client. No password is retained by the client;
+// an authenticated browser session is kept only for the current browser session.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const env = (import.meta as { env?: Record<string, unknown> }).env ?? {};
@@ -35,17 +36,35 @@ const memoryStorage = {
   removeItem: (key: string) => { sessionMemory.delete(key); },
 };
 
+type SessionStorageAdapter = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+/**
+ * Preserve an authenticated admin session through a reload in the same browser
+ * session, without using persistent local storage. The memory fallback remains
+ * fail-safe for non-browser or privacy-restricted environments.
+ */
+function resolvePortalSessionStorage(): SessionStorageAdapter {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) return window.sessionStorage;
+  } catch {
+    // Browser storage can be blocked by a privacy policy; fall back to memory.
+  }
+  return memoryStorage;
+}
+
+const portalSessionStorage = resolvePortalSessionStorage();
+
 let client: SupabaseClient | null = null;
 export function lemtelClient(): SupabaseClient | null {
   if (!LEMTEL_BACKEND_CONFIGURED) return null;
   if (!client) {
     client = createClient(LEMTEL_API_URL, LEMTEL_PUBLISHABLE_KEY, {
       auth: {
-        storage: memoryStorage,
+        storage: portalSessionStorage,
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
-        storageKey: "lemtel-portal-session-memory",
+        storageKey: "lemtel-portal-session",
       },
     });
   }

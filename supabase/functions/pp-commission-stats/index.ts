@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
     // instead of re-reading the whole register + live Maestro feed. Only
     // validated `ok: true` payloads are ever stored; errors never get cached.
     const cacheKey = `stats:${user.id}:${year}:${month}:${scope}:${granularity}:${periodIndex}:${agent ?? ""}`;
-    const FRESH_MS = 5 * 60_000;
+    const FRESH_MS = 15 * 60_000; // register changes at most every 30 min
     const { data: snap } = await admin
       .from("planipret_commission_snapshots")
       .select("payload,fetched_at")

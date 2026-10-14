@@ -181,7 +181,7 @@ export default function PpActiveCallScreen({
     if (speakerBusy) return;
     setSpeakerBusy(true);
     try {
-      const applied = await audioRouter.setRoute(requested);
+      const applied = await audioRouter.chooseRoute(requested);
       setAudioDev(applied);
       setSpeakerOn(applied.route === "speaker");
       if (applied.route !== requested) {

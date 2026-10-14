@@ -5,6 +5,8 @@ import {
 } from "recharts";
 import { Loader2, TrendingUp, TrendingDown, Trophy, FileDown, RotateCcw, Star, ImageDown, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
+import { invalidateCommissionCache } from "@/lib/planipret/commissionClientCache";
 import CommissionInsights from "./CommissionInsights";
 import ClubExcellencePanel from "./ClubExcellencePanel";
 import { Ov3DChartFilters, Ov3DGradients, fill3d } from "@/components/planipret/broker/overview/ov3dChart";
@@ -223,6 +225,9 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
 
   // Bumped after a Maestro sync to refetch the stats.
   const [refreshKey, setRefreshKey] = useState(0);
+  // A sync / live change must bypass the 15-min device copy (declared before
+  // the fetch effect so it runs first).
+  useEffect(() => { if (refreshKey) invalidateCommissionCache(); }, [refreshKey]);
 
   // Live: any new commission row (import or Maestro sync) refetches the stats.
   useEffect(() => {
@@ -272,18 +277,15 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
       const cached = readStatsCache(cacheKey) ?? (data ? null : readAnyStatsCache(scopeKey));
       if (cached && !cancelled) { setData(cached.value); setStale(true); setCachedAt(new Date(cached.ts).toISOString()); }
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const { data: res, error: err } = await supabase.functions.invoke("pp-commission-stats", {
-          body: {
-            year,
-            month: granularity === "ytd" || granularity === "month" ? periodIndex : month,
-            granularity,
-            periodIndex,
-            scope: isAdminView ? "all" : "self",
-            agent: isAdminView && agent ? agent : null,
-          },
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
-        });
+        // Shared 15-min device cache (paid + pending), invalidated on server updates.
+        const { data: res, error: err } = await ppEdgeInvoke("pp-commission-stats", {
+          year,
+          month: granularity === "ytd" || granularity === "month" ? periodIndex : month,
+          granularity,
+          periodIndex,
+          scope: isAdminView ? "all" : "self",
+          agent: isAdminView && agent ? agent : null,
+        }, { retries: 1, timeoutMs: 90_000 });
         if (err) throw err;
         if ((res as any)?.error) throw new Error((res as any).error);
         if (!cancelled) {

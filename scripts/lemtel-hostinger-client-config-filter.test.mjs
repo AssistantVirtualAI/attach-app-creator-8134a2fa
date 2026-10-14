@@ -11,6 +11,7 @@ const base = {
   VITE_LEMTEL_PUBLISHABLE_KEY: key,
   VITE_LEMTEL_PRIVATE_DIRECTORY: 'approved',
   VITE_LEMTEL_EMAIL_ONLY_SIGNIN: 'approved',
+  VITE_LEMTEL_HOSTED_ONBOARDING: 'approved',
   VITE_LEMTEL_AUTH_REDIRECT_URL: 'https://lemtel.assistantvirtualai.com/reset-password',
 };
 
@@ -28,6 +29,7 @@ test('canonical build templates and workflows expose only namespaced Lemtel runt
   for (const source of [template, workflow]) {
     assert.match(source, /VITE_LEMTEL_API_URL/);
     assert.match(source, /VITE_LEMTEL_PUBLISHABLE_KEY/);
+    assert.match(source, /VITE_LEMTEL_HOSTED_ONBOARDING/);
     assert.doesNotMatch(source, /VITE_SUPABASE_URL:/);
     assert.doesNotMatch(source, /VITE_SUPABASE_PUBLISHABLE_KEY:/);
   }
@@ -39,5 +41,6 @@ test('filter denies Planipret, the former Hostinger route, unapproved flags and 
   assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_PRIVATE_DIRECTORY: 'enabled' }).ok, false);
   assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_SUPABASE_URL: 'https://lemtel.assistantvirtualai.com' }).ok, false);
   assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_EMAIL_ONLY_SIGNIN: 'disabled' }).ok, false);
+  assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_HOSTED_ONBOARDING: 'disabled' }).ok, false);
   assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_API_URL: 'http://lemtel.assistantvirtualai.com' }).ok, false);
 });

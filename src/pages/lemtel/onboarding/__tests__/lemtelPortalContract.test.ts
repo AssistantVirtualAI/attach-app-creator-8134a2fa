@@ -28,6 +28,12 @@ describe("Lemtel portal contract", () => {
     })).toEqual({ url: "https://lemtel.example.invalid", publishableKey: "lemtel-public-key" });
   });
 
+  it("uses a direct Vite build flag for approved administrative writes", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtelHostedApi.ts"), "utf8");
+    expect(source).toContain("import.meta.env.VITE_LEMTEL_HOSTED_ONBOARDING");
+    expect(source).toContain('hostedOnboardingApproval === "approved"');
+  });
+
   it("uses only the exact create-organization body accepted by the Lemtel Edge function", () => {
     expect(buildCreateOrganizationBody({ displayName: "Lemtel : Staging", slug: "lemtel-staging", defaultLocale: "fr", owner: { email: "owner@example.com", displayName: "Owner", locale: "fr" } })).toEqual({
       action: "create_organization",

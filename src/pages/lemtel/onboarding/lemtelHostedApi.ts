@@ -3,6 +3,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const env = (import.meta as { env?: Record<string, unknown> }).env ?? {};
+// Keep this as a direct Vite access so the approved admin-build flag is inlined.
+const hostedOnboardingApproval = import.meta.env.VITE_LEMTEL_HOSTED_ONBOARDING;
 
 /**
  * The Lemtel portal can be built beside Planiprêt, so it must never inherit the
@@ -24,7 +26,7 @@ export const LEMTEL_PUBLISHABLE_KEY = configuredKey;
 export const LEMTEL_BACKEND_CONFIGURED = Boolean(LEMTEL_API_URL && LEMTEL_PUBLISHABLE_KEY);
 /** Administrative writes remain fail-closed until an approved Lemtel build opts in. */
 export const LEMTEL_ONBOARDING_ENABLED =
-  LEMTEL_BACKEND_CONFIGURED && String(env.VITE_LEMTEL_HOSTED_ONBOARDING ?? "") === "approved";
+  LEMTEL_BACKEND_CONFIGURED && hostedOnboardingApproval === "approved";
 
 const sessionMemory = new Map<string, string>();
 const memoryStorage = {

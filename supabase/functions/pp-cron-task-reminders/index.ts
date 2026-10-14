@@ -102,7 +102,6 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({} as any));
   const dryRun = body?.dry_run === true;
-  if (!RESEND_API_KEY && !dryRun) return json({ success: false, error: "resend_not_configured" }, 500);
 
   const now = Date.now();
   const horizon = new Date(now + DUE_SOON_HOURS * 3600_000).toISOString();
@@ -217,16 +216,8 @@ Deno.serve(async (req) => {
       tasks: g.items.map((i) => ({ title: i.title, due: i.due, notes: i.notes, overdue: i.kind === "overdue" })),
     }));
 
-    if (!res.ok) { failures.push({ client: g.client, error: res.error ?? "send_failed" }); continue; }
-
-    await admin.from("planipret_task_reminders").upsert(
-      g.items.map((i) => ({ user_id: g.user_id, task_id: i.task_id, kind: i.kind, due_at: i.due, email: to })),
-      { onConflict: "user_id,task_id,kind" },
-    );
-    for (const i of g.items) already.add(`${g.user_id}|${i.task_id}|${i.kind}`);
-    sent += 1;
-
-    // Lock-screen reminder on the phone (gated by notif_reminders).
+    // Lock-screen reminder on the phone (gated by notif_reminders). Sent even
+    // when the email fails: the idempotency key prevents hourly repeats.
     const pushUid = String(prof?.user_id ?? g.user_id);
     try {
       const pr = await fetch(`${SUPABASE_URL}/functions/v1/pp-push-notify`, {
@@ -241,6 +232,15 @@ Deno.serve(async (req) => {
       });
       await pr.text();
     } catch (e) { console.warn("[task-reminders] push failed", e); }
+    if (!res.ok) { failures.push({ client: g.client, error: res.error ?? "send_failed" }); continue; }
+
+    await admin.from("planipret_task_reminders").upsert(
+      g.items.map((i) => ({ user_id: g.user_id, task_id: i.task_id, kind: i.kind, due_at: i.due, email: to })),
+      { onConflict: "user_id,task_id,kind" },
+    );
+    for (const i of g.items) already.add(`${g.user_id}|${i.task_id}|${i.kind}`);
+    sent += 1;
+
   }
 
   return json({ success: true, scanned: candidates.length, clients: sent, sent, skipped, failures, dry_run: dryRun });

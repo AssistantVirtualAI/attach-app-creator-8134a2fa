@@ -64,6 +64,13 @@
       "when": 1791945645461,
       "tag": "0008_planipret_security_definer_anon_lockdown",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791946688211,
+      "tag": "0009_planipret_row_push_triggers",
+      "breakpoints": true
     }
   ]
 }

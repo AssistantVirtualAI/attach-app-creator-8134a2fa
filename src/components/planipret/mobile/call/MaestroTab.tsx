@@ -131,20 +131,17 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
 
   const nextActions = extractNextActions(call);
   const hasAiContent = !!(call.ai_summary || call.ai_summary_short || call.ai_analysis_json);
-  const hasTranscript = !!(call.transcript || (Array.isArray(call.transcript_segments) && call.transcript_segments.length > 0));
 
   const runAiAnalysis = async () => {
-    if (!hasTranscript) {
-      toast.error(t("maestro.aiFailed"), { description: lang === "fr" ? "Transcription requise avant analyse." : "Transcript required before analysis." });
-      return;
-    }
     setAnalyzing(true);
     try {
       const { data, error } = await supabase.functions.invoke("pp-coach-call", {
         body: { call_id: call.id },
       });
+      const ctx: any = (error as any)?.context instanceof Response ? await (error as any).context.clone().json().catch(() => ({})) : {};
       if (error || (data as any)?.success === false) {
-        toast.error(t("maestro.aiFailed"), { description: (data as any)?.error ?? error?.message });
+        const d: any = data ?? ctx;
+        toast.error(t("maestro.aiFailed"), { description: d?.message ?? d?.error ?? ctx?.message ?? error?.message });
       } else {
         toast.success(t("maestro.aiGenerated"));
         onUpdated();
@@ -164,8 +161,10 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
         body: { call_id: call.id, force: true, explicit_user_action: true },
       });
 
+      const ctx: any = (error as any)?.context instanceof Response ? await (error as any).context.clone().json().catch(() => ({})) : {};
       if (error || (data as any)?.success === false) {
-        toast.error(t("maestro.pushFailed"), { description: (data as any)?.error ?? error?.message });
+        const d: any = data ?? ctx;
+        toast.error(t("maestro.pushFailed"), { description: d?.message ?? d?.error ?? ctx?.message ?? error?.message });
       } else {
         toast.success(t("maestro.pushSuccess"));
         onUpdated();
@@ -294,7 +293,7 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
         {!hasAiContent && (
           <button
             onClick={runAiAnalysis}
-            disabled={analyzing || !hasTranscript}
+            disabled={analyzing}
             className="mt-3 w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-brand-accent-2)" }}
           >
@@ -303,7 +302,7 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
         )}
 
         {/* Push CTA */}
-        {!call.maestro_synced && hasAiContent && (
+        {!call.maestro_synced && (
           <button
             onClick={() => setConfirmOpen(true)}
             disabled={pushing}

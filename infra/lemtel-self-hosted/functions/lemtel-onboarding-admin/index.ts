@@ -36,7 +36,9 @@ type RequestBody =
   | { action: "create_domain"; organizationId: string; domain: DomainInput }
   | { action: "suspend_domain"; organizationId: string; domainId: string }
   | { action: "assign_existing_user"; organizationId: string; user: ExistingUserInput }
-  | { action: "set_membership_role"; organizationId: string; recipientUserId: string; role: AssignableRole };
+  | { action: "set_membership_role"; organizationId: string; recipientUserId: string; role: AssignableRole }
+  | { action: "transfer_organization_ownership"; organizationId: string; recipientUserId: string }
+  | { action: "reactivate_domain"; organizationId: string; domainId: string };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -115,6 +117,23 @@ export function validateBody(raw: unknown): RequestBody | Failure {
     if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
     if (!EMAIL_RE.test(email) || email.length > 254 || (role !== "admin" && role !== "member")) return fail("invalid_user", 400);
     return { action: "assign_existing_user", organizationId: parsedOrganizationId, user: { email, role } };
+  }
+  if (raw.action === "transfer_organization_ownership") {
+    if (!exactKeys(raw, ["action", "organizationId", "recipientUserId"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedRecipientUserId = organizationId(raw.recipientUserId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedRecipientUserId)) return parsedRecipientUserId;
+    if (parsedOrganizationId === parsedRecipientUserId) return fail("invalid_owner_transfer", 400);
+    return { action: "transfer_organization_ownership", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId };
+  }
+  if (raw.action === "reactivate_domain") {
+    if (!exactKeys(raw, ["action", "organizationId", "domainId"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedDomainId = organizationId(raw.domainId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedDomainId)) return parsedDomainId;
+    return { action: "reactivate_domain", organizationId: parsedOrganizationId, domainId: parsedDomainId };
   }
   if (raw.action === "set_membership_role") {
     if (!exactKeys(raw, ["action", "organizationId", "recipientUserId", "role"])) return fail("invalid_body", 400);
@@ -245,6 +264,11 @@ async function platformAdmin(admin: any, userId: string): Promise<boolean> {
 
 async function organizationAdmin(admin: any, userId: string, organizationId: string): Promise<boolean> {
   const { data } = await admin.from("lemtel_organization_memberships").select("user_id").eq("organization_id", organizationId).eq("user_id", userId).eq("status", "active").in("role", ["owner", "admin"]).maybeSingle();
+  return Boolean(data?.user_id);
+}
+
+async function organizationOwner(admin: any, userId: string, organizationId: string): Promise<boolean> {
+  const { data } = await admin.from("lemtel_organization_memberships").select("user_id").eq("organization_id", organizationId).eq("user_id", userId).eq("status", "active").eq("role", "owner").maybeSingle();
   return Boolean(data?.user_id);
 }
 
@@ -408,6 +432,12 @@ async function assignExistingUser(admin: any, organizationId: string, actor: str
     await audit(admin, organizationId, actor, "membership_role_changed", existingUser.id, { role: input.role });
   }
   return { status: "unchanged" as const };
+}
+
+async function transferOrganizationOwnership(admin: any, organizationId: string, actor: string, recipientUserId: string) {
+  const { data, error } = await admin.rpc("lemtel_transfer_organization_ownership", { p_organization_id: organizationId, p_actor_id: actor, p_recipient_user_id: recipientUserId });
+  if (error || data !== "transferred") return fail(error?.code === "42501" ? "organization_owner_required" : "ownership_transfer_failed", error?.code === "42501" ? 403 : 503);
+  return { status: "transferred" as const };
 }
 
 async function setMembershipRole(admin: any, organizationId: string, actor: string, recipientUserId: string, role: AssignableRole) {
@@ -691,6 +721,12 @@ export async function handler(req: Request): Promise<Response> {
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, membership: result });
   }
 
+  if (request.action === "transfer_organization_ownership") {
+    if (!(await organizationOwner(admin, actor, request.organizationId))) return respond({ error: "organization_owner_required" }, 403);
+    const result = await transferOrganizationOwnership(admin, request.organizationId, actor, request.recipientUserId);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, ownership: result });
+  }
+
   if (request.action === "create_domain") {
     if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
     const { data: domain, error } = await admin.from("lemtel_organization_domains")
@@ -710,6 +746,18 @@ export async function handler(req: Request): Promise<Response> {
     if (error) return respond({ error: "domain_suspend_failed" }, 503);
     if (!domain?.id) return respond({ error: "domain_not_found" }, 404);
     await audit(admin, request.organizationId, actor, "domain_suspended", null, { domain_id: request.domainId });
+    return respond({ ok: true });
+  }
+
+  if (request.action === "reactivate_domain") {
+    if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const { data: domain, error } = await admin.from("lemtel_organization_domains")
+      .update({ status: "active", suspended_at: null, updated_at: new Date().toISOString() })
+      .eq("id", request.domainId).eq("organization_id", request.organizationId).eq("status", "suspended")
+      .select("id").maybeSingle();
+    if (error) return respond({ error: "domain_reactivate_failed" }, 503);
+    if (!domain?.id) return respond({ error: "domain_not_found" }, 404);
+    await audit(admin, request.organizationId, actor, "domain_reactivated", null, { domain_id: request.domainId });
     return respond({ ok: true });
   }
 
@@ -750,6 +798,7 @@ export async function handler(req: Request): Promise<Response> {
   return respond({ ok: true, delivered: delivery.delivered, ...(delivery.delivered ? {} : { error: delivery.reason }), email_delivery_required: true });
   }
 
+  if (request.action !== "revoke_invitation") return respond({ error: "invalid_action" }, 400);
   if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
   const { data: membership, error: membershipError } = await admin.from("lemtel_organization_memberships")
     .select("role,status")

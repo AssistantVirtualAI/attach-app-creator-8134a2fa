@@ -63,5 +63,12 @@ export function MembershipRoleControl({ t, organizationId, person, readonly, onD
     catch (cause) { toast.error(errorText(t, cause)); }
     finally { setBusy(false); }
   };
-  return <div className="flex items-center gap-2 min-w-[180px]"><select aria-label={t.role} className="lt-input !py-1.5 text-xs" disabled={readonly || busy || !organizationId} value={role} onChange={(event) => setRole(event.target.value as AssignableRole)}><option value="member">{t.roles.member}</option><option value="admin">{t.roles.admin}</option></select><button className="lt-btn lt-btn-ghost !py-1.5 !px-2" aria-label={t.membership.saveRole} disabled={readonly || busy || !organizationId || role === person.role} onClick={save}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}</button></div>;
+  const transferOwnership = async () => {
+    if (!organizationId || !window.confirm(t.membership.confirmOwnershipTransfer)) return;
+    setBusy(true);
+    try { await portalApi.transferOrganizationOwnership(organizationId, person.userId); toast.success(t.membership.ownershipTransferred); onDone(); }
+    catch (cause) { toast.error(errorText(t, cause)); }
+    finally { setBusy(false); }
+  };
+  return <div className="flex items-center gap-2 min-w-[180px] flex-wrap"><select aria-label={t.role} className="lt-input !py-1.5 text-xs" disabled={readonly || busy || !organizationId} value={role} onChange={(event) => setRole(event.target.value as AssignableRole)}><option value="member">{t.roles.member}</option><option value="admin">{t.roles.admin}</option></select><button className="lt-btn lt-btn-ghost !py-1.5 !px-2" aria-label={t.membership.saveRole} disabled={readonly || busy || !organizationId || role === person.role} onClick={save}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}</button><button className="lt-btn lt-btn-ghost !py-1.5 text-xs" disabled={readonly || busy || !organizationId} onClick={transferOwnership}>{t.membership.transferOwnership}</button></div>;
 }

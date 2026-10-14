@@ -741,7 +741,18 @@ export async function handleTaskRequest(
     // documented live read-back paths below.
     // The hourly sweeper must always read Maestro live; serving the projection
     // to it froze large accounts at the first interactive mirror (400 rows).
-    const projected = overrideBroker || fullSync ? [] : await loadProjection(admin, userId).catch(() => []);
+    // Admin broker views read THAT broker's own mirrored projection (server-
+    // resolved owner), so a reduced live scan never hides their tasks.
+    let projectionOwner: string | null = overrideBroker ? null : userId;
+    if (overrideBroker && !fullSync) {
+      try {
+        const { data: owner } = await admin
+          .from("planipret_profiles").select("user_id")
+          .eq("maestro_broker_id", overrideBroker).not("user_id", "is", null).limit(1);
+        projectionOwner = owner?.[0]?.user_id ? String(owner[0].user_id) : null;
+      } catch { projectionOwner = null; }
+    }
+    const projected = fullSync || !projectionOwner ? [] : await loadProjection(admin, projectionOwner).catch(() => []);
     if (projected.length) {
       all = projected;
     } else if (token) {

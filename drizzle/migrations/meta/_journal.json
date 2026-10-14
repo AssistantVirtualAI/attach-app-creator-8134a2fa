@@ -57,6 +57,13 @@
       "when": 1791801411025,
       "tag": "0007_ai_insights_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791945645461,
+      "tag": "0008_planipret_security_definer_anon_lockdown",
+      "breakpoints": true
     }
   ]
 }

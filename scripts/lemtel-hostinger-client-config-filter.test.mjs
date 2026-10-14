@@ -6,8 +6,8 @@ import { validateLemtelActivePassiveConfig } from './lemtel-hostinger-client-con
 const key = 'test-lemtel-public-key';
 const base = {
   VITE_LEMTEL_TARGET: 'lemtel-active-passive',
-  VITE_SUPABASE_URL: 'https://lemtel.assistantvirtualai.com',
-  VITE_SUPABASE_PUBLISHABLE_KEY: key,
+  VITE_LEMTEL_API_URL: 'https://lemtel.assistantvirtualai.com',
+  VITE_LEMTEL_PUBLISHABLE_KEY: key,
   VITE_LEMTEL_PRIVATE_DIRECTORY: 'approved',
   VITE_LEMTEL_EMAIL_ONLY_SIGNIN: 'approved',
   VITE_LEMTEL_AUTH_REDIRECT_URL: 'https://lemtel.assistantvirtualai.com/reset-password',
@@ -21,9 +21,10 @@ test('filter accepts only the canonical active-passive profile with the server p
 });
 
 test('filter denies Planipret, the former Hostinger route, unapproved flags and malformed origins', () => {
-  assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_SUPABASE_URL: 'https://gejxisrqtvxavbrfcoxz.supabase.co' }).ok, false);
-  assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_SUPABASE_URL: 'https://lemtel.avastatistic.ca' }).ok, false);
+  assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_API_URL: 'https://gejxisrqtvxavbrfcoxz.supabase.co' }).ok, false);
+  assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_API_URL: 'https://lemtel.avastatistic.ca' }).ok, false);
   assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_PRIVATE_DIRECTORY: 'enabled' }).ok, false);
+  assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_SUPABASE_URL: 'https://lemtel.assistantvirtualai.com' }).ok, false);
   assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_EMAIL_ONLY_SIGNIN: 'disabled' }).ok, false);
-  assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_SUPABASE_URL: 'http://lemtel.assistantvirtualai.com' }).ok, false);
+  assert.equal(validateLemtelActivePassiveConfig({ ...base, VITE_LEMTEL_API_URL: 'http://lemtel.assistantvirtualai.com' }).ok, false);
 });

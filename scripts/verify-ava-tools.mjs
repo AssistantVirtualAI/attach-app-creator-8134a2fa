@@ -22,6 +22,7 @@ const legacyHandler = read("supabase/functions/elevenlabs-tool-handler/index.ts"
 const retention = read("supabase/functions/pp-data-retention/index.ts");
 const softphone = read("src/hooks/useMplanipretSoftphone.ts");
 const actionExecutor = read("supabase/functions/ava-action-executor/index.ts");
+const toolTransition = read("supabase/functions/_shared/elevenlabs-tool-transition.ts");
 const stt = read("supabase/functions/pp-ava-stt/index.ts");
 const tts = read("supabase/functions/pp-ava-tts/index.ts");
 const brief = read("supabase/functions/pp-ava-brief/index.ts");
@@ -95,6 +96,7 @@ check(consentUi.includes('functions.invoke("pp-ai-consent"') && consentUi.includ
 check(fs.existsSync(path.join(root, "supabase/migrations/20260915062000_planipret_ai_consent.sql")), "AI consent migration is missing");
 
 check(manage.includes("existingType !== desiredType") && manage.includes('method: "DELETE"') && manage.includes("Synchronisation incomplète"), "ElevenLabs sync must recreate changed tool types and reject partial attachment");
+check(manage.includes("planToolTypeTransition") && manage.includes("tools_detached_for_type_change") && toolTransition.includes("retainedIds"), "ElevenLabs type changes must detach only the affected tool ids before deletion");
 check(legacyHandler.includes('functions/v1/ava-tool-executor') && !legacyHandler.includes('functions/v1/maestro-actions'), "Legacy ElevenLabs handler must delegate to the canonical executor");
 check(!retention.includes("x-cron-trigger") && !retention.includes("x-cron-secret"), "Data retention must not trust a public boolean cron header");
 check(!actionExecutor.includes('executionMode = "mock"') && actionExecutor.includes('functions/v1/ava-tool-executor'), "Email-proposed Maestro actions must execute for real through the canonical router");

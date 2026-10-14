@@ -3,6 +3,7 @@
 // the AVA conversational agent without touching the ElevenLabs dashboard.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { buildAvaToolsArray, buildAvaToolConfigs } from "../_shared/ava-tools.ts";
+import { planToolTypeTransition } from "../_shared/elevenlabs-tool-transition.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -250,8 +251,37 @@ Deno.serve(async (req) => {
         const existing: any[] = listRes.data?.tools ?? [];
         const byName = new Map<string, any>(existing.map((t) => [t?.tool_config?.name ?? t?.name, t]));
 
-        // 2. Upsert each AVA tool in the registry.
+        // ElevenLabs refuses to delete a tool while an agent uses it. Read the
+        // current attachment first so that a webhook → client transition can
+        // detach only the affected ids, preserving every other active tool.
+        const agentRes = await elFetch(apiKey, `/convai/agents/${agentId}`);
+        if (!agentRes.ok) {
+          return json({ success: false, error: `Impossible de lire l'agent avant synchronisation: ${agentRes.error}`, status: agentRes.status });
+        }
+
+        // 2. Build the target registry and detach only changed tool types.
         const desired = buildAvaToolConfigs(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const desiredTypes = new Map<string, string>(desired.map((cfg: any) => [cfg.tool_config.name, cfg.tool_config.type]));
+        const currentPrompt = agentRes.data?.conversation_config?.agent?.prompt ?? {};
+        const transition = planToolTypeTransition(currentPrompt, existing, desiredTypes);
+
+        if (transition.replaceIds.length) {
+          const detachRes = await elFetch(apiKey, `/convai/agents/${agentId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ conversation_config: { agent: { prompt: { tool_ids: transition.retainedIds, tools: [] } } } }),
+          });
+          if (!detachRes.ok) {
+            return json({
+              success: false,
+              error: `Impossible de détacher les outils à convertir: ${detachRes.error}`,
+              status: detachRes.status,
+              tools_to_replace: transition.replaceNames,
+            });
+          }
+          await broadcastSetup(admin, userId, { type: "tools_detached_for_type_change", tools: transition.replaceNames });
+        }
+
+        // 3. Upsert each AVA tool in the registry.
         const ids: string[] = [];
         const errors: string[] = [];
         const errors_detailed: Array<{ tool: string; status: number; message: string; data?: any }> = [];
@@ -314,7 +344,7 @@ Deno.serve(async (req) => {
           });
         }
 
-        // 3. Attach tool_ids on the agent.
+        // 4. Reattach the complete registry only after all tools are valid.
         const patchRes = await elFetch(apiKey, `/convai/agents/${agentId}`, {
           method: "PATCH",
           body: JSON.stringify({ conversation_config: { agent: { prompt: { tool_ids: uniqIds, tools: [] } } } }),

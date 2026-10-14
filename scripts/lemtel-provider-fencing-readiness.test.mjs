@@ -11,7 +11,7 @@ test('provider fencing records only attested read access and no provider mutatio
   const value = contract();
   assert.equal(value.scope, 'provider_readonly_verification_and_fencing_design_no_actions');
   assert.equal(value.verification.digitalocean_readonly_api_verified, true);
-  assert.equal(value.verification.hostinger_readonly_api_verified, false);
+  assert.equal(value.verification.hostinger_readonly_api_verified, true);
   assert.equal(value.verification.provider_mutation_executed, false);
   assert.equal(value.verification.credential_values_emitted, false);
 });

@@ -3,7 +3,7 @@
   "scope": "provider_readonly_verification_and_fencing_design_no_actions",
   "verification": {
     "digitalocean_readonly_api_verified": true,
-    "hostinger_readonly_api_verified": false,
+    "hostinger_readonly_api_verified": true,
     "digitalocean_fence_action_authorized": false,
     "hostinger_fence_action_authorized": false,
     "provider_mutation_executed": false,

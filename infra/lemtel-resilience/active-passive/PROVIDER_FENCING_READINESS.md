@@ -1,6 +1,6 @@
 # Lemtel — préparation du fencing fournisseur
 
-> **État actuel :** lecture DigitalOcean attestée ; accès lecture Hostinger à réparer. Aucune action fournisseur, promotion, DNS, routage ou téléphonie n’est déclenchée par ce document.
+> **État actuel :** lectures DigitalOcean et Hostinger attestées. Aucune action fournisseur, promotion, DNS, routage ou téléphonie n’est déclenchée par ce document.
 
 ## Décision fail-closed
 
@@ -17,7 +17,7 @@ Une perte de réseau ne suffit jamais à promouvoir Hostinger. Cloudflare mesure
 
 ## Préconditions restantes
 
-- Réparer l’autorisation API VPS Hostinger : le dernier inventaire lecture seule a retourné un refus d’accès.
+- Conserver des vérifications lecture seule périodiques des deux fournisseurs, sans action VPS.
 - Déployer l’arbitre hors des deux VPS en observation/refus par défaut.
 - Prouver la durabilité Storage double-écriture, la parité runtime et les drills de fencing/promotion/failback.
 - Créer et tester le monitoring Cloudflare avant tout routage.

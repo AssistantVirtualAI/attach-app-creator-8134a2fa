@@ -16,7 +16,7 @@ const BOUNDARY_KEYS = ['single_writer_only', 'public_postgres_listener', 'fusion
 
 const exactKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) &&
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
-const validPreflight = (value) => Object.entries(value).every(([key, entry]) => entry === (key === 'postgres_synchronous_streaming_verified'));
+const validPreflight = (value) => Object.entries(value).every(([key, entry]) => entry === (key === 'provider_api_credentials_verified' || key === 'postgres_synchronous_streaming_verified'));
 const everyBoolean = (value) => Object.values(value).every((entry) => typeof entry === 'boolean');
 
 export function validateAutomaticFailoverTarget(policy) {

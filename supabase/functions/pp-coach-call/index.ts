@@ -59,19 +59,33 @@ Deno.serve(async (req) => {
 
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }
-  const call_id = body.call_id;
+  const requestedCallId = body.call_id;
   const force = body.force === true;
   const reprocess = body.reprocess === true;
   const bodyTranscript = typeof body.transcript === "string" ? body.transcript : null;
-  if (!call_id) return json({ error: "call_id required" }, 400);
+  if (!requestedCallId) return json({ error: "call_id required" }, 400);
 
+  if (typeof requestedCallId !== "string" || requestedCallId.length > 200) return json({ error: "invalid call_id" }, 400);
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-  const { data: row, error } = await admin
-    .from("planipret_phone_calls")
-    .select("*")
-    .eq("id", call_id)
-    .maybeSingle();
-  if (error || !row) return json({ error: "call not found", details: error?.message }, 404);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedCallId);
+  let row: any = null;
+  if (isUuid) {
+    const { data } = await admin.from("planipret_phone_calls").select("*").eq("id", requestedCallId).maybeSingle();
+    row = data;
+  }
+  // The mobile list can hand over a NetSapiens call id instead of the row id.
+  if (!row) {
+    for (const col of ["ns_call_id", "ns_callid", "ns_orig_callid", "ns_term_callid"]) {
+      const { data } = await admin.from("planipret_phone_calls").select("*")
+        .eq(col, requestedCallId).is("deleted_at", null)
+        .order("has_transcript", { ascending: false, nullsFirst: false })
+        .limit(1).maybeSingle();
+      if (data) { row = data; break; }
+    }
+  }
+  if (!row) return json({ error: "call not found", code: "call_not_found", message: "Appel introuvable." }, 404);
+  // From here on, always use the resolved row id.
+  const call_id: string = row.id;
   const access = await authorizeCallAccess(req, admin, row);
   if (!access.ok) return json({ error: access.error }, access.status);
   const consent = allowCallViewing(row);

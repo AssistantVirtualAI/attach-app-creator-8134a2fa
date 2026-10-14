@@ -7,7 +7,7 @@
   "sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "36750ae1ba54eabbe509d4f77045a5ce0c24806bb602a80f369fc4ebfd710e21"
+      "sha256": "922b50e79a0a37d0289f27a94fa2029a9474f0de277e10d23e7e9e716589f2a9"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",

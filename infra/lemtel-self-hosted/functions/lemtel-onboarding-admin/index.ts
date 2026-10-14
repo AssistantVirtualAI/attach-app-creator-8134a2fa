@@ -529,7 +529,7 @@ async function operationalTrend(admin: any) {
     samples: (data ?? []).map((row: unknown) => {
       const status = redactedOperationalStatusFromRow(row);
       return {
-        observedAt: status.observedAt,
+        observedAt: "observedAt" in status ? status.observedAt : undefined,
         overall: status.overall,
         runtime: status.services.runtime,
         database: status.services.database,

@@ -1,8 +1,9 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
+import lemtelIcon from "./assets/lemtel-icon.png";
 
 export function LemtelMonogram({ size = 36 }: { size?: number }) {
-  return <span aria-hidden className="lt-monogram inline-flex items-center justify-center font-extrabold rounded-xl" style={{ width: size, height: size, fontSize: size * 0.5, letterSpacing: "-0.04em" }}>L</span>;
+  return <img src={lemtelIcon} alt="Lemtel" className="lt-brand-mark" width={size} height={size} style={{ width: size, height: size, objectFit: "contain", borderRadius: Math.round(size * .22) }} />;
 }
 
 export function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children: (id: string, describedBy?: string) => ReactNode }) {

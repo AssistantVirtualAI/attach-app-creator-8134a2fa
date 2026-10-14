@@ -128,4 +128,15 @@ describe("Lemtel portal contract", () => {
     expect(server).toContain('https://testflight.apple.com');
     expect(client).not.toMatch(/resend_api_key|service_role_key/i);
   });
+
+  it("uses the canonical Lemtel mark and the AVA attribution in the portal chrome", () => {
+    const app = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
+    const ui = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelUi.tsx"), "utf8");
+    const css = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtel-portal.css"), "utf8");
+    expect(ui).toContain('import lemtelIcon from "./assets/lemtel-icon.png"');
+    expect(app).toContain('href="https://assistantvirtualai.com"');
+    expect(app).toContain("Powered by AVA");
+    expect(app).toContain("lt-sidebar");
+    expect(css).toContain("Brand refresh");
+  });
 });

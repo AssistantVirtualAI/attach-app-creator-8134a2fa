@@ -2,6 +2,7 @@
 // Deployment and email delivery require explicit approval, a fresh backup, and configured secrets.
 // This function never calls FusionPBX and never persists or logs a temporary password.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -29,6 +30,7 @@ type RequestBody =
   | { action: "list_activity"; organizationId: string }
   | { action: "list_domains"; organizationId: string }
   | { action: "list_client_connections"; organizationId: string }
+  | { action: "get_telephony_readiness"; organizationId: string }
   | { action: "create_domain"; organizationId: string; domain: DomainInput }
   | { action: "suspend_domain"; organizationId: string; domainId: string };
 
@@ -80,7 +82,7 @@ export function validateBody(raw: unknown): RequestBody | Failure {
   if (raw.action === "list_organizations" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
-  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections") {
+  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections" || raw.action === "get_telephony_readiness") {
     if (!exactKeys(raw, ["action", "organizationId"])) return fail("invalid_body", 400);
     const parsedOrganizationId = organizationId(raw.organizationId);
     return isFailure(parsedOrganizationId) ? parsedOrganizationId : { action: raw.action, organizationId: parsedOrganizationId } as RequestBody;
@@ -567,6 +569,11 @@ export async function handler(req: Request): Promise<Response> {
     if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
     const result = request.action === "get_operational_status" ? await operationalStatus(admin) : await operationalTrend(admin);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+  if (request.action === "get_telephony_readiness") {
+    if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    // This immutable catalog is intentionally pre-provisioning only: no provider connection or business-data mutation occurs here.
+    return respond({ capabilities: telephonyReadinessCatalog() });
   }
   if (request.action === "list_people" || request.action === "list_invitations" || request.action === "list_activity" || request.action === "list_domains" || request.action === "list_client_connections") {
     if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);

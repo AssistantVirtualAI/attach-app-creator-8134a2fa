@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_email_onboarding_portal_admin_v5",
+  "package_version": "lemtel_email_onboarding_portal_admin_v6",
   "scope": "offline_function_source_only",
   "deployment_authorized": false,
   "client_cutover_authorized": false,
@@ -16,7 +16,8 @@
     "authenticated_portal_client_connection_read",
     "authenticated_platform_operational_status_read",
     "authenticated_platform_operational_trend_read",
-    "organization_access_suspension"
+    "organization_access_suspension",
+    "authenticated_portal_telephony_readiness_read"
   ],
   "explicitly_excluded": [
     "planipret_import",
@@ -32,7 +33,9 @@
     "direct_browser_host_access",
     "automatic_failover",
     "automatic_promotion",
-    "automatic_dns_change"
+    "automatic_dns_change",
+    "telephony_provider_connection",
+    "telephony_config_write"
   ],
   "runtime_requirements": [
     "SUPABASE_URL",
@@ -60,6 +63,7 @@
     "synthetic_auth_rbac_and_email_smoke_test",
     "synthetic_portal_read_and_access_suspension_rbac_test",
     "synthetic_platform_admin_operational_status_rbac_test",
-    "approved_edge_deployment"
+    "approved_edge_deployment",
+    "approved_telephony_readiness_catalog_deployment"
   ]
 }

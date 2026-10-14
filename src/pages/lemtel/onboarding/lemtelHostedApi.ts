@@ -175,6 +175,19 @@ export type PortalClientConnection = {
   authorityRevision: number;
 };
 export type PortalConfig = { downloads: { desktop?: string; windows?: string; macosApple?: string; macosIntel?: string; ios?: string; android?: string }; supportContact?: string };
+export type PortalTelephonyCapability = {
+  key: string;
+  category: "phone_system" | "call_center" | "analytics_media" | "communications" | "monitoring" | "administration";
+  categoryFr: string;
+  categoryEn: string;
+  nameFr: string;
+  nameEn: string;
+  descriptionFr: string;
+  descriptionEn: string;
+  activationRequirementFr: string;
+  activationRequirementEn: string;
+  status: "not_provisioned";
+};
 export type OperationalHealth = "healthy" | "degraded" | "unknown";
 export type LemtelOperationalStatus = {
   telemetry: "live" | "not_configured";
@@ -241,6 +254,7 @@ export const portalApi = {
   listActivity: (organizationId: string) => invoke<{ events: PortalActivity[] }>("lemtel-onboarding-admin", { action: "list_activity", organizationId }),
   listDomains: (organizationId: string) => invoke<{ domains: PortalDomain[] }>("lemtel-onboarding-admin", { action: "list_domains", organizationId }),
   listClientConnections: (organizationId: string) => invoke<{ connections: PortalClientConnection[] }>("lemtel-onboarding-admin", { action: "list_client_connections", organizationId }),
+  getTelephonyReadiness: (organizationId: string) => invoke<{ capabilities: PortalTelephonyCapability[] }>("lemtel-onboarding-admin", { action: "get_telephony_readiness", organizationId }),
   createOrganization: (input: Parameters<typeof buildCreateOrganizationBody>[0]) =>
     invoke<{ ok: true; organization: { id: string } }>("lemtel-onboarding-admin", buildCreateOrganizationBody(input), { write: true }),
   provisionUsers: (organizationId: string, users: ProvisionedUser[]) =>

@@ -26,6 +26,7 @@ required_files=(
   "$bundle/0010_lemtel_client_connections.sql"
   "$bundle/0011_lemtel_operational_status_history.sql"
   "$bundle/lemtel-onboarding-admin.index.ts"
+  "$bundle/lemtelTelephonyReadiness.ts"
   "$bundle/lemtel-session-bootstrap.index.ts"
   "$bundle/lemtel-ha-promoted-writer-status-publish.sh"
   "$bundle/lemtel-ha-promoted-writer-status-timer-enable.sh"
@@ -66,8 +67,9 @@ functions_source="$(docker inspect --format '{{range .Mounts}}{{if eq .Destinati
 caddyfile="$caddy_source/Caddyfile"
 portal_dir="$caddy_source/lemtel-portal"
 admin_target="$functions_source/lemtel-onboarding-admin/index.ts"
+catalog_target="$functions_source/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts"
 session_target="$functions_source/lemtel-session-bootstrap/index.ts"
-[ -f "$caddyfile" ] && [ -d "$portal_dir" ] && [ -f "$admin_target" ] && [ -f "$session_target" ] || fail runtime_target_missing
+[ -f "$caddyfile" ] && [ -d "$portal_dir" ] && [ -f "$admin_target" ] && [ -d "$(dirname "$catalog_target")" ] && [ -f "$session_target" ] || fail runtime_target_missing
 marker_summary="$(awk -v marker="$portal_marker" '
   index($0, marker) { contains += 1 }
   { candidate = $0; sub(/^[[:space:]]+/, "", candidate); sub(/[[:space:]]+$/, "", candidate); if (candidate == marker) normalized += 1 }
@@ -82,17 +84,22 @@ install -d -o root -g root -m 0700 "$backup_root"
 backup_dir="$backup_root/$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -o root -g root -m 0700 "$backup_dir"
 cp --preserve=mode,ownership,timestamps "$admin_target" "$backup_dir/lemtel-onboarding-admin.index.ts"
+catalog_preexisting=false
+if [ -f "$catalog_target" ]; then cp --preserve=mode,ownership,timestamps "$catalog_target" "$backup_dir/lemtelTelephonyReadiness.ts"; catalog_preexisting=true; fi
 cp --preserve=mode,ownership,timestamps "$session_target" "$backup_dir/lemtel-session-bootstrap.index.ts"
 portal_stage="$(mktemp -d "${caddy_source}/.lemtel-device-observability-stage.XXXXXX")"
 admin_temp="$(mktemp "${admin_target}.lemtel-device.XXXXXX")"
+catalog_temp="$(mktemp "${catalog_target}.lemtel-device.XXXXXX")"
 session_temp="$(mktemp "${session_target}.lemtel-device.XXXXXX")"
 portal_replaced=false
 functions_replaced=false
+catalog_replaced=false
 
 rollback() {
   local code=$?
   if [ "$functions_replaced" = true ]; then
     cp -- "$backup_dir/lemtel-onboarding-admin.index.ts" "$admin_target" || true
+    if [ "$catalog_replaced" = true ]; then if [ "$catalog_preexisting" = true ]; then cp -- "$backup_dir/lemtelTelephonyReadiness.ts" "$catalog_target" || true; else rm -f "$catalog_target" || true; fi; fi
     cp -- "$backup_dir/lemtel-session-bootstrap.index.ts" "$session_target" || true
     docker restart --time 30 "$edge_container" >/dev/null 2>&1 || true
   fi
@@ -100,7 +107,7 @@ rollback() {
     rm -rf "$portal_dir" || true
     [ -d "$backup_dir/lemtel-portal" ] && mv "$backup_dir/lemtel-portal" "$portal_dir" || true
   fi
-  rm -f "$admin_temp" "$session_temp"
+  rm -f "$admin_temp" "$catalog_temp" "$session_temp"
   [ -d "$portal_stage" ] && rm -rf "$portal_stage" || true
   exit "$code"
 }
@@ -118,12 +125,15 @@ for object in public.lemtel_organization_domains public.lemtel_client_connection
 done
 
 cp -- "$bundle/lemtel-onboarding-admin.index.ts" "$admin_temp"
+cp -- "$bundle/lemtelTelephonyReadiness.ts" "$catalog_temp"
 cp -- "$bundle/lemtel-session-bootstrap.index.ts" "$session_temp"
-chmod --reference="$admin_target" "$admin_temp"
+chmod --reference="$admin_target" "$admin_temp" "$catalog_temp"
 chmod --reference="$session_target" "$session_temp"
-mv -f "$admin_temp" "$admin_target"
-mv -f "$session_temp" "$session_target"
 functions_replaced=true
+mv -f "$admin_temp" "$admin_target"
+mv -f "$catalog_temp" "$catalog_target"
+catalog_replaced=true
+mv -f "$session_temp" "$session_target"
 docker restart --time 30 "$edge_container" >/dev/null
 [ "$(docker inspect --format '{{.State.Running}}' "$edge_container")" = true ] || fail edge_runtime_not_running_after_restart
 

@@ -19,6 +19,7 @@ manifest="$bundle/manifest.sha256"
 portal_archive="$bundle/portal.tar"
 migration="$bundle/0008_lemtel_organization_domains.sql"
 function_source="$bundle/lemtel-onboarding-admin.index.ts"
+catalog_source="$bundle/lemtelTelephonyReadiness.ts"
 backup_root='/var/lib/lemtel-ha/portal-authority/backups'
 portal_marker='# LEMTEL_OPERATIONS_PORTAL_V1'
 
@@ -39,8 +40,8 @@ verify_digest() {
 
 command -v docker >/dev/null 2>&1 || fail docker_missing
 docker ps >/dev/null 2>&1 || fail docker_unavailable
-for required in "$manifest" "$portal_archive" "$migration" "$function_source"; do [ -s "$required" ] || fail bundle_file_missing; done
-for source in "$portal_archive" "$migration" "$function_source"; do verify_digest "$source"; done
+for required in "$manifest" "$portal_archive" "$migration" "$function_source" "$catalog_source"; do [ -s "$required" ] || fail bundle_file_missing; done
+for source in "$portal_archive" "$migration" "$function_source" "$catalog_source"; do verify_digest "$source"; done
 
 db_container="$(resolve_database_container || true)"
 edge_container='supabase-edge-functions'
@@ -59,8 +60,9 @@ functions_source="$(docker inspect --format '{{range .Mounts}}{{if eq .Destinati
 caddyfile="$caddy_source/Caddyfile"
 portal_dir="$caddy_source/lemtel-portal"
 function_target="$functions_source/lemtel-onboarding-admin/index.ts"
+catalog_target="$functions_source/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts"
 [ -f "$caddyfile" ] || fail caddyfile_missing
-[ -f "$function_target" ] || fail function_target_missing
+[ -f "$function_target" ] && [ -d "$(dirname "$catalog_target")" ] || fail function_target_missing
 [ -d "$portal_dir" ] || fail portal_directory_missing
 portal_marker_summary="$(awk -v marker="$portal_marker" '
   index($0, marker) { contains += 1 }
@@ -81,28 +83,34 @@ install -d -o root -g root -m 0700 "$backup_root"
 backup_dir="$backup_root/$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -o root -g root -m 0700 "$backup_dir"
 backup_function="$backup_dir/lemtel-onboarding-admin.index.ts"
+backup_catalog="$backup_dir/lemtelTelephonyReadiness.ts"
 function_temporary="$(mktemp "${function_target}.lemtel-authority.XXXXXX")"
+catalog_temporary="$(mktemp "${catalog_target}.lemtel-authority.XXXXXX")"
 portal_stage="$(mktemp -d "${caddy_source}/.lemtel-portal-authority-stage.XXXXXX")"
 function_replaced=false
+catalog_replaced=false
+catalog_preexisting=false
 portal_replaced=false
 
 rollback() {
   local code=$?
   if [ "$function_replaced" = true ] && [ -f "$backup_function" ]; then
     cp -- "$backup_function" "$function_target"
+    if [ "$catalog_replaced" = true ]; then if [ "$catalog_preexisting" = true ]; then cp -- "$backup_catalog" "$catalog_target"; else rm -f "$catalog_target"; fi; fi
     docker restart --time 30 "$edge_container" >/dev/null 2>&1 || true
   fi
   if [ "$portal_replaced" = true ]; then
     rm -rf "$portal_dir"
     [ -d "$backup_dir/lemtel-portal" ] && mv "$backup_dir/lemtel-portal" "$portal_dir" || true
   fi
-  rm -f "$function_temporary"
+  rm -f "$function_temporary" "$catalog_temporary"
   [ -d "$portal_stage" ] && rm -rf "$portal_stage" || true
   exit "$code"
 }
 trap rollback ERR INT TERM
 
 cp --preserve=mode,ownership,timestamps -- "$function_target" "$backup_function"
+if [ -f "$catalog_target" ]; then cp --preserve=mode,ownership,timestamps -- "$catalog_target" "$backup_catalog"; catalog_preexisting=true; fi
 tar -xf "$portal_archive" -C "$portal_stage"
 [ -s "$portal_stage/lemtel-portal.html" ] || fail portal_archive_invalid
 
@@ -111,9 +119,12 @@ domain_table="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; 
 [ "$domain_table" = lemtel_organization_domains ] || fail domain_schema_missing
 
 cp -- "$function_source" "$function_temporary"
-chmod --reference="$function_target" "$function_temporary"
-mv -f "$function_temporary" "$function_target"
+cp -- "$catalog_source" "$catalog_temporary"
+chmod --reference="$function_target" "$function_temporary" "$catalog_temporary"
 function_replaced=true
+mv -f "$function_temporary" "$function_target"
+mv -f "$catalog_temporary" "$catalog_target"
+catalog_replaced=true
 docker restart --time 30 "$edge_container" >/dev/null
 [ "$(docker inspect --format '{{.State.Running}}' "$edge_container")" = true ] || fail edge_runtime_not_running_after_restart
 
@@ -123,6 +134,8 @@ portal_replaced=true
 [ -s "$portal_dir/lemtel-portal.html" ] || fail portal_install_invalid
 
 function_replaced=false
+catalog_replaced=false
+catalog_preexisting=false
 portal_replaced=false
 trap - ERR INT TERM
 printf 'portal_authority_deploy_format=lemtel_portal_authority_deploy_v1\n'

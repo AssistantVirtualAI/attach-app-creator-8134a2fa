@@ -19,6 +19,7 @@ manifest="$bundle/manifest.sha256"
 portal_archive="$bundle/portal.tar"
 migration="$bundle/0006_lemtel_operational_status.sql"
 function_source="$bundle/lemtel-onboarding-admin.index.ts"
+catalog_source="$bundle/lemtelTelephonyReadiness.ts"
 publisher_source="$bundle/lemtel-ha-promoted-writer-status-publish.sh"
 timer_source="$bundle/lemtel-ha-promoted-writer-status-timer-enable.sh"
 resolve_database_container() {
@@ -36,7 +37,7 @@ canonical_host='lemtel.assistantvirtualai.com'
 portal_marker='# LEMTEL_OPERATIONS_PORTAL_V1'
 backup_root='/var/lib/lemtel-ha/operations-portal/backups'
 
-for required in "$manifest" "$migration" "$function_source" "$publisher_source" "$timer_source"; do
+for required in "$manifest" "$migration" "$function_source" "$catalog_source" "$publisher_source" "$timer_source"; do
   [ -s "$required" ] || fail "bundle_file_missing"
 done
 [ -s "$portal_archive" ] || fail portal_artifact_missing
@@ -49,7 +50,7 @@ verify_digest() {
   actual="$(sha256sum "$path" | awk '{print $1}')"
   [ "$actual" = "$expected" ] || fail manifest_digest_mismatch
 }
-for source in "$migration" "$function_source" "$publisher_source" "$timer_source" "$portal_archive"; do verify_digest "$source"; done
+for source in "$migration" "$function_source" "$catalog_source" "$publisher_source" "$timer_source" "$portal_archive"; do verify_digest "$source"; done
 
 for container in "$db_container" "$caddy_container" "$edge_container"; do
   docker inspect "$container" >/dev/null 2>&1 || fail container_missing
@@ -63,8 +64,9 @@ functions_source="$(docker inspect --format '{{range .Mounts}}{{if eq .Destinati
 [ -n "$caddy_source" ] && [ -n "$functions_source" ] || fail required_runtime_mount_missing
 caddyfile="$caddy_source/Caddyfile"
 function_target="$functions_source/lemtel-onboarding-admin/index.ts"
+catalog_target="$functions_source/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts"
 [ -f "$caddyfile" ] || fail caddyfile_missing
-[ -f "$function_target" ] || fail onboarding_function_missing
+[ -f "$function_target" ] && [ -d "$(dirname "$catalog_target")" ] || fail onboarding_function_missing
 [ "$(grep -Fxc "{\$PROXY_DOMAIN}, $canonical_host {" "$caddyfile" || true)" = 1 ] || fail canonical_caddy_site_unexpected
 portal_route_present=false
 if grep -Fq "$portal_marker" "$caddyfile"; then
@@ -82,6 +84,7 @@ backup_dir="$backup_root/$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -o root -g root -m 0700 "$backup_dir"
 backup_caddy="$backup_dir/Caddyfile"
 backup_function="$backup_dir/lemtel-onboarding-admin.index.ts"
+backup_catalog="$backup_dir/lemtelTelephonyReadiness.ts"
 portal_dir="$caddy_source/lemtel-portal"
 deployment_mode=initial
 if [ "$portal_route_present" = true ]; then
@@ -93,9 +96,12 @@ fi
 caddy_candidate="$(mktemp "${caddyfile}.lemtel-operations.XXXXXX")"
 caddy_temporary="$(mktemp "${caddyfile}.lemtel-live.XXXXXX")"
 function_temporary="$(mktemp "${function_target}.lemtel-live.XXXXXX")"
+catalog_temporary="$(mktemp "${catalog_target}.lemtel-live.XXXXXX")"
 portal_stage="$(mktemp -d "${caddy_source}/.lemtel-portal-stage.XXXXXX")"
 caddy_replaced=false
 function_replaced=false
+catalog_replaced=false
+catalog_preexisting=false
 portal_replaced=false
 timer_enabled=false
 
@@ -110,13 +116,14 @@ rollback() {
   fi
   if [ "$function_replaced" = true ] && [ -f "$backup_function" ]; then
     cp -- "$backup_function" "$function_target"
+    if [ "$catalog_replaced" = true ]; then if [ "$catalog_preexisting" = true ]; then cp -- "$backup_catalog" "$catalog_target"; else rm -f "$catalog_target"; fi; fi
     docker restart --time 30 "$edge_container" >/dev/null 2>&1 || true
   fi
   if [ "$portal_replaced" = true ]; then
     rm -rf "$portal_dir"
     [ -d "$backup_dir/lemtel-portal" ] && mv "$backup_dir/lemtel-portal" "$portal_dir" || true
   fi
-  rm -f "$caddy_candidate" "$caddy_temporary" "$function_temporary"
+  rm -f "$caddy_candidate" "$caddy_temporary" "$function_temporary" "$catalog_temporary"
   [ -d "$portal_stage" ] && rm -rf "$portal_stage" || true
   exit "$code"
 }
@@ -145,6 +152,7 @@ docker exec -i "$caddy_container" caddy adapt --config /dev/stdin --adapter cadd
 
 cp --preserve=mode,ownership,timestamps -- "$caddyfile" "$backup_caddy"
 cp --preserve=mode,ownership,timestamps -- "$function_target" "$backup_function"
+if [ -f "$catalog_target" ]; then cp --preserve=mode,ownership,timestamps -- "$catalog_target" "$backup_catalog"; catalog_preexisting=true; fi
 tar -xf "$portal_archive" -C "$portal_stage"
 [ -s "$portal_stage/lemtel-portal.html" ] || fail portal_archive_invalid
 
@@ -154,9 +162,12 @@ table_state="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; p
 [ "$table_state" = 'lemtel_operational_status' ] || fail operational_status_schema_missing
 
 cp -- "$function_source" "$function_temporary"
-chmod --reference="$function_target" "$function_temporary"
-mv -f "$function_temporary" "$function_target"
+cp -- "$catalog_source" "$catalog_temporary"
+chmod --reference="$function_target" "$function_temporary" "$catalog_temporary"
 function_replaced=true
+mv -f "$function_temporary" "$function_target"
+mv -f "$catalog_temporary" "$catalog_target"
+catalog_replaced=true
 docker restart --time 30 "$edge_container" >/dev/null
 [ "$(docker inspect --format '{{.State.Running}}' "$edge_container")" = true ] || fail edge_runtime_not_running_after_restart
 
@@ -181,6 +192,8 @@ snapshot_count="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null
 
 caddy_replaced=false
 function_replaced=false
+catalog_replaced=false
+catalog_preexisting=false
 portal_replaced=false
 trap - ERR INT TERM
 rm -f "$caddy_candidate"

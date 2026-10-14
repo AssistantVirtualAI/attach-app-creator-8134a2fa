@@ -19,23 +19,23 @@ export async function handler(req: Request): Promise<Response> {
   if (userError || !user?.id || !user.email) return respond({ error: "unauthorized" }, 401);
   if (user.app_metadata?.lemtel_onboarding_required === true) return respond({ error: "first_password_change_required" }, 409);
   if (user.app_metadata?.lemtel_email_only_signin !== true) return respond({ error: "lemtel_email_only_account_required" }, 403);
-  // Resolve membership and organization status atomically in PostgreSQL. This avoids
-  // transient multi-request PostgREST inconsistencies after a self-hosted schema reload.
-  const { data: context, error: contextError } = await admin.rpc("lemtel_session_bootstrap_context", { p_user_id: user.id });
-  if (contextError || !context?.length) return respond({ error: "lemtel_active_organization_required" }, 403);
+  // Resolve membership and client-family access atomically in PostgreSQL. This avoids
+  // transient multi-request PostgREST inconsistencies after an access revocation.
+  // No device identifier, network metadata or client-supplied tenant scope is accepted.
+  const requestedClient = (req.headers.get("X-Lemtel-Client") ?? "").toLowerCase();
+  const clientKind = requestedClient === "mobile" || requestedClient === "desktop" || requestedClient === "portal"
+    ? requestedClient
+    : "client";
+  const { data: context, error: contextError } = await admin.rpc("lemtel_session_bootstrap_context_for_client", { p_user_id: user.id, p_client_kind: clientKind });
+  if (contextError || !context?.length) return respond({ error: "lemtel_active_client_access_required" }, 403);
   const authorityRevision = context.reduce((current: number, entry: Record<string, unknown>) => {
     const revision = Number(entry.account_authority_revision);
     return Number.isSafeInteger(revision) && revision > current ? revision : current;
   }, 0);
   // Presence is observational only: authentication and authorization remain entirely
-  // determined by the authoritative context above. No device identifier or network
-  // metadata is accepted or exposed.
-  const requestedClient = (req.headers.get("X-Lemtel-Client") ?? "").toLowerCase();
-  const clientKind = requestedClient === "mobile" || requestedClient === "desktop" || requestedClient === "portal"
-    ? requestedClient
-    : "client";
+  // determined by the authoritative context above.
   try {
-    await admin.rpc("lemtel_record_client_connection", {
+    await admin.rpc("lemtel_record_authorized_client_connection", {
       p_user_id: user.id,
       p_client_kind: clientKind,
     });

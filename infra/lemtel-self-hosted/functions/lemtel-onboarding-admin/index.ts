@@ -38,7 +38,8 @@ type RequestBody =
   | { action: "assign_existing_user"; organizationId: string; user: ExistingUserInput }
   | { action: "set_membership_role"; organizationId: string; recipientUserId: string; role: AssignableRole }
   | { action: "transfer_organization_ownership"; organizationId: string; recipientUserId: string }
-  | { action: "reactivate_domain"; organizationId: string; domainId: string };
+  | { action: "reactivate_domain"; organizationId: string; domainId: string }
+  | { action: "set_client_session_access"; organizationId: string; recipientUserId: string; clientKind: "mobile" | "desktop" | "client"; accessState: "active" | "revoked" };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -134,6 +135,16 @@ export function validateBody(raw: unknown): RequestBody | Failure {
     if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
     if (isFailure(parsedDomainId)) return parsedDomainId;
     return { action: "reactivate_domain", organizationId: parsedOrganizationId, domainId: parsedDomainId };
+  }
+  if (raw.action === "set_client_session_access") {
+    if (!exactKeys(raw, ["action", "organizationId", "recipientUserId", "clientKind", "accessState"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedRecipientUserId = organizationId(raw.recipientUserId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedRecipientUserId)) return parsedRecipientUserId;
+    if (raw.clientKind !== "mobile" && raw.clientKind !== "desktop" && raw.clientKind !== "client") return fail("invalid_client_kind", 400);
+    if (raw.accessState !== "active" && raw.accessState !== "revoked") return fail("invalid_access_state", 400);
+    return { action: "set_client_session_access", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId, clientKind: raw.clientKind, accessState: raw.accessState };
   }
   if (raw.action === "set_membership_role") {
     if (!exactKeys(raw, ["action", "organizationId", "recipientUserId", "role"])) return fail("invalid_body", 400);
@@ -546,9 +557,22 @@ async function listClientConnections(admin: any, organizationId: string) {
     .order("last_seen_at", { ascending: false })
     .limit(500);
   if (error) return fail("client_connection_lookup_failed", 503);
-  const directory = await usersById(admin, (data ?? []).map((row: any) => String(row.user_id)));
+  const { data: controls, error: controlsError } = await admin.from("lemtel_client_session_controls")
+    .select("user_id,client_kind,access_state")
+    .eq("organization_id", organizationId)
+    .limit(500);
+  if (controlsError) return fail("client_connection_lookup_failed", 503);
+  const controlledKinds = new Set(["mobile", "desktop", "client"]);
+  const controlsByKey = new Map((controls ?? []).map((row: any) => [`${row.user_id}:${row.client_kind}`, row.access_state === "revoked" ? "revoked" : "active"]));
+  const combined = new Map<string, any>();
+  for (const row of data ?? []) combined.set(`${row.user_id}:${row.client_kind}`, row);
+  for (const control of controls ?? []) {
+    const key = `${control.user_id}:${control.client_kind}`;
+    if (!combined.has(key)) combined.set(key, { user_id: control.user_id, client_kind: control.client_kind, authority_revision: 0 });
+  }
+  const directory = await usersById(admin, [...combined.values()].map((row: any) => String(row.user_id)));
   return {
-    connections: (data ?? []).flatMap((row: any) => {
+    connections: [...combined.values()].flatMap((row: any) => {
       const user = directory.get(String(row.user_id));
       if (!user?.email) return [];
       const clientKind = row.client_kind === "mobile" || row.client_kind === "desktop" || row.client_kind === "portal" ? row.client_kind : "client";
@@ -557,11 +581,34 @@ async function listClientConnections(admin: any, organizationId: string) {
         fullName: userName(user),
         email: user.email,
         clientKind,
-        lastSeenAt: row.last_seen_at,
+        ...(typeof row.last_seen_at === "string" ? { lastSeenAt: row.last_seen_at } : {}),
         authorityRevision: Number.isSafeInteger(Number(row.authority_revision)) ? Number(row.authority_revision) : 0,
+        accessState: controlledKinds.has(clientKind) && controlsByKey.get(`${row.user_id}:${clientKind}`) === "revoked" ? "revoked" : "active",
       }];
     }),
   };
+}
+
+async function setClientSessionAccess(admin: any, organizationId: string, actor: string, recipientUserId: string, clientKind: "mobile" | "desktop" | "client", accessState: "active" | "revoked") {
+  const { data: membership, error: membershipError } = await admin.from("lemtel_organization_memberships")
+    .select("user_id")
+    .eq("organization_id", organizationId)
+    .eq("user_id", recipientUserId)
+    .maybeSingle();
+  if (membershipError) return fail("membership_lookup_failed", 503);
+  if (!membership?.user_id) return fail("recipient_not_found", 404);
+  const { error } = await admin.from("lemtel_client_session_controls").upsert({
+    organization_id: organizationId,
+    user_id: recipientUserId,
+    client_kind: clientKind,
+    access_state: accessState,
+    updated_at: new Date().toISOString(),
+    updated_by: actor,
+  }, { onConflict: "organization_id,user_id,client_kind" });
+  if (error) return fail("client_session_access_update_failed", 503);
+  await bumpAccountAuthorityRevision(admin, organizationId);
+  await audit(admin, organizationId, actor, accessState === "revoked" ? "client_session_access_revoked" : "client_session_access_reactivated", recipientUserId, { client_kind: clientKind });
+  return { status: accessState };
 }
 
 
@@ -719,6 +766,12 @@ export async function handler(req: Request): Promise<Response> {
     if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
     const result = await setMembershipRole(admin, request.organizationId, actor, request.recipientUserId, request.role);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, membership: result });
+  }
+
+  if (request.action === "set_client_session_access") {
+    if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const result = await setClientSessionAccess(admin, request.organizationId, actor, request.recipientUserId, request.clientKind, request.accessState);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, clientSession: result });
   }
 
   if (request.action === "transfer_organization_ownership") {

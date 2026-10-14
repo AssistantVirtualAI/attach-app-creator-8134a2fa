@@ -173,8 +173,9 @@ export type PortalClientConnection = {
   fullName: string;
   email: string;
   clientKind: "mobile" | "desktop" | "portal" | "client";
-  lastSeenAt: string;
+  lastSeenAt?: string;
   authorityRevision: number;
+  accessState: "active" | "revoked";
 };
 export type PortalConfig = { downloads: { desktop?: string; windows?: string; macosApple?: string; macosIntel?: string; ios?: string; android?: string }; supportContact?: string };
 export type PortalTelephonyCapability = {
@@ -258,6 +259,10 @@ export function buildReactivateDomainBody(organizationId: string, domainId: stri
   return { action: "reactivate_domain" as const, organizationId, domainId };
 }
 
+export function buildSetClientSessionAccessBody(organizationId: string, recipientUserId: string, clientKind: "mobile" | "desktop" | "client", accessState: "active" | "revoked") {
+  return { action: "set_client_session_access" as const, organizationId, recipientUserId, clientKind, accessState };
+}
+
 /**
  * Every object below uses the exact Lemtel Edge contract. There is intentionally
  * no generic action/payload wrapper and no legacy Planiprêt action name.
@@ -293,6 +298,8 @@ export const portalApi = {
     invoke<{ ok: true; membership: { status: "updated" | "unchanged" } }>("lemtel-onboarding-admin", buildSetMembershipRoleBody(organizationId, recipientUserId, role), { write: true }),
   transferOrganizationOwnership: (organizationId: string, recipientUserId: string) =>
     invoke<{ ok: true; ownership: { status: "transferred" } }>("lemtel-onboarding-admin", buildTransferOrganizationOwnershipBody(organizationId, recipientUserId), { write: true }),
+  setClientSessionAccess: (organizationId: string, recipientUserId: string, clientKind: "mobile" | "desktop" | "client", accessState: "active" | "revoked") =>
+    invoke<{ ok: true; clientSession: { status: "active" | "revoked" } }>("lemtel-onboarding-admin", buildSetClientSessionAccessBody(organizationId, recipientUserId, clientKind, accessState), { write: true }),
   completeFirstPassword: (newPassword: string) =>
     invoke<{ ok: true; password_change_required: false }>("lemtel-complete-first-password", { newPassword }),
   requestTemporaryPassword: async (email: string): Promise<void> => {

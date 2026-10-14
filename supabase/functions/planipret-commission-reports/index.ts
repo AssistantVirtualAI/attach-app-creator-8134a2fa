@@ -538,7 +538,9 @@ async function handler(req: Request): Promise<Response> {
     // Strict admin scope: firm/peer views use only the firm credential.
     const brokerSources: { token: string; label: string; user_id: string | null; usersId: string }[] = [];
     // Repli admin sans jeton cabinet : chaque courtier connecté via son propre jeton serveur.
-    if (role === "admin" && !firmToken.token && (!filters.users_id || String(filters.users_id) !== String(resolvedUsersId ?? ""))) {
+    // The firm credential returns no deposits without users_id, so admins
+    // always fan out per broker (firm token when configured, else broker's own).
+    if (role === "admin" && (!filters.users_id || String(filters.users_id) !== String(resolvedUsersId ?? ""))) {
       let q = admin.from("planipret_profiles").select("user_id, full_name, email, maestro_broker_id")
         .eq("maestro_connected", true).not("maestro_broker_id", "is", null);
       if (filters.users_id) q = q.eq("maestro_broker_id", filters.users_id);
@@ -548,7 +550,7 @@ async function handler(req: Request): Promise<Response> {
         const id = String(p.maestro_broker_id);
         if (seen.has(id) || !p.user_id) continue;
         seen.add(id);
-        const t = await getUserMaestroAccessToken(admin, String(p.user_id));
+        const t = firmToken.token ?? await getUserMaestroAccessToken(admin, String(p.user_id));
         if (t) brokerSources.push({ token: t, label: String(p.full_name ?? p.email ?? id), user_id: String(p.user_id), usersId: id });
       }
       if (!brokerSources.length) return scopeError("maestro_not_connected");

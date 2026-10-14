@@ -178,14 +178,30 @@ function welcomeMessage(input: { locale: Locale; displayName: string; email: str
   };
 }
 
+const RELEASE_ROOT = "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases";
+const RELEASE_TAG = `${RELEASE_ROOT}/download/v2.5.20`;
+
+/** Server-owned app channels. Variables permit a later verified release without changing the browser bundle. */
+function distributionUrls() {
+  const value = (name: string) => Deno.env.get(name)?.trim() || undefined;
+  return {
+    desktop: value("LEMTEL_DOWNLOAD_DESKTOP_URL") ?? `${RELEASE_ROOT}/tag/v2.5.20`,
+    windows: value("LEMTEL_DOWNLOAD_WINDOWS_URL") ?? `${RELEASE_TAG}/Lemtel-Telecom-Setup-2.5.20.exe`,
+    macosApple: value("LEMTEL_DOWNLOAD_MACOS_APPLE_URL") ?? `${RELEASE_TAG}/Lemtel-Telecom-2.5.20-arm64.dmg`,
+    macosIntel: value("LEMTEL_DOWNLOAD_MACOS_INTEL_URL") ?? `${RELEASE_TAG}/Lemtel-Telecom-2.5.20-x64.dmg`,
+    // TestFlight access remains limited to Apple IDs authorised by the release owner.
+    ios: value("LEMTEL_DOWNLOAD_IOS_URL") ?? "https://testflight.apple.com",
+    // Android has no public store release yet; this remains a controlled release channel.
+    android: value("LEMTEL_DOWNLOAD_ANDROID_URL") ?? RELEASE_ROOT,
+  };
+}
+
 function emailConfig(): { apiKey: string; from: string; urls: { ios: string; android: string; desktop: string } } | Failure {
   const apiKey = Deno.env.get("RESEND_API_KEY") ?? "";
   const from = Deno.env.get("LEMTEL_WELCOME_FROM") ?? "";
-  const ios = Deno.env.get("LEMTEL_DOWNLOAD_IOS_URL") ?? "";
-  const android = Deno.env.get("LEMTEL_DOWNLOAD_ANDROID_URL") ?? "";
-  const desktop = Deno.env.get("LEMTEL_DOWNLOAD_DESKTOP_URL") ?? "";
-  if (!apiKey || !from || !ios || !android || !desktop) return fail("email_provider_not_configured", 503);
-  return { apiKey, from, urls: { ios, android, desktop } };
+  const urls = distributionUrls();
+  if (!apiKey || !from) return fail("email_provider_not_configured", 503);
+  return { apiKey, from, urls: { ios: urls.ios, android: urls.android, desktop: urls.desktop } };
 }
 
 async function actorId(admin: any, req: Request): Promise<string | Failure> {
@@ -400,9 +416,8 @@ async function listDomains(admin: any, organizationId: string) {
 }
 
 function portalConfig() {
-  const value = (name: string) => Deno.env.get(name)?.trim() || undefined;
-  const supportContact = value("LEMTEL_SUPPORT_CONTACT");
-  return { downloads: { desktop: value("LEMTEL_DOWNLOAD_DESKTOP_URL"), ios: value("LEMTEL_DOWNLOAD_IOS_URL"), android: value("LEMTEL_DOWNLOAD_ANDROID_URL") }, ...(supportContact ? { supportContact } : {}) };
+  const supportContact = Deno.env.get("LEMTEL_SUPPORT_CONTACT")?.trim() || undefined;
+  return { downloads: distributionUrls(), ...(supportContact ? { supportContact } : {}) };
 }
 
 type OperationalHealth = "healthy" | "degraded" | "unknown";

@@ -110,4 +110,22 @@ describe("Lemtel portal contract", () => {
     expect(source).toContain('Route path={`${BASE}/overview`} element={<Overview {...context} />}');
     expect(source).not.toContain('Route path="*" element={<Navigate to="overview" replace />}');
   });
+
+  it("renders independent, server-configured download channels for Windows, macOS, iOS and Android", () => {
+    const client = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtelHostedApi.ts"), "utf8");
+    const app = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
+    const server = readFileSync(resolve(process.cwd(), "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts"), "utf8");
+    expect(client).toContain('windows?: string; macosApple?: string; macosIntel?: string');
+    expect(app).toContain('key: "windows"');
+    expect(app).toContain('key: "macosApple"');
+    expect(app).toContain('key: "macosIntel"');
+    expect(app).toContain('key: "ios"');
+    expect(app).toContain('key: "android"');
+    expect(server).toContain('function distributionUrls()');
+    expect(server).toContain('LEMTEL_DOWNLOAD_WINDOWS_URL');
+    expect(server).toContain('LEMTEL_DOWNLOAD_MACOS_APPLE_URL');
+    expect(server).toContain('LEMTEL_DOWNLOAD_MACOS_INTEL_URL');
+    expect(server).toContain('https://testflight.apple.com');
+    expect(client).not.toMatch(/resend_api_key|service_role_key/i);
+  });
 });

@@ -166,7 +166,7 @@ export type PortalInvitation = {
 };
 export type PortalActivity = { id: string; at: string; action: string };
 export type PortalDomain = { id: string; hostname: string; status: "active" | "suspended"; verificationStatus: "verified" | "unverified"; createdAt?: string };
-export type PortalConfig = { downloads: { desktop?: string; ios?: string; android?: string }; supportContact?: string };
+export type PortalConfig = { downloads: { desktop?: string; windows?: string; macosApple?: string; macosIntel?: string; ios?: string; android?: string }; supportContact?: string };
 export type OperationalHealth = "healthy" | "degraded" | "unknown";
 export type LemtelOperationalStatus = {
   telemetry: "live" | "not_configured";

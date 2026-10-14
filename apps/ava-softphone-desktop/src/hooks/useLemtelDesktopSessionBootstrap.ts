@@ -40,6 +40,7 @@ async function requestBootstrap(sessionToken: string): Promise<{ kind: 'ok'; org
       headers: {
         apikey: SB_KEY,
         Authorization: `Bearer ${sessionToken}`,
+        'X-Lemtel-Client': 'desktop',
       },
     });
     if (!response.ok) {

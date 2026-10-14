@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Cloud, Database, HardDrive, RefreshCw, Route, Server, ShieldCheck, Smartphone, WifiOff } from "lucide-react";
-import { LemtelError, portalApi, type LemtelOperationalStatus, type PortalConfig } from "./lemtelHostedApi";
+import { Activity, AlertTriangle, CheckCircle2, Cloud, Database, HardDrive, RefreshCw, Route, Server, ShieldCheck, Smartphone, WifiOff } from "lucide-react";
+import { LemtelError, portalApi, type LemtelOperationalStatus, type LemtelOperationalTrendSample, type PortalConfig } from "./lemtelHostedApi";
 import type { LemtelDict, Lang } from "./lemtelI18n";
 
 type Props = { t: LemtelDict; lang: Lang; config: PortalConfig; readonly: boolean };
@@ -74,6 +74,7 @@ export function normalizeOperationalStatus(value: unknown): LemtelOperationalSta
 
 export default function LemtelOperationalStatus({ t, lang, config, readonly }: Props) {
   const [data, setData] = useState<LemtelOperationalStatus | null>(null);
+  const [trend, setTrend] = useState<LemtelOperationalTrendSample[] | null>(null);
   const [loading, setLoading] = useState(!readonly);
   const [error, setError] = useState<"not_allowed" | "unavailable" | null>(null);
 
@@ -82,6 +83,8 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
     setLoading(true); setError(null);
     try {
       setData(await portalApi.getOperationalStatus());
+      const history = await portalApi.getOperationalTrend().catch(() => ({ samples: [] }));
+      setTrend(history.samples);
     } catch (cause) {
       setError(cause instanceof LemtelError && cause.key === "not_allowed" ? "not_allowed" : "unavailable");
     } finally { setLoading(false); }
@@ -96,6 +99,8 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
   const status = normalizeOperationalStatus(data ?? unknownOperationalStatus);
   const services = status.services;
   const replication = status.replication;
+  const sampleCount = trend?.length ?? 0;
+  const healthySamples = (trend ?? []).filter((sample) => sample.overall === "healthy").length;
   const clients = [
     { label: t.desktop, href: config.downloads.desktop },
     { label: t.ios, href: config.downloads.ios },
@@ -117,6 +122,14 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
       <StatusCard icon={Server} label={t.operations.writer} value={t.operations.topology[status.topology.writer]} tone={services.runtime} detail={t.operations.writerDetail} />
       <StatusCard icon={Cloud} label={t.operations.standby} value={t.operations.topology[status.topology.standby]} tone={replicationHealth(replication.database)} detail={t.operations.replication[replication.database]} />
       <StatusCard icon={Route} label={t.operations.route} value={t.operations.topology[status.topology.route]} tone={services.auth} detail={t.operations.routeDetail} />
+    </section>
+
+    <section className="grid xl:grid-cols-[1.4fr_.6fr] gap-5 mb-5" aria-label={lang === "fr" ? "Tendances opérationnelles" : "Operational trends"}>
+      <div className="lt-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4"><div><div className="flex items-center gap-2"><Activity className="w-5 h-5" style={{ color: "hsl(var(--lt-cyan))" }} /><h2 className="font-semibold">{lang === "fr" ? "Tendance de disponibilité" : "Availability trend"}</h2></div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "Échantillons de santé redigés publiés par le writer, sans adresses ni secrets." : "Redacted health samples published by the writer, without addresses or secrets."}</p></div><span className={`lt-chip ${sampleCount > 0 ? "lt-chip-cyan" : "lt-chip-warn"}`}>{sampleCount} {lang === "fr" ? "échantillon(s)" : "sample(s)"}</span></div>
+        <AvailabilityChart samples={trend ?? []} lang={lang} />
+      </div>
+      <div className="lt-card p-5 space-y-4"><div><div className="text-sm lt-ink-2">{lang === "fr" ? "Santé observée" : "Observed health"}</div><div className="text-3xl font-semibold mt-1">{sampleCount ? `${healthySamples}/${sampleCount}` : "—"}</div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "échantillons sains" : "healthy samples"}</p></div><div className="pt-3 border-t" style={{ borderColor: "hsl(var(--lt-border))" }}><div className="text-sm font-medium">{lang === "fr" ? "Trafic serveur" : "Server traffic"}</div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "Aucun collecteur de trafic n’est encore provisionné : aucun chiffre n’est inventé." : "No traffic collector is provisioned yet: no numbers are fabricated."}</p><span className="lt-chip lt-chip-warn mt-2">{lang === "fr" ? "Non collecté" : "Not collected"}</span></div></div>
     </section>
 
     <section className="grid xl:grid-cols-[1.25fr_.75fr] gap-5">
@@ -165,4 +178,16 @@ function ServiceRow({ icon: Icon, label, value, t, override }: { icon: typeof Se
 
 function SignalRow({ icon: Icon, label, tone, value }: { icon: typeof Server; label: string; tone: Health; value: string }) {
   return <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3" style={{ borderColor: "hsl(var(--lt-border))" }}><div className="flex items-center gap-2 min-w-0"><Icon className="w-4 h-4 shrink-0" style={{ color: "hsl(var(--lt-cyan))" }} /><span className="text-sm truncate">{label}</span></div><span className={`lt-chip ${healthClass[tone]}`}>{value}</span></div>;
+}
+
+function AvailabilityChart({ samples, lang }: { samples: LemtelOperationalTrendSample[]; lang: Lang }) {
+  if (samples.length < 2) return <div className="lt-chart-empty">{lang === "fr" ? "La courbe s’affichera après au moins deux relevés vérifiés." : "The line will appear after at least two verified samples."}</div>;
+  const width = 560;
+  const height = 140;
+  const point = (sample: LemtelOperationalTrendSample, index: number) => {
+    const x = 16 + (index * (width - 32)) / (samples.length - 1);
+    const y = sample.overall === "healthy" ? 28 : sample.overall === "degraded" ? 74 : 116;
+    return `${x},${y}`;
+  };
+  return <div className="lt-chart-wrap"><svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={lang === "fr" ? "Tendance de disponibilité Lemtel" : "Lemtel availability trend"} className="w-full h-auto"><path d={`M 16 28 H ${width - 16} M 16 74 H ${width - 16} M 16 116 H ${width - 16}`} className="lt-chart-grid" /><polyline points={samples.map(point).join(" ")} fill="none" className="lt-chart-line" />{samples.map((sample, index) => { const [x, y] = point(sample, index).split(","); return <circle key={`${sample.observedAt ?? index}-${index}`} cx={x} cy={y} r="4" className={`lt-chart-point lt-chart-point-${sample.overall}`}><title>{`${safeDate(sample.observedAt, lang)} · ${sample.overall}`}</title></circle>; })}</svg><div className="flex justify-between text-[11px] lt-ink-2 mt-1"><span>{safeDate(samples[0]?.observedAt, lang)}</span><span>{safeDate(samples[samples.length - 1]?.observedAt, lang)}</span></div></div>;
 }

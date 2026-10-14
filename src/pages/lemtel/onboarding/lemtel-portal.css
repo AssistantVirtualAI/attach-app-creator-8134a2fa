@@ -60,6 +60,11 @@
 .lt-input { background: hsl(var(--lt-card) / .9); border-radius: .75rem; box-shadow: inset 0 1px 0 hsl(var(--lt-card)); }
 .lt-skeleton { background: linear-gradient(90deg, hsl(var(--lt-border) / .5), hsl(var(--lt-card)), hsl(var(--lt-border) / .5)); }
 .lt-overlay { backdrop-filter: blur(5px); }
+.lt-chart-empty { min-height: 10.5rem; display: flex; align-items: center; justify-content: center; text-align: center; padding: 1.25rem; border-radius: .85rem; border: 1px dashed hsl(var(--lt-border)); color: hsl(var(--lt-ink-2)); font-size: .82rem; background: hsl(var(--lt-surface) / .45); }
+.lt-chart-wrap { border-radius: .85rem; padding: .7rem .85rem .55rem; background: linear-gradient(180deg, hsl(var(--lt-surface) / .72), hsl(var(--lt-card))); border: 1px solid hsl(var(--lt-border)); }
+.lt-chart-grid { stroke: hsl(var(--lt-border)); stroke-width: 1; stroke-dasharray: 4 5; }
+.lt-chart-line { stroke: hsl(var(--lt-cyan)); stroke-width: 3.25; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 3px 5px hsl(var(--lt-cyan) / .26)); }
+.lt-chart-point { stroke: hsl(var(--lt-card)); stroke-width: 2; }.lt-chart-point-healthy { fill: hsl(var(--lt-green)); }.lt-chart-point-degraded { fill: hsl(var(--lt-gold)); }.lt-chart-point-unknown { fill: hsl(var(--lt-ink-2)); }
 
 @media (max-width: 767px) { .lt-main::before { background-size: 24px 24px; } .lt-card { border-radius: .9rem; } }
 @media (prefers-reduced-motion: reduce) { .lt-nav-item, .lt-card, .lt-btn, .lt-powered-by { transition: none; } .lt-skeleton { animation: none; } }

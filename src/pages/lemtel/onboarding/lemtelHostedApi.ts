@@ -166,6 +166,14 @@ export type PortalInvitation = {
 };
 export type PortalActivity = { id: string; at: string; action: string };
 export type PortalDomain = { id: string; hostname: string; status: "active" | "suspended"; verificationStatus: "verified" | "unverified"; createdAt?: string };
+export type PortalClientConnection = {
+  userId: string;
+  fullName: string;
+  email: string;
+  clientKind: "mobile" | "desktop" | "portal" | "client";
+  lastSeenAt: string;
+  authorityRevision: number;
+};
 export type PortalConfig = { downloads: { desktop?: string; windows?: string; macosApple?: string; macosIntel?: string; ios?: string; android?: string }; supportContact?: string };
 export type OperationalHealth = "healthy" | "degraded" | "unknown";
 export type LemtelOperationalStatus = {
@@ -183,6 +191,14 @@ export type LemtelOperationalStatus = {
     database: "streaming" | "rebuild_required" | "unknown";
     storage: "integrity_verified" | "sync_attention" | "rebuild_required" | "unknown";
   };
+};
+export type LemtelOperationalTrendSample = {
+  observedAt?: string;
+  overall: OperationalHealth;
+  runtime: OperationalHealth;
+  database: OperationalHealth;
+  storage: OperationalHealth;
+  standby: "hostinger_streaming_standby" | "hostinger_fenced_rebuild_required" | "unknown";
 };
 
 export function buildCreateOrganizationBody(input: {
@@ -219,10 +235,12 @@ export const portalApi = {
   listOrganizations: () => invoke<{ organizations: PortalOrganization[] }>("lemtel-onboarding-admin", { action: "list_organizations" }),
   getConfig: () => invoke<PortalConfig>("lemtel-onboarding-admin", { action: "get_config" }),
   getOperationalStatus: () => invoke<LemtelOperationalStatus>("lemtel-onboarding-admin", { action: "get_operational_status" }),
+  getOperationalTrend: () => invoke<{ samples: LemtelOperationalTrendSample[] }>("lemtel-onboarding-admin", { action: "get_operational_trend" }),
   listPeople: (organizationId: string) => invoke<{ people: PortalPerson[] }>("lemtel-onboarding-admin", { action: "list_people", organizationId }),
   listInvitations: (organizationId: string) => invoke<{ invitations: PortalInvitation[] }>("lemtel-onboarding-admin", { action: "list_invitations", organizationId }),
   listActivity: (organizationId: string) => invoke<{ events: PortalActivity[] }>("lemtel-onboarding-admin", { action: "list_activity", organizationId }),
   listDomains: (organizationId: string) => invoke<{ domains: PortalDomain[] }>("lemtel-onboarding-admin", { action: "list_domains", organizationId }),
+  listClientConnections: (organizationId: string) => invoke<{ connections: PortalClientConnection[] }>("lemtel-onboarding-admin", { action: "list_client_connections", organizationId }),
   createOrganization: (input: Parameters<typeof buildCreateOrganizationBody>[0]) =>
     invoke<{ ok: true; organization: { id: string } }>("lemtel-onboarding-admin", buildCreateOrganizationBody(input), { write: true }),
   provisionUsers: (organizationId: string, users: ProvisionedUser[]) =>

@@ -71,7 +71,16 @@ storage_replication=unknown
 if [ -r "$storage_attestation" ]; then
   storage_stamp="$(sed -n 's/^sync_timestamp_utc=//p' "$storage_attestation" | sed -n '1p')"
   if [[ "$storage_stamp" =~ ^[0-9]{8}T[0-9]{6}Z$ ]]; then
-    storage_epoch="$(date -u -d "$storage_stamp" +%s 2>/dev/null || true)"
+    storage_epoch="$(python3 - "$storage_stamp" <<'PY'
+import sys
+from datetime import datetime, timezone
+try:
+    stamp = datetime.strptime(sys.argv[1], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+    print(int(stamp.timestamp()))
+except (IndexError, ValueError):
+    pass
+PY
+)"
     now_epoch="$(date -u +%s)"
     if [[ "$storage_epoch" =~ ^[0-9]+$ ]] && [ "$storage_epoch" -le "$now_epoch" ] && [ $((now_epoch - storage_epoch)) -le 900 ]; then
       storage_replication=integrity_verified
@@ -121,7 +130,7 @@ import json
 import sys
 observed_at, overall, runtime, database, auth, rest, storage, account_recovery, standby, database_replication, storage_replication = sys.argv[1:]
 print(json.dumps({
-  "version": "lemtel_operational_status_v1",
+  "version": "lemtel_operational_status_v2",
   "observed_at": observed_at,
   "overall": overall,
   "topology": {
@@ -158,6 +167,10 @@ SET observed_at = EXCLUDED.observed_at,
     overall_status = EXCLUDED.overall_status,
     payload = EXCLUDED.payload,
     updated_at = now();
+
+INSERT INTO public.lemtel_operational_status_history (observed_at, overall_status, payload)
+VALUES ((:'"'"'payload'"'"'::jsonb ->> '"'"'observed_at'"'"')::timestamptz, :'"'"'payload'"'"'::jsonb ->> '"'"'overall'"'"', :'"'"'payload'"'"'::jsonb)
+ON CONFLICT (observed_at) DO NOTHING;
 SQL
 ' >/dev/null
 

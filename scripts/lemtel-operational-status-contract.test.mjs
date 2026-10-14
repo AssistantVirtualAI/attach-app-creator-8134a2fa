@@ -36,6 +36,7 @@ test('operational status has its own immutable offline deployment package', () =
     'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json',
     'infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql',
     'infra/lemtel-self-hosted/migrations/0007_lemtel_portal_account_authority.sql',
+    'infra/lemtel-self-hosted/migrations/0011_lemtel_operational_status_history.sql',
     'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh',
     'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-timer-enable.sh',
   ]);
@@ -52,6 +53,7 @@ test('operational status schema is Lemtel-only and denies browser table access',
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /REVOKE ALL ON TABLE public\.lemtel_operational_status FROM anon, authenticated/);
   assert.match(migration, /no credentials, IP addresses/i);
+  assert.match(read('infra/lemtel-self-hosted/migrations/0011_lemtel_operational_status_history.sql'), /REVOKE ALL ON TABLE public\.lemtel_operational_status_history FROM PUBLIC, anon, authenticated/);
   assert.doesNotMatch(migration, /planipret|pbx_/i);
 });
 
@@ -88,6 +90,8 @@ test('writer status timer is root-gated and carries no Hostinger start, promotio
 
 test('operational status is served only by the authoritative Lemtel edge function', () => {
   assert.match(edge, /get_operational_status/);
+  assert.match(edge, /get_operational_trend/);
+  assert.match(publisher, /lemtel_operational_status_history/);
   assert.match(edge, /lemtel_operational_status/);
   assert.match(edge, /accountRecovery/);
   assert.match(edge, /platformAdmin\(admin, actor\)/);

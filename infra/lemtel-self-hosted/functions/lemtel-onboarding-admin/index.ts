@@ -23,10 +23,12 @@ type RequestBody =
   | { action: "list_organizations" }
   | { action: "get_config" }
   | { action: "get_operational_status" }
+  | { action: "get_operational_trend" }
   | { action: "list_people"; organizationId: string }
   | { action: "list_invitations"; organizationId: string }
   | { action: "list_activity"; organizationId: string }
   | { action: "list_domains"; organizationId: string }
+  | { action: "list_client_connections"; organizationId: string }
   | { action: "create_domain"; organizationId: string; domain: DomainInput }
   | { action: "suspend_domain"; organizationId: string; domainId: string };
 
@@ -75,10 +77,10 @@ function userList(value: unknown, allowOwner: boolean): UserInput[] | Failure {
 
 export function validateBody(raw: unknown): RequestBody | Failure {
   if (!plainObject(raw) || typeof raw.action !== "string") return fail("invalid_body", 400);
-  if (raw.action === "list_organizations" || raw.action === "get_config" || raw.action === "get_operational_status") {
+  if (raw.action === "list_organizations" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
-  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains") {
+  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections") {
     if (!exactKeys(raw, ["action", "organizationId"])) return fail("invalid_body", 400);
     const parsedOrganizationId = organizationId(raw.organizationId);
     return isFailure(parsedOrganizationId) ? parsedOrganizationId : { action: raw.action, organizationId: parsedOrganizationId } as RequestBody;
@@ -415,6 +417,32 @@ async function listDomains(admin: any, organizationId: string) {
   })) };
 }
 
+async function listClientConnections(admin: any, organizationId: string) {
+  const { data, error } = await admin.from("lemtel_client_connection_presence")
+    .select("user_id,client_kind,last_seen_at,authority_revision")
+    .eq("organization_id", organizationId)
+    .order("last_seen_at", { ascending: false })
+    .limit(500);
+  if (error) return fail("client_connection_lookup_failed", 503);
+  const directory = await usersById(admin, (data ?? []).map((row: any) => String(row.user_id)));
+  return {
+    connections: (data ?? []).flatMap((row: any) => {
+      const user = directory.get(String(row.user_id));
+      if (!user?.email) return [];
+      const clientKind = row.client_kind === "mobile" || row.client_kind === "desktop" || row.client_kind === "portal" ? row.client_kind : "client";
+      return [{
+        userId: user.id,
+        fullName: userName(user),
+        email: user.email,
+        clientKind,
+        lastSeenAt: row.last_seen_at,
+        authorityRevision: Number.isSafeInteger(Number(row.authority_revision)) ? Number(row.authority_revision) : 0,
+      }];
+    }),
+  };
+}
+
+
 function portalConfig() {
   const supportContact = Deno.env.get("LEMTEL_SUPPORT_CONTACT")?.trim() || undefined;
   return { downloads: distributionUrls(), ...(supportContact ? { supportContact } : {}) };
@@ -490,6 +518,28 @@ async function operationalStatus(admin: any) {
   return redactedOperationalStatusFromRow(data);
 }
 
+async function operationalTrend(admin: any) {
+  const { data, error } = await admin
+    .from("lemtel_operational_status_history")
+    .select("observed_at,overall_status,payload")
+    .order("observed_at", { ascending: false })
+    .limit(48);
+  if (error) return fail("operational_trend_unavailable", 503);
+  return {
+    samples: (data ?? []).map((row: unknown) => {
+      const status = redactedOperationalStatusFromRow(row);
+      return {
+        observedAt: status.observedAt,
+        overall: status.overall,
+        runtime: status.services.runtime,
+        database: status.services.database,
+        storage: status.services.storage,
+        standby: status.topology.standby,
+      };
+    }).reverse(),
+  };
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   if (req.method !== "POST") return respond({ error: "method_not_allowed" }, 405);
@@ -513,12 +563,12 @@ export async function handler(req: Request): Promise<Response> {
     if (!(await portalAccess(admin, actor))) return respond({ error: "forbidden" }, 403);
     return respond(portalConfig());
   }
-  if (request.action === "get_operational_status") {
+  if (request.action === "get_operational_status" || request.action === "get_operational_trend") {
     if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
-    const result = await operationalStatus(admin);
+    const result = request.action === "get_operational_status" ? await operationalStatus(admin) : await operationalTrend(admin);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
-  if (request.action === "list_people" || request.action === "list_invitations" || request.action === "list_activity" || request.action === "list_domains") {
+  if (request.action === "list_people" || request.action === "list_invitations" || request.action === "list_activity" || request.action === "list_domains" || request.action === "list_client_connections") {
     if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
     const result = request.action === "list_people"
       ? await listPeople(admin, request.organizationId)
@@ -526,7 +576,9 @@ export async function handler(req: Request): Promise<Response> {
         ? await listInvitations(admin, request.organizationId)
         : request.action === "list_domains"
           ? await listDomains(admin, request.organizationId)
-          : await listActivity(admin, request.organizationId);
+          : request.action === "list_client_connections"
+            ? await listClientConnections(admin, request.organizationId)
+            : await listActivity(admin, request.organizationId);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
 

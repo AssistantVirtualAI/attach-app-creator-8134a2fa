@@ -39,7 +39,11 @@ export async function bootstrapLemtelMobileSession(
   try {
     response = await fetcher(`${BACKEND_URL}/functions/v1/lemtel-session-bootstrap`, {
       method: 'GET',
-      headers: { apikey: BACKEND_ANON_KEY, Authorization: `Bearer ${accessToken}` },
+      headers: {
+        apikey: BACKEND_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        'X-Lemtel-Client': 'mobile',
+      },
     });
   } catch {
     throw new LemtelSessionBootstrapError('bootstrap_network_error', 0);

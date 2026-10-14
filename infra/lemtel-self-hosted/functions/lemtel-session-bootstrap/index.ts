@@ -27,6 +27,17 @@ export async function handler(req: Request): Promise<Response> {
     const revision = Number(entry.account_authority_revision);
     return Number.isSafeInteger(revision) && revision > current ? revision : current;
   }, 0);
+  // Presence is observational only: authentication and authorization remain entirely
+  // determined by the authoritative context above. No device identifier or network
+  // metadata is accepted or exposed.
+  const requestedClient = (req.headers.get("X-Lemtel-Client") ?? "").toLowerCase();
+  const clientKind = requestedClient === "mobile" || requestedClient === "desktop" || requestedClient === "portal"
+    ? requestedClient
+    : "client";
+  await admin.rpc("lemtel_record_client_connection", {
+    p_user_id: user.id,
+    p_client_kind: clientKind,
+  }).catch(() => undefined);
   return respond({
     user: { id: user.id, email: user.email, displayName: String(user.user_metadata?.full_name || user.email), locale: user.user_metadata?.locale === "en" ? "en" : "fr" },
     organizations: context.map((entry: Record<string, unknown>) => ({

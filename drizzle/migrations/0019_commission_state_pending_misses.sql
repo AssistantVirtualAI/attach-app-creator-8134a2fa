@@ -1,0 +1,1 @@
+ALTER TABLE public.planipret_commission_source_state ADD COLUMN IF NOT EXISTS pending_misses jsonb NOT NULL DEFAULT '[]'::jsonb;

@@ -3,7 +3,8 @@
  * authenticated viewer and selected report period.  Maestro payload changes do
  * not enter this key: a manual refresh is required to regenerate before 24 h.
  */
-export const COMMISSION_INSIGHTS_TTL_MS = 24 * 60 * 60 * 1000;
+// Keyed on the commission data version: unchanged figures => cached forever.
+export const COMMISSION_INSIGHTS_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 export function commissionInsightsCacheScope(input: {
   userId: string;
@@ -16,9 +17,11 @@ export function commissionInsightsCacheScope(input: {
   window?: unknown;
   agent?: unknown;
   lenderFilter?: unknown;
+  dataVersion?: string | null;
 }) {
   return JSON.stringify({
-    version: 1,
+    version: 2,
+    data_version: input.dataVersion ?? null,
     user_id: input.userId,
     lang: input.lang,
     scope: input.scope,

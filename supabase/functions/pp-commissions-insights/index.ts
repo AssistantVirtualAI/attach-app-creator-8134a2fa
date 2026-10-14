@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { claudeText } from "../_shared/anthropic.ts";
 import { insightsCacheKey, readInsightsCache, writeInsightsCache } from "../_shared/insights-cache.ts";
+import { commissionDataVersion } from "../_shared/commission-version.ts";
 import { COMMISSION_INSIGHTS_TTL_MS, commissionInsightsCacheScope } from "../_shared/commission-insights-cache.ts";
 
 /**
@@ -94,10 +95,24 @@ Deno.serve(async (req) => {
       window: metrics.window,
       agent: metrics.agent,
       lenderFilter: metrics.lenderFilter,
+      dataVersion: await commissionDataVersion(admin),
     });
     const cacheKey = await insightsCacheKey("commissions-insights", cacheScope);
     const cached = force ? null : await readInsightsCache(cacheKey, COMMISSION_INSIGHTS_TTL_MS);
     if (cached) return j({ ...(cached as object), cached: true });
+
+    // Single-flight: concurrent openings of the same view share one AI call.
+    const lockKey = `lock:${cacheKey}`;
+    const { data: lock } = await admin.from("ai_insights_cache").select("created_at").eq("cache_key", lockKey).maybeSingle();
+    if (lock && Date.now() - new Date((lock as any).created_at).getTime() < 90_000) {
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const done = await readInsightsCache(cacheKey, COMMISSION_INSIGHTS_TTL_MS);
+        if (done) return j({ ...(done as object), cached: true });
+      }
+      return j({ success: false, error: "analyse_en_cours" }, 409);
+    }
+    await admin.from("ai_insights_cache").upsert({ cache_key: lockKey, payload: {}, created_at: new Date().toISOString() });
 
     const text = await claudeText(SYSTEM, userText, {
       cacheTtl: "1h",
@@ -106,10 +121,10 @@ Deno.serve(async (req) => {
       temperature: 0.3,
       label: "commissions-insights",
     });
-    if (!text) return j({ success: false, error: "AI indisponible" }, 502);
+    if (!text) { await admin.from("ai_insights_cache").delete().eq("cache_key", lockKey); return j({ success: false, error: "AI indisponible" }, 502); }
 
     const parsed = extractJson(text);
-    if (!parsed) return j({ success: false, error: "Réponse IA illisible" }, 502);
+    if (!parsed) { await admin.from("ai_insights_cache").delete().eq("cache_key", lockKey); return j({ success: false, error: "Réponse IA illisible" }, 502); }
 
     const insights = Array.isArray(parsed.insights) ? parsed.insights.slice(0, 5).map((i: any) => ({
       category: ["growth", "lenders", "products", "risk", "seasonality"].includes(String(i?.category)) ? String(i.category) : "growth",
@@ -122,6 +137,7 @@ Deno.serve(async (req) => {
 
     const result = { success: true, summary: String(parsed.summary ?? "").slice(0, 600), insights };
     await writeInsightsCache(cacheKey, result);
+    await admin.from("ai_insights_cache").delete().eq("cache_key", lockKey);
     return j(result);
   } catch (e: any) {
     console.error("pp-commissions-insights error", e);

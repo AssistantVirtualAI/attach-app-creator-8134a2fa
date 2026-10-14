@@ -9,6 +9,7 @@
 //   - role "admin":  may pass an explicit users_id, or omit it for all brokers.
 // Any other role is rejected with 403.
 
+import { commissionDataVersion } from "../_shared/commission-version.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
@@ -849,7 +850,7 @@ function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r
 }
 // ---- Server-side snapshot cache (fresh 15 min, stale served instantly) ----
 const FRESH_MS = 15 * 60_000;
-const FORCE_MIN_MS = 60_000;
+const FORCE_MIN_MS = 2 * 60_000;
 const CACHEABLE = new Set(["summary", "pending", "analytics", "deposits", "by_agent", "agents", "institutions"]);
 
 async function sha(text: string) {
@@ -868,9 +869,10 @@ async function runFresh(req: Request, bodyText: string) {
   let data: any = null; try { data = JSON.parse(text); } catch { /* */ }
   return { r, text, data };
 }
-async function store(admin: any, key: string, userId: string, body: any, data: any) {
-  await admin.from("planipret_commission_snapshots").upsert({ cache_key: key, user_id: userId, request_body: body, payload: data, fetched_at: new Date().toISOString(), last_accessed_at: new Date().toISOString(), refreshing_until: null });
-  await notifyUpdated();
+async function store(admin: any, key: string, userId: string, body: any, data: any, notify = true) {
+  const data_version = await commissionDataVersion(admin);
+  await admin.from("planipret_commission_snapshots").upsert({ cache_key: key, user_id: userId, request_body: body, payload: data, data_version, fetched_at: new Date().toISOString(), last_accessed_at: new Date().toISOString(), refreshing_until: null });
+  if (notify) await notifyUpdated();
 }
 // Realtime nudge so open portal/app screens refetch their own (scoped)
 // snapshot. Payload carries no figures, ids or names.
@@ -905,18 +907,20 @@ Deno.serve(async (req) => {
     }
     // Safe to trigger from the scheduler: it only refreshes existing, already
     // authorized snapshots older than ~14 min, bounded to 12 per run.
-    const cutoff = new Date(Date.now() - FRESH_MS + 60_000).toISOString();
-    const { data: rows } = await admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body")
-      .lt("fetched_at", cutoff).gt("last_accessed_at", new Date(Date.now() - 2 * 3_600_000).toISOString())
-      .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("fetched_at").limit(12);
+    const version = await commissionDataVersion(admin);
+    let wq = admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body");
+    if (version) wq = wq.or(`data_version.is.null,data_version.neq.${version}`);
+    const { data: rows } = await wq.gt("last_accessed_at", new Date(Date.now() - 2 * 3_600_000).toISOString())
+      .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("last_accessed_at", { ascending: false }).limit(12);
     let ok = 0, failed = 0;
     await Promise.allSettled((rows ?? []).map(async (row: any) => {
       await admin.from("planipret_commission_snapshots").update({ refreshing_until: new Date(Date.now() + 10 * 60_000).toISOString() }).eq("cache_key", row.cache_key);
       const h = new Headers({ Authorization: `Bearer ${SERVICE_KEY}`, "x-ava-internal-user-id": row.user_id, "Content-Type": "application/json" });
       const { data } = await runFresh(new Request(req.url, { method: "POST", headers: h }), JSON.stringify(row.request_body));
-      if (data?.ok === true) { await store(admin, row.cache_key, row.user_id, row.request_body, data); ok++; }
+      if (data?.ok === true) { await store(admin, row.cache_key, row.user_id, row.request_body, data, false); ok++; }
       else { failed++; await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", row.cache_key); }
     }));
+    if (ok) await notifyUpdated();
     return new Response(JSON.stringify({ ok: true, refreshed: ok, failed }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
@@ -930,11 +934,15 @@ Deno.serve(async (req) => {
 
   const norm = stableBody(body);
   const key = await sha(`${userId}|${JSON.stringify(norm)}`);
-  const { data: snap } = await admin.from("planipret_commission_snapshots").select("payload,fetched_at,refreshing_until").eq("cache_key", key).maybeSingle();
+  const { data: snap } = await admin.from("planipret_commission_snapshots").select("payload,fetched_at,refreshing_until,data_version").eq("cache_key", key).maybeSingle();
   const age = snap ? Date.now() - new Date(snap.fetched_at).getTime() : Infinity;
   const force = body?.force === true || body?.refresh === true;
+  // Same data version as the last change probe => figures are unchanged:
+  // serve the stored copy with no Maestro call, whatever its age.
+  const version = await commissionDataVersion(admin);
+  const sameVersion = !!snap && !!version && snap.data_version === version;
 
-  if (snap && (age < (force ? FORCE_MIN_MS : FRESH_MS))) {
+  if (snap && (force ? age < FORCE_MIN_MS : (sameVersion || age < FRESH_MS))) {
     admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", key).then(() => {});
     return out(snap.payload, true, snap.fetched_at);
   }

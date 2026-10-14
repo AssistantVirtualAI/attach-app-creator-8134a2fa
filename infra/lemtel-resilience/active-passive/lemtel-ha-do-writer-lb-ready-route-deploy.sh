@@ -9,7 +9,7 @@ bundle="${LEMTEL_L7_READY_BUNDLE:-/home/lemtelops/lemtel-l7-ready-deployment}"
 refresh_source="$bundle/lemtel-ha-do-writer-lb-ready-refresh.sh"
 timer_source="$bundle/lemtel-ha-do-writer-lb-ready-timer-enable.sh"
 manifest="$bundle/manifest.sha256"
-site_line='{$PROXY_DOMAIN}, lemtel.assistantvirtualai.com {'
+canonical_host='lemtel.assistantvirtualai.com'
 route_marker='# LEMTEL_LOAD_BALANCER_READY_V1'
 caddy_container='supabase-caddy'
 lock_file='/var/lock/lemtel-ha-do-writer-l7-route.lock'
@@ -22,7 +22,16 @@ caddy_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/
 [ -n "$caddy_mount" ] || fail caddy_mount_missing
 caddyfile="$caddy_mount/Caddyfile"
 [ -f "$caddyfile" ] || fail caddyfile_missing
-[ "$(grep -Fxc "$site_line" "$caddyfile" || true)" = 1 ] || fail canonical_site_unexpected
+site_line="$(awk -v canonical_host="$canonical_host" '
+  /^[[:space:]]*#/ { next }
+  index($0, canonical_host) && $0 ~ /[{][[:space:]]*$/ {
+    candidate = $0
+    matches += 1
+    if (matches == 1) print candidate
+  }
+  END { if (matches != 1) exit 1 }
+' "$caddyfile")" || fail canonical_site_unexpected
+[ -n "$site_line" ] || fail canonical_site_unexpected
 ! grep -Fq "$route_marker" "$caddyfile" || fail route_already_present
 exec 9>"$lock_file"; flock -n 9 || fail concurrent_deploy
 backup_dir="/var/lib/lemtel-ha/l7-ready/backups/$(date -u +%Y%m%dT%H%M%SZ)"; install -d -o root -g root -m 0700 "$backup_dir"

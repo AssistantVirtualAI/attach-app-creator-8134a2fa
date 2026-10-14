@@ -98,11 +98,15 @@ test('Desktop and mobile use the Lemtel recovery endpoint instead of a reset-lin
 
 test('session bootstrap exposes no telephony secrets before provisioning', () => {
   const source = read('infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts');
+  const sql = read('infra/lemtel-self-hosted/migrations/0009_lemtel_session_bootstrap_authority.sql');
   const executable = source.replace(/^\s*\/\/.*$/gm, '');
   assert.match(source, /first_password_change_required/);
-  assert.match(source, /organizationById/);
-  assert.match(source, /from\("lemtel_organizations"\)/);
-  assert.doesNotMatch(executable, /lemtel_organizations!inner/);
+  assert.match(source, /rpc\("lemtel_session_bootstrap_context"/);
+  assert.match(sql, /INNER JOIN public\.lemtel_organizations/);
+  assert.match(sql, /SECURITY DEFINER/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION public\.lemtel_session_bootstrap_context/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.lemtel_session_bootstrap_context\(uuid\)\s+TO service_role/);
+  assert.doesNotMatch(sql, /planipret|pbx|fusionpbx|sip_|wss/i);
   assert.match(source, /telephony: \{ status: "not_provisioned" \}/);
   assert.doesNotMatch(executable, /sip_password|wss_url|\bturn\b|fusionpbx/i);
 });

@@ -19,33 +19,27 @@ export async function handler(req: Request): Promise<Response> {
   if (userError || !user?.id || !user.email) return respond({ error: "unauthorized" }, 401);
   if (user.app_metadata?.lemtel_onboarding_required === true) return respond({ error: "first_password_change_required" }, 409);
   if (user.app_metadata?.lemtel_email_only_signin !== true) return respond({ error: "lemtel_email_only_account_required" }, 403);
-  // Do not rely on an embedded PostgREST relationship here. Fresh self-hosted
-  // schemas can briefly have a stale relationship cache immediately after a
-  // migration even though both Lemtel-only tables and the membership are valid.
-  const { data: memberships, error: membershipError } = await admin
-    .from("lemtel_organization_memberships")
-    .select("organization_id,role")
-    .eq("user_id", user.id)
-    .eq("status", "active");
-  if (membershipError || !memberships?.length) return respond({ error: "lemtel_membership_required" }, 403);
-  const organizationIds = memberships.map((membership: Record<string, unknown>) => String(membership.organization_id));
-  const { data: organizations, error: organizationError } = await admin
-    .from("lemtel_organizations")
-    .select("id,display_name,slug,status,account_authority_revision")
-    .in("id", organizationIds)
-    .eq("status", "active");
-  if (organizationError || !organizations?.length) return respond({ error: "lemtel_active_organization_required" }, 403);
-  const organizationById = new Map(organizations.map((organization: Record<string, unknown>) => [String(organization.id), organization]));
-  const activeMemberships = memberships.filter((membership: Record<string, unknown>) => organizationById.has(String(membership.organization_id)));
-  if (!activeMemberships.length) return respond({ error: "lemtel_active_organization_required" }, 403);
-  const authorityRevision = activeMemberships.reduce((current: number, membership: Record<string, unknown>) => {
-    const organization = organizationById.get(String(membership.organization_id));
-    const revision = Number((organization as Record<string, unknown> | undefined)?.account_authority_revision);
+  // Resolve membership and organization status atomically in PostgreSQL. This avoids
+  // transient multi-request PostgREST inconsistencies after a self-hosted schema reload.
+  const { data: context, error: contextError } = await admin.rpc("lemtel_session_bootstrap_context", { p_user_id: user.id });
+  if (contextError || !context?.length) return respond({ error: "lemtel_active_organization_required" }, 403);
+  const authorityRevision = context.reduce((current: number, entry: Record<string, unknown>) => {
+    const revision = Number(entry.account_authority_revision);
     return Number.isSafeInteger(revision) && revision > current ? revision : current;
   }, 0);
   return respond({
     user: { id: user.id, email: user.email, displayName: String(user.user_metadata?.full_name || user.email), locale: user.user_metadata?.locale === "en" ? "en" : "fr" },
-    organizations: activeMemberships.map((membership: Record<string, unknown>) => ({ organizationId: membership.organization_id, role: membership.role, organization: organizationById.get(String(membership.organization_id)) })),
+    organizations: context.map((entry: Record<string, unknown>) => ({
+      organizationId: entry.organization_id,
+      role: entry.membership_role,
+      organization: {
+        id: entry.organization_id,
+        display_name: entry.organization_display_name,
+        slug: entry.organization_slug,
+        status: "active",
+        account_authority_revision: entry.account_authority_revision,
+      },
+    })),
     authority: { policy: "portal_only_active_membership", revision: authorityRevision },
     telephony: { status: "not_provisioned" },
   });

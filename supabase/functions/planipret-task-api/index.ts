@@ -156,9 +156,11 @@ function makeListFetch(token: string | null) {
     // this id appears, instead of stopping at the first non-empty page.
     const wanted = String(opts.findTaskId ?? "").trim();
 
+    // The sweeper mirrors open work only: thousands of completed tasks pushed
+    // the full scan over the Edge resource limit (546) for large accounts.
     const statuses = opts.status && LIST_STATUSES.has(opts.status)
       ? [opts.status]
-      : ["pending", "open", "complete"];
+      : opts.fullSync ? ["pending", "open"] : ["pending", "open", "complete"];
     // Phone/portal lists must return before the Edge CPU budget is exhausted.
     // The hourly synchronizer is the sole caller allowed a broader bounded
     // scan; interactive requests receive the latest page quickly, then their

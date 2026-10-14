@@ -56,7 +56,9 @@ async function setDeliveryState(admin: any, id: string, state: "sent" | "failed"
   await admin.from("lemtel_password_reset_delivery_attempts").update({
     state,
     attempted_at: timestamp,
-    ...(state === "sent" ? { sent_at: timestamp, provider_message_id: providerMessageId ?? null } : { failed_at: timestamp, failure_code: failureCode ?? "provider_delivery_failed" }),
+    ...(state === "sent"
+      ? { sent_at: timestamp, provider_message_id: providerMessageId ?? null }
+      : { failed_at: timestamp, failure_code: failureCode ?? "provider_delivery_failed", provider_message_id: providerMessageId ?? null }),
   }).eq("id", id);
 }
 
@@ -90,19 +92,8 @@ export async function handler(req: Request): Promise<Response> {
   if (claimError || typeof deliveryAttempt !== "string" || !deliveryAttempt) return accepted();
 
   const temporaryPassword = randomPassword();
-  const { data: userResult } = await admin.auth.admin.getUserById(recipient.user_id);
-  const existingMetadata = userResult?.user?.app_metadata ?? {};
-  const { error: updateError } = await admin.auth.admin.updateUserById(recipient.user_id, {
-    password: temporaryPassword,
-    app_metadata: { ...existingMetadata, lemtel_onboarding_required: true, lemtel_email_only_signin: true },
-  });
-  if (updateError) {
-    await setDeliveryState(admin, deliveryAttempt, "failed", "auth_password_rotation_failed");
-    await admin.rpc("lemtel_release_failed_password_reset", { p_user_id: recipient.user_id });
-    return accepted();
-  }
-
   const message = passwordMessage({ locale: recipient.locale, displayName: recipient.display_name || email.split("@")[0], temporaryPassword });
+  let providerMessageId: string | undefined;
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -111,11 +102,30 @@ export async function handler(req: Request): Promise<Response> {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error("provider_delivery_failed");
-    await setDeliveryState(admin, deliveryAttempt, "sent", undefined, typeof payload?.id === "string" ? payload.id : undefined);
+    providerMessageId = typeof payload?.id === "string" ? payload.id : undefined;
   } catch {
     await setDeliveryState(admin, deliveryAttempt, "failed", "provider_delivery_failed");
     await admin.rpc("lemtel_release_failed_password_reset", { p_user_id: recipient.user_id });
+    return accepted();
   }
+
+  // Never replace a working password before the transactional provider accepts
+  // its delivery request. A provider refusal must leave the existing sign-in
+  // credential usable; an accepted email paired with a rare Auth failure is
+  // auditable and retryable without locking the user out.
+  const { data: userResult } = await admin.auth.admin.getUserById(recipient.user_id);
+  const existingMetadata = userResult?.user?.app_metadata ?? {};
+  const { error: updateError } = await admin.auth.admin.updateUserById(recipient.user_id, {
+    password: temporaryPassword,
+    app_metadata: { ...existingMetadata, lemtel_onboarding_required: true, lemtel_email_only_signin: true },
+  });
+  if (updateError) {
+    await setDeliveryState(admin, deliveryAttempt, "failed", "auth_password_rotation_failed_after_provider_accepted", providerMessageId);
+    await admin.rpc("lemtel_release_failed_password_reset", { p_user_id: recipient.user_id });
+    return accepted();
+  }
+
+  await setDeliveryState(admin, deliveryAttempt, "sent", undefined, providerMessageId);
 
   return accepted();
 }

@@ -391,7 +391,7 @@ async function handler(req: Request): Promise<Response> {
           const c = String(r.contract_id ?? r.number ?? "").trim();
           const loan = num(r.loan_amount ?? r.loan_amt ?? 0);
           const d = String(r.date_trans ?? "");
-          if (c && loan > 0 && String(r.commission_type ?? "").toLowerCase() === "base" && /^\d{4}-\d{2}-\d{2}/.test(d) && !d.startsWith("0000")) { b.contracts.set(c, loan); b.vols.set(`${c}|${loan}`, loan); }
+          if (c && loan > 0 && String(r.commission_type ?? "").toLowerCase() === "base" && /^\d{4}-\d{2}-\d{2}/.test(d) && !d.startsWith("0000")) { b.contracts.set(`${c}|${loan}`, loan); b.vols.set(`${c}|${loan}`, loan); }
         };
         for (const r of rows as any[]) {
           const pid = r.primary_broker_id != null ? String(r.primary_broker_id) : null;
@@ -435,7 +435,7 @@ async function handler(req: Request): Promise<Response> {
             const d = String(r.date_trans ?? "");
             if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
             if (!c || loan <= 0) continue;
-            contracts.add(`${receiver}|${c}`); vol.set(`${receiver}|${c}|${loan}`, loan);
+            contracts.add(`${receiver}|${c}|${loan}`); vol.set(`${receiver}|${c}|${loan}`, loan);
           }
           summary.deal_count = contracts.size;
           summary.total_loan_volume = r2([...vol.values()].reduce((t, v) => t + v, 0));
@@ -652,7 +652,7 @@ async function handler(req: Request): Promise<Response> {
         const loan = num(r.loan_amt); const c = String(r.number ?? "").trim();
         if (!c || loan <= 0) continue;
         const e = per.get(rec) ?? { files: new Set<string>(), vol: new Map<string, number>() };
-        e.files.add(c); e.vol.set(`${c}|${loan}`, loan); per.set(rec, e);
+        e.files.add(`${c}|${loan}`); e.vol.set(`${c}|${loan}`, loan); per.set(rec, e);
       }
       const out = new Map<string, { files: number; volume: number }>();
       let files = 0, volume = 0;
@@ -767,7 +767,7 @@ async function handler(req: Request): Promise<Response> {
             const amt = num(r.amount); const n = String(r.number ?? "");
             const vol = unique_volume ? num(r.loan_amt) : 0;
             const isBase = String((r as any).commission_type ?? "base").toLowerCase() === "base" && Number((r as any).is_adjustment) !== 1 && num(r.loan_amt) > 0;
-            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { const k = `${n}|${num(r.loan_amt)}`; if (!x.vk.has(k)) { x.vk.add(k); x.volume += num(r.loan_amt); } x.files.add(n); } };
+            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { const k = `${n}|${num(r.loan_amt)}`; if (!x.vk.has(k)) { x.vk.add(k); x.volume += num(r.loan_amt); } x.files.add(k); } };
             apply(b);
             if (b === team) { const m = mem.get(t) ?? { name: String(target).trim(), b: mk() }; apply(m.b); mem.set(t, m); }
           }
@@ -822,7 +822,7 @@ async function handler(req: Request): Promise<Response> {
 
 // Month buckets shared by paid and pending (same rule as the cards):
 // commission = every dated row; files/volume = receiver's own base rows,
-// dated, positive loan, one count per contract, volume per contract+loan.
+// dated, positive loan, one count per contract+loan tranche (same key as volume).
 function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r: any) => string | null; skip?: (r: any) => boolean }) {
   const m = new Map<string, { month: string; commission: number; files: Set<string>; vol: Map<string, number> }>();
   for (const r of rows) {
@@ -838,7 +838,7 @@ function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r
     const loan = Number(r.loan_amt ?? r.loan_amount ?? 0) || 0;
     const c = String(r.number ?? r.contract_id ?? "").trim();
     if (!c || loan <= 0) continue;
-    b.files.add(`${rec}|${c}`); b.vol.set(`${rec}|${c}|${loan}`, loan);
+    b.files.add(`${rec}|${c}|${loan}`); b.vol.set(`${rec}|${c}|${loan}`, loan);
   }
   return [...m.values()].sort((a, b) => a.month.localeCompare(b.month)).map((b) => ({
     month: b.month, commission: Math.round(b.commission * 100) / 100, files: b.files.size,

@@ -7,7 +7,13 @@ function mapContactsStatus(value: string | undefined | null): PermStatus {
   return "prompt";
 }
 
-export async function getContactsPermissionStatus(): Promise<PermStatus> {
+/**
+ * Raw permission read — never triggers the AVA sync. `listDeviceContacts()`
+ * uses this one: routing it through `getContactsPermissionStatus()` created an
+ * infinite mutual recursion (status → sync → list → status → …) that flooded
+ * the native bridge with `getContacts` / `checkPermissions` calls at boot.
+ */
+async function readContactsPermission(): Promise<PermStatus> {
   let status: PermStatus = "unavailable";
   try {
     if (!(await isNative())) return "unavailable";
@@ -16,9 +22,14 @@ export async function getContactsPermissionStatus(): Promise<PermStatus> {
     status = mapContactsStatus(check.contacts);
   } catch {
     status = "denied";
-  } finally {
-    await setPref("perm_contacts_v1", status);
   }
+  return status;
+}
+
+export async function getContactsPermissionStatus(): Promise<PermStatus> {
+  const status = await readContactsPermission();
+  await setPref("perm_contacts_v1", status);
+  if (status === "granted") void syncDeviceContactsToServer();
   return status;
 }
 
@@ -40,6 +51,7 @@ export async function ensureContacts(): Promise<PermStatus> {
     }
   } finally {
     await setPref("perm_contacts_v1", status);
+    if (status === "granted") void syncDeviceContactsToServer();
   }
   return status;
 }
@@ -63,7 +75,7 @@ export type NativeContactEntry = {
 
 export async function listDeviceContacts(): Promise<NativeContactEntry[]> {
   try {
-    if ((await getContactsPermissionStatus()) !== "granted") return [];
+    if ((await readContactsPermission()) !== "granted") return [];
     const { Contacts } = await import("@capacitor-community/contacts");
     const res = await Contacts.getContacts({
       projection: { name: true, phones: true, emails: true, organization: true },
@@ -85,5 +97,69 @@ export async function listDeviceContacts(): Promise<NativeContactEntry[]> {
     }).filter((c) => c.display_name || c.phone || c.email);
   } catch {
     return [];
+  }
+}
+
+/**
+ * Uploads the device address book to `planipret_contacts` so AVA (chatbot and
+ * ElevenLabs voice agent) can find people by first name, last name or number.
+ * Runs at most once every 12h, silently, and only when the user granted the
+ * Contacts permission. Can be disabled from Settings.
+ */
+const SYNC_KEY = "pp:contacts:lastDeviceSync";
+const SYNC_TTL_MS = 12 * 60 * 60 * 1000;
+const OPT_OUT_KEY = "pp:contacts:avaSyncDisabled";
+
+export function isDeviceContactSyncEnabled(): boolean {
+  try { return localStorage.getItem(OPT_OUT_KEY) !== "1"; } catch { return true; }
+}
+
+export function setDeviceContactSyncEnabled(enabled: boolean) {
+  try {
+    if (enabled) localStorage.removeItem(OPT_OUT_KEY);
+    else localStorage.setItem(OPT_OUT_KEY, "1");
+  } catch { /* ignore */ }
+}
+
+let syncInFlight: Promise<number> | null = null;
+
+export async function syncDeviceContactsToServer(force = false): Promise<number> {
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = runDeviceContactSync(force).finally(() => { syncInFlight = null; });
+  return syncInFlight;
+}
+
+async function runDeviceContactSync(force: boolean): Promise<number> {
+  try {
+    if (!isDeviceContactSyncEnabled()) return 0;
+    if (!force) {
+      const last = Number(localStorage.getItem(SYNC_KEY) ?? 0);
+      if (last && Date.now() - last < SYNC_TTL_MS) return 0;
+    }
+    const entries = await listDeviceContacts();
+    const contacts = entries
+      .filter((c) => c.phone)
+      .map((c) => ({
+        external_id: c.id,
+        full_name: c.display_name || `${c.first_name} ${c.last_name}`.trim(),
+        phone: c.phone,
+        email: c.email || null,
+        company: c.company || null,
+      }));
+    // Un carnet vide est un état valide : il avance le TTL, sans masquer
+    // une erreur de réseau ou de permission qui doit pouvoir être réessayée.
+    if (!contacts.length) {
+      try { localStorage.setItem(SYNC_KEY, String(Date.now())); } catch { /* ignore */ }
+      return 0;
+    }
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { error } = await supabase.functions.invoke("pp-contacts-upsert", {
+      body: { contacts, source: "device" },
+    });
+    if (error) return 0;
+    try { localStorage.setItem(SYNC_KEY, String(Date.now())); } catch { /* ignore */ }
+    return contacts.length;
+  } catch {
+    return 0;
   }
 }

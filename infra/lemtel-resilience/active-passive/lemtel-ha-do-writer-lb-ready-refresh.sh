@@ -15,9 +15,17 @@ fail() {
 [ "${LEMTEL_HA_ROLE:-}" = 'digitalocean_promoted_writer' ] || fail invalid_role
 
 caddy_container='supabase-caddy'
-db_container='supabase-db'
-auth_container='supabase-auth'
 storage_timer='lemtel-ha-do-writer-storage-sync.timer'
+resolve_runtime_container() {
+  local image_pattern="$1"
+  local -a candidates=()
+  mapfile -t candidates < <(docker ps -a --format '{{.Names}}|{{.Image}}' | awk -F'|' -v pattern="$image_pattern" '$2 ~ pattern { print $1 }')
+  [ "${#candidates[@]}" -eq 1 ] && printf '%s' "${candidates[0]}"
+}
+db_container="$(resolve_runtime_container '(^|/)postgres(:|$)|supabase/postgres(:|$)' || true)"
+auth_container="$(resolve_runtime_container '(^|/)gotrue(:|$)|supabase/gotrue(:|$)' || true)"
+[ -n "$db_container" ] || fail database_container_unresolved
+[ -n "$auth_container" ] || fail auth_container_unresolved
 storage_attestation='/var/lib/lemtel-ha/storage-sync-manifests/last-success'
 max_storage_freshness_seconds=900
 marker_name='lemtel-lb-ready'

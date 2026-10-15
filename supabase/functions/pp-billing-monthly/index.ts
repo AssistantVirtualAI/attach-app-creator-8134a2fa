@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({}));
   const action = String(body?.action ?? "");
-  if (!["sync", "preview", "monthly"].includes(action)) return json({ error: "invalid_action" }, 400);
+  if (!["sync", "preview", "monthly", "test_send"].includes(action)) return json({ error: "invalid_action" }, 400);
   if (isCron && action !== "monthly") return json({ error: "forbidden" }, 403);
 
   const sync = await syncItems(admin);
@@ -106,6 +106,22 @@ Deno.serve(async (req) => {
     const start = monthStart(now.getUTCFullYear(), now.getUTCMonth());
     const end = monthStart(now.getUTCFullYear(), now.getUTCMonth() + 1);
     return json({ sync, report: await report(admin, start, end) });
+  }
+
+  if (action === "test_send") {
+    const start = monthStart(now.getUTCFullYear(), now.getUTCMonth());
+    const end = monthStart(now.getUTCFullYear(), now.getUTCMonth() + 1);
+    const rep = await report(admin, start, end);
+    const to = RECIPIENTS[0];
+    try {
+      const r = await sendTemplateEmail("planipret-monthly-billing", to, {
+        templateData: { report: rep },
+        idempotencyKey: `billing-test-${Date.now()}`,
+      });
+      return json({ test: true, sent: r.sent, reason: r.sent ? undefined : r.reason });
+    } catch (e) {
+      return json({ test: true, sent: false, reason: (e as any)?.code ?? "error" }, 502);
+    }
   }
 
   // monthly: previous month

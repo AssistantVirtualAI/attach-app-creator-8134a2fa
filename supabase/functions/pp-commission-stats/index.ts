@@ -130,8 +130,11 @@ Deno.serve(async (req) => {
     // Stale-while-revalidate: an older validated snapshot is shown instantly
     // while a single background refresh rebuilds it (never a long wait).
     const STALE_MS = 7 * 24 * 60 * 60_000;
+    // A refresh request never blocks the screen: when a snapshot exists it is
+    // served instantly and rebuilt in the background (the global rebuild is
+    // too heavy to run while the user waits).
     const force = body?.force === true || body?.refresh === true;
-    const { data: snap } = force ? { data: null as any } : await admin
+    const { data: snap } = await admin
       .from("planipret_commission_snapshots")
       .select("payload,fetched_at,refreshing_until,data_version")
       .eq("cache_key", cacheKey)
@@ -141,7 +144,7 @@ Deno.serve(async (req) => {
       const age = Date.now() - new Date(snap.fetched_at).getTime();
       const version = await commissionDataVersion(admin);
       const sameVersion = !!version && snap.data_version === version;
-      if (sameVersion || age < FRESH_MS) {
+      if (force ? age < 2 * 60_000 : (sameVersion || age < FRESH_MS)) {
         admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", cacheKey).then(() => {});
         return json({ ...snap.payload, cache: { cached: true, stale: false, fetched_at: snap.fetched_at } });
       }

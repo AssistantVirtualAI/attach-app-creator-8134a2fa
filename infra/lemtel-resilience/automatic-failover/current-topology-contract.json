@@ -1,0 +1,58 @@
+{
+  "contract_version": "lemtel_current_ha_topology_v1",
+  "scope": "current_topology_readiness_only_no_remote_activation",
+  "current_topology": {
+    "writer": "do_writer",
+    "standby": "hostinger_private_hot_standby",
+    "postgresql": {
+      "replication": "synchronous",
+      "standby_state": "recovery_streaming",
+      "public_listener": false
+    },
+    "storage_integrity": {
+      "required": true,
+      "dual_durable_write_acknowledgement": true,
+      "immutable_runtime_artifact_staged": true
+    },
+    "hostinger_runtime": {
+      "encrypted_staged": true,
+      "running": false
+    }
+  },
+  "cloudflare": {
+    "monitor_present": true,
+    "do_pool_present": true,
+    "hostinger_pool_present": true,
+    "load_balancer_present": false,
+    "routing_configured": false,
+    "load_balancer_priority_when_authorized": [
+      "do_writer",
+      "hostinger_private_hot_standby"
+    ],
+    "monitor_never_promotes": true
+  },
+  "fail_closed_gates": {
+    "do_writer_provider_fence_attestation": false,
+    "hostinger_promotion_drill": false,
+    "cloudflare_load_balancer_and_routing": false,
+    "reverse_failback_drill": false,
+    "mobile_retry_validation": false,
+    "single_writer_evidence": false
+  },
+  "activation": {
+    "automatic_provider_fencing": false,
+    "automatic_promotion": false,
+    "automatic_runtime_start": false,
+    "automatic_traffic_routing": false,
+    "automatic_failback": false
+  },
+  "boundaries": {
+    "single_writer_only": true,
+    "public_postgres_listener": false,
+    "provider_api_contact": false,
+    "planipret_change": false,
+    "avastatistic_change": false,
+    "fusionpbx_or_telephony_change": false,
+    "legacy_inverse_role_scripts_automate_current_topology": false
+  }
+}

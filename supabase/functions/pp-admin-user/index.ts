@@ -366,6 +366,8 @@ Deno.serve(async (req) => {
         organization_id: profile.organization_id,
         email,
         full_name,
+        first_name: String(full_name).trim().split(/\s+/)[0] || null,
+        last_name: String(full_name).trim().split(/\s+/).slice(1).join(" ") || null,
         extension: ns_extension,
         ns_extension,
         ns_domain: NS_DEFAULT_DOMAIN,

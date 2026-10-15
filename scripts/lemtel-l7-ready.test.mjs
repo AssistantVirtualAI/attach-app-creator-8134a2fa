@@ -9,6 +9,11 @@ const deploy=readFileSync(resolve(root,'infra/lemtel-resilience/active-passive/l
 test('L7 readiness is writer-only and content-free',()=>{
   for (const expected of ['digitalocean_promoted_writer','database_not_writer','database_streaming_absent','storage_attestation_stale','lemtel-ha-do-writer-storage-sync.timer','printf \'ready\\n\'','automatic_traffic_failover_enabled=false']) assert.match(refresh,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   assert.doesNotMatch(refresh,/FUSIONPBX|SIP_|WSS|TURN|POSTGRES_PASSWORD|SERVICE_ROLE|Bearer/i);
+  assert.match(refresh,/resolve_runtime_container/);
+  assert.match(refresh,/database_container_unresolved/);
+  assert.match(refresh,/auth_container_unresolved/);
+  assert.doesNotMatch(refresh,/db_container='supabase-db'/);
+  assert.doesNotMatch(refresh,/auth_container='supabase-auth'/);
 });
 test('route is exact, transactional and does not activate Cloudflare routing',()=>{
   for (const expected of ["canonical_host='lemtel.assistantvirtualai.com'", 'index($0, canonical_host)', 'matches != 1','path /lemtel-lb-ready','root * /etc/caddy','rewrite * /lemtel-lb-ready','caddy reload','cloudflare_routing_changed=false','automatic_traffic_failover_enabled=false']) assert.match(deploy,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));

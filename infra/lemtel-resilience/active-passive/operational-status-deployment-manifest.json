@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_operational_status_deployment_v9",
+  "package_version": "lemtel_operational_status_deployment_v10",
   "scope": "offline_promoted_writer_operational_status_package",
   "deployment_authorized": false,
   "hostinger_rebuild_or_start_authorized": false,
@@ -7,7 +7,7 @@
   "sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "bc1bb3122328f87e57a25e7e7f837ac68cce6068aa88b50331f80243b7701d8c"
+      "sha256": "09634032de24b6becf254eb6ff3215c28f72749df8bc71f4dc931c1e83ef7a60"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts",
@@ -15,7 +15,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
-      "sha256": "cf38f60a363cf69442359a8c71802acf7610b6493fbc78dbe9642759ade10afd"
+      "sha256": "69b299e9ded89b65752f5f19a9a06a665db3bac970575d7efe4fb2f58c5aa295"
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql",

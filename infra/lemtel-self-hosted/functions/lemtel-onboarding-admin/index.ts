@@ -1,7 +1,7 @@
 // Lemtel email-only onboarding — source package only.
 // Deployment and email delivery require explicit approval, a fresh backup, and configured secrets.
 // This function never calls FusionPBX and never persists or logs a temporary password.
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
@@ -31,6 +31,7 @@ type RequestBody =
   | { action: "get_config" }
   | { action: "get_operational_status" }
   | { action: "get_operational_trend" }
+  | { action: "get_traffic_trend" }
   | { action: "list_people"; organizationId: string }
   | { action: "list_invitations"; organizationId: string }
   | { action: "list_activity"; organizationId: string }
@@ -92,7 +93,7 @@ function userList(value: unknown, allowOwner: boolean): UserInput[] | Failure {
 
 export function validateBody(raw: unknown): RequestBody | Failure {
   if (!plainObject(raw) || typeof raw.action !== "string") return fail("invalid_body", 400);
-  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend") {
+  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend" || raw.action === "get_traffic_trend") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
   if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections" || raw.action === "get_telephony_readiness") {
@@ -787,6 +788,69 @@ async function operationalTrend(admin: any) {
   };
 }
 
+type NodeRole = "do_writer" | "hostinger_standby";
+type TrafficSample = { observedAt: string; periodSeconds: number; rxBytes: number; txBytes: number; tcpEstablished: number };
+const NODE_ROLES: NodeRole[] = ["do_writer", "hostinger_standby"];
+const BUCKET_MS = 300_000;
+const boundedInteger = (value: unknown, max: number): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= max;
+
+/** A new object allowlist: never forward rows, opaque JSON or database errors. */
+export function redactedTrafficTrend(rows: unknown[], now = Date.now()) {
+  const windowEnd = Math.floor(now / 60_000) * 60_000 + 60_000;
+  const windowStart = windowEnd - 86_400_000;
+  const roles = NODE_ROLES.map((nodeRole) => {
+    const minutes = new Map<number, TrafficSample>();
+    for (const raw of rows) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const row = raw as Record<string, unknown>;
+      if (row.node_role !== nodeRole || row.collector_state !== "collecting" || typeof row.observed_at !== "string") continue;
+      const at = Date.parse(row.observed_at);
+      if (!Number.isFinite(at) || at % 60_000 !== 0 || at < windowStart || at >= windowEnd
+        || !boundedInteger(row.period_seconds, 300) || row.period_seconds < 30
+        || !boundedInteger(row.rx_bytes, 1_000_000_000_000) || !boundedInteger(row.tx_bytes, 1_000_000_000_000)
+        || !boundedInteger(row.tcp_established, 1_000_000)) continue;
+      if (!minutes.has(at)) minutes.set(at, { observedAt: new Date(at).toISOString(), periodSeconds: row.period_seconds,
+        rxBytes: row.rx_bytes, txBytes: row.tx_bytes, tcpEstablished: row.tcp_established });
+    }
+    const sorted = [...minutes.entries()].sort(([a], [b]) => a - b);
+    const buckets = new Map<number, TrafficSample>();
+    for (const [at, sample] of sorted) {
+      const bucket = Math.floor(at / BUCKET_MS) * BUCKET_MS;
+      const previous = buckets.get(bucket);
+      buckets.set(bucket, {
+        observedAt: new Date(bucket).toISOString(),
+        periodSeconds: (previous?.periodSeconds ?? 0) + sample.periodSeconds,
+        rxBytes: (previous?.rxBytes ?? 0) + sample.rxBytes,
+        txBytes: (previous?.txBytes ?? 0) + sample.txBytes,
+        // Gauge: latest measured count, NEVER the sum of connection counts.
+        tcpEstablished: sample.tcpEstablished,
+      });
+    }
+    const latest = sorted.at(-1)?.[1];
+    return { nodeRole, collectorState: latest && now - Date.parse(latest.observedAt) <= 180_000 ? "collecting" as const : "pending" as const,
+      ...(latest ? { latest } : {}), samples: [...buckets.values()] };
+  });
+  return { windowStart: new Date(windowStart).toISOString(), windowEnd: new Date(windowEnd).toISOString(), bucketSeconds: 300, roles };
+}
+
+export async function trafficTrend(admin: Pick<SupabaseClient, "from">, now = Date.now()) {
+  const empty = redactedTrafficTrend([], now);
+  const rows: unknown[] = [];
+  // Two roles × 1,440 minute keys. Explicit pages avoid the usual 1,000-row cap.
+  for (let offset = 0; offset < 3000; offset += 1000) {
+    const { data, error } = await admin.from("lemtel_traffic_samples")
+      .select("node_role,observed_at,period_seconds,rx_bytes,tx_bytes,tcp_established,collector_state")
+      .gte("observed_at", empty.windowStart).lt("observed_at", empty.windowEnd)
+      .order("observed_at", { ascending: true }).order("node_role", { ascending: true })
+      .range(offset, offset + 999);
+    if (error) return { error: "traffic_trend_unavailable", status: 503 };
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return redactedTrafficTrend(rows, now);
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   if (req.method !== "POST") return respond({ error: "method_not_allowed" }, 405);
@@ -797,7 +861,7 @@ export async function handler(req: Request): Promise<Response> {
   const url = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   if (!url || !serviceRoleKey) return respond({ error: "server_not_configured" }, 503);
-  const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
+  const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const actor = await actorId(admin, req);
   if (isFailure(actor)) return respond({ error: actor.error }, actor.status);
 
@@ -828,6 +892,11 @@ export async function handler(req: Request): Promise<Response> {
   if (request.action === "get_operational_status" || request.action === "get_operational_trend") {
     if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
     const result = request.action === "get_operational_status" ? await operationalStatus(admin) : await operationalTrend(admin);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+  if (request.action === "get_traffic_trend") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await trafficTrend(admin);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
   if (request.action === "get_telephony_readiness") {

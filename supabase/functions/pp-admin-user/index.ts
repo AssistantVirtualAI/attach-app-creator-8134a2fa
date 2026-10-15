@@ -287,7 +287,9 @@ async function autoAssignDid(admin: any, extension: string, fullName?: string, c
     if (!e164) {
       return { assigned: false, reason: "no_available_did", diagnostic: "Aucun numéro disponible dans l'inventaire DID." };
     }
-    const r = await assignDidToExtension(NS_DEFAULT_DOMAIN, e164, extension);
+    const r = await assignDidToExtension(NS_DEFAULT_DOMAIN, e164, extension, fullName);
+    // The texting side of the chosen number follows the same broker.
+    const sms = r.verified ? await assignSmsNumber(NS_DEFAULT_DOMAIN, e164, extension).catch(() => ({ ok: false })) : { ok: false };
     if (r.verified) {
       await admin.from("planipret_did_assignments")
         .update({

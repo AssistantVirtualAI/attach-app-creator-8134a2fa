@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1.0.14";
-import { redactedOperationalStatusFromRow, validateBody } from "./index.ts";
+import { provisionMany, redactedOperationalStatusFromRow, validateBody } from "./index.ts";
 import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
 
 Deno.test("portal list action accepts only its exact body", () => {
@@ -143,4 +143,10 @@ Deno.test("platform administrator controls require explicit exact confirmations"
   assertEquals(validateBody({ action: "grant_platform_administrator", email: " Phil@Lemtel.com ", confirmation: "GRANT_PLATFORM_ADMIN" }), { action: "grant_platform_administrator", email: "phil@lemtel.com", confirmation: "GRANT_PLATFORM_ADMIN" });
   assertEquals(validateBody({ action: "grant_platform_administrator", email: "phil@lemtel.com", confirmation: "GRANT" }), { error: "platform_admin_confirmation_required", status: 400 });
   assertEquals(validateBody({ action: "revoke_platform_administrator", recipientUserId, confirmation: "REVOKE_PLATFORM_ADMIN" }), { action: "revoke_platform_administrator", recipientUserId, confirmation: "REVOKE_PLATFORM_ADMIN" });
+});
+
+Deno.test("invalid mail preflight stops before any account or delivery mutation", async () => {
+  const result = await provisionMany({} as any, "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", [{ email: "member@example.test", displayName: "Member", role: "member", locale: "fr" }], () => ({ error: "email_delivery_unavailable", status: 503 }));
+  assertEquals(result, [{ email: "member@example.test", deliveryStatus: "needs_attention", error: "email_delivery_unavailable" }]);
+  assert(!JSON.stringify(result).match(/password|synthetic-provider-key/i));
 });

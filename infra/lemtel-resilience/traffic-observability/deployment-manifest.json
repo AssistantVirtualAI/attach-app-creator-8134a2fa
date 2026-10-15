@@ -11,7 +11,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/lemtel-traffic-manifest.json",
-      "sha256": "d6b38e98004e5e21e197ea100a386730d691a1877614664658115665e475441d"
+      "sha256": "9e44d286e8eba3608ee94f3b235a0c4e0df29c3890a66039a5a23952bdeb972f"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.ts",
@@ -31,11 +31,11 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "09634032de24b6becf254eb6ff3215c28f72749df8bc71f4dc931c1e83ef7a60"
+      "sha256": "50967cfd8dae702a788a17503f4ca2f0c42550a6dd060cfdfbcf1029f96e9f22"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
-      "sha256": "69b299e9ded89b65752f5f19a9a06a665db3bac970575d7efe4fb2f58c5aa295"
+      "sha256": "77063fde26bfacf02b7c90a6a61789b50f8b1bc4c610bca5d581d3d0f5e915d5"
     },
     {
       "path": "src/pages/lemtel/onboarding/LemtelTrafficPanel.tsx",
@@ -47,11 +47,11 @@
     },
     {
       "path": "src/pages/lemtel/onboarding/lemtelHostedApi.ts",
-      "sha256": "26d85d9505eacef43b041425ecb8a59281e2bd5e7e2b488256209ea324ed66d4"
+      "sha256": "12af2fba20e637590c1f64247ad967efefc42e54657530890362df6326b56925"
     },
     {
       "path": "src/pages/lemtel/onboarding/lemtelI18n.ts",
-      "sha256": "d74dd2bf2733bc4fc44edee1add3b561cac3e95474099bd23f6f05fd639da8b3"
+      "sha256": "077dda9be0284bbaf5df3904d8de0afa6c89d9d11b013a12e3160d6536b33b74"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/README.md",

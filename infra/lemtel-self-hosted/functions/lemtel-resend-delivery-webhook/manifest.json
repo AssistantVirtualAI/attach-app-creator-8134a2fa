@@ -1,0 +1,32 @@
+{
+  "function": "lemtel-resend-delivery-webhook",
+  "scope": "lemtel_only_resend_delivery_event_handler",
+  "deployment_authorized": false,
+  "allowed_methods": ["POST"],
+  "authentication": "resend_svix_signature_required",
+  "accepted_event_types": ["email.sent", "email.delivered", "email.bounced", "email.failed"],
+  "capabilities": [
+    "signature_verified_provider_event_processing",
+    "redacted_delivery_state_transition",
+    "idempotent_provider_message_correlation"
+  ],
+  "forbidden": [
+    "webhook_payload_storage",
+    "raw_email_content_fetch",
+    "recipient_or_provider_identifier_response",
+    "temporary_password_logs",
+    "temporary_password_database_storage",
+    "planipret_auth_or_data",
+    "fusionpbx_mutation",
+    "telephony_configuration"
+  ],
+  "required_environment": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "RESEND_WEBHOOK_SECRET"],
+  "deployment_prerequisites": [
+    "approved_lemtel_transactional_email_delivery_state_migration",
+    "resend_webhook_endpoint_created_out_of_band",
+    "resend_webhook_secret_set_out_of_band",
+    "signed_synthetic_webhook_verification",
+    "approved_edge_deployment",
+    "no_email_sent_during_deployment"
+  ]
+}

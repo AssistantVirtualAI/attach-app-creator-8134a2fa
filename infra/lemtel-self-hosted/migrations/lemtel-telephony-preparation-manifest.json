@@ -13,7 +13,7 @@
   "edge_sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "dbccd26868765e3b281a57f3554d9affec3b386b69c5bb209e2bbee042ba6c3d"
+      "sha256": "50967cfd8dae702a788a17503f4ca2f0c42550a6dd060cfdfbcf1029f96e9f22"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts",
@@ -21,7 +21,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
-      "sha256": "4c3befc66a00655df895e44b94d62579a40c36b56f7162ef7ec35a01c4222ee8"
+      "sha256": "77063fde26bfacf02b7c90a6a61789b50f8b1bc4c610bca5d581d3d0f5e915d5"
     }
   ],
   "required_preconditions": [

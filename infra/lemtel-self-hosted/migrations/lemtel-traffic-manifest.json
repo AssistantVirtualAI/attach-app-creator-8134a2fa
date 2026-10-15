@@ -21,11 +21,11 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "09634032de24b6becf254eb6ff3215c28f72749df8bc71f4dc931c1e83ef7a60"
+      "sha256": "50967cfd8dae702a788a17503f4ca2f0c42550a6dd060cfdfbcf1029f96e9f22"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
-      "sha256": "69b299e9ded89b65752f5f19a9a06a665db3bac970575d7efe4fb2f58c5aa295"
+      "sha256": "77063fde26bfacf02b7c90a6a61789b50f8b1bc4c610bca5d581d3d0f5e915d5"
     }
   ],
   "required_baseline_migration": "0016_lemtel_platform_administrator_audit.sql",

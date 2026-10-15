@@ -3,6 +3,7 @@
 // This function never calls FusionPBX and never persists or logs a temporary password.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
+import { emailConfig as configuredEmail, safeHttpsUrl, sendWithResend, transactionalEmailMessage, type TransactionalEmailConfig } from "../_shared/lemtelTransactionalEmail.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -265,51 +266,22 @@ function randomPassword(length = 20): string {
   return chars.join("");
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] ?? character));
-}
-
-function welcomeMessage(input: { locale: Locale; displayName: string; email: string; temporaryPassword: string; role: Role; downloadUrls: { ios: string; android: string; desktop: string } }) {
-  const displayName = escapeHtml(input.displayName);
-  const email = escapeHtml(input.email);
-  const password = escapeHtml(input.temporaryPassword);
-  const admin = input.role === "owner" || input.role === "admin";
-  if (input.locale === "fr") {
-    return {
-      subject: "Bienvenue chez Lemtel — votre accès est prêt",
-      html: `<main style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;max-width:620px;margin:auto;color:#10213b"><h1>Bienvenue chez Lemtel, ${displayName}</h1><p>Votre accès ${admin ? "administrateur" : "utilisateur"} est prêt.</p><p><strong>Nom d’utilisateur :</strong> ${email}<br/><strong>Mot de passe temporaire :</strong> <code>${password}</code></p><p>Ouvrez l’application Lemtel, entrez ces deux informations, puis choisissez immédiatement votre propre mot de passe. Vous ne devez jamais entrer un poste ou un domaine SIP.</p><h2>Télécharger Lemtel</h2><p><a href="${escapeHtml(input.downloadUrls.ios)}">iPhone / iPad</a> · <a href="${escapeHtml(input.downloadUrls.android)}">Android</a> · <a href="${escapeHtml(input.downloadUrls.desktop)}">Mac et Windows</a></p><p style="color:#64748b;font-size:12px">Ne partagez jamais ce mot de passe temporaire. Si vous n’attendiez pas ce courriel, contactez le soutien Lemtel.</p></main>`,
-    };
-  }
-  return {
-    subject: "Welcome to Lemtel — your access is ready",
-    html: `<main style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;max-width:620px;margin:auto;color:#10213b"><h1>Welcome to Lemtel, ${displayName}</h1><p>Your ${admin ? "administrator" : "user"} access is ready.</p><p><strong>Username:</strong> ${email}<br/><strong>Temporary password:</strong> <code>${password}</code></p><p>Open the Lemtel app, enter these two values, then choose your own password immediately. You never need to enter an extension or SIP domain.</p><h2>Download Lemtel</h2><p><a href="${escapeHtml(input.downloadUrls.ios)}">iPhone / iPad</a> · <a href="${escapeHtml(input.downloadUrls.android)}">Android</a> · <a href="${escapeHtml(input.downloadUrls.desktop)}">Mac and Windows</a></p><p style="color:#64748b;font-size:12px">Never share this temporary password. If you did not expect this email, contact Lemtel support.</p></main>`,
-  };
-}
-
-const RELEASE_ROOT = "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases";
-const RELEASE_TAG = `${RELEASE_ROOT}/download/v2.5.20`;
-
-/** Server-owned app channels. Variables permit a later verified release without changing the browser bundle. */
 function distributionUrls() {
-  const value = (name: string) => Deno.env.get(name)?.trim() || undefined;
+  const value = (name: string, fallback: string) => safeHttpsUrl(Deno.env.get(name)?.trim() || fallback);
   return {
-    desktop: value("LEMTEL_DOWNLOAD_DESKTOP_URL") ?? `${RELEASE_ROOT}/tag/v2.5.20`,
-    windows: value("LEMTEL_DOWNLOAD_WINDOWS_URL") ?? `${RELEASE_TAG}/Lemtel-Telecom-Setup-2.5.20.exe`,
-    macosApple: value("LEMTEL_DOWNLOAD_MACOS_APPLE_URL") ?? `${RELEASE_TAG}/Lemtel-Telecom-2.5.20-arm64.dmg`,
-    macosIntel: value("LEMTEL_DOWNLOAD_MACOS_INTEL_URL") ?? `${RELEASE_TAG}/Lemtel-Telecom-2.5.20-x64.dmg`,
-    // TestFlight access remains limited to Apple IDs authorised by the release owner.
-    ios: value("LEMTEL_DOWNLOAD_IOS_URL") ?? "https://testflight.apple.com",
-    // Android has no public store release yet; this remains a controlled release channel.
-    android: value("LEMTEL_DOWNLOAD_ANDROID_URL") ?? RELEASE_ROOT,
+    desktop: value("LEMTEL_DOWNLOAD_DESKTOP_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/tag/v2.5.20"),
+    windows: value("LEMTEL_DOWNLOAD_WINDOWS_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/download/v2.5.20/Lemtel-Telecom-Setup-2.5.20.exe"),
+    macosApple: value("LEMTEL_DOWNLOAD_MACOS_APPLE_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/download/v2.5.20/Lemtel-Telecom-2.5.20-arm64.dmg"),
+    macosIntel: value("LEMTEL_DOWNLOAD_MACOS_INTEL_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/download/v2.5.20/Lemtel-Telecom-2.5.20-x64.dmg"),
+    ios: value("LEMTEL_DOWNLOAD_IOS_URL", "https://testflight.apple.com"),
+    android: value("LEMTEL_DOWNLOAD_ANDROID_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases"),
   };
 }
 
-function emailConfig(): { apiKey: string; from: string; urls: { ios: string; android: string; desktop: string } } | Failure {
-  const apiKey = Deno.env.get("RESEND_API_KEY") ?? "";
-  const from = Deno.env.get("LEMTEL_WELCOME_FROM") ?? "";
-  const urls = distributionUrls();
-  if (!apiKey || !from) return fail("email_provider_not_configured", 503);
-  return { apiKey, from, urls: { ios: urls.ios, android: urls.android, desktop: urls.desktop } };
+/** All sender, logo and download URLs are checked before an Auth password can be changed. */
+function transactionalEmailConfig(): TransactionalEmailConfig | Failure {
+  const configuration = configuredEmail(Deno.env);
+  return configuration ?? fail("email_delivery_unavailable", 503);
 }
 
 async function actorId(admin: any, req: Request): Promise<string | Failure> {
@@ -363,7 +335,7 @@ async function createRecipient(admin: any, organizationId: string, recipient: Us
   return { userId, temporaryPassword };
 }
 
-async function deliverWelcome(admin: any, organizationId: string, actor: string, userId: string, recipient: UserInput, temporaryPassword: string, kind: "welcome" | "welcome_resend") {
+async function deliverWelcome(admin: any, organizationId: string, actor: string, userId: string, recipient: UserInput, temporaryPassword: string, kind: "welcome" | "welcome_resend", configuration: TransactionalEmailConfig) {
   const { data: attempt, error: attemptError } = await admin.from("lemtel_onboarding_delivery_attempts").insert({
     organization_id: organizationId,
     recipient_user_id: userId,
@@ -373,40 +345,39 @@ async function deliverWelcome(admin: any, organizationId: string, actor: string,
     delivery_kind: kind,
     state: "pending",
   }).select("id").single();
-  if (attemptError || !attempt?.id) return { delivered: false, reason: "delivery_audit_unavailable" };
-  const configuration = emailConfig();
-  if (isFailure(configuration)) {
-    await admin.from("lemtel_onboarding_delivery_attempts").update({ state: "failed", attempted_at: new Date().toISOString(), failed_at: new Date().toISOString(), failure_code: configuration.error }).eq("id", attempt.id);
-    await audit(admin, organizationId, actor, "welcome_failed", userId, { reason: configuration.error, delivery_kind: kind });
-    return { delivered: false, reason: configuration.error };
+  if (attemptError || !attempt?.id) {
+    await audit(admin, organizationId, actor, "welcome_delivery_failed", userId, { delivery_kind: kind, reason: "delivery_recording_unavailable" });
+    return { deliveryStatus: "needs_attention" as const };
   }
-  const message = welcomeMessage({ ...recipient, temporaryPassword, downloadUrls: configuration.urls });
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${configuration.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: configuration.from, to: [recipient.email], subject: message.subject, html: message.html }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(`provider_${response.status}`);
-    await admin.from("lemtel_onboarding_delivery_attempts").update({ state: "sent", attempted_at: new Date().toISOString(), sent_at: new Date().toISOString(), provider_message_id: typeof payload?.id === "string" ? payload.id : null }).eq("id", attempt.id);
-    await audit(admin, organizationId, actor, kind === "welcome" ? "welcome_sent" : "welcome_resent", userId, { locale: recipient.locale, delivery_kind: kind });
-    return { delivered: true };
-  } catch {
-    await admin.from("lemtel_onboarding_delivery_attempts").update({ state: "failed", attempted_at: new Date().toISOString(), failed_at: new Date().toISOString(), failure_code: "provider_delivery_failed" }).eq("id", attempt.id);
-    await audit(admin, organizationId, actor, "welcome_failed", userId, { reason: "provider_delivery_failed", delivery_kind: kind });
-    return { delivered: false, reason: "provider_delivery_failed" };
+  // This returns provider API acceptance only. It is never represented as inbox delivery.
+  const message = transactionalEmailMessage({ kind: "welcome", ...recipient, temporaryPassword, config: configuration });
+  const provider = await sendWithResend(configuration, recipient.email, message);
+  const timestamp = new Date().toISOString();
+  if (provider.accepted) {
+    await admin.from("lemtel_onboarding_delivery_attempts").update({
+      state: "provider_accepted", attempted_at: timestamp, provider_accepted_at: timestamp,
+      provider_message_id: provider.providerMessageId ?? null,
+    }).eq("id", attempt.id);
+    await audit(admin, organizationId, actor, "welcome_provider_accepted", userId, { locale: recipient.locale, delivery_kind: kind });
+    return { deliveryStatus: "provider_accepted" as const };
   }
+  await admin.from("lemtel_onboarding_delivery_attempts").update({ state: "failed", attempted_at: timestamp, failed_at: timestamp, failure_code: "provider_request_failed" }).eq("id", attempt.id);
+  await audit(admin, organizationId, actor, "welcome_delivery_failed", userId, { delivery_kind: kind, reason: "provider_request_failed" });
+  return { deliveryStatus: "failed" as const };
 }
 
-async function provisionMany(admin: any, organizationId: string, actor: string, recipients: UserInput[]) {
-  const results: Array<{ email: string; userId?: string; delivered: boolean; error?: string }> = [];
+type ProvisionResult = { email: string; userId?: string; deliveryStatus: "provider_accepted" | "failed" | "needs_attention"; error?: string };
+export async function provisionMany(admin: any, organizationId: string, actor: string, recipients: UserInput[], configurationProvider: () => TransactionalEmailConfig | Failure = transactionalEmailConfig): Promise<ProvisionResult[]> {
+  // Fail before creating any account when sender/logo/link configuration is invalid.
+  const configuration = configurationProvider();
+  if (isFailure(configuration)) return recipients.map((recipient): ProvisionResult => ({ email: recipient.email, deliveryStatus: "needs_attention", error: "email_delivery_unavailable" }));
+  const results: ProvisionResult[] = [];
   for (const recipient of recipients) {
     const created = await createRecipient(admin, organizationId, recipient);
-    if (isFailure(created)) { results.push({ email: recipient.email, delivered: false, error: created.error }); continue; }
+    if (isFailure(created)) { results.push({ email: recipient.email, deliveryStatus: "needs_attention", error: created.error }); continue; }
     await audit(admin, organizationId, actor, "user_provisioned", created.userId, { role: recipient.role, locale: recipient.locale });
-    const delivery = await deliverWelcome(admin, organizationId, actor, created.userId, recipient, created.temporaryPassword, "welcome");
-    results.push({ email: recipient.email, userId: created.userId, delivered: delivery.delivered, ...(delivery.delivered ? {} : { error: delivery.reason }) });
+    const delivery = await deliverWelcome(admin, organizationId, actor, created.userId, recipient, created.temporaryPassword, "welcome", configuration);
+    results.push({ email: recipient.email, userId: created.userId, deliveryStatus: delivery.deliveryStatus, ...(delivery.deliveryStatus === "provider_accepted" ? {} : { error: "email_delivery_unavailable" }) });
   }
   return results;
 }
@@ -617,18 +588,21 @@ async function listPeople(admin: any, organizationId: string) {
 async function listInvitations(admin: any, organizationId: string) {
   const { data: memberships, error } = await admin.from("lemtel_organization_memberships").select("user_id,role,status").eq("organization_id", organizationId).order("created_at", { ascending: false });
   if (error) return fail("invitation_lookup_failed", 503);
-  const { data: deliveries } = await admin.from("lemtel_onboarding_delivery_attempts").select("recipient_user_id,state,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false });
+  const { data: deliveries } = await admin.from("lemtel_onboarding_delivery_attempts").select("recipient_user_id,state,locale,provider_accepted_at,delivered_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false });
   const latestDelivery = new Map<string, any>();
   for (const delivery of deliveries ?? []) if (!latestDelivery.has(String(delivery.recipient_user_id))) latestDelivery.set(String(delivery.recipient_user_id), delivery);
   const directory = await usersById(admin, (memberships ?? []).map((row: any) => String(row.user_id)));
+  const deliveryState = (value: unknown): "pending" | "provider_accepted" | "delivered" | "failed" | "needs_attention" =>
+    value === "pending" || value === "provider_accepted" || value === "delivered" || value === "failed" || value === "needs_attention" ? value : "needs_attention";
   return {
     invitations: (memberships ?? []).flatMap((membership: any) => {
       const user = directory.get(String(membership.user_id));
       if (!user?.email) return [];
       const delivery = latestDelivery.get(String(user.id));
-      const pending = user.app_metadata?.lemtel_onboarding_required === true;
-      const status = membership.status !== "active" ? "revoked" : !pending ? "active" : delivery?.state === "sent" ? "temp_pending" : "delivery_needs_attention";
-      return [{ userId: user.id, fullName: userName(user), email: user.email, role: membership.role, locale: userLocale(user), status, ...(delivery?.sent_at ? { sentAt: delivery.sent_at } : {}) }];
+      const onboardingPending = user.app_metadata?.lemtel_onboarding_required === true;
+      const status = membership.status !== "active" ? "revoked" : !onboardingPending ? "active" : "onboarding_pending";
+      const requestedLocale = delivery?.locale === "en" ? "en" : delivery?.locale === "fr" ? "fr" : userLocale(user);
+      return [{ userId: user.id, fullName: userName(user), email: user.email, role: membership.role, locale: userLocale(user), requestedLocale, status, ...(onboardingPending ? { deliveryStatus: deliveryState(delivery?.state) } : {}), ...(delivery?.provider_accepted_at ? { providerAcceptedAt: delivery.provider_accepted_at } : {}), ...(delivery?.delivered_at ? { deliveredAt: delivery.delivered_at } : {}) }];
     }),
   };
 }
@@ -1084,7 +1058,10 @@ export async function handler(req: Request): Promise<Response> {
   }
 
   if (request.action === "resend_welcome") {
-  if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+  // Organization admins and platform admins only. Mail preflight must succeed before rotation.
+  if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+  const configuration = transactionalEmailConfig();
+  if (isFailure(configuration)) return respond({ error: "email_delivery_unavailable" }, configuration.status);
   const { data: membership } = await admin.from("lemtel_organization_memberships").select("role").eq("organization_id", request.organizationId).eq("user_id", request.recipientUserId).eq("status", "active").maybeSingle();
   const { data: userResult } = await admin.auth.admin.getUserById(request.recipientUserId);
   const authUser = userResult?.user;
@@ -1096,8 +1073,8 @@ export async function handler(req: Request): Promise<Response> {
   await bumpAccountAuthorityRevision(admin, request.organizationId);
   await audit(admin, request.organizationId, actor, "temporary_password_rotated", request.recipientUserId, {});
   const recipient: UserInput = { email, displayName: String(authUser?.user_metadata?.full_name || email), role: membership.role as Role, locale: request.locale };
-  const delivery = await deliverWelcome(admin, request.organizationId, actor, request.recipientUserId, recipient, temporaryPassword, "welcome_resend");
-  return respond({ ok: true, delivered: delivery.delivered, ...(delivery.delivered ? {} : { error: delivery.reason }), email_delivery_required: true });
+  const delivery = await deliverWelcome(admin, request.organizationId, actor, request.recipientUserId, recipient, temporaryPassword, "welcome_resend", configuration);
+  return respond({ ok: true, deliveryStatus: delivery.deliveryStatus, email_delivery_required: true });
   }
 
   if (request.action !== "revoke_invitation") return respond({ error: "invalid_action" }, 400);

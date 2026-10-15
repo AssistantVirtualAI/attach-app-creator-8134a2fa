@@ -241,4 +241,18 @@ describe("Lemtel portal contract", () => {
     expect(app).toContain("lt-sidebar");
     expect(css).toContain("Brand refresh");
   });
+  it("renders requested locale and truthful provider delivery states while keeping resend server-authorized", () => {
+    const client = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtelHostedApi.ts"), "utf8");
+    const app = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
+    const server = readFileSync(resolve(process.cwd(), "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts"), "utf8");
+    expect(client).toContain('deliveryStatus?: "pending" | "provider_accepted" | "delivered" | "failed" | "needs_attention"');
+    expect(app).toContain("requestedLocale");
+    expect(app).toContain("t.delivery[invitation.deliveryStatus]");
+    expect(app).toContain('invitation.status === "onboarding_pending"');
+    expect(app).toContain("t.resendAccess");
+    expect(server).toContain("portalOrganizationAdmin(admin, actor, request.organizationId)");
+    expect(server).toContain('state: "provider_accepted"');
+    expect(server).not.toContain('state: "sent"');
+  });
+
 });

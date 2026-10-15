@@ -163,8 +163,11 @@ export type PortalInvitation = {
   email: string;
   role: LemtelRole;
   locale: LemtelLocale;
-  status: "active" | "temp_pending" | "delivery_needs_attention" | "revoked";
-  sentAt?: string;
+  requestedLocale: LemtelLocale;
+  status: "active" | "onboarding_pending" | "revoked";
+  deliveryStatus?: "pending" | "provider_accepted" | "delivered" | "failed" | "needs_attention";
+  providerAcceptedAt?: string;
+  deliveredAt?: string;
 };
 export type PortalActivity = { id: string; at: string; action: string };
 export type PortalDomain = { id: string; hostname: string; status: "active" | "suspended"; verificationStatus: "verified" | "unverified"; createdAt?: string };
@@ -336,9 +339,9 @@ export const portalApi = {
   createOrganization: (input: Parameters<typeof buildCreateOrganizationBody>[0]) =>
     invoke<{ ok: true; organization: { id: string } }>("lemtel-onboarding-admin", buildCreateOrganizationBody(input), { write: true }),
   provisionUsers: (organizationId: string, users: ProvisionedUser[]) =>
-    invoke<{ ok: true; users: Array<{ email: string; delivered: boolean; error?: string }> }>("lemtel-onboarding-admin", buildProvisionUsersBody(organizationId, users), { write: true }),
+    invoke<{ ok: true; users: Array<{ email: string; deliveryStatus: "provider_accepted" | "failed" | "needs_attention"; error?: string }> }>("lemtel-onboarding-admin", buildProvisionUsersBody(organizationId, users), { write: true }),
   issueTemporaryPassword: (organizationId: string, recipientUserId: string, locale: LemtelLocale) =>
-    invoke<{ ok: true; delivered: boolean }>("lemtel-onboarding-admin", buildResendWelcomeBody(organizationId, recipientUserId, locale), { write: true }),
+    invoke<{ ok: true; deliveryStatus: "provider_accepted" | "failed" | "needs_attention" }>("lemtel-onboarding-admin", buildResendWelcomeBody(organizationId, recipientUserId, locale), { write: true }),
   revokeAccess: (organizationId: string, recipientUserId: string) =>
     invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "revoke_invitation", organizationId, recipientUserId }, { write: true }),
   updateOrganization: (organizationId: string, organization: { displayName: string; defaultLocale: LemtelLocale }) =>

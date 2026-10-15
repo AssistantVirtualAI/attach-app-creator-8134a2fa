@@ -83,7 +83,7 @@ async function nsFetch(path: string, init: RequestInit = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
-import { assignDidToExtension } from "../_shared/pp-did-routing.ts";
+import { assignDidToExtension, assignSmsNumber } from "../_shared/pp-did-routing.ts";
 
 function nsUserPayload(fullName: string, email: string, extension: string, password?: string) {
   const [firstName, ...rest] = String(fullName || extension).trim().split(/\s+/);

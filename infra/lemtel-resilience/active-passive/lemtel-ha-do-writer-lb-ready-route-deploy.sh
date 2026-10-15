@@ -38,6 +38,7 @@ case "$route_marker_count" in
   1)
     grep -Fq '@lemtel_load_balancer_ready path /lemtel-lb-ready' "$caddyfile" || fail existing_route_invalid
     grep -Fq 'rewrite * /lemtel-lb-ready' "$caddyfile" || fail existing_route_invalid
+    grep -Fq 'header Content-Type application/json' "$caddyfile" || fail existing_route_invalid
     route_state='already_present'
     ;;
   *) fail route_marker_ambiguous ;;
@@ -48,7 +49,7 @@ backup="$backup_dir/Caddyfile"; candidate="$(mktemp "${caddyfile}.l7-ready.XXXXX
 rollback() { if [ "$replaced" = true ]; then cp -- "$backup" "$caddyfile"; docker exec "$caddy_container" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || true; fi; rm -f "$candidate" "$temporary"; }
 trap rollback ERR INT TERM
 if [ "$route_state" = installed ]; then
-  awk -v site="$site_line" -v marker="$route_marker" '$0 == site { print; print "  " marker; print "  @lemtel_load_balancer_ready path /lemtel-lb-ready"; print "  handle @lemtel_load_balancer_ready {"; print "    root * /etc/caddy"; print "    rewrite * /lemtel-lb-ready"; print "    file_server"; print "  }"; next } { print }' "$caddyfile" > "$candidate"
+  awk -v site="$site_line" -v marker="$route_marker" '$0 == site { print; print "  " marker; print "  @lemtel_load_balancer_ready path /lemtel-lb-ready"; print "  handle @lemtel_load_balancer_ready {"; print "    root * /etc/caddy"; print "    rewrite * /lemtel-lb-ready"; print "    header Content-Type application/json"; print "    file_server"; print "  }"; next } { print }' "$caddyfile" > "$candidate"
   docker exec -i "$caddy_container" caddy adapt --config /dev/stdin --adapter caddyfile < "$candidate" >/dev/null || fail caddy_candidate_invalid
   cp --preserve=mode,ownership,timestamps -- "$caddyfile" "$backup"
   cp -- "$candidate" "$temporary"; chmod --reference="$caddyfile" "$temporary"; mv -f "$temporary" "$caddyfile"; replaced=true

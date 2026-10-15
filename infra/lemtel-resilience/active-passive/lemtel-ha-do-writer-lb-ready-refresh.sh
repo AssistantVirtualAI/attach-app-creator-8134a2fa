@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publishes a content-free Caddy marker only while the DO writer passes local checks.
+# Publishes a minimal, non-sensitive Caddy JSON marker only while the DO writer passes local checks.
 # No routing, provider action, promotion, database mutation or telephony action is performed.
 set -euo pipefail
 
@@ -71,14 +71,15 @@ auth_status="$(curl --silent --show-error --output /dev/null --write-out '%{http
 case "$auth_status" in 200|204|401|403) ;; *) fail auth_route_unreachable ;; esac
 
 tmp="$(mktemp "$caddy_mount/.${marker_name}.XXXXXX")"
-printf 'ready\n' > "$tmp"
+observed_at="$(date -u +%s)"
+printf '{"format":"lemtel_do_writer_l7_ready_v1","writer_role":"do_writer","definitive":true,"observed_at":%s,"status":"healthy"}\n' "$observed_at" > "$tmp"
 chmod 0644 "$tmp"
 mv -f -- "$tmp" "$marker_path"
 
 printf 'do_writer_l7_ready_format=lemtel_do_writer_l7_ready_v1\n'
 printf 'writer=digitalocean_promoted_writer\n'
 printf 'marker_written=true\n'
-printf 'response_body=content_free_ready\n'
+printf 'response_body=minimal_l7_ready_json\n'
 printf 'dns_change_executed=false\n'
 printf 'cloudflare_routing_changed=false\n'
 printf 'hostinger_runtime_started=false\n'

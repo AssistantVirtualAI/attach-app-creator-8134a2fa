@@ -47,10 +47,24 @@ function fixture(t) {
   f.env = { FAILOVER_MODE: 'active', STATE, DO_API_TOKEN: secret('provider'),
     DO_WRITER_DROPLET_ID: writerID, AGENT_SHARED_SECRET: secret('agent'),
     DO_WRITER_L7_SECRET: secret('l7'), DRILL_APPROVAL_SECRET: secret('approval'),
-    DO_API_BASE_URL: `${fakeURL('provider')}/v2`, DO_WRITER_L7_URL: `${fakeURL('writer')}/health`,
+    DO_API_BASE_URL: `${fakeURL('provider')}/v2`, DO_WRITER_L7_URL: `${fakeURL('writer')}/lemtel-lb-ready`,
     CONFIG_REVISION: 'synthetic-config-v1', ARBITER_SERIALIZATION_ACK: 'reviewed_single_serialized_scheduler',
     OBSERVATION_INTERVAL_SECONDS: '60', INCIDENT_FAILURE_CYCLES: '3',
     GRACEFUL_SHUTDOWN_DELAY_SECONDS: '180', POWER_STATE_TIMEOUT_SECONDS: '1800', COMMAND_TTL_SECONDS: '120' };
+  const readyMarker = (observedAt = f.now) => ({ format: 'lemtel_do_writer_l7_ready_v1', writer_role: 'do_writer',
+    definitive: true, observed_at: observedAt, status: 'healthy' });
+  const l7Response = (body, code = 200, url = f.env.DO_WRITER_L7_URL, redirected = false) => {
+    const raw = response(body, code);
+    return { status: raw.status, headers: raw.headers, body: raw.body, url, redirected };
+  };
+  const l7TextResponse = (body, code = 200, url = f.env.DO_WRITER_L7_URL) => {
+    const raw = new Response(body, { status: code, headers: { 'content-type': 'application/json' } });
+    return { status: raw.status, headers: raw.headers, body: raw.body, url, redirected: false };
+  };
+  const l7EmptyResponse = (code = 404, url = f.env.DO_WRITER_L7_URL) => {
+    const raw = new Response(null, { status: code });
+    return { status: raw.status, headers: raw.headers, body: raw.body, url, redirected: false };
+  };
   const payload = { format: 'lemtel_production_destructive_drill_v1', config_revision: f.env.CONFIG_REVISION,
     writer_role: 'do_writer', target_role: 'hostinger_standby', writer_droplet_id: writerID,
     destructive_drill_validated: true, serialized_execution_verified: true,
@@ -64,11 +78,16 @@ function fixture(t) {
     if (url === f.env.DO_WRITER_L7_URL) {
       if (f.healthBarrier) await f.healthBarrier;
       if (f.health === 'timeout') throw new Error('synthetic_transport_failure');
-      if (f.health === 'invalid') return response({ arbitrary: true }, 503);
-      if (f.health === 'stale') return response({ format: 'lemtel_do_writer_l7_observation_v1', writer_role: 'do_writer',
-        definitive: true, observed_at: f.now - 121, status: 'unhealthy', reason: 'writer_unavailable' }, 503);
-      return response({ format: 'lemtel_do_writer_l7_observation_v1', writer_role: 'do_writer',
-        definitive: true, observed_at: f.now, status: f.health, reason: 'writer_unavailable' }, f.health === 'healthy' ? 200 : 503);
+      if (f.health === 'unhealthy') return l7EmptyResponse();
+      if (f.health === 'invalid') return l7Response({ arbitrary: true });
+      if (f.health === 'enriched') return l7Response({ ...readyMarker(), reason: 'unexpected' });
+      if (f.health === 'non_json') return l7TextResponse('not-json');
+      if (f.health === 'stale') return l7Response(readyMarker(f.now - 121));
+      if (f.health === 'arbitrary_5xx') return l7Response({ error: 'opaque' }, 503);
+      if (f.health === 'wrong_host') return l7EmptyResponse(404, `${fakeURL('other-writer')}/lemtel-lb-ready`);
+      if (f.health === 'wrong_path') return l7EmptyResponse(404, `${fakeURL('writer')}/unexpected`);
+      if (f.health === 'redirect') return l7Response(readyMarker(), 200, f.env.DO_WRITER_L7_URL, true);
+      return l7Response(readyMarker());
     }
     assert.ok(url.startsWith(`${f.env.DO_API_BASE_URL}/`), 'only the configured fake provider can be requested');
     if (options.method === 'POST') {
@@ -156,6 +175,13 @@ test('every explicit active binding, secret, ID, approval and safety limit is ma
   assert.equal(f.incident(), null);
 });
 
+test('L7 configuration is pinned to the exact HTTPS readiness path before any observation', async (t) => {
+  const f = fixture(t);
+  f.env.DO_WRITER_L7_URL = `${fakeURL('writer')}/unexpected`;
+  assert.equal((await f.tick()).state, 'blocked');
+  assert.equal(f.calls.length, 0);
+});
+
 test('unsigned, expired, missing or config-mismatched production drill is fail-closed', async (t) => {
   const f = fixture(t), original = f.values.get(drillKey);
   for (const change of [null, { signature: '0'.repeat(64) }, { payload: { expires_at: f.now - 1 } },
@@ -173,9 +199,23 @@ test('unsigned, expired, missing or config-mismatched production drill is fail-c
   assert.equal(f.calls.length, 0);
 });
 
-test('healthy and ambiguous L7 observations reset suspicion; timeout is never fence proof', async (t) => {
+test('exact 404 marker absence is definitive unhealthy and exact healthy JSON resets suspicion', async (t) => {
   const f = fixture(t);
-  for (const health of ['healthy', 'timeout', 'invalid', 'stale']) {
+  const unavailable = await f.tick();
+  assert.equal(unavailable.state, 'incident_suspected');
+  assert.equal(f.incident().last_definitive_observation, 'unhealthy');
+  assert.equal(f.incident().failure_cycles, 1);
+  f.health = 'healthy';
+  const healthy = await f.tick();
+  assert.equal(healthy.state, 'healthy');
+  assert.equal(f.incident().last_definitive_observation, 'healthy');
+  assert.equal(f.incident().failure_cycles, 0);
+  assert.deepEqual(f.posts(), []);
+});
+
+test('only the exact healthy JSON is positive; ambiguous L7 responses reset suspicion and never fence', async (t) => {
+  const f = fixture(t);
+  for (const health of ['healthy', 'timeout', 'invalid', 'enriched', 'non_json', 'stale', 'arbitrary_5xx', 'wrong_host', 'wrong_path', 'redirect']) {
     f.health = 'unhealthy'; await f.tick(); await f.tick();
     f.health = health;
     const result = await f.tick();

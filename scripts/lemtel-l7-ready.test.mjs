@@ -1,13 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+
 const root=resolve(import.meta.dirname,'..');
-const refresh=readFileSync(resolve(root,'infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-lb-ready-refresh.sh'),'utf8');
-const timer=readFileSync(resolve(root,'infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-lb-ready-timer-enable.sh'),'utf8');
-const deploy=readFileSync(resolve(root,'infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-lb-ready-route-deploy.sh'),'utf8');
+const activePassive=resolve(root,'infra/lemtel-resilience/active-passive');
+const refresh=readFileSync(resolve(activePassive,'lemtel-ha-do-writer-lb-ready-refresh.sh'),'utf8');
+const timer=readFileSync(resolve(activePassive,'lemtel-ha-do-writer-lb-ready-timer-enable.sh'),'utf8');
+const deployPath=resolve(activePassive,'lemtel-ha-do-writer-lb-ready-route-deploy.sh');
+const deploy=readFileSync(deployPath,'utf8');
+const packagePath=resolve(activePassive,'lemtel-ha-do-writer-l7-ready-package.sh');
+const packager=readFileSync(packagePath,'utf8');
+const escaped=(value)=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+
 test('L7 readiness is writer-only and exposes only the minimal healthy JSON marker',()=>{
-  for (const expected of ['digitalocean_promoted_writer','database_not_writer','database_streaming_absent','storage_attestation_stale','lemtel-ha-do-writer-storage-sync.timer','observed_at="$(date -u +%s)"','lemtel_do_writer_l7_ready_v1','"writer_role":"do_writer"','"definitive":true','"status":"healthy"','automatic_traffic_failover_enabled=false']) assert.match(refresh,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for (const expected of ['digitalocean_promoted_writer','database_not_writer','database_streaming_absent','storage_attestation_stale','lemtel-ha-do-writer-storage-sync.timer','observed_at="$(date -u +%s)"','lemtel_do_writer_l7_ready_v1','"writer_role":"do_writer"','"definitive":true','"status":"healthy"','automatic_traffic_failover_enabled=false']) assert.match(refresh,new RegExp(escaped(expected)));
   assert.doesNotMatch(refresh,/printf 'ready\\n'/);
   assert.doesNotMatch(refresh,/FUSIONPBX|SIP_|WSS|TURN|POSTGRES_PASSWORD|SERVICE_ROLE|Bearer/i);
   assert.match(refresh,/resolve_runtime_container/);
@@ -16,12 +25,23 @@ test('L7 readiness is writer-only and exposes only the minimal healthy JSON mark
   assert.doesNotMatch(refresh,/db_container='supabase-db'/);
   assert.doesNotMatch(refresh,/auth_container='supabase-auth'/);
 });
-test('route is exact, transactional and does not activate Cloudflare routing',()=>{
-  for (const expected of ["canonical_host='lemtel.assistantvirtualai.com'", 'index($0, canonical_host)', 'matches != 1','path /lemtel-lb-ready','route_marker_count','existing_route_invalid','route_marker_ambiguous','route_state','root * /etc/caddy','rewrite * /lemtel-lb-ready','header Content-Type application/json','caddy reload','cloudflare_routing_changed=false','automatic_traffic_failover_enabled=false']) assert.match(deploy,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
-  assert.doesNotMatch(deploy,/cloudflare\.request|pg_ctl promote|fencing_executed=true/i);
-  assert.match(timer,/\[ -f \"\$source_script\" \] \|\| fail readiness_source_missing/);
+
+test('route is exact, archive-verified, transactional and does not activate Cloudflare routing',()=>{
+  for (const expected of [
+    "canonical_host='lemtel.assistantvirtualai.com'", 'index($0, canonical_host)', 'matches != 1',
+    'path /lemtel-lb-ready', 'route_marker_count', 'existing_route_invalid', 'route_marker_ambiguous',
+    'route_state', 'root * /etc/caddy', 'rewrite * /lemtel-lb-ready', 'header Content-Type application/json',
+    'LEMTEL_L7_READY_ARCHIVE', 'LEMTEL_L7_READY_ARCHIVE_DIGESTS', 'archive_digest_mismatch',
+    'archive_layout_invalid', 'manifest_digest_mismatch', 'sha256sum -c --status', 'tar -tzf',
+    'caddy validate', 'caddy reload', 'backup_root', 'trap cleanup EXIT',
+    'l7_http_attestation_failed', "[ \"$http_code\" = 200 ]", "[ \"$content_type\" = application/json ]",
+    'lemtel_do_writer_l7_ready_v1', 'cloudflare_routing_changed=false', 'automatic_traffic_failover_enabled=false'
+  ]) assert.match(deploy,new RegExp(escaped(expected)));
+  assert.doesNotMatch(deploy,/caddy fmt(?:\s|$)/i);
+  assert.doesNotMatch(deploy,/cloudflare\.request|pg_ctl promote|fencing_executed=true|authorization:|Bearer/i);
+  assert.match(timer,/\[ -f "\$source_script" \] \|\| fail readiness_source_missing/);
   assert.match(timer,/install -o root -g root -m 0750/);
-  assert.doesNotMatch(timer,/\[ -x \"\$source_script\" \]/);
+  assert.doesNotMatch(timer,/\[ -x "\$source_script" \]/);
   assert.match(timer,/OnUnitActiveSec=60/);
 });
 
@@ -32,4 +52,45 @@ test('Caddy anchor accepts only one non-comment canonical site declaration',()=>
   assert.match(program,/\/\^\[\[:space:\]\]\*#\//);
   assert.match(program,/index\(\$0, canonical_host\)/);
   assert.match(program,/matches != 1/);
+});
+
+test('package build is reproducible, digest-bound, L7-only, and emits a review-gated macOS launcher',()=>{
+  const sandbox=mkdtempSync(resolve(tmpdir(),'lemtel-l7-ready-'));
+  try {
+    const first=resolve(sandbox,'first');
+    const second=resolve(sandbox,'second');
+    const env={...process.env,SOURCE_DATE_EPOCH:'1700000000'};
+    execFileSync('bash',[packagePath,first],{env,stdio:'pipe'});
+    execFileSync('bash',[packagePath,second],{env,stdio:'pipe'});
+    const archive='lemtel-l7-ready-deployment.tar.gz';
+    const digest=`${archive}.sha256`;
+    assert.deepEqual(readFileSync(resolve(first,archive)),readFileSync(resolve(second,archive)));
+    assert.deepEqual(readFileSync(resolve(first,digest),'utf8'),readFileSync(resolve(second,digest),'utf8'));
+    const members=execFileSync('tar',['-tzf',resolve(first,archive)],{encoding:'utf8'}).trim().split('\n');
+    assert.deepEqual(members,[
+      'lemtel-ha-do-writer-lb-ready-refresh.sh',
+      'lemtel-ha-do-writer-lb-ready-route-deploy.sh',
+      'lemtel-ha-do-writer-lb-ready-timer-enable.sh',
+      'manifest.sha256'
+    ]);
+    const manifest=execFileSync('tar',['-xOzf',resolve(first,archive),'manifest.sha256'],{encoding:'utf8'});
+    assert.equal(manifest.trim().split('\n').length,3);
+    for (const file of members.slice(0,3)) assert.match(manifest,new RegExp(` ${escaped(file)}$`,'m'));
+    const launcher=readFileSync(resolve(first,'lemtel_deploy_l7_ready_json_mac.sh'),'utf8');
+    assert.match(launcher,/LEMTEL_PARENT_REVIEW_APPROVED/);
+    assert.match(launcher,/LEMTEL_L7_DEPLOY_SSH_TARGET/);
+    assert.match(launcher,/BatchMode=yes/);
+    assert.match(launcher,/ForwardAgent=no/);
+    assert.match(launcher,/LEMTEL_L7_READY_ARCHIVE_DIGESTS/);
+    assert.doesNotMatch(launcher,/lemtel\.assistantvirtualai\.com|https?:\/\/|Bearer|password|secret|token/i);
+  } finally {
+    rmSync(sandbox,{recursive:true,force:true});
+  }
+});
+
+test('package generator remains local-only and refuses non-reproducible builds',()=>{
+  for (const expected of ['SOURCE_DATE_EPOCH', 'transfer_executed=false', 'deployment_executed=false', 'automatic_traffic_failover_enabled=false', 'credential_values_emitted=false']) assert.match(packager,new RegExp(escaped(expected)));
+  assert.doesNotMatch(packager,/scp |rsync |curl |wget |cloudflare|hostinger|pg_ctl promote/i);
+  assert.match(packager,/tar --sort=name/);
+  assert.match(packager,/gzip -n/);
 });

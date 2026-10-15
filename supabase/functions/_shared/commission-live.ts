@@ -102,10 +102,12 @@ export async function fetchLiveRegisterRows(
 
   // PostgREST returns at most 1000 rows per response: page explicitly, otherwise
   // the prior-year deposits are silently missing and YoY percentages explode.
+  // Only the JSON keys we use are projected server-side: pulling the whole
+  // row_data blob for every broker blew the CPU budget of the admin view.
   const baseQuery = () => {
     let q = admin
       .from("planipret_commission_live_cache")
-      .select("broker_user_id, broker_label, maestro_broker_id, agent_name, date_trans, fiscal_year, row_data, synced_at")
+      .select("broker_user_id, broker_label, maestro_broker_id, agent_name, date_trans, fiscal_year, synced_at, number:row_data->number, loan_amt:row_data->loan_amt, institution:row_data->institution, amount:row_data->amount, mortgage_type:row_data->mortgage_type, term:row_data->term, target_name:row_data->target_name, commission_type:row_data->commission_type, is_adjustment:row_data->is_adjustment, cabinet:row_data->cabinet")
       .in("fiscal_year", years)
       .order("id", { ascending: true });
     if (!isAdmin) {
@@ -141,7 +143,7 @@ export async function fetchLiveRegisterRows(
   let syncedAt: string | null = null;
   for (const c of (cached ?? []) as any[]) {
     if (!isMineCacheRow(c)) continue;
-    const d = c.row_data ?? {};
+    const d = c;
     const name = String(c.agent_name ?? c.broker_label ?? "").trim();
     brokers.add(name || String(c.broker_label ?? ""));
     if (!syncedAt || (c.synced_at && c.synced_at > syncedAt)) syncedAt = c.synced_at ?? syncedAt;

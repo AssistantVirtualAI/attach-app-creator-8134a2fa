@@ -20,3 +20,4 @@
 - Planipret SMS, missed-call and voicemail phone alerts come from row triggers calling pp-row-push (row re-read server-side, recent-only, idempotency keys shared with ns-webhook-receiver), because NetSapiens webhooks are not the only ingestion path.
 - Commission screens (portal and mobile) read through a per-user 15-minute device cache in ppEdgeInvoke that stores only validated answers and is cleared by the server "updated" broadcast or an explicit refresh.
 - Every Planipret number assignment (new broker, portal assign, single DID) goes through assignNumberToExtension in _shared/pp-did-routing.ts: calls, texts and caller ID verified by read-back, old numbers released; partial writes broke texting.
+- Admin commission dashboards read only the projected JSON keys of planipret_commission_live_cache, never the full row_data blob, because the full blob exceeds the function CPU budget and freezes the global snapshot.

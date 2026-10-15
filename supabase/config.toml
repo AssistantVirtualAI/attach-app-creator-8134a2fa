@@ -231,3 +231,8 @@ project_id = "gejxisrqtvxavbrfcoxz"
     verify_jwt = false
   [functions.webhooks-router]
     verify_jwt = false
+
+[functions.preview-transactional-email]
+  verify_jwt = false
+[functions.pp-billing-monthly]
+  verify_jwt = false

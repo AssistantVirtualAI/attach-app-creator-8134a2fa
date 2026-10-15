@@ -24,7 +24,6 @@
       "sha256": "4c3befc66a00655df895e44b94d62579a40c36b56f7162ef7ec35a01c4222ee8"
     }
   ],
-  "required_baseline_migration": "0017_lemtel_traffic_samples.sql",
   "required_preconditions": [
     "approved_lemtel_telephony_preparation_governance_schema_write",
     "synthetic_telephony_preparation_tenant_rbac_test",

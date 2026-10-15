@@ -10476,9 +10476,43 @@ export type Database = {
           },
         ]
       }
+      planipret_commission_rows: {
+        Row: {
+          first_seen: string
+          last_seen: string
+          maestro_broker_id: string
+          removed_at: string | null
+          row_data: Json
+          row_hash: string
+          row_key: string
+          source: string
+        }
+        Insert: {
+          first_seen?: string
+          last_seen?: string
+          maestro_broker_id: string
+          removed_at?: string | null
+          row_data: Json
+          row_hash: string
+          row_key: string
+          source: string
+        }
+        Update: {
+          first_seen?: string
+          last_seen?: string
+          maestro_broker_id?: string
+          removed_at?: string | null
+          row_data?: Json
+          row_hash?: string
+          row_key?: string
+          source?: string
+        }
+        Relationships: []
+      }
       planipret_commission_snapshots: {
         Row: {
           cache_key: string
+          data_version: string | null
           fetched_at: string
           last_accessed_at: string
           payload: Json
@@ -10488,6 +10522,7 @@ export type Database = {
         }
         Insert: {
           cache_key: string
+          data_version?: string | null
           fetched_at?: string
           last_accessed_at?: string
           payload: Json
@@ -10497,12 +10532,46 @@ export type Database = {
         }
         Update: {
           cache_key?: string
+          data_version?: string | null
           fetched_at?: string
           last_accessed_at?: string
           payload?: Json
           refreshing_until?: string | null
           request_body?: Json
           user_id?: string
+        }
+        Relationships: []
+      }
+      planipret_commission_source_state: {
+        Row: {
+          last_changed_at: string | null
+          last_checked_at: string | null
+          last_error: string | null
+          maestro_broker_id: string
+          pending_misses: Json
+          row_count: number
+          set_hash: string | null
+          source: string
+        }
+        Insert: {
+          last_changed_at?: string | null
+          last_checked_at?: string | null
+          last_error?: string | null
+          maestro_broker_id: string
+          pending_misses?: Json
+          row_count?: number
+          set_hash?: string | null
+          source: string
+        }
+        Update: {
+          last_changed_at?: string | null
+          last_checked_at?: string | null
+          last_error?: string | null
+          maestro_broker_id?: string
+          pending_misses?: Json
+          row_count?: number
+          set_hash?: string | null
+          source?: string
         }
         Relationships: []
       }

@@ -1,3 +1,4 @@
+import { commissionDataVersion } from "../_shared/commission-version.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
@@ -132,13 +133,15 @@ Deno.serve(async (req) => {
     const force = body?.force === true || body?.refresh === true;
     const { data: snap } = force ? { data: null as any } : await admin
       .from("planipret_commission_snapshots")
-      .select("payload,fetched_at,refreshing_until")
+      .select("payload,fetched_at,refreshing_until,data_version")
       .eq("cache_key", cacheKey)
       .maybeSingle();
     let staleSnap: any = null;
     if (snap?.payload?.ok === true) {
       const age = Date.now() - new Date(snap.fetched_at).getTime();
-      if (age < FRESH_MS) {
+      const version = await commissionDataVersion(admin);
+      const sameVersion = !!version && snap.data_version === version;
+      if (sameVersion || age < FRESH_MS) {
         admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", cacheKey).then(() => {});
         return json({ ...snap.payload, cache: { cached: true, stale: false, fetched_at: snap.fetched_at } });
       }
@@ -1064,6 +1067,7 @@ Deno.serve(async (req) => {
       user_id: user.id,
       request_body: { year, month, scope, granularity, periodIndex, agent },
       payload,
+      data_version: await commissionDataVersion(admin),
       fetched_at: new Date().toISOString(),
       last_accessed_at: new Date().toISOString(),
       refreshing_until: null,

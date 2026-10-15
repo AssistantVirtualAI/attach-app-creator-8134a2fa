@@ -11,9 +11,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
-import { buildDepositQuery, commissionGet, type CommissionDepositRow } from "../_shared/commission-reports.ts";
+import { buildDepositQuery, commissionGet, PENDING_COMMISSION_PATH, type CommissionDepositRow } from "../_shared/commission-reports.ts";
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
 import { agentKey } from "../_shared/broker-identity.ts";
+import { contentKeyed, decideChange, fastHash, stableJson } from "../_shared/commission-version.ts";
 
 const MAX_PAGES = 15;
 const PER_PAGE = 200;
@@ -52,11 +53,14 @@ Deno.serve(async (req) => {
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(url, key, { auth: { persistSession: false } });
   const cid = crypto.randomUUID().slice(0, 8);
+  const log = (...a: unknown[]) => console.log(`[live-sync][${cid}]`, ...a);
 
   // --- authorization: Vault-backed internal cron, or a signed-in admin -------
   let trigger = "cron";
   const internalSecret = req.headers.get("X-Planipret-Internal-Trigger")?.trim() ?? "";
-  if (!(await isInternalCron(admin, internalSecret))) {
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const chained = bearer === key; // self-chain between broker batches
+  if (!chained && !(await isInternalCron(admin, internalSecret))) {
     const authz = req.headers.get("Authorization") ?? "";
     const jwt = authz.replace(/^Bearer\s+/i, "");
     const { data: { user } } = await admin.auth.getUser(jwt);
@@ -153,7 +157,7 @@ Deno.serve(async (req) => {
       let page = 1;
       while (page <= MAX_PAGES) {
         const qs = buildDepositQuery({
-          date_from: from, date_to: to, page, per_page: PER_PAGE, commission_type: ctype,
+          date_from: from, date_to: to, page, per_page: PER_PAGE, commission_type: ctype, order_by: "number", sort: "asc",
           ...(usersId ? { users_id: usersId } : {}),
         } as any);
         const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
@@ -179,10 +183,100 @@ Deno.serve(async (req) => {
     return { rows, error: null as null | { status: number; message: string } };
   };
 
+  // ---- Change probe: compare each broker's Maestro rows with stored hashes ----
+  // Small batches keep each worker under its memory/CPU limit; the run
+  // chains itself until every broker has been probed this cycle.
+  const BATCH = 4;
+  const chainDepth = Number(body?.chain) || 0;
+  const cycleStart = typeof body?.cycle_start === "string" ? body.cycle_start : new Date().toISOString();
+  const carriedChange = body?.changed === true;
+  const deadline = Date.now() + 90_000;
+  let anyChanged = false, probed = 0, skippedForTime = 0;
+  const { data: stateRows } = await admin.from("planipret_commission_source_state")
+    .select("maestro_broker_id, source, last_checked_at").neq("source", "global");
+  const lastChecked = new Map<string, number>();
+  for (const s of (stateRows ?? []) as any[]) {
+    const t = s.last_checked_at ? new Date(s.last_checked_at).getTime() : 0;
+    lastChecked.set(String(s.maestro_broker_id), Math.min(lastChecked.get(String(s.maestro_broker_id)) ?? Infinity, t));
+  }
+  // Oldest-checked first so a time-budget cut resumes with the next brokers.
+  (list as any[]).sort((a, b) => (lastChecked.get(String(a.maestro_broker_id)) ?? 0) - (lastChecked.get(String(b.maestro_broker_id)) ?? 0));
+
+  const loadStored = async (src: "paid" | "pending", mid: string) => {
+    const m = new Map<string, string>();
+    for (let off = 0; ; off += 1000) {
+      const { data } = await admin.from("planipret_commission_rows").select("row_key,row_hash")
+        .eq("source", src).eq("maestro_broker_id", mid).is("removed_at", null).range(off, off + 999);
+      for (const r of (data ?? []) as any[]) m.set(r.row_key, r.row_hash);
+      if (!data || data.length < 1000) break;
+    }
+    return m;
+  };
+  /** Returns true when the source changed (and persists the delta only then). */
+  const probe = async (src: "paid" | "pending", mid: string, rows: { key: string; data: unknown }[]) => {
+    const now = new Date().toISOString();
+    const stored = await loadStored(src, mid);
+    const { data: st } = await admin.from("planipret_commission_source_state").select("set_hash,pending_misses")
+      .eq("maestro_broker_id", mid).eq("source", src).maybeSingle();
+    const prev = new Set<string>(Array.isArray((st as any)?.pending_misses) ? (st as any).pending_misses : []);
+    const d = decideChange(rows.map((r) => r.key), new Set(stored.keys()), prev);
+    const byKey = new Map(rows.map((r) => [r.key, r.data]));
+    let setHash = (st as any)?.set_hash ?? null;
+    if (d.changed || !setHash) {
+      for (let i = 0; i < d.added.length; i += 500) {
+        await admin.from("planipret_commission_rows").upsert(d.added.slice(i, i + 500).map((k) => ({
+          source: src, maestro_broker_id: mid, row_key: k, row_hash: k, row_data: byKey.get(k), last_seen: now, removed_at: null,
+        })), { onConflict: "source,maestro_broker_id,row_key" });
+      }
+      for (let i = 0; i < d.confirmedRemoved.length; i += 200) {
+        await admin.from("planipret_commission_rows").update({ removed_at: now })
+          .eq("source", src).eq("maestro_broker_id", mid).in("row_key", d.confirmedRemoved.slice(i, i + 200));
+      }
+      const removed = new Set(d.confirmedRemoved);
+      const active = [...new Set([...stored.keys(), ...d.added])].filter((k) => !removed.has(k)).sort();
+      setHash = fastHash(active.join("\n")) + ":" + active.length;
+    }
+    await admin.from("planipret_commission_source_state").upsert({
+      maestro_broker_id: mid, source: src, set_hash: setHash, row_count: rows.length, pending_misses: d.newMisses,
+      last_checked_at: now, ...(d.changed ? { last_changed_at: now } : {}), last_error: null,
+    }, { onConflict: "maestro_broker_id,source" });
+    if (d.changed) { anyChanged = true; log(src, mid, "added", d.added.length, "removed", d.confirmedRemoved.length); }
+    return d.changed;
+  };
+  const markError = async (src: "paid" | "pending", mid: string, err: string) => {
+    await admin.from("planipret_commission_source_state").upsert({
+      maestro_broker_id: mid, source: src, last_checked_at: new Date().toISOString(), last_error: err.slice(0, 200),
+    }, { onConflict: "maestro_broker_id,source" });
+  };
+  // Change detection only (totals come from planipret-commission-reports):
+  // Maestro pending pages are not order-stable, so rows are keyed by content
+  // and the page set is re-read until every row Maestro reports is seen.
+  const fetchPendingRows = async (token: string, usersId: string | null) => {
+    const byKey = new Map<string, any>();
+    let expected = 0;
+    for (let pass = 0; pass < 4; pass++) {
+      const before = byKey.size;
+      for (let page = 1; page <= 25; page++) {
+        const qs = new URLSearchParams({ page: String(page), per_page: "200" });
+        if (usersId) qs.set("users_id", usersId);
+        const r = await commissionGet(`${PENDING_COMMISSION_PATH}?${qs}`, token, cid);
+        if (!r.ok) return { rows: null as null | { key: string; data: unknown }[], status: r.status };
+        const batch: any[] = Array.isArray(r.data?.data) ? r.data.data : [];
+        for (const row of batch) { const k = fastHash(stableJson(row)); if (!byKey.has(k)) byKey.set(k, row); }
+        expected = Number(r.data?.meta?.total ?? 0) || expected;
+        if (page >= Number(r.data?.meta?.last_page ?? 1) || batch.length === 0) break;
+      }
+      if (byKey.size >= expected || byKey.size === before) break;
+    }
+    return { rows: contentKeyed([...byKey.values()]), status: 200 };
+  };
+
   for (const p of list as any[]) {
     const label = String(p.full_name ?? p.email ?? p.user_id);
     const attemptedAt = new Date().toISOString();
     const mid = p.maestro_broker_id != null ? String(p.maestro_broker_id) : null;
+    if ((lastChecked.get(String(mid ?? `u:${p.user_id}`)) ?? 0) >= new Date(cycleStart).getTime()) continue;
+    if (Date.now() > deadline || probed >= BATCH) { skippedForTime++; continue; }
 
     // Prefer the broker's own token (always correctly scoped); fall back to the
     // admin-scoped credential when the broker never connected.
@@ -216,6 +310,8 @@ Deno.serve(async (req) => {
         reason, http_status: error.status,
         rows_count: 0, source, last_attempt_at: attemptedAt,
       });
+      await markError("paid", mid ?? `u:${p.user_id}`, `http_${error.status}`);
+      await markError("pending", mid ?? `u:${p.user_id}`, "paid_failed_skipped");
       continue;
     }
 
@@ -264,13 +360,24 @@ Deno.serve(async (req) => {
     for (const r of payload) byKey.set(r.dedupe_key, r);
     const unique = [...byKey.values()];
 
-    for (let i = 0; i < unique.length; i += 500) {
-      const { error: upErr } = await admin
-        .from("planipret_commission_live_cache")
-        .upsert(unique.slice(i, i + 500), { onConflict: "dedupe_key" });
-      if (upErr) console.error(`[${cid}] upsert failed`, upErr.message);
-      else upserted += Math.min(500, unique.length - i);
+    // Unchanged paid set => no write at all; changed => only then refresh cache.
+    const pk = mid ?? `u:${p.user_id}`;
+    probed++;
+    const paidChanged = await probe("paid", pk, contentKeyed(payload.map((u) => ({ ...u.row_data, date_trans: u.date_trans, agent: u.maestro_broker_id }))));
+    if (paidChanged) {
+      for (let i = 0; i < unique.length; i += 500) {
+        const { error: upErr } = await admin
+          .from("planipret_commission_live_cache")
+          .upsert(unique.slice(i, i + 500).map((u) => ({ ...u, synced_at: new Date().toISOString() })), { onConflict: "dedupe_key" });
+        if (upErr) console.error(`[${cid}] upsert failed`, upErr.message);
+        else upserted += Math.min(500, unique.length - i);
+      }
     }
+
+    // Pending: same token and scope; a failure keeps the last good state.
+    const pend = await fetchPendingRows(token, source === "admin_token" ? mid : null);
+    if (pend.rows) await probe("pending", pk, pend.rows);
+    else await markError("pending", pk, `http_${pend.status}`);
 
     diagRows.push({
       broker_user_id: p.user_id, broker_label: label, broker_email: p.email ?? null,
@@ -279,6 +386,41 @@ Deno.serve(async (req) => {
       http_status: 200, rows_count: unique.length, source,
       last_ok_at: new Date().toISOString(), last_attempt_at: attemptedAt,
     });
+  }
+
+  // More brokers left in this cycle => hand off to the next batch.
+  if (skippedForTime > 0 && chainDepth < 20) {
+    const next = fetch(`${url}/functions/v1/pp-commission-live-sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ ...body, chain: chainDepth + 1, cycle_start: cycleStart, changed: anyChanged || carriedChange }),
+    }).catch(() => {});
+    (globalThis as any).EdgeRuntime?.waitUntil?.(next);
+    return json({ ok: true, cid, partial: true, probed, changed: anyChanged });
+  }
+  anyChanged = anyChanged || carriedChange;
+  // Global version moves only when at least one broker's data changed.
+  if (anyChanged) {
+    const { data: all } = await admin.from("planipret_commission_source_state")
+      .select("maestro_broker_id, source, set_hash").neq("source", "global");
+    const sig = ((all ?? []) as any[]).map((s) => `${s.maestro_broker_id}|${s.source}|${s.set_hash ?? ""}`).sort().join("\n");
+    const version = fastHash(sig) + ":" + (all ?? []).length;
+    const now = new Date().toISOString();
+    await admin.from("planipret_commission_source_state").upsert({
+      maestro_broker_id: "*", source: "global", set_hash: version, row_count: (all ?? []).length,
+      last_checked_at: now, last_changed_at: now,
+    }, { onConflict: "maestro_broker_id,source" });
+    // Rebuild recently viewed snapshots once, then a figure-free nudge.
+    try {
+      await fetch(`${url}/functions/v1/planipret-commission-reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ action: "warm_snapshots" }),
+      });
+    } catch { /* best effort */ }
+  } else {
+    await admin.from("planipret_commission_source_state").update({ last_checked_at: new Date().toISOString() })
+      .eq("maestro_broker_id", "*").eq("source", "global");
   }
 
   for (let i = 0; i < diagRows.length; i += 200) {
@@ -302,6 +444,7 @@ Deno.serve(async (req) => {
     brokers_total: list.length,
     brokers_connected: connectedCount,
     rows_upserted: upserted,
+    probed, changed: anyChanged, skipped_for_time: skippedForTime,
     admin_scope: { configured: adminTok.source !== "none", source: adminTok.source, reason: adminTok.reason ?? null },
   });
 });

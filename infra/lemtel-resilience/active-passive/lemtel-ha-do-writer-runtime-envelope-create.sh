@@ -7,18 +7,6 @@ fail() { printf 'do_writer_runtime_envelope_status=failed\nreason=%s\n' "$1" >&2
 [ "${LEMTEL_HA_EXECUTE:-}" = 'create_hostinger_runtime_envelope' ] || fail execution_token_required
 [ "${LEMTEL_HA_ROLE:-}" = 'digitalocean_writer' ] || fail invalid_role
 
-compose_dir='/opt/lemtel-staging-bootstrap/lemtel-supabase'
-stage_dir='/var/lib/lemtel-ha/runtime-envelope'
-envelope_file="$stage_dir/hostinger-runtime.age"
-manifest_file="$stage_dir/hostinger-runtime.manifest"
-age_recipient="${LEMTEL_HA_HOSTINGER_AGE_RECIPIENT:-}"
-case "$age_recipient" in age1[0-9a-z]*) ;; *) fail invalid_hostinger_age_recipient ;; esac
-command -v age >/dev/null 2>&1 || fail age_missing
-command -v tar >/dev/null 2>&1 || fail tar_missing
-command -v sha256sum >/dev/null 2>&1 || fail sha256sum_missing
-[ -d "$compose_dir" ] || fail compose_directory_missing
-printf '' | age -r "$age_recipient" -o /dev/null || fail invalid_hostinger_age_recipient
-
 runtime_paths=(
   .env
   docker-compose.yml
@@ -32,6 +20,40 @@ runtime_paths=(
   volumes/api/envoy/lds.template.yaml
   volumes/api/envoy/docker-entrypoint.sh
 )
+valid_compose_dir() {
+  local candidate="$1" path
+  [ -n "$candidate" ] && [ -d "$candidate" ] || return 1
+  for path in "${runtime_paths[@]}"; do [ -e "$candidate/$path" ] || return 1; done
+}
+resolve_active_compose_dir() {
+  local -a candidates=() valid=()
+  local candidate
+  mapfile -t candidates < <(docker ps --format '{{.Label "com.docker.compose.project.working_dir"}}' | awk 'NF { print }' | sort -u)
+  for candidate in "${candidates[@]}"; do
+    valid_compose_dir "$candidate" && valid+=("$candidate")
+  done
+  [ "${#valid[@]}" -eq 1 ] && printf '%s' "${valid[0]}"
+}
+requested_compose_dir="${LEMTEL_HA_RUNTIME_SOURCE_DIR:-}"
+if [ -n "$requested_compose_dir" ]; then
+  case "$requested_compose_dir" in /*) ;; *) fail invalid_runtime_source_directory ;; esac
+  valid_compose_dir "$requested_compose_dir" || fail invalid_runtime_source_directory
+  compose_dir="$requested_compose_dir"
+else
+  compose_dir="$(resolve_active_compose_dir || true)"
+  [ -n "$compose_dir" ] || fail compose_directory_unresolved
+fi
+stage_dir='/var/lib/lemtel-ha/runtime-envelope'
+envelope_file="$stage_dir/hostinger-runtime.age"
+manifest_file="$stage_dir/hostinger-runtime.manifest"
+age_recipient="${LEMTEL_HA_HOSTINGER_AGE_RECIPIENT:-}"
+case "$age_recipient" in age1[0-9a-z]*) ;; *) fail invalid_hostinger_age_recipient ;; esac
+command -v docker >/dev/null 2>&1 || fail docker_missing
+command -v age >/dev/null 2>&1 || fail age_missing
+command -v tar >/dev/null 2>&1 || fail tar_missing
+command -v sha256sum >/dev/null 2>&1 || fail sha256sum_missing
+printf '' | age -r "$age_recipient" -o /dev/null || fail invalid_hostinger_age_recipient
+
 cd "$compose_dir"
 for path in "${runtime_paths[@]}"; do
   [ -e "$path" ] || fail "runtime_path_missing_$(basename "$path")"

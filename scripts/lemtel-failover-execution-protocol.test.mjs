@@ -332,22 +332,22 @@ test('agent verifies both domain-separated HMACs, expiry, writer binding, termin
     assert.ok(agent.includes(required), required);
   }
   assert.match(agent, /incident = validate_command\(reply\['command'\], cfg\)\n    ledger = claim_incident\(incident\)/u);
-  assert.ok(agent.indexOf('ledger = claim_incident(incident)') < agent.indexOf('result = subprocess.run'));
+  assert.ok(agent.indexOf('ledger = claim_incident(incident)') < agent.indexOf("if not run_local(GUARD"));
   assert.doesNotMatch(agent, /(?:os\.(?:remove|unlink|rmdir)|shutil\.rmtree)/u);
 });
 
-test('agent has exactly one allowlisted guard execution, no runtime/promotion/routing/provider call', () => {
-  const forbidden = /(?:\bpg_ctl\b|pg_promote\s*\(|docker\s+(?:compose|run|start|restart)|\b(?:curl|wget|ssh|scp|rsync|doctl|terraform|cloudflared)\b|\b(?:systemctl|service)\s+(?:start|restart|enable)|\b(?:os\.system|os\.exec\w*|subprocess\.(?:Popen|call|check_call|check_output))\b|shell\s*=\s*True)/iu;
-  assert.doesNotMatch(agent, forbidden);
-  assert.equal((agent.match(/subprocess\.run\(/g) || []).length, 1);
-  assert.match(agent, /subprocess\.run\(\['\/usr\/bin\/bash', GUARD\], env=guard_env/u);
-  assert.match(agent, /GUARD = '\/opt\/lemtel-ha\/automatic-failover\/lemtel-ha-hostinger-auto-promotion-guard\.sh'/u);
-  assert.match(agent, /verify_hostinger_promotion_readiness_only/u);
+test('agent keeps network and provider control in the arbiter, validates a fixed local command chain, and defaults to review', () => {
   assert.equal((agent.match(/urllib\.request\.Request\(/g) || []).length, 1);
   assert.match(agent, /cfg\['ARBITER_URL'\]\.rstrip\('\/'\) \+ '\/agent\/command'/u);
   assert.doesNotMatch(agent, /(?:\/droplets\/|\/actions\/|\/zones\/|\/accounts\/|DO_API_TOKEN|DO_API_BASE_URL)/u);
-  assert.match(agent, /promotion_executed=false\\nruntime_start_executed=false/u);
-  assert.match(agent, /stdout=subprocess\.DEVNULL, stderr=subprocess\.DEVNULL/u);
+  for (const required of ['PROMOTION_EXECUTION_MODE', 'automatic_execution_acknowledgement_required',
+    'runtime_stage_attestation_blocked_incident_consumed', 'promotion_readiness_guard_blocked_incident_consumed', 'promotion_execution_started',
+    'runtime_start_started', 'promotion_and_runtime_completed', "cfg['PROMOTION_EXECUTION_MODE'] == 'review'"]) {
+    assert.ok(agent.includes(required), required);
+  }
+  assert.equal((agent.match(/subprocess\.run\(/g) || []).length, 1);
+  assert.match(agent, /def run_local\(path, env, timeout\)/u);
+  assert.doesNotMatch(agent, /(?:os\.(?:remove|unlink|rmdir)|shutil\.rmtree|shell\s*=\s*True)/u);
 });
 
 test('service and timer are uninstalled, unenabled templates with no Install/WantedBy or active mode', () => {

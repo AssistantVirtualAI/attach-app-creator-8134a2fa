@@ -1,6 +1,6 @@
 {
-  "contract_version": "lemtel_current_ha_topology_v1",
-  "scope": "current_topology_readiness_only_no_remote_activation",
+  "contract_version": "lemtel_current_ha_topology_v2",
+  "scope": "prepared_current_topology_execution_agent_uninstalled",
   "current_topology": {
     "writer": "do_writer",
     "standby": "hostinger_private_hot_standby",
@@ -54,5 +54,14 @@
     "avastatistic_change": false,
     "fusionpbx_or_telephony_change": false,
     "legacy_inverse_role_scripts_automate_current_topology": false
+  },
+  "prepared_execution_agent": {
+    "hostinger_promotion_script_prepared": true,
+    "hostinger_runtime_start_script_prepared": true,
+    "default_mode": "review",
+    "service_installed": false,
+    "timer_enabled": false,
+    "execute_mode_configured": false,
+    "routing_owned_by_cloudflare_load_balancer": true
   }
 }

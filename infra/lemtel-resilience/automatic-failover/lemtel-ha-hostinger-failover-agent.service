@@ -1,7 +1,7 @@
 # Prepared template only: NOT installed, NOT enabled, NOT started.
 # Disabled configuration is not an activation; there is deliberately no Install section.
 [Unit]
-Description=Lemtel Hostinger failover command validation and readiness guard only
+Description=Lemtel Hostinger failover validation and current-topology execution agent
 ConditionPathExists=/etc/lemtel-ha/failover-agent.env
 
 [Service]
@@ -19,5 +19,5 @@ ProtectSystem=strict
 ProtectHome=true
 StateDirectory=lemtel-ha/failover-agent
 StateDirectoryMode=0700
-ReadWritePaths=/var/lib/lemtel-ha/failover-agent
-ReadOnlyPaths=/etc/lemtel-ha /opt/lemtel-ha/automatic-failover /var/lib/lemtel-ha/current-topology-evidence
+ReadWritePaths=/var/lib/lemtel-ha/failover-agent /var/lib/lemtel-ha/current-topology-evidence /var/lock /opt/lemtel-ha/runtime-stage
+ReadOnlyPaths=/etc/lemtel-ha /opt/lemtel-ha/automatic-failover

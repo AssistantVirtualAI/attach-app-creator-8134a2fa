@@ -25,6 +25,9 @@ type RequestBody =
   | { action: "resend_welcome"; organizationId: string; recipientUserId: string; locale: Locale }
   | { action: "revoke_invitation"; organizationId: string; recipientUserId: string }
   | { action: "list_organizations" }
+  | { action: "list_platform_administrators" }
+  | { action: "grant_platform_administrator"; email: string; confirmation: "GRANT_PLATFORM_ADMIN" }
+  | { action: "revoke_platform_administrator"; recipientUserId: string; confirmation: "REVOKE_PLATFORM_ADMIN" }
   | { action: "get_config" }
   | { action: "get_operational_status" }
   | { action: "get_operational_trend" }
@@ -89,13 +92,27 @@ function userList(value: unknown, allowOwner: boolean): UserInput[] | Failure {
 
 export function validateBody(raw: unknown): RequestBody | Failure {
   if (!plainObject(raw) || typeof raw.action !== "string") return fail("invalid_body", 400);
-  if (raw.action === "list_organizations" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend") {
+  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
   if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections" || raw.action === "get_telephony_readiness") {
     if (!exactKeys(raw, ["action", "organizationId"])) return fail("invalid_body", 400);
     const parsedOrganizationId = organizationId(raw.organizationId);
     return isFailure(parsedOrganizationId) ? parsedOrganizationId : { action: raw.action, organizationId: parsedOrganizationId } as RequestBody;
+  }
+  if (raw.action === "grant_platform_administrator") {
+    if (!exactKeys(raw, ["action", "email", "confirmation"])) return fail("invalid_body", 400);
+    const email = typeof raw.email === "string" ? raw.email.trim().toLowerCase() : "";
+    if (!EMAIL_RE.test(email) || email.length > 254) return fail("invalid_email", 400);
+    if (raw.confirmation !== "GRANT_PLATFORM_ADMIN") return fail("platform_admin_confirmation_required", 400);
+    return { action: "grant_platform_administrator", email, confirmation: "GRANT_PLATFORM_ADMIN" };
+  }
+  if (raw.action === "revoke_platform_administrator") {
+    if (!exactKeys(raw, ["action", "recipientUserId", "confirmation"])) return fail("invalid_body", 400);
+    const recipientUserId = organizationId(raw.recipientUserId);
+    if (isFailure(recipientUserId)) return fail("invalid_recipient_user_id", 400);
+    if (raw.confirmation !== "REVOKE_PLATFORM_ADMIN") return fail("platform_admin_confirmation_required", 400);
+    return { action: "revoke_platform_administrator", recipientUserId, confirmation: "REVOKE_PLATFORM_ADMIN" };
   }
   if (raw.action === "create_domain") {
     if (!exactKeys(raw, ["action", "organizationId", "domain"]) || !plainObject(raw.domain)) return fail("invalid_body", 400);
@@ -379,6 +396,47 @@ async function provisionMany(admin: any, organizationId: string, actor: string, 
   return results;
 }
 
+async function platformAudit(admin: any, actor: string, subjectUserId: string, action: "platform_administrator_granted" | "platform_administrator_revoked") {
+  const { error } = await admin.from("lemtel_platform_administrator_audit").insert({ actor_id: actor, subject_user_id: subjectUserId, action, metadata: {} });
+  return !error;
+}
+async function listPlatformAdministrators(admin: any) {
+  const { data, error } = await admin.from("lemtel_platform_administrators").select("user_id,status,created_at").order("created_at", { ascending: true });
+  if (error) return fail("platform_administrator_list_failed", 503);
+  const users = await usersById(admin, (data ?? []).map((entry: any) => entry.user_id));
+  return { administrators: (data ?? []).map((entry: any) => {
+    const user = users.get(entry.user_id);
+    return { userId: entry.user_id, fullName: userName(user), email: String(user?.email ?? "").trim().toLowerCase(), status: entry.status === "active" ? "active" : "revoked", grantedAt: entry.created_at };
+  }).filter((entry: any) => entry.email) };
+}
+async function grantPlatformAdministrator(admin: any, actor: string, email: string) {
+  const user = await userByEmail(admin, email);
+  if (!user?.id) return fail("platform_administrator_recipient_not_found", 404);
+  const { data: previous, error: previousError } = await admin.from("lemtel_platform_administrators").select("status,revoked_at").eq("user_id", user.id).maybeSingle();
+  if (previousError) return fail("platform_administrator_lookup_failed", 503);
+  const { error } = await admin.from("lemtel_platform_administrators").upsert({ user_id: user.id, status: "active", revoked_at: null }, { onConflict: "user_id" });
+  if (error) return fail("platform_administrator_grant_failed", 503);
+  if (!(await platformAudit(admin, actor, user.id, "platform_administrator_granted"))) {
+    if (previous) await admin.from("lemtel_platform_administrators").update({ status: previous.status, revoked_at: previous.revoked_at }).eq("user_id", user.id);
+    else await admin.from("lemtel_platform_administrators").delete().eq("user_id", user.id);
+    return fail("platform_administrator_audit_failed", 503);
+  }
+  return { status: "active" as const, userId: user.id };
+}
+async function revokePlatformAdministrator(admin: any, actor: string, recipientUserId: string) {
+  if (actor === recipientUserId) return fail("platform_administrator_self_revoke_forbidden", 400);
+  const { count, error: countError } = await admin.from("lemtel_platform_administrators").select("user_id", { count: "exact", head: true }).eq("status", "active");
+  if (countError) return fail("platform_administrator_count_failed", 503);
+  if ((count ?? 0) <= 1) return fail("last_platform_administrator_required", 400);
+  const { data, error } = await admin.from("lemtel_platform_administrators").update({ status: "revoked", revoked_at: new Date().toISOString() }).eq("user_id", recipientUserId).eq("status", "active").select("user_id").maybeSingle();
+  if (error) return fail("platform_administrator_revoke_failed", 503);
+  if (!data?.user_id) return fail("platform_administrator_not_found", 404);
+  if (!(await platformAudit(admin, actor, recipientUserId, "platform_administrator_revoked"))) {
+    await admin.from("lemtel_platform_administrators").update({ status: "active", revoked_at: null }).eq("user_id", recipientUserId);
+    return fail("platform_administrator_audit_failed", 503);
+  }
+  return { status: "revoked" as const };
+}
 async function portalAccess(admin: any, userId: string): Promise<boolean> {
   if (await platformAdmin(admin, userId)) return true;
   const { data } = await admin.from("lemtel_organization_memberships").select("user_id").eq("user_id", userId).eq("status", "active").limit(1);
@@ -747,6 +805,21 @@ export async function handler(req: Request): Promise<Response> {
     if (!(await portalAccess(admin, actor))) return respond({ error: "forbidden" }, 403);
     const result = await listOrganizations(admin, actor);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+  if (request.action === "list_platform_administrators") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await listPlatformAdministrators(admin);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+  if (request.action === "grant_platform_administrator") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await grantPlatformAdministrator(admin, actor, request.email);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, administrator: result });
+  }
+  if (request.action === "revoke_platform_administrator") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await revokePlatformAdministrator(admin, actor, request.recipientUserId);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, administrator: result });
   }
   if (request.action === "get_config") {
     if (!(await portalAccess(admin, actor))) return respond({ error: "forbidden" }, 403);

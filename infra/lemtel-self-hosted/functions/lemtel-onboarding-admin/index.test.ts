@@ -122,3 +122,11 @@ Deno.test("operational status fails closed for malformed data", () => {
   assertEquals(snapshot.services.auth, "unknown");
   assertEquals(snapshot.topology.writer, "unknown");
 });
+
+Deno.test("platform administrator controls require explicit exact confirmations", () => {
+  const recipientUserId = "22222222-2222-4222-8222-222222222222";
+  assertEquals(validateBody({ action: "list_platform_administrators" }), { action: "list_platform_administrators" });
+  assertEquals(validateBody({ action: "grant_platform_administrator", email: " Phil@Lemtel.com ", confirmation: "GRANT_PLATFORM_ADMIN" }), { action: "grant_platform_administrator", email: "phil@lemtel.com", confirmation: "GRANT_PLATFORM_ADMIN" });
+  assertEquals(validateBody({ action: "grant_platform_administrator", email: "phil@lemtel.com", confirmation: "GRANT" }), { error: "platform_admin_confirmation_required", status: 400 });
+  assertEquals(validateBody({ action: "revoke_platform_administrator", recipientUserId, confirmation: "REVOKE_PLATFORM_ADMIN" }), { action: "revoke_platform_administrator", recipientUserId, confirmation: "REVOKE_PLATFORM_ADMIN" });
+});

@@ -177,6 +177,7 @@ export type PortalClientConnection = {
   authorityRevision: number;
   accessState: "active" | "revoked";
 };
+export type PlatformAdministrator = { userId: string; fullName: string; email: string; status: "active" | "revoked"; grantedAt?: string };
 export type PortalConfig = { downloads: { desktop?: string; windows?: string; macosApple?: string; macosIntel?: string; ios?: string; android?: string }; supportContact?: string };
 export type PortalTelephonyCapability = {
   key: string;
@@ -239,6 +240,13 @@ export function buildResendWelcomeBody(organizationId: string, recipientUserId: 
   return { action: "resend_welcome" as const, organizationId, recipientUserId, locale };
 }
 
+export function buildGrantPlatformAdministratorBody(email: string, confirmation: string) {
+  return { action: "grant_platform_administrator" as const, email: email.trim().toLowerCase(), confirmation };
+}
+export function buildRevokePlatformAdministratorBody(recipientUserId: string, confirmation: string) {
+  return { action: "revoke_platform_administrator" as const, recipientUserId, confirmation };
+}
+
 export function buildCreateDomainBody(organizationId: string, hostname: string) {
   return { action: "create_domain" as const, organizationId, domain: { hostname: hostname.trim().toLowerCase().replace(/\.$/, "") } };
 }
@@ -276,6 +284,9 @@ export function buildSetClientSessionAccessBody(organizationId: string, recipien
  */
 export const portalApi = {
   listOrganizations: () => invoke<{ organizations: PortalOrganization[] }>("lemtel-onboarding-admin", { action: "list_organizations" }),
+  listPlatformAdministrators: () => invoke<{ administrators: PlatformAdministrator[] }>("lemtel-onboarding-admin", { action: "list_platform_administrators" }),
+  grantPlatformAdministrator: (email: string, confirmation: string) => invoke<{ ok: true }>("lemtel-onboarding-admin", buildGrantPlatformAdministratorBody(email, confirmation), { write: true }),
+  revokePlatformAdministrator: (recipientUserId: string, confirmation: string) => invoke<{ ok: true }>("lemtel-onboarding-admin", buildRevokePlatformAdministratorBody(recipientUserId, confirmation), { write: true }),
   getConfig: () => invoke<PortalConfig>("lemtel-onboarding-admin", { action: "get_config" }),
   getOperationalStatus: () => invoke<LemtelOperationalStatus>("lemtel-onboarding-admin", { action: "get_operational_status" }),
   getOperationalTrend: () => invoke<{ samples: LemtelOperationalTrendSample[] }>("lemtel-onboarding-admin", { action: "get_operational_trend" }),

@@ -19,3 +19,4 @@
 - AVA chat and voice share one tool registry (_shared/ava-tools.ts) executed by ava-tool-executor; commission answers go through planipret-commission-reports so AVA, portal and mobile show identical validated figures.
 - Planipret SMS, missed-call and voicemail phone alerts come from row triggers calling pp-row-push (row re-read server-side, recent-only, idempotency keys shared with ns-webhook-receiver), because NetSapiens webhooks are not the only ingestion path.
 - Commission screens (portal and mobile) read through a per-user 15-minute device cache in ppEdgeInvoke that stores only validated answers and is cleared by the server "updated" broadcast or an explicit refresh.
+- Every Planipret number assignment (new broker, portal assign, single DID) goes through assignNumberToExtension in _shared/pp-did-routing.ts: calls, texts and caller ID verified by read-back, old numbers released; partial writes broke texting.

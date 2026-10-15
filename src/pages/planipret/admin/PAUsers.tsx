@@ -1359,19 +1359,20 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
 
   const applyPhoneNumber = async (ext: string) => {
     if (phoneNumber === originalNumber) return { ok: true };
-    // Unassign the previous number (if any & changed/cleared)
-    if (originalNumber && originalNumber !== phoneNumber) {
-      await supabase.functions.invoke("pp-admin-phonenumbers", {
-        body: { action: "unassign", payload: { phone_number: originalNumber } },
-      }).catch(() => null);
-    }
+    // Assign first (calls → texts → caller ID, old numbers released server-side);
+    // the previous number is only freed explicitly when the field was cleared.
     if (phoneNumber) {
       const { data, error } = await supabase.functions.invoke("pp-admin-phonenumbers", {
         body: { action: "assign", payload: { phone_number: phoneNumber, extension: ext } },
       });
       if (error || !(data as any)?.success) {
-        return { ok: false, error: (data as any)?.error ?? error?.message ?? "Erreur DID" };
+        return { ok: false, error: (data as any)?.diagnostic ?? (data as any)?.error ?? error?.message ?? "Erreur DID" };
       }
+      toast.success((data as any)?.diagnostic ?? "Numéro assigné");
+    } else if (originalNumber) {
+      await supabase.functions.invoke("pp-admin-phonenumbers", {
+        body: { action: "unassign", payload: { phone_number: originalNumber } },
+      }).catch(() => null);
     }
     return { ok: true };
   };

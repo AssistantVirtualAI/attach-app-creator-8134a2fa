@@ -224,3 +224,74 @@ export async function assignSmsNumber(domain: string, rawNumber: string, extensi
   const live = Array.isArray(r.data) ? r.data[0] : r.data;
   return { ok: (extension ? String(live?.dest ?? "") === extension : String(live?.application ?? "") === "available"), write_status: w.status };
 }
+
+/** Met le numéro comme caller ID du poste (appels + textos sortants), puis relit. */
+export async function setExtensionCallerId(domain: string, extension: string, rawNumber: string | null) {
+  const path = `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}`;
+  const d = rawNumber ? pbxNumberId(rawNumber).replace(/^1(?=\d{10}$)/, "") : "";
+  const w = await nsCall(path, { method: "PUT", body: JSON.stringify({ "caller-id-number": d, "caller-id-number-emergency": d }) });
+  const r = await nsCall(path);
+  const live = digitsOnly(one(r.data)?.["caller-id-number"]).replace(/^1(?=\d{10}$)/, "");
+  return { ok: live === d, write_status: w.status };
+}
+
+export type NumberAssignResult = {
+  success: boolean;
+  phone_number: string;
+  extension: string;
+  steps: { voice: boolean; sms: boolean; caller_id: boolean; released: { number: string; ok: boolean }[] };
+  error_code?: string;
+  diagnostic: string;
+};
+
+/**
+ * Procédure UNIQUE d'assignation d'un numéro à un poste (création de courtier,
+ * bouton Assigner, single_did). Appels → textos → caller ID → libération des
+ * anciens numéros du poste. Échec appels = rien d'autre n'est modifié.
+ */
+export async function assignNumberToExtension(
+  domain: string, rawNumber: string, extension: string,
+  opts: { description?: string; releaseOthers?: boolean } = {},
+): Promise<NumberAssignResult> {
+  const pn = pbxNumberId(rawNumber);
+  const ext = String(extension ?? "").trim();
+  const base = { phone_number: pn, extension: ext, steps: { voice: false, sms: false, caller_id: false, released: [] as { number: string; ok: boolean }[] } };
+  if (!/^[0-9]{2,10}$/.test(ext) || !/^\d{11}$/.test(pn)) {
+    return { ...base, success: false, error_code: "invalid_input", diagnostic: "Numéro ou poste invalide." };
+  }
+  const exts = await listLiveExtensions(domain);
+  if (exts.size && !exts.has(ext)) {
+    return { ...base, success: false, error_code: "extension_missing", diagnostic: `Le poste ${ext} n'existe pas dans le système téléphonique.` };
+  }
+  const cur = await nsCall(pnPath(domain, pn));
+  if (cur.status === 404) {
+    return { ...base, success: false, error_code: "sms_only_number", diagnostic: "Numéro textos seulement : activez l'appel chez le fournisseur avant de l'assigner." };
+  }
+  const owner = destinationUserOf(cur.data);
+  if (owner && owner !== ext && exts.has(owner)) {
+    return { ...base, success: false, error_code: "number_in_use", diagnostic: `Ce numéro est déjà assigné au poste ${owner}.` };
+  }
+  const voice = await assignDidToExtension(domain, pn, ext, opts.description);
+  base.steps.voice = voice.verified;
+  if (!voice.verified) return { ...base, success: false, error_code: "voice_failed", diagnostic: voice.diagnostic };
+  base.steps.sms = (await assignSmsNumber(domain, pn, ext).catch(() => ({ ok: false }))).ok;
+  base.steps.caller_id = (await setExtensionCallerId(domain, ext, pn).catch(() => ({ ok: false }))).ok;
+  if (opts.releaseOthers) {
+    const dids = await listLiveDids(domain);
+    for (const [other, dest] of dids) {
+      if (other === pn || dest !== ext) continue;
+      const rel = await releaseDid(domain, other);
+      const s = await assignSmsNumber(domain, other, null).catch(() => ({ ok: false }));
+      base.steps.released.push({ number: other, ok: rel.released && s.ok });
+    }
+  }
+  const success = base.steps.voice && base.steps.sms && base.steps.caller_id && base.steps.released.every((r) => r.ok);
+  return {
+    ...base, success,
+    error_code: success ? undefined : "partial",
+    diagnostic: success
+      ? `Appels ✓ Textos ✓ Numéro affiché ✓ pour ${e164Of(pn)} → ${ext}.`
+      : `Appels ${base.steps.voice ? "✓" : "✗"} Textos ${base.steps.sms ? "✓" : "✗"} Numéro affiché ${base.steps.caller_id ? "✓" : "✗"}`
+        + (base.steps.released.some((r) => !r.ok) ? " · libération ancien numéro ✗" : "") + " — relancez l'assignation.",
+  };
+}

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildArchiveOrganizationBody, buildAssignExistingUserBody, buildCreateOrganizationBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetClientSessionAccessBody, buildSetMembershipRoleBody, buildTransferOrganizationOwnershipBody, buildUpdateOrganizationBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
+import { buildArchiveOrganizationBody, buildAssignExistingUserBody, buildCreateOrganizationBody, buildGrantPlatformAdministratorBody, buildRevokePlatformAdministratorBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetClientSessionAccessBody, buildSetMembershipRoleBody, buildTransferOrganizationOwnershipBody, buildUpdateOrganizationBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
@@ -69,6 +69,18 @@ describe("Lemtel portal contract", () => {
     expect(buildResendWelcomeBody("11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "fr")).toEqual({
       action: "resend_welcome", organizationId: "11111111-1111-4111-8111-111111111111", recipientUserId: "22222222-2222-4222-8222-222222222222", locale: "fr",
     });
+  });
+
+  it("uses exact confirmed server-side bodies for platform administrator controls", () => {
+    const userId = "22222222-2222-4222-8222-222222222222";
+    expect(buildGrantPlatformAdministratorBody(" Phil@Lemtel.com ", "GRANT_PLATFORM_ADMIN")).toEqual({ action: "grant_platform_administrator", email: "phil@lemtel.com", confirmation: "GRANT_PLATFORM_ADMIN" });
+    expect(buildRevokePlatformAdministratorBody(userId, "REVOKE_PLATFORM_ADMIN")).toEqual({ action: "revoke_platform_administrator", recipientUserId: userId, confirmation: "REVOKE_PLATFORM_ADMIN" });
+    expect(typeof portalApi.listPlatformAdministrators).toBe("function");
+    expect(typeof portalApi.grantPlatformAdministrator).toBe("function");
+    const panel = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPlatformAdministrators.tsx"), "utf8");
+    expect(panel).toContain("GRANT_PLATFORM_ADMIN");
+    expect(panel).toContain("REVOKE_PLATFORM_ADMIN");
+    expect(panel).toContain("Telephony remains unprovisioned");
   });
 
   it("uses exact organization-scoped bodies for existing-account assignment and role changes", () => {

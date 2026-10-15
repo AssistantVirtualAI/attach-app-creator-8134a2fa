@@ -54,7 +54,7 @@ const MonthlyBilling = ({ report }: { report?: any }) => {
             <table width="100%" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse' }}>
               <thead><tr>
                 <th style={th}>Service</th><th style={th}>Existants</th><th style={th}>Ajoutés</th><th style={th}>Total</th>
-                <th style={th}>11,99 $/mois</th><th style={th}>Activation (100 $)</th>
+                <th style={th}>Mensuel (premier gratuit)</th><th style={th}>Activation (100 $)</th>
               </tr></thead>
               <tbody>
                 {r.services.map((s: any) => (
@@ -93,10 +93,10 @@ export const template = {
         { plan: 'ai', label: 'Kit complet (App + AVA)', existing: 80, added: 0, total: 80, unit_price: 99.95, cost: 4000, revenue: 7996, margin: 3996 },
       ],
       services: [
-        { kind: 'queue', label: "Files d'attente", existing: 2, added: 1, total: 3, added_names: ['Ventes'], monthly: 35.97, activation: 100 },
-        { kind: 'ivr', label: 'IVR', existing: 1, added: 0, total: 1, added_names: [], monthly: 11.99, activation: 0 },
+        { kind: 'queue', label: "Files d'attente", existing: 2, added: 1, total: 3, added_names: ['Ventes'], monthly: 23.98, activation: 100 },
+        { kind: 'ivr', label: 'IVR', existing: 1, added: 0, total: 1, added_names: [], monthly: 0, activation: 0 },
       ],
-      totals: { users: 91, users_added: 1, plan_cost: 4219.9, plan_revenue: 8574.5, plan_margin: 4354.6, monthly_recurring: 8622.46, activation_one_time: 100, total_billed: 8722.46 },
+      totals: { users: 91, users_added: 1, plan_cost: 4219.9, plan_revenue: 8574.5, plan_margin: 4354.6, monthly_recurring: 4243.88, activation_one_time: 100, total_billed: 4343.88 },
     },
   },
 } satisfies TemplateEntry

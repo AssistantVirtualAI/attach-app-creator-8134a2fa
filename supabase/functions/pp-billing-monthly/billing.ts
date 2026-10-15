@@ -42,14 +42,25 @@ export function buildReport(profiles: Profile[], items: Item[], start: Date, end
       margin: r2(total * (PLAN_PRICES[k] - PLAN_COSTS[k])),
     };
   });
+  const activeItems = items.filter((i) => new Date(i.first_seen_at).getTime() < e && (!i.removed_at || new Date(i.removed_at).getTime() >= e));
+  // Premier service (file ou IVR, le plus ancien) gratuit; chaque service additionnel 11,99 $/mois.
+  const freeKeys = new Set(
+    activeItems
+      .slice()
+      .sort((a, b) => new Date(a.first_seen_at).getTime() - new Date(b.first_seen_at).getTime())
+      .slice(0, 1)
+      .map((i) => `${i.kind}|${i.first_seen_at}|${i.name ?? ""}`)
+  );
   const services = (["queue", "ivr"] as const).map((kind) => {
-    const active = items.filter((i) => i.kind === kind && new Date(i.first_seen_at).getTime() < e && (!i.removed_at || new Date(i.removed_at).getTime() >= e));
+    const active = activeItems.filter((i) => i.kind === kind);
     const added = active.filter((i) => new Date(i.first_seen_at).getTime() >= s);
+    const free = active.filter((i) => freeKeys.has(`${i.kind}|${i.first_seen_at}|${i.name ?? ""}`)).length;
+    const billable = Math.max(0, active.length - free);
     return {
       kind, label: kind === "queue" ? "Files d'attente" : "IVR",
       existing: active.length - added.length, added: added.length, total: active.length,
       added_names: added.map((i) => i.name ?? "—"),
-      monthly: r2(active.length * SERVICE_MONTHLY), activation: r2(added.length * SERVICE_ACTIVATION),
+      monthly: r2(billable * SERVICE_MONTHLY), activation: r2(added.length * SERVICE_ACTIVATION),
     };
   });
   const planRevenue = r2(plans.reduce((a, p) => a + p.revenue, 0));

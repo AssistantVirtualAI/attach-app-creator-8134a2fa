@@ -10186,6 +10186,42 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_commission_broker_aggregates: {
+        Row: {
+          bucket_key: string
+          built_at: string
+          data_hash: string | null
+          fiscal_year: number | null
+          kind: string
+          owner_key: string | null
+          row_count: number
+          rows: Json
+          source_max_updated_at: string | null
+        }
+        Insert: {
+          bucket_key: string
+          built_at?: string
+          data_hash?: string | null
+          fiscal_year?: number | null
+          kind: string
+          owner_key?: string | null
+          row_count?: number
+          rows?: Json
+          source_max_updated_at?: string | null
+        }
+        Update: {
+          bucket_key?: string
+          built_at?: string
+          data_hash?: string | null
+          fiscal_year?: number | null
+          kind?: string
+          owner_key?: string | null
+          row_count?: number
+          rows?: Json
+          source_max_updated_at?: string | null
+        }
+        Relationships: []
+      }
       planipret_commission_broker_aliases: {
         Row: {
           agent_key: string
@@ -10622,6 +10658,8 @@ export type Database = {
           last_changed_at: string | null
           last_checked_at: string | null
           last_error: string | null
+          last_review: Json | null
+          last_review_at: string | null
           maestro_broker_id: string
           pending_misses: Json
           row_count: number
@@ -10632,6 +10670,8 @@ export type Database = {
           last_changed_at?: string | null
           last_checked_at?: string | null
           last_error?: string | null
+          last_review?: Json | null
+          last_review_at?: string | null
           maestro_broker_id: string
           pending_misses?: Json
           row_count?: number
@@ -10642,6 +10682,8 @@ export type Database = {
           last_changed_at?: string | null
           last_checked_at?: string | null
           last_error?: string | null
+          last_review?: Json | null
+          last_review_at?: string | null
           maestro_broker_id?: string
           pending_misses?: Json
           row_count?: number

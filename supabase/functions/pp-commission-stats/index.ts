@@ -29,6 +29,7 @@ import {
 } from "../_shared/commission-engine.ts";
 import { agentKey } from "../_shared/broker-identity.ts";
 import { fetchLiveRegisterRows, dedupeKey } from "../_shared/commission-live.ts";
+import { ensureBuckets, readBuckets } from "../_shared/commission-buckets.ts";
 import { collectPaidDeposits, summarize, type CommissionDepositRow } from "../_shared/commission-reports.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 import { validateCommissionOutput } from "../_shared/commission-validation.ts";
@@ -140,7 +141,8 @@ Deno.serve(async (req) => {
       .eq("cache_key", cacheKey)
       .maybeSingle();
     let staleSnap: any = null;
-    if (snap?.payload?.ok === true) {
+    // Only a real stats payload (with KPIs) may be served from this key.
+    if (snap?.payload?.ok === true && snap.payload.kpi) {
       const age = Date.now() - new Date(snap.fetched_at).getTime();
       const version = await commissionDataVersion(admin);
       const sameVersion = !!version && snap.data_version === version;
@@ -159,20 +161,32 @@ Deno.serve(async (req) => {
     // the register and produced impossible YoY percentages. Page explicitly.
     const years = [year - 4, year - 3, year - 2, year - 1, year, year + 1];
     const PAGE = 1000;
-    const allRowsRaw: any[] = [];
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await admin
-        .from("planipret_commission_register")
-        .select(
-          "number,loan_amt,institution,amount,mortgage_type,term,agent_name,target_name,date_trans,commission_type,is_adjustment,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key,cabinet,fiscal_year,sheet_name",
-        )
-        .in("fiscal_year", years)
-        .order("source_row", { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (error) return json({ error: error.message }, 500);
-      const page = (data ?? []) as any[];
-      allRowsRaw.push(...page);
-      if (page.length < PAGE || allRowsRaw.length >= 200000) break;
+    let allRowsRaw: any[] | null = null;
+    // Ready-made per-year buckets: rebuilt only when register rows changed.
+    try {
+      await ensureBuckets(admin, "reg");
+      allRowsRaw = await readBuckets(admin, "reg", years);
+      allRowsRaw?.sort((a, b) => Number(a.source_row) - Number(b.source_row));
+    } catch (e) {
+      console.warn("[pp-commission-stats] register buckets unavailable", String(e).slice(0, 200));
+      allRowsRaw = null;
+    }
+    if (!allRowsRaw) {
+      allRowsRaw = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await admin
+          .from("planipret_commission_register")
+          .select(
+            "number,loan_amt,institution,amount,mortgage_type,term,agent_name,target_name,date_trans,commission_type,is_adjustment,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key,cabinet,fiscal_year,sheet_name",
+          )
+          .in("fiscal_year", years)
+          .order("source_row", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) return json({ error: error.message }, 500);
+        const page = (data ?? []) as any[];
+        allRowsRaw.push(...page);
+        if (page.length < PAGE || allRowsRaw.length >= 200000) break;
+      }
     }
 
     const registerRows = allRowsRaw as RegisterRow[];

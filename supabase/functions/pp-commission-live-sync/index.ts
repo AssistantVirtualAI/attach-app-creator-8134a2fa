@@ -15,6 +15,8 @@ import { buildDepositQuery, commissionGet, PENDING_COMMISSION_PATH, type Commiss
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
 import { agentKey } from "../_shared/broker-identity.ts";
 import { contentKeyed, decideChange, fastHash, stableJson } from "../_shared/commission-version.ts";
+import { reviewCommissionDelta, shouldReview, type DeltaReview } from "../_shared/commission-delta-review.ts";
+import { ensureBuckets } from "../_shared/commission-buckets.ts";
 
 const MAX_PAGES = 15;
 const PER_PAGE = 200;
@@ -216,12 +218,13 @@ Deno.serve(async (req) => {
   const probe = async (src: "paid" | "pending", mid: string, rows: { key: string; data: unknown }[]) => {
     const now = new Date().toISOString();
     const stored = await loadStored(src, mid);
-    const { data: st } = await admin.from("planipret_commission_source_state").select("set_hash,pending_misses")
+    const { data: st } = await admin.from("planipret_commission_source_state").select("set_hash,pending_misses,last_review_at")
       .eq("maestro_broker_id", mid).eq("source", src).maybeSingle();
     const prev = new Set<string>(Array.isArray((st as any)?.pending_misses) ? (st as any).pending_misses : []);
     const d = decideChange(rows.map((r) => r.key), new Set(stored.keys()), prev);
     const byKey = new Map(rows.map((r) => [r.key, r.data]));
     let setHash = (st as any)?.set_hash ?? null;
+    let review: DeltaReview | null = null;
     if (d.changed || !setHash) {
       for (let i = 0; i < d.added.length; i += 500) {
         await admin.from("planipret_commission_rows").upsert(d.added.slice(i, i + 500).map((k) => ({
@@ -235,12 +238,23 @@ Deno.serve(async (req) => {
       const removed = new Set(d.confirmedRemoved);
       const active = [...new Set([...stored.keys(), ...d.added])].filter((k) => !removed.has(k)).sort();
       setHash = fastHash(active.join("\n")) + ":" + active.length;
+      // Claude reviews ONLY the new rows (advisory, bounded, at most hourly
+      // per broker/source) and never when the time budget is nearly spent.
+      if (setHash && (st as any)?.set_hash && shouldReview(d.added.length, (st as any)?.last_review_at) && Date.now() < deadline - 25_000) {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 15_000);
+        review = await reviewCommissionDelta({
+          source: src, added: d.added.map((k) => byKey.get(k)), removedCount: d.confirmedRemoved.length, totalRows: rows.length,
+        }, undefined, ctl.signal).catch(() => null);
+        clearTimeout(timer);
+      }
     }
     await admin.from("planipret_commission_source_state").upsert({
       maestro_broker_id: mid, source: src, set_hash: setHash, row_count: rows.length, pending_misses: d.newMisses,
       last_checked_at: now, ...(d.changed ? { last_changed_at: now } : {}), last_error: null,
+      ...(review ? { last_review: review, last_review_at: review.at } : {}),
     }, { onConflict: "maestro_broker_id,source" });
-    if (d.changed) { anyChanged = true; log(src, mid, "added", d.added.length, "removed", d.confirmedRemoved.length); }
+    if (d.changed) { anyChanged = true; log(src, mid, "added", d.added.length, "removed", d.confirmedRemoved.length, "review", review?.status ?? "none"); }
     return d.changed;
   };
   const markError = async (src: "paid" | "pending", mid: string, err: string) => {
@@ -410,6 +424,9 @@ Deno.serve(async (req) => {
       maestro_broker_id: "*", source: "global", set_hash: version, row_count: (all ?? []).length,
       last_checked_at: now, last_changed_at: now,
     }, { onConflict: "maestro_broker_id,source" });
+    // Refresh only the per-broker buckets whose rows changed, so the global
+    // view below reads ready-made data instead of re-reading everything.
+    try { const b = await ensureBuckets(admin, "live"); log("buckets", b); } catch (e) { log("buckets failed", String(e).slice(0, 200)); }
     // Rebuild recently viewed snapshots once, then a figure-free nudge.
     try {
       await fetch(`${url}/functions/v1/planipret-commission-reports`, {

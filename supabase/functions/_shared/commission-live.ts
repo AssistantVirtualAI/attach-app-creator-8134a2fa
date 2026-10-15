@@ -5,6 +5,7 @@
 // broker's `users_id` returns zero rows). So the only way to widen the live
 // view is to fan out over every broker who connected their Maestro account.
 // Whatever the API can't cover stays covered by the imported register.
+import { ensureBuckets, readBuckets } from "./commission-buckets.ts";
 
 
 export type LiveRegisterRow = {
@@ -129,13 +130,31 @@ export async function fetchLiveRegisterRows(
   };
 
   const PAGE = 1000;
-  const cached: any[] = [];
-  for (let from = 0; from < 60000; from += PAGE) {
-    const { data, error } = await baseQuery().range(from, from + PAGE - 1);
-    if (error) { failures.push({ broker: "cache", status: 500, message: error.message }); break; }
-    const page = (data ?? []) as any[];
-    cached.push(...page);
-    if (page.length < PAGE) break;
+  let cached: any[] | null = null;
+  // Admin (firm-wide) view: read the ready-made per-broker buckets, rebuilt
+  // only for brokers whose rows changed, instead of paging the whole cache.
+  if (isAdmin) {
+    try {
+      await ensureBuckets(admin, "live");
+      const rows = await readBuckets(admin, "live", years);
+      if (rows) {
+        const want = agentFilter ? agentFilter.trim().toLocaleLowerCase("fr-CA") : null;
+        cached = want ? rows.filter((r) => String(r.agent_name ?? "").trim().toLocaleLowerCase("fr-CA") === want) : rows;
+      }
+    } catch (e) {
+      console.warn("[commission-live] buckets unavailable", String(e).slice(0, 200));
+      cached = null;
+    }
+  }
+  if (!cached) {
+    cached = [];
+    for (let from = 0; from < 60000; from += PAGE) {
+      const { data, error } = await baseQuery().range(from, from + PAGE - 1);
+      if (error) { failures.push({ broker: "cache", status: 500, message: error.message }); break; }
+      const page = (data ?? []) as any[];
+      cached.push(...page);
+      if (page.length < PAGE) break;
+    }
   }
 
 

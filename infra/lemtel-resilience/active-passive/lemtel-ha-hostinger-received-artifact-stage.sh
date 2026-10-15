@@ -12,7 +12,13 @@ current_digest_file="$artifact_dir/current.sha256"
 age_identity='/etc/lemtel-ha/age/identity.txt'
 base_dir='/opt/lemtel-ha'
 runtime_stage="$base_dir/runtime-stage"
-postgres_container='lemtel-postgres-standby'
+resolve_standby_postgres() {
+  local -a candidates=()
+  mapfile -t candidates < <(docker ps -a --format '{{.Names}}|{{.Image}}' | awk -F'|' '$2 ~ /(^|\/)postgres(:|$)|supabase\/postgres(:|$)/ { print $1 }')
+  [ "${#candidates[@]}" -eq 1 ] && printf '%s' "${candidates[0]}"
+}
+postgres_container="$(resolve_standby_postgres || true)"
+[ -n "$postgres_container" ] || fail standby_postgres_unresolved
 
 command -v age >/dev/null 2>&1 || fail age_missing
 command -v tar >/dev/null 2>&1 || fail tar_missing

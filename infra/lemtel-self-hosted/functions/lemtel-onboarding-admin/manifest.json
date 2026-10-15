@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_email_onboarding_portal_admin_v13",
+  "package_version": "lemtel_email_onboarding_portal_admin_v14",
   "scope": "offline_function_source_only",
   "deployment_authorized": false,
   "client_cutover_authorized": false,
@@ -31,7 +31,10 @@
     "platform_administrator_revoke_with_last_admin_protection",
     "authenticated_platform_traffic_trend_read",
     "authenticated_portal_telephony_preparation_state_read",
-    "organization_scoped_telephony_preparation_review_state_update"
+    "organization_scoped_telephony_preparation_review_state_update",
+    "localized_access_delivery_status_visibility",
+    "organization_or_platform_admin_resend_access",
+    "strict_transactional_sender_logo_and_url_validation"
   ],
   "explicitly_excluded": [
     "planipret_import",
@@ -61,7 +64,13 @@
     "LEMTEL_DOWNLOAD_DESKTOP_URL"
   ],
   "optional_runtime_configuration": [
-    "LEMTEL_SUPPORT_CONTACT"
+    "LEMTEL_EMAIL_SENDER_NAME",
+    "LEMTEL_EMAIL_SENDER_ADDRESS",
+    "LEMTEL_EMAIL_LOGO_URL",
+    "LEMTEL_SUPPORT_CONTACT",
+    "LEMTEL_DOWNLOAD_WINDOWS_URL",
+    "LEMTEL_DOWNLOAD_MACOS_APPLE_URL",
+    "LEMTEL_DOWNLOAD_MACOS_INTEL_URL"
   ],
   "deployment_prerequisites": [
     "approved_lemtel_onboarding_migration",
@@ -89,6 +98,11 @@
     "approved_lemtel_traffic_samples_migration",
     "synthetic_platform_admin_traffic_trend_rbac_test",
     "approved_lemtel_telephony_preparation_governance_migration",
-    "synthetic_telephony_preparation_tenant_rbac_test"
+    "synthetic_telephony_preparation_tenant_rbac_test",
+    "approved_lemtel_transactional_email_delivery_state_migration",
+    "strict_sender_logo_and_download_url_preflight",
+    "signed_provider_delivery_webhook_or_provider_accepted_only_ux",
+    "authenticated_failed_invitation_resend_test",
+    "no_email_sent_during_deployment"
   ]
 }

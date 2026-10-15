@@ -3,6 +3,7 @@
 // A temporary password is generated in memory, stored only in Supabase Auth and sent once
 // through the approved transactional provider. It is never logged or stored in Lemtel tables.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { emailConfig as configuredEmail, sendWithResend, transactionalEmailMessage } from "../_shared/lemtelTransactionalEmail.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -26,40 +27,25 @@ function randomPassword(length = 20): string {
   return chars.join("");
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] ?? character));
+/** Configuration is checked before a throttle claim or password mutation. */
+function transactionalEmailConfig() {
+  return configuredEmail(Deno.env);
 }
 
-function passwordMessage(input: { locale: Locale; displayName: string; temporaryPassword: string }) {
-  const displayName = escapeHtml(input.displayName);
-  const password = escapeHtml(input.temporaryPassword);
-  if (input.locale === "fr") {
-    return {
-      subject: "Lemtel — votre mot de passe temporaire",
-      html: `<main style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;max-width:620px;margin:auto;color:#10213b"><h1>Bonjour ${displayName},</h1><p>Une demande de réinitialisation de mot de passe a été reçue pour votre compte Lemtel.</p><p><strong>Mot de passe temporaire :</strong> <code>${password}</code></p><p>Ouvrez l’application Lemtel et connectez-vous avec votre adresse e-mail et ce mot de passe temporaire. Vous devrez immédiatement choisir votre mot de passe personnel. Vous n’avez jamais à saisir un poste ou un domaine SIP.</p><p style="color:#64748b;font-size:12px">Ne partagez pas ce mot de passe. Si vous n’avez pas fait cette demande, contactez le soutien Lemtel dès que possible.</p></main>`,
-    };
-  }
+export function passwordResetDeliveryPatch(state: "provider_accepted" | "failed" | "needs_attention", failureCode?: string, providerMessageId?: string, timestamp = new Date().toISOString()) {
   return {
-    subject: "Lemtel — your temporary password",
-    html: `<main style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;max-width:620px;margin:auto;color:#10213b"><h1>Hello ${displayName},</h1><p>A password recovery request was received for your Lemtel account.</p><p><strong>Temporary password:</strong> <code>${password}</code></p><p>Open the Lemtel app and sign in with your email address and this temporary password. You will be required to choose your personal password immediately. You never need to enter an extension or SIP domain.</p><p style="color:#64748b;font-size:12px">Do not share this password. If you did not request it, contact Lemtel support as soon as possible.</p></main>`,
+    state,
+    attempted_at: timestamp,
+    ...(state === "provider_accepted"
+      ? { provider_accepted_at: timestamp, provider_message_id: providerMessageId ?? null }
+      : state === "needs_attention"
+        ? { needs_attention_at: timestamp, failure_code: failureCode ?? "credential_rotation_failed_after_provider_acceptance", provider_message_id: providerMessageId ?? null }
+        : { failed_at: timestamp, failure_code: failureCode ?? "provider_request_failed", provider_message_id: providerMessageId ?? null }),
   };
 }
 
-function emailConfig(): { apiKey: string; from: string } | null {
-  const apiKey = Deno.env.get("RESEND_API_KEY") ?? "";
-  const from = Deno.env.get("LEMTEL_WELCOME_FROM") ?? "";
-  return apiKey && from ? { apiKey, from } : null;
-}
-
-async function setDeliveryState(admin: any, id: string, state: "sent" | "failed", failureCode?: string, providerMessageId?: string) {
-  const timestamp = new Date().toISOString();
-  await admin.from("lemtel_password_reset_delivery_attempts").update({
-    state,
-    attempted_at: timestamp,
-    ...(state === "sent"
-      ? { sent_at: timestamp, provider_message_id: providerMessageId ?? null }
-      : { failed_at: timestamp, failure_code: failureCode ?? "provider_delivery_failed", provider_message_id: providerMessageId ?? null }),
-  }).eq("id", id);
+async function setDeliveryState(admin: any, id: string, state: "provider_accepted" | "failed" | "needs_attention", failureCode?: string, providerMessageId?: string) {
+  await admin.from("lemtel_password_reset_delivery_attempts").update(passwordResetDeliveryPatch(state, failureCode, providerMessageId)).eq("id", id);
 }
 
 export async function handler(req: Request): Promise<Response> {
@@ -74,7 +60,7 @@ export async function handler(req: Request): Promise<Response> {
 
   const url = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const configuration = emailConfig();
+  const configuration = transactionalEmailConfig();
   if (!url || !serviceRoleKey || !configuration) return fail("password_recovery_unavailable", 503);
   const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
@@ -92,19 +78,13 @@ export async function handler(req: Request): Promise<Response> {
   if (claimError || typeof deliveryAttempt !== "string" || !deliveryAttempt) return accepted();
 
   const temporaryPassword = randomPassword();
-  const message = passwordMessage({ locale: recipient.locale, displayName: recipient.display_name || email.split("@")[0], temporaryPassword });
-  let providerMessageId: string | undefined;
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${configuration.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: configuration.from, to: [email], subject: message.subject, html: message.html }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error("provider_delivery_failed");
-    providerMessageId = typeof payload?.id === "string" ? payload.id : undefined;
-  } catch {
-    await setDeliveryState(admin, deliveryAttempt, "failed", "provider_delivery_failed");
+  const message = transactionalEmailMessage({
+    kind: "password_recovery", locale: recipient.locale, displayName: recipient.display_name || email.split("@")[0],
+    email, temporaryPassword, config: configuration,
+  });
+  const provider = await sendWithResend(configuration, email, message);
+  if (!provider.accepted) {
+    await setDeliveryState(admin, deliveryAttempt, "failed", "provider_request_failed");
     await admin.rpc("lemtel_release_failed_password_reset", { p_user_id: recipient.user_id });
     return accepted();
   }
@@ -120,14 +100,16 @@ export async function handler(req: Request): Promise<Response> {
     app_metadata: { ...existingMetadata, lemtel_onboarding_required: true, lemtel_email_only_signin: true },
   });
   if (updateError) {
-    await setDeliveryState(admin, deliveryAttempt, "failed", "auth_password_rotation_failed_after_provider_accepted", providerMessageId);
+    // The provider accepted the request but no usable password was committed: surface action, not delivery.
+    await setDeliveryState(admin, deliveryAttempt, "needs_attention", "credential_rotation_failed_after_provider_acceptance", provider.providerMessageId);
     await admin.rpc("lemtel_release_failed_password_reset", { p_user_id: recipient.user_id });
     return accepted();
   }
 
-  await setDeliveryState(admin, deliveryAttempt, "sent", undefined, providerMessageId);
+  // Provider acceptance is not inbox delivery. A signed provider webhook may later mark this delivered.
+  await setDeliveryState(admin, deliveryAttempt, "provider_accepted", undefined, provider.providerMessageId);
 
   return accepted();
 }
 
-Deno.serve(handler);
+if (import.meta.main) Deno.serve(handler);

@@ -1,5 +1,5 @@
 {
-  "contract_version": "lemtel_email_only_onboarding_v2",
+  "contract_version": "lemtel_email_only_onboarding_v3",
   "scope": "offline_schema_function_and_client_source_only",
   "deployment": {
     "migration_apply_authorized": false,
@@ -8,7 +8,8 @@
     "client_cutover_authorized": false,
     "external_email_provider_configured": false,
     "public_auth_signup_disable_verified": false,
-    "portal_account_authority_migration_authorized": false
+    "portal_account_authority_migration_authorized": false,
+    "provider_webhook_configured": false
   },
   "identity": {
     "login_identifier": "email",
@@ -22,8 +23,14 @@
   "portal": {
     "organization_creator": "explicit_lemtel_platform_administrator",
     "organization_owner": "receives_welcome_email",
-    "member_provisioning": ["single", "bulk"],
-    "locale_selection": ["fr", "en"],
+    "member_provisioning": [
+      "single",
+      "bulk"
+    ],
+    "locale_selection": [
+      "fr",
+      "en"
+    ],
     "legacy_portal_flow_enabled": false,
     "logical_customer_domain": "lemtel_organization_slug_not_dns_or_sip",
     "enrollment": "server_side_portal_create_user_only"
@@ -33,12 +40,46 @@
     "desktop": "email_password_then_mandatory_first_password_change",
     "password_recovery": "email_request_then_temporary_password_then_mandatory_first_password_change",
     "telephony_configuration": "server_authoritative_after_login_and_out_of_scope_until_fusionpbx_test_data_is_provisioned",
-    "account_reconciliation": ["sign_in", "token_refresh", "mobile_foreground", "desktop_focus", "desktop_visibility_change"]
+    "account_reconciliation": [
+      "sign_in",
+      "token_refresh",
+      "mobile_foreground",
+      "desktop_focus",
+      "desktop_visibility_change"
+    ]
   },
   "delivery": {
-    "required_links": ["ios", "android", "desktop"],
+    "required_links": [
+      "ios",
+      "android",
+      "desktop"
+    ],
     "email_sender": "approved_transactional_provider_only",
+    "sender_identity": "recognizable Lemtel display name; strict email address validation",
+    "logo": "optional LEMTEL_EMAIL_LOGO_URL only; strict HTTPS without credentials, query or fragment; inline Lemtel wordmark fallback",
+    "status_visibility": [
+      "pending",
+      "provider_accepted",
+      "delivered",
+      "failed",
+      "needs_attention"
+    ],
+    "provider_accepted_means": "provider API accepted the message; inbox receipt is unconfirmed",
+    "delivered_means": "verified signed provider webhook only",
+    "failed_delivery_recovery": "authenticated organization or platform administrator may manually resend after configuration repair; no automatic mass resend",
     "audit": "non_secret_delivery_metadata_only"
   },
-  "forbidden": ["Planipret_data_or_auth", "FusionPBX_mutation", "SIP_password_in_email_or_client_login", "temporary_password_logs", "temporary_password_database_storage", "password_recovery_account_enumeration", "Lovable_current_project_change", "automatic_production_delivery"]
+  "forbidden": [
+    "Planipret_data_or_auth",
+    "FusionPBX_mutation",
+    "SIP_password_in_email_or_client_login",
+    "temporary_password_logs",
+    "temporary_password_database_storage",
+    "password_recovery_account_enumeration",
+    "Lovable_current_project_change",
+    "automatic_production_delivery",
+    "unverified_delivery_claim",
+    "unvalidated_sender_or_logo_url",
+    "raw_provider_webhook_payload_storage"
+  ]
 }

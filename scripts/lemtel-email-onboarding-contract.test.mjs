@@ -36,7 +36,7 @@ test('onboarding administrator function enforces role and email-only limits', ()
   assert.match(source, /LEMTEL_DOWNLOAD_IOS_URL/);
   assert.match(source, /LEMTEL_DOWNLOAD_ANDROID_URL/);
   assert.match(source, /LEMTEL_DOWNLOAD_DESKTOP_URL/);
-  assert.match(source, /email_provider_not_configured/);
+  assert.match(source, /email_delivery_unavailable/);
   assert.doesNotMatch(source, /functions\.invoke\(['"]pbx|from\(['"]pbx_/i);
   assert.doesNotMatch(source, /console\.log/);
 });
@@ -65,7 +65,11 @@ test('temporary-password recovery is Lemtel-only, generic and server-throttled',
   assert.match(source, /status: "request_accepted"/);
   assert.match(source, /lemtel_claim_password_reset/);
   assert.match(source, /lemtel_onboarding_required: true/);
-  assert.match(source, /RESEND_API_KEY/);
+  const mail = read('infra/lemtel-self-hosted/functions/_shared/lemtelTransactionalEmail.ts');
+  assert.match(source, /sendWithResend/);
+  assert.match(source, /transactionalEmailMessage/);
+  assert.match(mail, /RESEND_API_KEY/);
+  assert.match(mail, /LEMTEL_EMAIL_LOGO_URL/);
   assert.doesNotMatch(source, /console\.log|console\.error|pbx_|fusionpbx/i);
   assert.equal(manifest.authentication, 'anonymous_request_generic_response');
   assert.match(manifest.forbidden.join(' '), /temporary_password_database_storage/);
@@ -73,15 +77,16 @@ test('temporary-password recovery is Lemtel-only, generic and server-throttled',
 
 test('temporary-password recovery preserves the active credential when provider delivery fails', () => {
   const source = read('infra/lemtel-self-hosted/functions/lemtel-password-reset-request/index.ts');
-  const providerRequest = source.indexOf('fetch("https://api.resend.com/emails"');
-  const providerFailureReturn = source.indexOf('await setDeliveryState(admin, deliveryAttempt, "failed", "provider_delivery_failed")');
+  const providerRequest = source.indexOf('await sendWithResend(configuration, email, message)');
+  const providerFailureReturn = source.indexOf('await setDeliveryState(admin, deliveryAttempt, "failed", "provider_request_failed")');
   const authUpdate = source.indexOf('await admin.auth.admin.updateUserById');
-  const providerSuccessAudit = source.indexOf('await setDeliveryState(admin, deliveryAttempt, "sent", undefined, providerMessageId)');
+  const providerSuccessAudit = source.indexOf('await setDeliveryState(admin, deliveryAttempt, "provider_accepted", undefined, provider.providerMessageId)');
   assert.ok(providerRequest >= 0);
   assert.ok(providerFailureReturn > providerRequest);
   assert.ok(authUpdate > providerFailureReturn);
   assert.ok(providerSuccessAudit > authUpdate);
-  assert.match(source, /auth_password_rotation_failed_after_provider_accepted/);
+  assert.match(source, /credential_rotation_failed_after_provider_acceptance/);
+  assert.doesNotMatch(source, /state: "sent"/);
 });
 
 test('Desktop and mobile use the Lemtel recovery endpoint instead of a reset-link flow', () => {

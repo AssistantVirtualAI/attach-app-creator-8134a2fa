@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildArchiveOrganizationBody, buildAssignExistingUserBody, buildCreateOrganizationBody, buildGrantPlatformAdministratorBody, buildRevokePlatformAdministratorBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetClientSessionAccessBody, buildSetMembershipRoleBody, buildTransferOrganizationOwnershipBody, buildUpdateOrganizationBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
+import { buildArchiveOrganizationBody, buildAssignExistingUserBody, buildCreateOrganizationBody, buildGrantPlatformAdministratorBody, buildRevokePlatformAdministratorBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetClientSessionAccessBody, buildSetMembershipRoleBody, buildSetTelephonyPreparationStateBody, buildTransferOrganizationOwnershipBody, buildUpdateOrganizationBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
@@ -129,6 +129,19 @@ describe("Lemtel portal contract", () => {
       action: "set_client_session_access", organizationId, recipientUserId, clientKind: "desktop", accessState: "revoked",
     });
     expect(typeof portalApi.setClientSessionAccess).toBe("function");
+  });
+
+  it("uses exact server-owned bodies for non-operational telephony preparation markers", () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    expect(buildSetTelephonyPreparationStateBody(organizationId, "extensions", "review_ready")).toEqual({ action: "set_telephony_preparation_state", organizationId, capabilityKey: "extensions", state: "review_ready" });
+    expect(typeof portalApi.listTelephonyPreparationStates).toBe("function");
+    expect(typeof portalApi.setTelephonyPreparationState).toBe("function");
+    const control = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelTelephonyControl.tsx"), "utf8");
+    expect(control).toContain("portalApi.setTelephonyPreparationState");
+    expect(control).toContain("review_ready");
+    expect(control).toContain("not_started");
+    expect(control).not.toMatch(/\bfetch\(/);
+    expect(control).not.toMatch(/Deno\.env/);
   });
 
   it("keeps user-domain access derived from organization membership", () => {

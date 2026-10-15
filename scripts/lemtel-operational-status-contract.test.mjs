@@ -43,6 +43,7 @@ test('operational status has its own immutable offline deployment package', () =
     'infra/lemtel-self-hosted/migrations/0014_lemtel_client_session_controls.sql',
     'infra/lemtel-self-hosted/migrations/0015_lemtel_organization_lifecycle.sql',
     'infra/lemtel-self-hosted/migrations/0016_lemtel_platform_administrator_audit.sql',
+    'infra/lemtel-self-hosted/migrations/0018_lemtel_telephony_preparation_governance.sql',
     'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh',
     'infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-timer-enable.sh',
   ]);
@@ -53,7 +54,9 @@ test('operational status has its own immutable offline deployment package', () =
   assert.match(deploymentManifest.forbidden_actions.join(' '), /hostinger_start_or_rebuild/);
   assert.match(deploymentManifest.forbidden_actions.join(' '), /automatic_promotion/);
   assert.ok(!deploymentManifest.sources.some((entry) => entry.path.includes('0017_lemtel_traffic_samples')));
+  assert.ok(deploymentManifest.sources.some((entry) => entry.path.includes('0018_lemtel_telephony_preparation_governance')));
   assert.ok(!deploymentManifest.required_preconditions.includes('approved_lemtel_traffic_samples_schema_write'));
+  assert.ok(deploymentManifest.required_preconditions.includes('approved_lemtel_telephony_preparation_governance_schema_write'));
 });
 
 test('operational status schema is Lemtel-only and denies browser table access', () => {

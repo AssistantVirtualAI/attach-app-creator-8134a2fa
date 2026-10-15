@@ -19,6 +19,8 @@ type DomainInput = { hostname: string };
 type ExistingUserInput = { email: string; role: AssignableRole };
 type OrganizationUpdateInput = { displayName: string; defaultLocale: Locale };
 const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+type TelephonyPreparationState = "not_started" | "review_ready";
+const TELEPHONY_CAPABILITY_KEYS = new Set(telephonyReadinessCatalog().map((capability) => capability.key));
 type RequestBody =
   | { action: "create_organization"; organization: OrganizationInput; owner: UserInput; users: UserInput[] }
   | { action: "provision_users"; organizationId: string; users: UserInput[] }
@@ -38,6 +40,8 @@ type RequestBody =
   | { action: "list_domains"; organizationId: string }
   | { action: "list_client_connections"; organizationId: string }
   | { action: "get_telephony_readiness"; organizationId: string }
+  | { action: "list_telephony_preparation_states"; organizationId: string }
+  | { action: "set_telephony_preparation_state"; organizationId: string; capabilityKey: string; state: TelephonyPreparationState }
   | { action: "create_domain"; organizationId: string; domain: DomainInput }
   | { action: "suspend_domain"; organizationId: string; domainId: string }
   | { action: "assign_existing_user"; organizationId: string; user: ExistingUserInput }
@@ -96,7 +100,7 @@ export function validateBody(raw: unknown): RequestBody | Failure {
   if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend" || raw.action === "get_traffic_trend") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
-  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections" || raw.action === "get_telephony_readiness") {
+  if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections" || raw.action === "get_telephony_readiness" || raw.action === "list_telephony_preparation_states") {
     if (!exactKeys(raw, ["action", "organizationId"])) return fail("invalid_body", 400);
     const parsedOrganizationId = organizationId(raw.organizationId);
     return isFailure(parsedOrganizationId) ? parsedOrganizationId : { action: raw.action, organizationId: parsedOrganizationId } as RequestBody;
@@ -114,6 +118,16 @@ export function validateBody(raw: unknown): RequestBody | Failure {
     if (isFailure(recipientUserId)) return fail("invalid_recipient_user_id", 400);
     if (raw.confirmation !== "REVOKE_PLATFORM_ADMIN") return fail("platform_admin_confirmation_required", 400);
     return { action: "revoke_platform_administrator", recipientUserId, confirmation: "REVOKE_PLATFORM_ADMIN" };
+  }
+  if (raw.action === "set_telephony_preparation_state") {
+    if (!exactKeys(raw, ["action", "organizationId", "capabilityKey", "state"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const capabilityKey = typeof raw.capabilityKey === "string" ? raw.capabilityKey : "";
+    const state = raw.state;
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (!TELEPHONY_CAPABILITY_KEYS.has(capabilityKey)) return fail("invalid_telephony_capability", 400);
+    if (state !== "not_started" && state !== "review_ready") return fail("invalid_telephony_preparation_state", 400);
+    return { action: "set_telephony_preparation_state", organizationId: parsedOrganizationId, capabilityKey, state };
   }
   if (raw.action === "create_domain") {
     if (!exactKeys(raw, ["action", "organizationId", "domain"]) || !plainObject(raw.domain)) return fail("invalid_body", 400);
@@ -448,6 +462,12 @@ async function portalOrganizationAdmin(admin: any, userId: string, organizationI
   return (await platformAdmin(admin, userId)) || (await organizationAdmin(admin, userId, organizationId));
 }
 
+async function activeOrganization(admin: any, organizationId: string): Promise<boolean> {
+  const { data } = await admin.from("lemtel_organizations").select("id").eq("id", organizationId).eq("status", "active").maybeSingle();
+  return Boolean(data?.id);
+}
+
+
 async function userByEmail(admin: any, email: string): Promise<any | null> {
   const canonicalEmail = email.trim().toLowerCase();
   for (let page = 1; page <= 100; page++) {
@@ -666,6 +686,42 @@ async function listClientConnections(admin: any, organizationId: string) {
       }];
     }),
   };
+}
+
+type TelephonyPreparation = { capabilityKey: string; state: TelephonyPreparationState; revision: number; updatedAt: string };
+
+async function listTelephonyPreparationStates(admin: any, organizationId: string) {
+  const { data, error } = await admin.from("lemtel_telephony_preparation_states")
+    .select("capability_key,state,revision,updated_at")
+    .eq("organization_id", organizationId)
+    .order("capability_key");
+  if (error) return fail("telephony_preparation_lookup_failed", 503);
+  return { preparations: (data ?? []).flatMap((row: any): TelephonyPreparation[] => {
+    const capabilityKey = typeof row.capability_key === "string" ? row.capability_key : "";
+    const state = row.state === "review_ready" ? "review_ready" as const : null;
+    const revision = Number(row.revision);
+    const updatedAt = typeof row.updated_at === "string" ? row.updated_at : "";
+    return TELEPHONY_CAPABILITY_KEYS.has(capabilityKey) && state && Number.isSafeInteger(revision) && revision > 0 && updatedAt
+      ? [{ capabilityKey, state, revision, updatedAt }]
+      : [];
+  }) };
+}
+
+async function setTelephonyPreparationState(admin: any, organizationId: string, actor: string, capabilityKey: string, state: TelephonyPreparationState) {
+  const { data, error } = await admin.rpc("lemtel_set_telephony_preparation_state", {
+    p_organization_id: organizationId,
+    p_capability_key: capabilityKey,
+    p_state: state,
+    p_actor_id: actor,
+  });
+  const row = Array.isArray(data) ? data[0] : null;
+  const returnedState = row?.state === "review_ready" ? "review_ready" : row?.state === "not_started" ? "not_started" : null;
+  const revision = Number(row?.revision);
+  const updatedAt = typeof row?.updated_at === "string" ? row.updated_at : undefined;
+  if (error || !returnedState || !Number.isSafeInteger(revision) || revision < 0) return fail("telephony_preparation_update_failed", 503);
+  if ((returnedState === "not_started" && (revision !== 0 || updatedAt !== undefined))
+    || (returnedState === "review_ready" && (revision < 1 || !updatedAt))) return fail("telephony_preparation_update_failed", 503);
+  return { capabilityKey, state: returnedState, revision, ...(updatedAt ? { updatedAt } : {}) };
 }
 
 async function setClientSessionAccess(admin: any, organizationId: string, actor: string, recipientUserId: string, clientKind: "mobile" | "desktop" | "client", accessState: "active" | "revoked") {
@@ -899,10 +955,19 @@ export async function handler(req: Request): Promise<Response> {
     const result = await trafficTrend(admin);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
-  if (request.action === "get_telephony_readiness") {
+  if (request.action === "get_telephony_readiness" || request.action === "list_telephony_preparation_states") {
     if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
-    // This immutable catalog is intentionally pre-provisioning only: no provider connection or business-data mutation occurs here.
-    return respond({ capabilities: telephonyReadinessCatalog() });
+    const result = await listTelephonyPreparationStates(admin, request.organizationId);
+    if (isFailure(result)) return respond({ error: result.error }, result.status);
+    // The catalog and its review markers remain pre-provisioning only: no provider connection or business-data mutation occurs here.
+    return request.action === "get_telephony_readiness"
+      ? respond({ capabilities: telephonyReadinessCatalog(), preparations: result.preparations })
+      : respond(result);
+  }
+  if (request.action === "set_telephony_preparation_state") {
+    if (!(await portalOrganizationAdmin(admin, actor, request.organizationId)) || !(await activeOrganization(admin, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const result = await setTelephonyPreparationState(admin, request.organizationId, actor, request.capabilityKey, request.state);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, preparation: result });
   }
   if (request.action === "list_people" || request.action === "list_invitations" || request.action === "list_activity" || request.action === "list_domains" || request.action === "list_client_connections") {
     if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);

@@ -9,7 +9,7 @@ source_script="${LEMTEL_L7_READY_SOURCE:-/home/lemtelops/lemtel-ha-do-writer-lb-
 installed_script='/usr/local/sbin/lemtel-ha-do-writer-lb-ready-refresh'
 service_file='/etc/systemd/system/lemtel-ha-do-writer-lb-ready.service'
 timer_file='/etc/systemd/system/lemtel-ha-do-writer-lb-ready.timer'
-[ -x "$source_script" ] || fail readiness_source_missing
+[ -f "$source_script" ] || fail readiness_source_missing
 install -o root -g root -m 0750 "$source_script" "$installed_script"
 cat > "$service_file" <<'UNIT'
 [Unit]

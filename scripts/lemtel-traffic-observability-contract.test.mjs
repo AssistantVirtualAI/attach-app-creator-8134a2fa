@@ -105,19 +105,20 @@ test('separate manifests have false deployment and activation flags, route-speci
   for (const manifest of [schemaManifest, deploymentManifest]) {
     assert.equal(manifest.deployment_authorized, false);
     assert.equal(manifest.activation_authorized, false);
-    assert.ok(manifest.required_preconditions.includes('external_router_route_specific_verify_jwt_false_only_for_lemtel_traffic_ingest'));
-    assert.ok(manifest.required_preconditions.includes('strict_hmac_sha256_required_for_lemtel_traffic_ingest'));
-    assert.ok(manifest.required_preconditions.includes('gateway_proxy_edge_access_logs_disabled_for_lemtel_traffic_ingest'));
+    assert.ok(manifest.required_preconditions.includes('direct_caddy_edge_route_hmac_only_for_lemtel_traffic_ingest'));
+    assert.ok(manifest.required_preconditions.includes('caddy_access_logs_disabled_for_lemtel_traffic_ingest'));
+    assert.ok(manifest.required_preconditions.includes('gateway_absence_or_noninterference_attested'));
     for (const entry of entries(manifest)) {
       assert.match(entry.sha256, /^[a-f0-9]{64}$/);
       assert.equal(entry.sha256, digest(entry.path), `stale digest for ${entry.path}`);
     }
   }
-  assert.equal(deploymentManifest.external_router_configuration.managed_in_repository, false);
-  assert.equal(deploymentManifest.external_router_configuration.verify_jwt, false);
+  assert.equal(deploymentManifest.external_router_configuration.managed_in_repository, true);
+  assert.equal(deploymentManifest.external_router_configuration.topology, 'direct_caddy_to_edge_no_gateway');
+  assert.equal(deploymentManifest.external_router_configuration.gateway_jwt_bypass, 'not_applicable_no_gateway');
   assert.equal(deploymentManifest.external_router_configuration.route, 'lemtel-traffic-ingest');
-  assert.match(readme, /aucune configuration de routage spécifique .*n’existe dans le dépôt/i);
-  assert.match(readme, /verify_jwt=false.*uniquement.*lemtel-traffic-ingest/i);
+  assert.match(readme, /direct Caddy → Edge/i);
+  assert.match(readme, /log_skip/);
   assert.doesNotMatch(read('supabase/config.toml'), /\[functions\.lemtel-traffic-ingest\]/u);
   assert.ok(adminManifest.capabilities.includes('authenticated_platform_traffic_trend_read'));
 });

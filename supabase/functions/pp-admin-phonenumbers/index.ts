@@ -1,7 +1,7 @@
 // Manage NetSapiens DIDs (phone numbers) for the Planiprêt domain.
 // Actions: list, assign, unassign, sync_assignments
 import { corsHeaders, jsonResponse, requirePlanipretAdmin, supaAdmin } from "../_shared/ns-broker.ts";
-import { assignDidToExtension, assignSmsNumber, releaseDid } from "../_shared/pp-did-routing.ts";
+import { assignDidToExtension, assignNumberToExtension, assignSmsNumber, releaseDid, setExtensionCallerId } from "../_shared/pp-did-routing.ts";
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
 const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
@@ -253,6 +253,7 @@ Deno.serve(async (req) => {
       const texts = (Array.isArray(sr.data) ? sr.data : []).filter((x: any) => x?.application === "user" && String(x?.dest ?? "") === ext).map((x: any) => String(x.number));
       const kept = await assignDidToExtension(domain, keep, ext, name);
       const keptSms = await assignSmsNumber(domain, keep, ext);
+      const keptCid = kept.verified ? await setExtensionCallerId(domain, ext, keep).catch(() => ({ ok: false })) : { ok: false };
       const released: any[] = [];
       for (const n of voice.filter((n: string) => n !== keep)) released.push({ n, voice: (await releaseDid(domain, n)).released });
       for (const n of texts.filter((n: string) => n !== keep)) released.push({ n, sms: (await assignSmsNumber(domain, n, null)).ok });
@@ -260,7 +261,7 @@ Deno.serve(async (req) => {
       const now = new Date().toISOString();
       await db.from("planipret_did_assignments").upsert({ phone_number_e164: `+${keep}`, phone_number_digits: keep, extension: ext, display_name: name ?? null, callerid_name: name ?? null, status: "assigned", domain, source: "admin_ui", updated_at: now }, { onConflict: "phone_number_e164" });
       for (const r of released) await db.from("planipret_did_assignments").update({ extension: null, display_name: null, callerid_name: null, status: "available", updated_at: now }).eq("phone_number_digits", r.n);
-      return jsonResponse({ success: kept.verified && keptSms.ok, kept: keep, voice_verified: kept.verified, sms_verified: keptSms.ok, released });
+      return jsonResponse({ success: kept.verified && keptSms.ok && keptCid.ok, kept: keep, voice_verified: kept.verified, sms_verified: keptSms.ok, caller_id_verified: keptCid.ok, released });
     }
 
     if (action === "assign") {
@@ -268,32 +269,17 @@ Deno.serve(async (req) => {
       if (!phone_number || !extension) {
         return jsonResponse({ success: false, error: "phone_number et extension requis" }, 400);
       }
-      const pn = String(phone_number).replace(/[^\d]/g, "");
       const ext = String(extension);
-      const assignBody = buildToUserDidPayload(ext, domain);
-      const r = await nsFetchFirstOk([
-        `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`,
-        `/domains/${encodeURIComponent(domain)}/phone-numbers/${encodeURIComponent(pn)}`,
-      ], { method: "PUT", body: JSON.stringify(assignBody) });
-
-      // Always persist our local overlay so the admin UI reflects the change even if NS
-      // read-back is stale or the API version does not echo the destination field.
-      try {
-        const e164 = pn.length === 10 ? `+1${pn}` : `+${pn}`;
-        await supaAdmin().from("planipret_did_assignments").upsert({
-          phone_number_e164: e164,
-          phone_number_digits: pn,
-          extension: ext,
-          domain,
-          source: "admin_ui",
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "phone_number_e164" });
-      } catch (e) { console.warn("assign upsert failed:", e); }
-
-      if (!r.ok) {
-        return jsonResponse({ success: false, error: `NS assign failed (${r.status})`, detail: r.data }, 200);
+      const res = await assignNumberToExtension(domain, String(phone_number), ext, { description: payload?.name ? String(payload.name) : undefined, releaseOthers: true });
+      const db = supaAdmin();
+      const now = new Date().toISOString();
+      if (res.steps.voice) {
+        await db.from("planipret_did_assignments").upsert({ phone_number_e164: `+${res.phone_number}`, phone_number_digits: res.phone_number, extension: ext, status: "assigned", domain, source: "admin_ui", updated_at: now }, { onConflict: "phone_number_e164" });
       }
-      return jsonResponse({ success: true, phone_number: pn, extension: ext });
+      for (const r of res.steps.released.filter((r) => r.ok)) {
+        await db.from("planipret_did_assignments").update({ extension: null, display_name: null, callerid_name: null, status: "available", updated_at: now }).eq("phone_number_digits", r.number);
+      }
+      return jsonResponse({ ...res, error: res.success ? undefined : res.diagnostic }, 200);
     }
 
     // Pull the live DID inventory from the PBX and make planipret_did_assignments

@@ -83,7 +83,7 @@ async function nsFetch(path: string, init: RequestInit = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
-import { assignDidToExtension, assignSmsNumber } from "../_shared/pp-did-routing.ts";
+import { assignDidToExtension, assignNumberToExtension, assignSmsNumber, readDidRouting, pbxNumberId } from "../_shared/pp-did-routing.ts";
 
 function nsUserPayload(fullName: string, email: string, extension: string, password?: string) {
   const [firstName, ...rest] = String(fullName || extension).trim().split(/\s+/);
@@ -287,9 +287,9 @@ async function autoAssignDid(admin: any, extension: string, fullName?: string, c
     if (!e164) {
       return { assigned: false, reason: "no_available_did", diagnostic: "Aucun numéro disponible dans l'inventaire DID." };
     }
-    const r = await assignDidToExtension(NS_DEFAULT_DOMAIN, e164, extension, fullName);
-    // The texting side of the chosen number follows the same broker.
-    const sms = r.verified ? await assignSmsNumber(NS_DEFAULT_DOMAIN, e164, extension).catch(() => ({ ok: false })) : { ok: false };
+    const res = await assignNumberToExtension(NS_DEFAULT_DOMAIN, e164, extension, { description: fullName });
+    const live = await readDidRouting(NS_DEFAULT_DOMAIN, pbxNumberId(e164));
+    const r = { verified: res.steps.voice, phone_number: res.phone_number, live, diagnostic: res.diagnostic };
     if (r.verified) {
       await admin.from("planipret_did_assignments")
         .update({
@@ -311,7 +311,7 @@ async function autoAssignDid(admin: any, extension: string, fullName?: string, c
       enabled: r.live.enabled,
       source: "auto_assign_new_user",
     });
-    return { assigned: r.verified, e164, extension, diagnostic: r.diagnostic };
+    return { assigned: r.verified, complete: res.success, steps: res.steps, e164, extension, diagnostic: r.diagnostic };
   } catch (e) {
     return { assigned: false, reason: "error", diagnostic: String((e as Error)?.message ?? e) };
   }

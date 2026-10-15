@@ -64,8 +64,8 @@ export function buildReport(profiles: Profile[], items: Item[], start: Date, end
       users_added: plans.reduce((a, p) => a + p.added, 0),
       plan_revenue: planRevenue, plan_cost: planCost, plan_margin: r2(planRevenue - planCost),
       services_monthly: svcMonthly, activation_one_time: activation,
-      monthly_recurring: r2(planRevenue + svcMonthly),
-      total_billed: r2(planRevenue + svcMonthly + activation),
+      monthly_recurring: r2(planCost + svcMonthly),
+      total_billed: r2(planCost + svcMonthly + activation),
     },
   };
 }

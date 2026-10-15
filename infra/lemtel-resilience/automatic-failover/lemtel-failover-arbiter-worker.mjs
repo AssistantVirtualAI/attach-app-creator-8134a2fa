@@ -46,12 +46,17 @@ function httpsURL(value, originOnly = false) {
     return url.href.replace(/\/$/, '');
   } catch { return null; }
 }
+function l7URL(value) {
+  const health = httpsURL(value);
+  if (!health) return null;
+  try { return new URL(value).pathname === '/lemtel-lb-ready' ? health : null; } catch { return null; }
+}
 function integer(value, min, max) {
   if (!/^\d+$/.test(String(value ?? ''))) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max ? parsed : null;
-}
-function config(env) {
+  }
+  function config(env) {
   if (env.FAILOVER_MODE !== 'active') return { denied: status('disabled_or_dry_run') };
   const missing = [];
   for (const name of ['DO_API_TOKEN', 'AGENT_SHARED_SECRET', 'DO_WRITER_L7_SECRET', 'DRILL_APPROVAL_SECRET']) {
@@ -60,7 +65,7 @@ function config(env) {
   if (!/^[1-9]\d*$/.test(env.DO_WRITER_DROPLET_ID || '')) missing.push('DO_WRITER_DROPLET_ID');
   if (!env.STATE || typeof env.STATE.get !== 'function' || typeof env.STATE.put !== 'function') missing.push('STATE');
   const provider = httpsURL(env.DO_API_BASE_URL);
-  const health = httpsURL(env.DO_WRITER_L7_URL);
+  const health = l7URL(env.DO_WRITER_L7_URL);
   if (!provider || !provider.endsWith('/v2')) missing.push('DO_API_BASE_URL');
   if (!health || health === provider || health.startsWith(`${provider}/`)) missing.push('DO_WRITER_L7_URL');
   if (!/^[a-z0-9-]{8,80}$/.test(env.CONFIG_REVISION || '')) missing.push('CONFIG_REVISION');
@@ -107,6 +112,9 @@ async function requestJSON(url, options = {}, accepted = [200]) {
   const response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(8000) });
   if (!accepted.includes(response.status) ||
       !response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new Error('untrusted_response');
+  return { code: response.status, body: await responseJSON(response) };
+}
+async function responseJSON(response) {
   // Bound memory and reject truncated, oversized or malformed bodies.
   const reader = response.body.getReader();
   let text = '', size = 0;
@@ -120,18 +128,36 @@ async function requestJSON(url, options = {}, accepted = [200]) {
       text += decoder.decode(value, { stream: true });
     }
   } finally { await reader.cancel(); }
-  return { code: response.status, body: JSON.parse(text + decoder.decode()) };
+  return JSON.parse(text + decoder.decode());
+}
+function exactL7Response(response, requested) {
+  if (response.redirected || !response.url) return false;
+  try {
+    const actual = new URL(response.url), expected = new URL(requested);
+    return actual.protocol === 'https:' && actual.origin === expected.origin &&
+      actual.pathname === expected.pathname && !actual.search && !actual.hash;
+  } catch { return false; }
+}
+async function requestL7(url, options = {}) {
+  const response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(8000) });
+  if (![200, 404].includes(response.status) || !exactL7Response(response, url)) throw new Error('untrusted_l7_response');
+  if (response.status === 404) return { code: 404 };
+  if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new Error('untrusted_l7_response');
+  return { code: 200, body: await responseJSON(response) };
+}
+function healthyL7Marker(body, now) {
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).sort().join(',') !== 'definitive,format,observed_at,status,writer_role') return false;
+  return body.format === 'lemtel_do_writer_l7_ready_v1' && body.writer_role === 'do_writer' &&
+    body.definitive === true && Number.isSafeInteger(body.observed_at) &&
+    body.observed_at <= now + 15 && now - body.observed_at <= 120 && body.status === 'healthy';
 }
 async function observe(env, cfg, now) {
   try {
-    const { code, body } = await requestJSON(cfg.health,
-      { headers: { authorization: `Bearer ${env.DO_WRITER_L7_SECRET}` } }, [200, 503]);
-    if (body.format !== 'lemtel_do_writer_l7_observation_v1' || body.writer_role !== 'do_writer' ||
-        body.definitive !== true || !Number.isSafeInteger(body.observed_at) ||
-        body.observed_at > now + 15 || now - body.observed_at > 120) return 'ambiguous';
-    if (code === 200 && body.status === 'healthy') return 'healthy';
-    if (code === 503 && body.status === 'unhealthy' && body.reason === 'writer_unavailable') return 'unhealthy';
-    return 'ambiguous';
+    const observation = await requestL7(cfg.health,
+      { headers: { authorization: `Bearer ${env.DO_WRITER_L7_SECRET}` } });
+    if (observation.code === 404) return 'unhealthy';
+    return healthyL7Marker(observation.body, now) ? 'healthy' : 'ambiguous';
   } catch { return 'ambiguous'; } // Timeout, transport failure and arbitrary 5xx are NOT proof of writer failure.
 }
 async function provider(env, cfg, path, actionType) {

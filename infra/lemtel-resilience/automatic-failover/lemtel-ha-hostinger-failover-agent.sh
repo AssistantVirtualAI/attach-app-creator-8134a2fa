@@ -34,8 +34,8 @@ import urllib.request
 
 CONFIG = '/etc/lemtel-ha/failover-agent.env'
 STATE = '/var/lib/lemtel-ha/failover-agent'
+EVIDENCE = '/var/lib/lemtel-ha/current-topology-evidence'
 STAGE_ATTEST = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-stage-attest.sh'
-GUARD = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-auto-promotion-guard.sh'
 PROMOTION = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-promote.sh'
 RUNTIME = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-runtime-start.sh'
 MAX_BODY = 65536
@@ -103,7 +103,6 @@ def load_config():
     if mode == 'execute' and values.get('EXECUTION_ACK') != 'I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER':
         deny('automatic_execution_acknowledgement_required')
     secure_path(STAGE_ATTEST, 0o750)
-    secure_path(GUARD, 0o755)
     secure_path(PROMOTION, 0o750)
     secure_path(RUNTIME, 0o750)
     values['PROMOTION_EXECUTION_MODE'] = mode
@@ -168,7 +167,7 @@ def validate_command(command, cfg):
             not valid_integer(proof['observed_at']) or proof['observed_at'] > issued or
             issued - proof['observed_at'] > 120):
         deny('fence_receipt_not_terminal_or_bound_to_incident')
-    return payload['incident_id']
+    return payload
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *_args, **_kwargs):
@@ -227,16 +226,47 @@ def write_ledger(path, state):
         os.fsync(handle.fileno())
     sync_directory(STATE)
 
+def persist_fence_receipt(incident_id, payload):
+    # The receipt was fully HMAC-verified before this function. Persist only the
+    # fixed, validated fields required by the local promotion/runtime actions.
+    try:
+        os.mkdir(EVIDENCE, 0o700)
+        sync_directory('/var/lib/lemtel-ha')
+    except FileExistsError:
+        pass
+    info = secure_path(EVIDENCE)
+    if not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o700:
+        deny('fence_evidence_directory_not_private')
+    target = EVIDENCE + '/do-writer-fence-receipt.state'
+    proof = payload['fence_receipt']['payload']
+    lines = [
+        'format=lemtel_do_writer_fence_receipt_v1',
+        'incident_id=' + incident_id,
+        'writer_role=do_writer',
+        'writer_droplet_id=' + proof['writer_droplet_id'],
+        'provider_action_id=' + str(proof['provider_action_id']),
+        'provider_action_type=' + proof['provider_action_type'],
+        'terminal_action_status=completed',
+        'terminal_power_state=off',
+        'confirmations=' + str(proof['confirmations']),
+        'receipt_hmac_verified=true',
+    ]
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        deny('fence_receipt_already_persisted_manual_review')
+    with os.fdopen(fd, 'w') as handle:
+        handle.write('\n'.join(lines) + '\n')
+        handle.flush()
+        os.fsync(handle.fileno())
+    sync_directory(EVIDENCE)
+
 def execution_environment(incident, cfg, phase):
     env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C',
            'LEMTEL_HA_INCIDENT_ID': incident}
     if phase == 'stage_attest':
         env.update({'LEMTEL_HA_EXECUTE': 'attest_current_topology_hostinger_runtime_stage',
                     'LEMTEL_HA_ROLE': 'hostinger_private_hot_standby'})
-    elif phase == 'guard':
-        env.update({'LEMTEL_HA_GUARD_MODE': 'verify_hostinger_promotion_readiness_only',
-                    'LEMTEL_HA_ROLE': 'hostinger_private_hot_standby',
-                    'LEMTEL_HA_LOCAL_POSTGRES_CONTAINER': cfg['LEMTEL_HA_LOCAL_POSTGRES_CONTAINER']})
     elif phase == 'promotion':
         env.update({'LEMTEL_HA_EXECUTE': 'promote_current_topology_hostinger_after_verified_fence',
                     'LEMTEL_HA_ROLE': 'hostinger_private_hot_standby',
@@ -266,12 +296,12 @@ def main():
     exact_fields(reply, ('state', 'command'))
     if reply['state'] != 'command_available':
         deny('no_valid_command')
-    incident = validate_command(reply['command'], cfg)
+    command = validate_command(reply['command'], cfg)
+    incident = command['incident_id']
     ledger = claim_incident(incident)
+    persist_fence_receipt(incident, command)
     if not run_local(STAGE_ATTEST, execution_environment(incident, cfg, 'stage_attest'), 45):
         deny('runtime_stage_attestation_blocked_incident_consumed')
-    if not run_local(GUARD, execution_environment(incident, cfg, 'guard'), 30):
-        deny('promotion_readiness_guard_blocked_incident_consumed')
     if cfg['PROMOTION_EXECUTION_MODE'] == 'review':
         write_ledger(ledger, 'manual_promotion_action_required')
         print('hostinger_failover_agent_status=manual_promotion_action_required')

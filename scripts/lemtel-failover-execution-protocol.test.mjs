@@ -331,8 +331,8 @@ test('agent verifies both domain-separated HMACs, expiry, writer binding, termin
     'os.fsync', 'incident_already_consumed_manual_review', 'status=manual_promotion_action_required']) {
     assert.ok(agent.includes(required), required);
   }
-  assert.match(agent, /incident = validate_command\(reply\['command'\], cfg\)\n    ledger = claim_incident\(incident\)/u);
-  assert.ok(agent.indexOf('ledger = claim_incident(incident)') < agent.indexOf("if not run_local(GUARD"));
+  assert.match(agent, /command = validate_command\(reply\['command'\], cfg\)\n    incident = command\['incident_id'\]\n    ledger = claim_incident\(incident\)\n    persist_fence_receipt\(incident, command\)/u);
+  assert.ok(agent.indexOf('persist_fence_receipt(incident, command)') < agent.indexOf('if not run_local(STAGE_ATTEST'));
   assert.doesNotMatch(agent, /(?:os\.(?:remove|unlink|rmdir)|shutil\.rmtree)/u);
 });
 
@@ -341,7 +341,7 @@ test('agent keeps network and provider control in the arbiter, validates a fixed
   assert.match(agent, /cfg\['ARBITER_URL'\]\.rstrip\('\/'\) \+ '\/agent\/command'/u);
   assert.doesNotMatch(agent, /(?:\/droplets\/|\/actions\/|\/zones\/|\/accounts\/|DO_API_TOKEN|DO_API_BASE_URL)/u);
   for (const required of ['PROMOTION_EXECUTION_MODE', 'automatic_execution_acknowledgement_required',
-    'runtime_stage_attestation_blocked_incident_consumed', 'promotion_readiness_guard_blocked_incident_consumed', 'promotion_execution_started',
+    'persist_fence_receipt', 'fence_receipt_already_persisted_manual_review', 'runtime_stage_attestation_blocked_incident_consumed', 'promotion_execution_started',
     'runtime_start_started', 'promotion_and_runtime_completed', "cfg['PROMOTION_EXECUTION_MODE'] == 'review'"]) {
     assert.ok(agent.includes(required), required);
   }

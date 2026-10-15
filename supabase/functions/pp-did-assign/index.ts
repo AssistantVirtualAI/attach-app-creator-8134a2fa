@@ -19,6 +19,8 @@ import { requirePlanipretAdmin } from "../_shared/ns-broker.ts";
 import {
   NS_DEFAULT_DOMAIN,
   assignDidToExtension,
+  assignNumberToExtension,
+  readDidRouting,
   e164Of,
   pbxNumberId,
   verifyDidRouting,
@@ -186,7 +188,11 @@ Deno.serve(async (req) => {
 
       if (!e164) return json({ success: false, error: "e164_requis" }, 400);
 
-      const result = await assignDidToExtension(domain, e164, extension);
+      const full = await assignNumberToExtension(domain, e164, extension, { releaseOthers: !isService });
+      const result = { verified: full.steps.voice, phone_number: full.phone_number || pbxNumberId(e164), diagnostic: full.diagnostic, live: await readDidRouting(domain, pbxNumberId(e164)) };
+      for (const rel of full.steps.released.filter((x) => x.ok)) {
+        await db.from("planipret_did_assignments").update({ status: "available", extension: null, display_name: null, updated_at: new Date().toISOString() }).eq("domain", domain).eq("phone_number_digits", rel.number);
+      }
 
       if (result.verified) {
         const { data: prof } = await db
@@ -217,7 +223,9 @@ Deno.serve(async (req) => {
       });
 
       return json({
-        success: result.verified,
+        success: full.success,
+        steps: full.steps,
+        error_code: full.error_code,
         action,
         domain,
         e164: e164Of(result.phone_number),
@@ -225,7 +233,7 @@ Deno.serve(async (req) => {
         verified: result.verified,
         diagnostic: result.diagnostic,
         live: result.live,
-      }, result.verified ? 200 : 502);
+      }, full.success ? 200 : (full.error_code && full.error_code !== "partial" && full.error_code !== "voice_failed" ? 200 : 502));
     }
 
     /* -------- release_orphans : rendre disponibles les DID sans courtier -------- */

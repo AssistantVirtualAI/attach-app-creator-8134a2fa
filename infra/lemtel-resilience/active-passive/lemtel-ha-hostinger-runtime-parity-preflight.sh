@@ -9,7 +9,13 @@ fail() { printf 'hostinger_runtime_parity_preflight_status=failed\nreason=%s\n' 
 artifact_dir='/var/lib/lemtel-ha/artifacts/hostinger-received'
 current_digest_file="$artifact_dir/current.sha256"
 runtime_stage='/opt/lemtel-ha/runtime-stage'
-postgres_container='lemtel-postgres-standby'
+resolve_standby_postgres() {
+  local -a candidates=()
+  mapfile -t candidates < <(docker ps -a --format '{{.Names}}|{{.Image}}' | awk -F'|' '$2 ~ /(^|\/)postgres(:|$)|supabase\/postgres(:|$)/ { print $1 }')
+  [ "${#candidates[@]}" -eq 1 ] && printf '%s' "${candidates[0]}"
+}
+postgres_container="$(resolve_standby_postgres || true)"
+[ -n "$postgres_container" ] || fail standby_postgres_unresolved
 
 command -v docker >/dev/null 2>&1 || fail docker_missing
 command -v sha256sum >/dev/null 2>&1 || fail sha256sum_missing

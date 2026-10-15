@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_operational_status_deployment_v7",
+  "package_version": "lemtel_operational_status_deployment_v8",
   "scope": "offline_promoted_writer_operational_status_package",
   "deployment_authorized": false,
   "hostinger_rebuild_or_start_authorized": false,
@@ -7,7 +7,7 @@
   "sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "63e1dd1ac573b5dc899552b7d352d5b80fe71efacb29c2dfaf800c5fa8c6a8b9"
+      "sha256": "6dc3b90dcbcefbd4806ae573d5ec5cfd9b797c3f6bb040e2a94e55a04d8963ae"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts",
@@ -15,7 +15,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
-      "sha256": "5d4e52665013f45ecb9a9ed9ff1190f266c7b5ff0258f87dd7fafa197aed5127"
+      "sha256": "30692a72e7afd36d4651b0718d8cc027790cfddefa8a87152a8b75070f01d5f3"
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/0006_lemtel_operational_status.sql",
@@ -42,6 +42,10 @@
       "sha256": "1c60cecb35e84f239df80bb4c36cea33f1e63d2af560ac5b1393fbca4d30387c"
     },
     {
+      "path": "infra/lemtel-self-hosted/migrations/0015_lemtel_organization_lifecycle.sql",
+      "sha256": "4458495623804c19de3082069282374057a077be38fe195e0e123cb09f13d60d"
+    },
+    {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-promoted-writer-status-publish.sh",
       "sha256": "295bc748676ef1e07c4f958718a5ac1134dc88912a0ec61a48f48a75b9255c6e"
     },
@@ -65,7 +69,8 @@
     "synthetic_membership_assignment_and_role_rbac_test",
     "approved_lemtel_organization_ownership_transfer_schema_write",
     "synthetic_owner_transfer_and_domain_reactivation_rbac_test",
-    "approved_lemtel_client_session_controls_schema_write"
+    "approved_lemtel_client_session_controls_schema_write",
+    "approved_lemtel_organization_lifecycle_schema_write"
   ],
   "forbidden_actions": [
     "hostinger_start_or_rebuild",

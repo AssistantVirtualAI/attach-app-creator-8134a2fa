@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAssignExistingUserBody, buildCreateOrganizationBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetClientSessionAccessBody, buildSetMembershipRoleBody, buildTransferOrganizationOwnershipBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
+import { buildArchiveOrganizationBody, buildAssignExistingUserBody, buildCreateOrganizationBody, buildProvisionUsersBody, buildReactivateDomainBody, buildResendWelcomeBody, buildSetClientSessionAccessBody, buildSetMembershipRoleBody, buildTransferOrganizationOwnershipBody, buildUpdateOrganizationBody, portalApi, resolveLemtelPortalBackend, toLemtelErrorKey } from "../lemtelHostedApi";
 import { csvTemplate, parseLemtelCsv, resultsCsv } from "../lemtelCsv";
 import LemtelPortalApp from "../LemtelPortalApp";
 import { needsPersonalPassword } from "../lemtelAuthAuthority";
@@ -82,6 +82,21 @@ describe("Lemtel portal contract", () => {
     });
     expect(typeof portalApi.assignExistingUser).toBe("function");
     expect(typeof portalApi.setMembershipRole).toBe("function");
+  });
+
+  it("opens a server-authoritative organization workspace and uses explicit soft-archive commands", () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    expect(buildUpdateOrganizationBody(organizationId, { displayName: "Lemtel : Staging", defaultLocale: "fr" })).toEqual({ action: "update_organization", organizationId, organization: { displayName: "Lemtel : Staging", defaultLocale: "fr" } });
+    expect(buildArchiveOrganizationBody(organizationId, "ARCHIVE")).toEqual({ action: "archive_organization", organizationId, confirmation: "ARCHIVE" });
+    expect(typeof portalApi.updateOrganization).toBe("function");
+    expect(typeof portalApi.archiveOrganization).toBe("function");
+    const app = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
+    const workspace = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelOrganizationWorkspace.tsx"), "utf8");
+    expect(app).toContain('organizations/:organizationId');
+    expect(app).toContain('to={`${BASE}/organizations/${organization.id}`}');
+    expect(workspace).toContain('confirmation !== t.archiveInput');
+    expect(workspace).toContain('portalApi.archiveOrganization');
+    expect(workspace).toContain('It does not delete data');
   });
 
   it("uses exact tenant-scoped bodies for domain reactivation and ownership transfer", () => {

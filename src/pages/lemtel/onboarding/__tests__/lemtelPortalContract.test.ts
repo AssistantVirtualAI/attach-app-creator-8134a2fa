@@ -49,7 +49,8 @@ describe("Lemtel portal contract", () => {
     expect(source).toContain("window.sessionStorage");
     expect(source).toContain("persistActiveOrganizationId");
     expect(source).toContain("setActiveOrganizationId");
-    expect(source).toContain("organizations.some((candidate) => candidate.id === organizationId)");
+    expect(source).toContain("candidate.id === requestedOrganizationId");
+    expect(source).toContain("A tenant scope is authoritative only when its id is in the latest server list.");
     expect(source).not.toContain("window.localStorage");
   });
 

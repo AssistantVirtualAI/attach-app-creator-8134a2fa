@@ -1,3 +1,4 @@
+import { parseModels } from "./models.ts";
 import { corsHeaders, jsonResponse, nsBrokerFetch, requirePlanipretAdmin } from "../_shared/ns-broker.ts";
 
 Deno.serve(async (req) => {
@@ -6,6 +7,8 @@ Deno.serve(async (req) => {
     const auth = await requirePlanipretAdmin(req);
     if ("error" in auth) return auth.error;
     const { admin, profile } = auth;
+    const parsed = parseModels(await req.json().catch(() => ({})));
+    if (!parsed.ok) return jsonResponse({ success: false, error: parsed.error }, 400);
 
     // NS cannot send custom headers on subscription posts, so the shared secret
     // travels in the post-url query string (validated by ns-webhook-receiver).
@@ -19,7 +22,7 @@ Deno.serve(async (req) => {
 
     // NS-API v2 models (docs/netsapiens/webhooks.md). `call` is REQUIRED to wake
     // the mobile app via VoIP push while it is suspended in the background.
-    const desired = ["call", "cdr", "message", "voicemail"];
+    const desired = parsed.models;
 
 
     // FIX 5 — check existing subscriptions first
@@ -61,13 +64,14 @@ Deno.serve(async (req) => {
       const data = await res.json().catch(() => ({}));
       // 409 = subscription already exists → treat as present, not an error.
       if (res.status === 409) { kept.push({ event, id: data?.id ?? null, existing: true }); continue; }
-      created.push({ event, ok: res.ok, status: res.status, data });
+      created.push({ event, ok: res.ok, status: res.status, id: data?.id ?? null });
     }
 
 
     console.log("ns-webhook-setup", { existing: kept.length, created: created.length, replaced: replaced.length });
     return jsonResponse({
       success: true,
+      requested_models: desired,
       existing: kept.length,
       created: created.length,
       replaced,

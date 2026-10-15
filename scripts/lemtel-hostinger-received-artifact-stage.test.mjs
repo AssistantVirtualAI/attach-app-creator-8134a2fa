@@ -5,12 +5,15 @@ import { resolve } from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const script=readFileSync(resolve(root,'infra/lemtel-resilience/active-passive/lemtel-ha-hostinger-received-artifact-stage.sh'),'utf8');
 test('Hostinger received artifact staging is encrypted, private and dormant',()=>{
-  for (const expected of ['stage_hostinger_received_runtime_envelope','hostinger_standby','artifact_digest_mismatch','runtime_envelope_decryption_failed','envelope_content_unapproved','runtime_compose_invalid','runtime_started=false','automatic_traffic_failover_enabled=false']) assert.match(script,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for (const expected of ['stage_hostinger_received_runtime_envelope','hostinger_standby','artifact_digest_mismatch','runtime_envelope_decryption_failed','envelope_content_unapproved','artifact_receipt_digest_mismatch','runtime_envelope_receipt','runtime_compose_invalid','runtime_started=false','automatic_traffic_failover_enabled=false']) assert.match(script,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   assert.match(script,/age -d -i "\$age_identity"/);
   assert.match(script,/resolve_standby_postgres/);
   assert.match(script,/standby_postgres_unresolved/);
   assert.match(script,/unexpected_direct_envelope_path/);
   assert.match(script,/direct_envelope_sha256_mismatch/);
+  assert.match(script,/artifact_receipt_tmp="\$\(mktemp/);
+  assert.match(script,/current_digest_tmp="\$\(mktemp/);
+  assert.match(script,/registered_direct_verified_transfer/);
   assert.match(script,/\[ \"\$direct_envelope\" = '\/tmp\/lemtel-hostinger-runtime\.age' \]/);
   assert.doesNotMatch(script,/postgres_container='lemtel-postgres-standby'/);
   assert.match(script,/docker compose --env-file/);

@@ -29,6 +29,9 @@ test('deployment applies only approved Lemtel governance schema and atomically r
   assert.match(source, /lemtel_session_bootstrap_context_for_client\(uuid,text\)/);
   assert.match(source, /lemtel_record_authorized_client_connection\(uuid,text\)/);
   assert.match(source, /\^present\\\|present\\\|present\\\|present\\\|present\$/);
+  assert.match(source, /schema_sql=/);
+  assert.match(source, /-c \"\$1\"/);
+  assert.match(source, /governance_schema_query_failed/);
   assert.match(source, /rollback\(\)/);
   assert.match(source, /cp -- "\$admin_backup" "\$admin_target"/);
   assert.match(source, /docker restart --time 30 "\$edge_container"/);

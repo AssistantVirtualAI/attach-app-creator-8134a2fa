@@ -7,6 +7,9 @@ fail() { printf 'traffic_ingress_route_apply_status=failed\nreason=%s\n' "$1" >&
 [ "${LEMTEL_TRAFFIC_ROUTE_EXECUTE:-}" = apply_verified_traffic_ingress_route ] || fail execution_token_required
 [ "${LEMTEL_HA_ROLE:-}" = digitalocean_writer ] || fail writer_role_required
 [ "${LEMTEL_TRAFFIC_ROUTE_BACKUP_ATTESTATION:-}" = FRESH_ENCRYPTED_WRITER_BACKUP_VERIFIED ] || fail fresh_backup_attestation_required
+[ "${LEMTEL_TRAFFIC_ROUTE_REVIEW_APPROVAL:-}" = REVIEWED_DO_WRITER_TRAFFIC_ROUTE ] || fail review_approval_required
+[ "${LEMTEL_TRAFFIC_ROUTE_SNAPSHOT_ATTESTATION:-}" = DO_WRITER_SNAPSHOT_CREATED_AND_RESTORE_REVIEWED ] || fail snapshot_restore_attestation_required
+[ "${LEMTEL_TRAFFIC_EDGE_LOG_ATTESTATION:-}" = EDGE_AND_ROUTE_ACCESS_LOGS_DISABLED_VERIFIED ] || fail ingress_log_attestation_required
 
 canonical_host='lemtel.assistantvirtualai.com'
 route_marker='# LEMTEL_TRAFFIC_INGRESS_V1'

@@ -11,7 +11,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/lemtel-traffic-manifest.json",
-      "sha256": "9e44d286e8eba3608ee94f3b235a0c4e0df29c3890a66039a5a23952bdeb972f"
+      "sha256": "9f89fb8fe0951383d5358dcaac1cb82bcabe0cf6c4d98d135be5ef2695fe9067"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.ts",
@@ -27,7 +27,7 @@
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-traffic-timer-enable.sh",
-      "sha256": "ac88320e62ccbee78575f01bbb6b3aa76ed1c92f7260ff81c7be824ae8df92da"
+      "sha256": "1c6fb338ef29698cb90c66905415014eae63172aac3b788f498cfb2f0398ccf8"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
@@ -55,15 +55,15 @@
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/README.md",
-      "sha256": "1970ece5eaced8829c932eb69340b5c295eb9d9cc50b712e40d581f2047a7f8b"
+      "sha256": "c9ac526ad65cc38b39e3a906a8b95663f9d0eabbae7ca55d729c2fa83beab57d"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-observability-deploy.sh",
-      "sha256": "895dfbedd70f01aa56957a0c76bdacec0fae4c22f0753e65d9d4011599a50acc"
+      "sha256": "14dd6e06fc6c8315f466476c38ba2964740d66a90a106735b0da653bd8cbb18e"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-ingress-route-apply.sh",
-      "sha256": "eacdd1591e8003bf18a9ad2365cc27938c2e938461aa8fabce29ee009050d19f"
+      "sha256": "e479f553e0bbd9ff55336a123de352866be8717f48ad836b1b0233ccff7bb4c3"
     }
   ],
   "validation_sources": [
@@ -81,15 +81,15 @@
     },
     {
       "path": "scripts/lemtel-traffic-observability-contract.test.mjs",
-      "sha256": "3878383f67d44659153489aad7987b6d184fe48567e22f8a42f01573a9a3697a"
+      "sha256": "cdb92257a25cd171ac27bba6c80b28d18cf0e43467a90e6cb03291152582ca4a"
     },
     {
       "path": "scripts/lemtel-traffic-observability-deploy.test.mjs",
-      "sha256": "936482dc275ed7b51e90b59cde61d08e6a616555365a2f2df4546e727fd39454"
+      "sha256": "b051e7f16a072f82ad25df61c1cd00c961efeb9439fa81e71c3431851c98ccb5"
     },
     {
       "path": "scripts/lemtel-traffic-ingress-route.test.mjs",
-      "sha256": "30d38f3c6331e200ebaf574257ab01640fb9e0b5a6558ecd2edd54fc2c0edb26"
+      "sha256": "3a324e1b91b0e1257184bb4f96610e326c8a1d6c47d61ea68897cd66189f0bb8"
     }
   ],
   "external_router_configuration": {
@@ -107,6 +107,9 @@
     "direct_caddy_edge_route_hmac_only_for_lemtel_traffic_ingest",
     "gateway_absence_or_noninterference_attested",
     "caddy_access_logs_disabled_for_lemtel_traffic_ingest",
+    "explicit_do_writer_change_review_approved",
+    "user_managed_do_writer_snapshot_and_restore_reviewed",
+    "edge_and_route_access_logs_disabled_attested",
     "root_only_collector_configuration_verified",
     "synthetic_hmac_and_platform_admin_rbac_tests",
     "explicit_separate_collector_activation_approval"

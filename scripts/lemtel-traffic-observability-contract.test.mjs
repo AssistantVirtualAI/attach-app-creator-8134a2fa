@@ -93,6 +93,8 @@ test('timer installation remains root-gated, explicit and non-automatic at a 60-
   assert.match(timer, /\[\[ "\$EUID" -ne 0 \]\]/);
   assert.match(timer, /enable-lemtel-traffic-collector/);
   assert.match(timer, /LEMTEL_TRAFFIC_ACTIVATION_APPROVED:-\}.*transactional-package-ready/);
+  assert.match(timer, /REVIEWED_LOCAL_COLLECTOR_ACTIVATION/);
+  assert.match(timer, /LOCAL_COLLECTOR_ROLLBACK_REVIEWED/);
   assert.match(timer, /OnBootSec=60s/);
   assert.match(timer, /OnUnitActiveSec=60s/);
   assert.match(timer, /RandomizedDelaySec=10s/);
@@ -108,6 +110,9 @@ test('separate manifests have false deployment and activation flags, route-speci
     assert.ok(manifest.required_preconditions.includes('direct_caddy_edge_route_hmac_only_for_lemtel_traffic_ingest'));
     assert.ok(manifest.required_preconditions.includes('caddy_access_logs_disabled_for_lemtel_traffic_ingest'));
     assert.ok(manifest.required_preconditions.includes('gateway_absence_or_noninterference_attested'));
+    assert.ok(manifest.required_preconditions.includes('explicit_do_writer_change_review_approved'));
+    assert.ok(manifest.required_preconditions.includes('user_managed_do_writer_snapshot_and_restore_reviewed'));
+    assert.ok(manifest.required_preconditions.includes('edge_and_route_access_logs_disabled_attested'));
     for (const entry of entries(manifest)) {
       assert.match(entry.sha256, /^[a-f0-9]{64}$/);
       assert.equal(entry.sha256, digest(entry.path), `stale digest for ${entry.path}`);

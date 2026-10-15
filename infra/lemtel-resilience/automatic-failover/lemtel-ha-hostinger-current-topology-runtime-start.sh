@@ -5,6 +5,7 @@ set -euo pipefail
 umask 077
 fail() { printf 'hostinger_current_topology_runtime_start_status=failed\nreason=%s\n' "$1" >&2; exit 1; }
 secure_root_file() { [ -f "$1" ] && [ -O "$1" ] && [ "$(stat -c '%a' "$1")" = 600 ]; }
+secure_root_dir() { [ -d "$1" ] && [ -O "$1" ] && [ "$(stat -c '%a' "$1")" = 700 ]; }
 [ "$(id -u)" -eq 0 ] || fail root_required
 [ "${LEMTEL_HA_EXECUTE:-}" = activate_current_topology_hostinger_runtime ] || fail execution_token_required
 [ "${LEMTEL_HA_ROLE:-}" = hostinger_promoted_writer ] || fail invalid_role
@@ -14,14 +15,17 @@ incident_id="${LEMTEL_HA_INCIDENT_ID:-}"
 for command in docker flock grep stat ss; do command -v "$command" >/dev/null 2>&1 || fail "${command}_missing"; done
 systemctl is-active --quiet docker || fail docker_inactive
 state_dir=/var/lib/lemtel-ha/current-topology-evidence
+secure_root_dir "$state_dir" || fail evidence_directory_missing_or_insecure
 promotion_state="$state_dir/hostinger-promotion.state"
-fence="$state_dir/do-writer-provider-fence.attestation"
-fence_signature="$state_dir/do-writer-provider-fence.attestation.asc"
-fence_keyring="$state_dir/provider-fence-attestation.gpg"
-for file in "$promotion_state" "$fence" "$fence_signature" "$fence_keyring"; do secure_root_file "$file" || fail required_evidence_missing_or_insecure; done
-gpgv --keyring "$fence_keyring" "$fence_signature" "$fence" >/dev/null 2>&1 || fail do_writer_fence_signature_invalid
+fence="$state_dir/do-writer-fence-receipt.state"
+for file in "$promotion_state" "$fence"; do secure_root_file "$file" || fail required_evidence_missing_or_insecure; done
+grep -Fxq 'format=lemtel_do_writer_fence_receipt_v1' "$fence" || fail do_writer_fence_format_invalid
+grep -Fxq 'receipt_hmac_verified=true' "$fence" || fail do_writer_fence_hmac_not_verified
 grep -Fxq "incident_id=$incident_id" "$fence" || fail do_writer_fence_incident_mismatch
-grep -Fxq 'writer_fenced=true' "$fence" || fail do_writer_not_fenced
+grep -Fxq 'writer_role=do_writer' "$fence" || fail do_writer_fence_role_invalid
+grep -Fxq 'terminal_action_status=completed' "$fence" || fail do_writer_fence_not_terminal
+grep -Fxq 'terminal_power_state=off' "$fence" || fail do_writer_not_fenced
+grep -Eq '^confirmations=[2-9][0-9]*$' "$fence" || fail do_writer_fence_confirmations_invalid
 grep -Fxq 'format=lemtel_hostinger_current_topology_promotion_v1' "$promotion_state" || fail promotion_state_format_invalid
 grep -Fxq "incident_id=$incident_id" "$promotion_state" || fail promotion_state_incident_mismatch
 grep -Fxq 'writer_role=hostinger_promoted_writer' "$promotion_state" || fail promotion_state_role_invalid
@@ -70,4 +74,4 @@ caddy_id="$("${compose[@]}" ps --quiet caddy)"; docker port "$caddy_id" | grep -
 [ -z "$(docker port "$container" 2>/dev/null || true)" ] || fail promoted_database_published_port
 if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_detected; fi
 printf 'hostinger_current_topology_runtime_start_format=lemtel_hostinger_current_topology_runtime_start_v1\n'
-printf 'writer=hostinger_promoted_writer\nincident_id_matched=true\ndo_writer_fence_attestation_signature_verified=true\npromoted_database_writer_verified=true\nstandby_runtime_started=true\npublic_runtime_listener_enabled=true\npublic_database_listener_enabled=false\ndns_change_executed=false\nautomatic_traffic_routing_enabled=false\ntelephony_contacted=false\ncredential_values_emitted=false\nhostinger_current_topology_runtime_start_status=complete\n'
+printf 'writer=hostinger_promoted_writer\nincident_id_matched=true\ndo_writer_fence_receipt_hmac_verified=true\npromoted_database_writer_verified=true\nstandby_runtime_started=true\npublic_runtime_listener_enabled=true\npublic_database_listener_enabled=false\ndns_change_executed=false\nautomatic_traffic_routing_enabled=false\ntelephony_contacted=false\ncredential_values_emitted=false\nhostinger_current_topology_runtime_start_status=complete\n'

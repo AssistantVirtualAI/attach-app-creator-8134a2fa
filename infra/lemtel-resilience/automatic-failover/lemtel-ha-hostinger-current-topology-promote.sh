@@ -7,6 +7,7 @@ set -euo pipefail
 umask 077
 fail() { printf 'hostinger_current_topology_promotion_status=failed\nreason=%s\n' "$1" >&2; exit 1; }
 secure_root_file() { [ -f "$1" ] && [ -O "$1" ] && [ "$(stat -c '%a' "$1")" = 600 ]; }
+secure_root_dir() { [ -d "$1" ] && [ -O "$1" ] && [ "$(stat -c '%a' "$1")" = 700 ]; }
 resolve_standby_postgres() {
   mapfile -t candidates < <(docker ps -a --format '{{.Names}}|{{.Image}}' | awk -F'|' '$2 ~ /(^|\/)postgres(:|$)|supabase\/postgres(:|$)/ { print $1 }')
   [ "${#candidates[@]}" -eq 1 ] && printf '%s' "${candidates[0]}"
@@ -17,22 +18,24 @@ resolve_standby_postgres() {
 [ "${LEMTEL_HA_ALLOW_CURRENT_TOPOLOGY_PROMOTION:-}" = I_UNDERSTAND_HOSTINGER_BECOMES_THE_ONLY_WRITER ] || fail promotion_acknowledgement_required
 incident_id="${LEMTEL_HA_INCIDENT_ID:-}"
 [[ "$incident_id" =~ ^[a-z0-9-]{8,80}$ ]] || fail invalid_incident_id
-for command in docker flock gpgv grep stat ss date; do command -v "$command" >/dev/null 2>&1 || fail "${command}_missing"; done
+for command in docker flock grep stat ss date; do command -v "$command" >/dev/null 2>&1 || fail "${command}_missing"; done
 systemctl is-active --quiet docker || fail docker_inactive
 state_dir=/var/lib/lemtel-ha/current-topology-evidence
-fence="$state_dir/do-writer-provider-fence.attestation"
-fence_signature="$state_dir/do-writer-provider-fence.attestation.asc"
-fence_keyring="$state_dir/provider-fence-attestation.gpg"
+secure_root_dir "$state_dir" || fail evidence_directory_missing_or_insecure
+fence="$state_dir/do-writer-fence-receipt.state"
 stage_state="$state_dir/hostinger-runtime-stage.state"
 promotion_state="$state_dir/hostinger-promotion.state"
 lock_file=/var/lock/lemtel-ha-hostinger-current-topology-promotion.lock
-for file in "$fence" "$fence_signature" "$fence_keyring" "$stage_state"; do secure_root_file "$file" || fail required_evidence_missing_or_insecure; done
+for file in "$fence" "$stage_state"; do secure_root_file "$file" || fail required_evidence_missing_or_insecure; done
 [ ! -e "$promotion_state" ] || fail promotion_state_already_exists
-gpgv --keyring "$fence_keyring" "$fence_signature" "$fence" >/dev/null 2>&1 || fail do_writer_fence_signature_invalid
-grep -Fxq 'format=lemtel_do_writer_provider_fence_attestation_v1' "$fence" || fail do_writer_fence_format_invalid
+grep -Fxq 'format=lemtel_do_writer_fence_receipt_v1' "$fence" || fail do_writer_fence_format_invalid
+grep -Fxq 'receipt_hmac_verified=true' "$fence" || fail do_writer_fence_hmac_not_verified
 grep -Fxq "incident_id=$incident_id" "$fence" || fail do_writer_fence_incident_mismatch
 grep -Fxq 'writer_role=do_writer' "$fence" || fail do_writer_fence_role_invalid
-grep -Fxq 'writer_fenced=true' "$fence" || fail do_writer_not_fenced
+grep -Fxq 'writer_role=do_writer' "$fence" || fail do_writer_fence_role_invalid
+grep -Fxq 'terminal_action_status=completed' "$fence" || fail do_writer_fence_not_terminal
+grep -Fxq 'terminal_power_state=off' "$fence" || fail do_writer_not_fenced
+grep -Eq '^confirmations=[2-9][0-9]*$' "$fence" || fail do_writer_fence_confirmations_invalid
 grep -Fxq 'format=lemtel_hostinger_runtime_stage_v1' "$stage_state" || fail runtime_stage_format_invalid
 grep -Fxq "incident_id=$incident_id" "$stage_state" || fail runtime_stage_incident_mismatch
 grep -Fxq 'runtime_staged=true' "$stage_state" || fail runtime_not_staged
@@ -64,4 +67,4 @@ done
 if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_detected; fi
 printf 'promotion_executed=true\nstandby_in_recovery=false\ndo_writer_fenced=true\npublic_database_listener_enabled=false\n' >> "$promotion_state"
 printf 'hostinger_current_topology_promotion_format=lemtel_hostinger_current_topology_promotion_v1\n'
-printf 'writer=hostinger_promoted_writer\nincident_id_matched=true\ndo_writer_fence_attestation_signature_verified=true\nstandby_promoted=true\nstandby_in_recovery=false\npublic_database_listener_enabled=false\nruntime_started=false\ndns_change_executed=false\nautomatic_traffic_routing_enabled=false\ntelephony_contacted=false\ncredential_values_emitted=false\nhostinger_current_topology_promotion_status=complete\n'
+printf 'writer=hostinger_promoted_writer\nincident_id_matched=true\ndo_writer_fence_receipt_hmac_verified=true\nstandby_promoted=true\nstandby_in_recovery=false\npublic_database_listener_enabled=false\nruntime_started=false\ndns_change_executed=false\nautomatic_traffic_routing_enabled=false\ntelephony_contacted=false\ncredential_values_emitted=false\nhostinger_current_topology_promotion_status=complete\n'

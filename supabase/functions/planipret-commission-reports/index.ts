@@ -908,7 +908,11 @@ Deno.serve(async (req) => {
     // Safe to trigger from the scheduler: it only refreshes existing, already
     // authorized snapshots older than ~14 min, bounded to 12 per run.
     const version = await commissionDataVersion(admin);
-    let wq = admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body");
+    // `stats:` keys belong to pp-commission-stats (different payload shape);
+    // re-running them here overwrote the Déboursées dashboards with a report
+    // payload. They refresh themselves (stale-while-revalidate) on next read.
+    let wq = admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body")
+      .not("cache_key", "like", "stats:%");
     if (version) wq = wq.or(`data_version.is.null,data_version.neq.${version}`);
     const { data: rows } = await wq.gt("last_accessed_at", new Date(Date.now() - 2 * 3_600_000).toISOString())
       .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("last_accessed_at", { ascending: false }).limit(12);

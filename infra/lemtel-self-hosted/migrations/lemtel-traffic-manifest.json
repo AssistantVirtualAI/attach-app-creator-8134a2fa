@@ -44,6 +44,9 @@
     "direct_caddy_edge_route_hmac_only_for_lemtel_traffic_ingest",
     "gateway_absence_or_noninterference_attested",
     "caddy_access_logs_disabled_for_lemtel_traffic_ingest",
+    "explicit_do_writer_change_review_approved",
+    "user_managed_do_writer_snapshot_and_restore_reviewed",
+    "edge_and_route_access_logs_disabled_attested",
     "root_only_collector_configuration_verified",
     "synthetic_hmac_and_platform_admin_rbac_tests",
     "explicit_separate_collector_activation_approval"

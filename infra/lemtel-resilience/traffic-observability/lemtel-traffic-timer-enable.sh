@@ -7,6 +7,9 @@ if [[ "$EUID" -ne 0 ]]; then printf 'status=root_required\n'; exit 78; fi
 if [[ "$#" -ne 1 || "$1" != 'enable-lemtel-traffic-collector' || "${LEMTEL_TRAFFIC_ACTIVATION_APPROVED:-}" != 'transactional-package-ready' ]]; then
   printf 'status=activation_not_approved\n'; exit 78
 fi
+if [[ "${LEMTEL_TRAFFIC_ACTIVATION_REVIEW_APPROVED:-}" != 'REVIEWED_LOCAL_COLLECTOR_ACTIVATION' || "${LEMTEL_TRAFFIC_LOCAL_ROLLBACK_ATTESTATION:-}" != 'LOCAL_COLLECTOR_ROLLBACK_REVIEWED' ]]; then
+  printf 'status=activation_review_not_approved\n'; exit 78
+fi
 source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if ! bash "$source_dir/lemtel-traffic-collect.sh" --check-config >/dev/null 2>&1; then
   printf 'status=config_refused\n'; exit 78

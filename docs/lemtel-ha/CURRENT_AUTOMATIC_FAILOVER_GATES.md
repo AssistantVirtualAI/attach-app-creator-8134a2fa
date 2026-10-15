@@ -18,12 +18,13 @@ Le contrat de base conserve tous les flags d’activation à `false`, notamment 
 
 Le failover automatique est **bloqué fail-closed** tant que les preuves suivantes ne sont pas fournies et validées pour l’incident :
 
-1. reçu HMAC de fencing du `do_writer`, validé par l’agent puis persisté root-only, lié au même incident et avec deux confirmations terminales ;
-2. drill de fencing fournisseur et drill de promotion Hostinger ;
-3. preuve du standby privé en recovery/streaming, de l’intégrité stockage et de l’absence de listener PostgreSQL public ;
-4. preuve de writer unique après promotion ;
-5. configuration et drill du Load Balancer/routage Cloudflare avec priorité `do_writer`, puis `hostinger_private_hot_standby` ;
-6. drill de reverse failback et validation du retry mobile.
+1. binding et migration Durable Object isolés Lemtel, singleton/lease/ledger revus sans fallback KV ;
+2. reçu HMAC de fencing du `do_writer`, validé par l’agent puis persisté root-only, lié au même incident et avec deux confirmations terminales ;
+3. drill de fencing fournisseur et drill de promotion Hostinger ;
+4. preuve du standby privé en recovery/streaming, de l’intégrité stockage et de l’absence de listener PostgreSQL public ;
+5. preuve de writer unique après promotion ;
+6. configuration et drill du Load Balancer/routage Cloudflare avec priorité `do_writer`, puis `hostinger_private_hot_standby` ;
+7. drill de reverse failback et validation du retry mobile.
 
 Le module `scripts/lemtel-current-topology-failover-gate.mjs` est volontairement pur et en mémoire : sans toutes ces preuves fournies par l’appelant, il retourne `automatic_failover_blocked` avec le code `78`. Même avec un jeu complet de preuves, son succès signifie seulement `manual_failover_readiness_evidence_complete` ; il n’active aucune action automatique.
 
@@ -43,7 +44,7 @@ Le **failback automatique est désactivé**. Tout retour vers DO exige une nouve
 | Fichier | Rôle limité |
 |---|---|
 | `infra/lemtel-resilience/automatic-failover/current-topology-contract.json` | Contrat strict de la topologie actuelle, de ses exclusions et de ses gates. |
-| `lemtel-failover-arbiter-worker.mjs` | Fencing DO via API fournisseur seulement après ses gates, puis émission d’un reçu HMAC à durée limitée. |
+| `lemtel-failover-arbiter-worker.mjs` | Classe Durable Object et Worker status-only : lease/ledger transactionnels avant observation/fencing/préparation, sans binding/migration provisionnés ni commande HTTP. Voir [correction source-only](DURABLE_OBJECT_SERIALIZATION_SOURCE_ONLY.md). |
 | `lemtel-ha-hostinger-failover-agent.sh` | Validation HMAC, ledger one-time, persistance root-only du reçu et orchestration locale `review`/`execute`. |
 | `lemtel-ha-hostinger-current-topology-promote.sh` | Promotion locale uniquement après reçu HMAC, stage et gates PostgreSQL. |
 | `lemtel-ha-hostinger-current-topology-runtime-start.sh` | Démarrage runtime local uniquement après promotion et reçu HMAC ; aucun routage. |

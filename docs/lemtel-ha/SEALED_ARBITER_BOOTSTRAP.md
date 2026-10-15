@@ -2,7 +2,7 @@
 
 ## Périmètre et invariants
 
-Cette révision fournit du **code et des tests locaux uniquement**. Elle ne déploie rien et ne modifie aucun secret, binding, cron, agent, fournisseur, DNS, Load Balancer ou runtime réel. Le Worker actuellement désactivé doit rester désactivé. Aucun périmètre Planipret, Avastatistic, PBX/FusionPBX ou téléphonie n’est concerné.
+Cette révision fournit du **code et des tests locaux uniquement**. La correction de sérialisation Durable Object reste elle aussi source-only et non provisionnée ; voir [la note dédiée](DURABLE_OBJECT_SERIALIZATION_SOURCE_ONLY.md). Elle ne déploie rien et ne modifie aucun secret, binding, cron, agent, fournisseur, DNS, Load Balancer ou runtime réel. Le Worker actuellement désactivé doit rester désactivé. Aucun périmètre Planipret, Avastatistic, PBX/FusionPBX ou téléphonie n’est concerné.
 
 | Mode exact | HTTP | Cron / effets autorisés |
 |---|---|---|
@@ -17,7 +17,8 @@ Cette révision fournit du **code et des tests locaux uniquement**. Elle ne dép
 | Binding | Type / origine / durée |
 |---|---|
 | `FAILOVER_MODE` | Texte ; défaut `disabled`. Fenêtre humaine `bootstrap` très courte ; **retour obligatoire à `disabled` après la tentative**, succès ou échec. Jamais d’activation par cette procédure. |
-| `STATE` | Workers KV isolé Lemtel avec `get`/`put`. Contient uniquement statuts redacted, marqueurs one-use et objets chiffrés. |
+| `STATE` | Workers KV isolé Lemtel avec `get`/`put`. Contient uniquement statuts redacted, marqueurs one-use et objets chiffrés ; **jamais un verrou de sérialisation**. |
+| `ARBITER_SERIALIZER` | Namespace Durable Object isolé Lemtel, requis seulement si un futur mode `active` est revu. Le source attend `idFromName`/`get`, mais ce binding, sa classe et sa migration ne sont ni déclarés, ni provisionnés, ni exécutés ici. Son absence/mauvais type bloque avant tout fetch fournisseur/commande. |
 | `CONFIG_REVISION` | Texte existant ; révision opaque ASCII `[a-z0-9-]`, 8–80 caractères. Nouvelle révision obligatoire après tout changement ou résultat incertain. |
 | `CONFIG_DECRYPTION_PUBLIC_JWK` | Texte **non secret**, RSA 3072–4096 bits, exposant 65537, usage `encrypt`, algorithme JWK `RSA-OAEP-256`. Seuls les composants publics sont autorisés. |
 | `CONFIG_DECRYPTION_PRIVATE_JWK` | **Secret runtime Cloudflare exclusivement**, correspondant exactement au JWK public ; nécessaire au POST, pas au GET ni au mode actif. Aucune valeur dans Git, bundle, fichiers locaux, arguments CLI/MCP visibles ou logs. |
@@ -98,7 +99,7 @@ La preuve couvre **tous** les champs, y compris les ciphertexts, nonce, dates, r
 
 Le payload déchiffré a exactement `{format, config_revision, issued_at, expires_at, configuration}`, avec `format=lemtel_failover_protected_config_v1`. Révision et issuance doivent correspondre à l’enveloppe. Son échéance doit être au moins celle de l’enveloppe, mais au plus **3 600 secondes après issuance** ; le retour à disabled ne prolonge pas cette échéance. L’activation future, si autorisée, nécessite une injection fraîche et toutes les autres gates.
 
-`configuration` a exactement les 13 champs opérationnels du protocole existant : quatre secrets, `DO_WRITER_DROPLET_ID`, `DO_API_BASE_URL`, `DO_WRITER_L7_URL`, `ARBITER_SERIALIZATION_ACK`, `OBSERVATION_INTERVAL_SECONDS`, `INCIDENT_FAILURE_CYCLES`, `GRACEFUL_SHUTDOWN_DELAY_SECONDS`, `POWER_STATE_TIMEOUT_SECONDS`, `COMMAND_TTL_SECONDS`. Aucune clé inconnue, mode, flag d’activation ou reçu de drill ne peut être ajouté. Les validations de sécurité existantes sont conservées : secrets de 32–4 096 caractères, ID positif, HTTPS sans credentials/query/fragment, chemin L7 **exact** `/lemtel-lb-ready`, sérialisation explicite, bornes des cycles/délais et timeout strictement supérieur au délai graceful.
+`configuration` a exactement les 12 champs opérationnels : quatre secrets, `DO_WRITER_DROPLET_ID`, `DO_API_BASE_URL`, `DO_WRITER_L7_URL`, `OBSERVATION_INTERVAL_SECONDS`, `INCIDENT_FAILURE_CYCLES`, `GRACEFUL_SHUTDOWN_DELAY_SECONDS`, `POWER_STATE_TIMEOUT_SECONDS`, `COMMAND_TTL_SECONDS`. Aucune clé inconnue, mode, flag d’activation, ACK textuel de sérialisation ou reçu de drill ne peut être ajouté. Les validations de sécurité existantes sont conservées : secrets de 32–4 096 caractères, ID positif, HTTPS sans credentials/query/fragment, chemin L7 **exact** `/lemtel-lb-ready`, bornes des cycles/délais et timeout strictement supérieur au délai graceful.
 
 ## Chiffrement à repos, replay et migration fail-closed
 
@@ -119,16 +120,16 @@ Les anciens incidents ou reçus de drill en clair ne sont **pas** migrés implic
 
 Le Worker brûle localement nonce et révision, écrit leurs marqueurs avant le record et refuse toute réécriture de config existante. Les résultats incertains ne permettent pas une nouvelle tentative de même session/révision. Un verrou d’isolate protège les POST locaux simultanés ; les marqueurs persistent au redémarrage.
 
-> **Limite bloquante de production : KV n’est ni transactionnel, ni un CAS, ni une lecture globale immédiatement cohérente.** Deux isolates/régions concurrents peuvent lire une absence stale. Les tests prouvent le refus local et celui d’un nouvel isolate ayant lu les marqueurs, pas une garantie anti-replay globale linéarisable. Le contrôleur unique, sans retry concurrent ni redéploiement pendant la fenêtre, est obligatoire mais ne remplace pas une primitive de sérialisation forte côté serveur si le modèle de menace l’exige. Ne pas autoriser l’active ni signer un drill de sérialisation pour masquer cette limite ; une primitive forte requiert une révision distincte.
+> **KV reste non transactionnel, sans CAS et sans lecture globale immédiatement cohérente.** Il ne sérialise aucune exécution. La correction source ajoute le singleton Durable Object `LemtelFailoverSerializer`, son lease court et son ledger transactionnel ; elle remplace l’ACK textuel, mais **n’ajoute aucun binding ni migration**. Sans provisionnement audité distinct de `ARBITER_SERIALIZER`, l’active reste bloqué. Le détail et les limites sont dans [la note Durable Object](DURABLE_OBJECT_SERIALIZATION_SOURCE_ONLY.md).
 
-En active, le Worker exige le marqueur de bootstrap, déchiffre chaque fois la config, vérifie la révision et la concordance exacte dates internes/record puis revalide tous les champs. Aucune config absente, plaintext, altérée, expirée ou indéchiffrable ne déclenche de fetch fournisseur/santé. La validité est revérifiée avant les fetchs et avant émission/livraison de commande. Les erreurs ne reflètent jamais secret, noms de champs sensibles, token, ID, URL ou exception brute.
+En active, le Worker exige le marqueur de bootstrap, déchiffre chaque fois la config, vérifie la révision et la concordance exacte dates internes/record puis revalide tous les champs. Aucune config absente, plaintext, altérée, expirée ou indéchiffrable ne déclenche de fetch fournisseur/santé. Un lease Durable Object valide est requis avant toute observation, lecture fournisseur, fencing ou préparation de promotion, et revérifié avant chaque POST destructif. Les erreurs ne reflètent jamais secret, noms de champs sensibles, token, ID, URL ou exception brute.
 
-Les endpoints bootstrap et de statut ne retournent jamais de valeur opérationnelle. **Le contrat métier existant de `/agent/command` reste distinct** : après configuration et drill valides, authentification de l’agent et fencing vérifié, il livre la commande HMAC avec son reçu signé liant l’identité writer, nécessaire à la validation Hostinger. Aucun token, URL ou secret de configuration n’y est ajouté. Le reçu/commande n’est jamais stocké en clair dans KV. Chiffrer aussi ce canal métier nécessiterait une révision du protocole et de l’agent ; cette livraison ne la prétend pas.
+Les endpoints bootstrap et de statut ne retournent jamais de valeur opérationnelle. **Aucune commande n’est accessible par HTTP** : toute ancienne route de commande retourne `404`, y compris avec authentification. Les structures scellées de reçu/commande ne sont jamais en clair dans KV et ne sont jamais retournées dans le statut. Un futur transport de commande, l’adaptation de l’agent et sa revue sont des travaux séparés non préparés ici.
 
 ## Gates restantes : aucune activation déduite du bootstrap
 
 1. Installation/revue de l’agent **Hostinger**, preflight root-only, secret partagé distribué séparément sans console, ledger atomique, chaîne locale et preuves PostgreSQL/Storage.
-2. **Drill destructif signé**, même révision/writer, sérialisation réellement prouvée, échéance et HMAC valide ; aucun reçu livré par les tests.
+2. **Binding/migration Durable Object réellement revus**, puis drill destructif signé de même révision/writer et échéance/HMAC valides ; aucun binding, migration ou reçu n’est livré par les tests.
 3. Observation HTTPS L7 exacte, ambiguïté sans fencing, délai graceful, timeout, intention persistée avant POST, absence de retries destructifs ; **deux confirmations terminales et nouvelle vérification** avant commande.
 4. Configuration et drill **Cloudflare LB/routage** dans une révision distincte ; aucun DNS/route/action trafic ici.
 5. Procédure/drill de **failback**, toujours sans failback automatique.
@@ -141,7 +142,7 @@ Voir [protocole d’exécution](AUTOMATIC_FAILOVER_EXECUTION_PROTOCOL.md) et [ga
 ```bash
 node --check infra/lemtel-resilience/automatic-failover/lemtel-failover-arbiter-worker.mjs
 node --check infra/lemtel-resilience/automatic-failover/lemtel-sealed-bootstrap-controller.mjs
-node --test scripts/lemtel-failover-arbiter.test.mjs scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs
+node --test scripts/lemtel-failover-arbiter.test.mjs scripts/lemtel-durable-object-serialization.test.mjs scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs
 node --test scripts/lemtel-current-topology-failover-gate.test.mjs scripts/lemtel-current-topology-failover-guards.test.mjs
 git diff --check
 ```

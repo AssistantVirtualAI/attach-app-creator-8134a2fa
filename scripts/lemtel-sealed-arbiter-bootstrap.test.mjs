@@ -5,6 +5,7 @@ import { createHmac } from 'node:crypto';
 import worker from '../infra/lemtel-resilience/automatic-failover/lemtel-failover-arbiter-worker.mjs';
 import { canonical, protocol, createBootstrapSession, createBootstrapEnvelope, sealDrillReceipt,
   injectBootstrapConfiguration } from '../infra/lemtel-resilience/automatic-failover/lemtel-sealed-bootstrap-controller.mjs';
+import { createSerializerBinding } from './lemtel-serializer-test-helpers.mjs';
 
 // Synthetic fixtures only. No real secrets/IDs/endpoints; global fetch always fails if reached.
 const source = readFileSync(new URL('../infra/lemtel-resilience/automatic-failover/lemtel-failover-arbiter-worker.mjs', import.meta.url), 'utf8');
@@ -26,7 +27,7 @@ async function fixture(t) {
   f.configuration = { DO_API_TOKEN: fixtureSecret('provider'), AGENT_SHARED_SECRET: fixtureSecret('agent'),
     DO_WRITER_L7_SECRET: fixtureSecret('l7'), DRILL_APPROVAL_SECRET: fixtureSecret('drill'), DO_WRITER_DROPLET_ID: '7'.repeat(9),
     DO_API_BASE_URL: `${origin}/v2`, DO_WRITER_L7_URL: `${origin}/lemtel-lb-ready`,
-    ARBITER_SERIALIZATION_ACK: 'reviewed_single_serialized_scheduler', OBSERVATION_INTERVAL_SECONDS: '60',
+    OBSERVATION_INTERVAL_SECONDS: '60',
     INCIDENT_FAILURE_CYCLES: '3', GRACEFUL_SHUTDOWN_DELAY_SECONDS: '180', POWER_STATE_TIMEOUT_SECONDS: '1800', COMMAND_TTL_SECONDS: '120' };
   f.STATE = {
     async get(key) {
@@ -40,6 +41,7 @@ async function fixture(t) {
       f.values.set(key, value);
     },
   };
+  f.serializer = createSerializerBinding();
   f.env = { FAILOVER_MODE: 'bootstrap', STATE: f.STATE, ...f.session.textBindings, ...f.session.secretBindings };
   t.mock.method(Date, 'now', () => f.now * 1000);
   t.mock.method(globalThis, 'fetch', async (...args) => { f.calls.push(args); throw new Error('unexpected_synthetic_outbound_call'); });
@@ -53,8 +55,8 @@ async function fixture(t) {
       { method: 'POST', headers: requestHeaders, body: JSON.stringify(envelope) }), f.env);
   };
   f.inject = async () => { const injection = await f.make(); const result = await f.post(injection.envelope, injection.proof); assert.equal(result.status, 201); return injection; };
-  f.active = () => { f.env = { FAILOVER_MODE: 'active', STATE: f.STATE, CONFIG_REVISION: f.session.configRevision,
-    CONFIG_STATE_ENCRYPTION_KEY: f.session.secretBindings.CONFIG_STATE_ENCRYPTION_KEY }; };
+  f.active = () => { f.env = { FAILOVER_MODE: 'active', STATE: f.STATE, ARBITER_SERIALIZER: f.serializer.binding,
+    CONFIG_REVISION: f.session.configRevision, CONFIG_STATE_ENCRYPTION_KEY: f.session.secretBindings.CONFIG_STATE_ENCRYPTION_KEY }; };
   const aes = await crypto.subtle.importKey('raw', Buffer.from(f.session.secretBindings.CONFIG_STATE_ENCRYPTION_KEY, 'base64url'),
     'AES-GCM', false, ['encrypt', 'decrypt']);
   const aad = (metadata) => new TextEncoder().encode(`${protocol.stateContext}\n${canonical(metadata)}`);
@@ -83,7 +85,7 @@ async function fixture(t) {
     const result = await worker.scheduled({}, f.env);
     assert.equal(result.state, 'blocked');
     const response = await f.get('/agent/command');
-    assert.equal(response.status, 409);
+    assert.equal(response.status, 404);
     assert.ok(!(await response.json()).command);
     assert.equal(f.calls.length, 0);
   };
@@ -125,6 +127,7 @@ test('disabled/unknown modes refuse both bootstrap endpoints and perform absolut
     assert.equal((await (await f.get('/agent/command')).json()).state, 'disabled_or_dry_run');
   }
   assert.deepEqual(f.reads, []); assert.deepEqual(f.writes, []); assert.deepEqual(f.calls, []);
+  assert.deepEqual(f.serializer.calls, []); assert.deepEqual(f.serializer.names, []);
 });
 
 test('public key is served only in bootstrap and needs no private/auth/state secrets', async (t) => {
@@ -230,7 +233,7 @@ test('complete protected configuration is strict: every field and existing safet
   }
   const invalid = [ ['DO_API_TOKEN', 'short'], ['AGENT_SHARED_SECRET', null], ['DO_WRITER_L7_SECRET', 123], ['DRILL_APPROVAL_SECRET', ''],
     ['DO_WRITER_DROPLET_ID', '0'], ['DO_API_BASE_URL', `${origin}/wrong`], ['DO_WRITER_L7_URL', `${origin}/unexpected`],
-    ['DO_WRITER_L7_URL', `${origin}/lemtel-lb-ready?query=forbidden`], ['ARBITER_SERIALIZATION_ACK', 'unreviewed'],
+    ['DO_WRITER_L7_URL', `${origin}/lemtel-lb-ready?query=forbidden`], ['unexpected_serialization_ack', 'unreviewed'],
     ['OBSERVATION_INTERVAL_SECONDS', '59'], ['INCIDENT_FAILURE_CYCLES', '2'], ['GRACEFUL_SHUTDOWN_DELAY_SECONDS', '59'],
     ['POWER_STATE_TIMEOUT_SECONDS', '180'], ['COMMAND_TTL_SECONDS', '301'], ['automatic_traffic_routing_enabled', true], ['FAILOVER_MODE', 'active'] ];
   for (const [name, value] of invalid) {

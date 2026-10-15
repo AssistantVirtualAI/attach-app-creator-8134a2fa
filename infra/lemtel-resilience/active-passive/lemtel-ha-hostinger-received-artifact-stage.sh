@@ -26,12 +26,25 @@ command -v sha256sum >/dev/null 2>&1 || fail sha256sum_missing
 command -v docker >/dev/null 2>&1 || fail docker_missing
 systemctl is-active --quiet docker || fail docker_inactive
 systemctl is-active --quiet wg-quick@lemtel-ha0 || fail wireguard_inactive
-[ -s "$current_digest_file" ] || fail artifact_digest_missing
-artifact_digest="$(tr -d '[:space:]' < "$current_digest_file")"
-[[ "$artifact_digest" =~ ^[a-f0-9]{64}$ ]] || fail artifact_digest_invalid
-artifact_file="$artifact_dir/$artifact_digest.tgz"
-[ -f "$artifact_file" ] || fail artifact_archive_missing
-[ "$(sha256sum "$artifact_file" | awk '{print $1}')" = "$artifact_digest" ] || fail artifact_digest_mismatch
+direct_envelope="${LEMTEL_HA_RUNTIME_ENVELOPE:-}"
+if [ -n "$direct_envelope" ]; then
+  [ "$direct_envelope" = '/tmp/lemtel-hostinger-runtime.age' ] || fail unexpected_direct_envelope_path
+  expected_direct_sha="${LEMTEL_HA_RUNTIME_ENVELOPE_SHA256:-}"
+  [[ "$expected_direct_sha" =~ ^[a-f0-9]{64}$ ]] || fail direct_envelope_sha256_invalid
+  [ -f "$direct_envelope" ] || fail direct_envelope_missing
+  [ "$(sha256sum "$direct_envelope" | awk '{print $1}')" = "$expected_direct_sha" ] || fail direct_envelope_sha256_mismatch
+  input_envelope="$direct_envelope"
+  envelope_source='direct_verified_transfer'
+else
+  [ -s "$current_digest_file" ] || fail artifact_digest_missing
+  artifact_digest="$(tr -d '[:space:]' < "$current_digest_file")"
+  [[ "$artifact_digest" =~ ^[a-f0-9]{64}$ ]] || fail artifact_digest_invalid
+  artifact_file="$artifact_dir/$artifact_digest.tgz"
+  [ -f "$artifact_file" ] || fail artifact_archive_missing
+  [ "$(sha256sum "$artifact_file" | awk '{print $1}')" = "$artifact_digest" ] || fail artifact_digest_mismatch
+  input_envelope="$artifact_file"
+  envelope_source='immutable_source_artifact'
+fi
 [ -r "$age_identity" ] || fail age_identity_missing
 [ ! -e "$runtime_stage" ] || fail runtime_stage_already_exists
 
@@ -44,7 +57,7 @@ work_dir="$(mktemp -d "$base_dir/.runtime-stage.XXXXXX")"
 work_tar="$(mktemp "$base_dir/.runtime-stage.tar.XXXXXX")"
 cleanup() { rm -rf -- "$work_dir"; rm -f -- "$work_tar"; }
 trap cleanup EXIT
-age -d -i "$age_identity" -o "$work_tar" "$artifact_file" || fail runtime_envelope_decryption_failed
+age -d -i "$age_identity" -o "$work_tar" "$input_envelope" || fail runtime_envelope_decryption_failed
 
 while IFS= read -r entry; do
   case "$entry" in
@@ -73,7 +86,8 @@ mv -- "$work_dir" "$runtime_stage"
 trap - EXIT
 printf 'hostinger_received_artifact_stage_format=lemtel_hostinger_received_artifact_stage_v1\n'
 printf 'standby=hostinger_private_standby\n'
-printf 'artifact_digest_verified=true\n'
+printf 'runtime_envelope_source=%s\n' "$envelope_source"
+printf 'runtime_envelope_digest_verified=true\n'
 printf 'runtime_envelope_decrypted_root_only=true\n'
 printf 'runtime_stage_compose_verified=true\n'
 printf 'runtime_stage_prepared=true\n'

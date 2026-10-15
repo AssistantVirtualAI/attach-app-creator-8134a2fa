@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import worker from '../infra/lemtel-resilience/automatic-failover/lemtel-failover-arbiter-worker.mjs';
 import { createBootstrapSession, createBootstrapEnvelope, canonical, protocol }
   from '../infra/lemtel-resilience/automatic-failover/lemtel-sealed-bootstrap-controller.mjs';
+import { createSerializerBinding } from './lemtel-serializer-test-helpers.mjs';
 
 // All endpoints, credentials and numeric bindings below are synthetic fixtures.
 // global fetch is replaced in every behavioral test: no network access is possible.
@@ -64,9 +65,9 @@ async function fixture(t) {
     DO_WRITER_DROPLET_ID: writerID, AGENT_SHARED_SECRET: secret('agent'),
     DO_WRITER_L7_SECRET: secret('l7'), DRILL_APPROVAL_SECRET: secret('approval'),
     DO_API_BASE_URL: `${fakeURL('provider')}/v2`, DO_WRITER_L7_URL: `${fakeURL('writer')}/lemtel-lb-ready`,
-    ARBITER_SERIALIZATION_ACK: 'reviewed_single_serialized_scheduler',
     OBSERVATION_INTERVAL_SECONDS: '60', INCIDENT_FAILURE_CYCLES: '3',
     GRACEFUL_SHUTDOWN_DELAY_SECONDS: '180', POWER_STATE_TIMEOUT_SECONDS: '1800', COMMAND_TTL_SECONDS: '120' };
+  f.serializer = createSerializerBinding();
   f.env = { FAILOVER_MODE: 'bootstrap', STATE, ...session.textBindings, ...session.secretBindings };
   const descriptor = await (await worker.fetch(new Request(fakeURL('arbiter') + protocol.keyPath), f.env)).json();
   const injection = await createBootstrapEnvelope({ session, publicDescriptor: descriptor, configuration: f.configuration, now: f.now });
@@ -74,7 +75,7 @@ async function fixture(t) {
   assert.equal((await worker.fetch(new Request(fakeURL('arbiter') + protocol.bootstrapPath, { method: 'POST',
     headers: { 'content-type': 'application/json', 'x-lemtel-bootstrap-proof': injection.proof },
     body: JSON.stringify(injection.envelope) }), f.env)).status, 201);
-  f.env = { FAILOVER_MODE: 'active', STATE, CONFIG_REVISION: session.configRevision,
+  f.env = { FAILOVER_MODE: 'active', STATE, ARBITER_SERIALIZER: f.serializer.binding, CONFIG_REVISION: session.configRevision,
     CONFIG_STATE_ENCRYPTION_KEY: session.secretBindings.CONFIG_STATE_ENCRYPTION_KEY };
   f.setConfig = async () => values.set(`${prefix}:sealed-config:${f.env.CONFIG_REVISION}`, await f.seal('configuration',
     { format: 'lemtel_failover_protected_config_v1', config_revision: f.env.CONFIG_REVISION,
@@ -196,7 +197,7 @@ test('every explicit active binding, secret, ID, approval and safety limit is ma
     const saved = f.env[key]; delete f.env[key];
     assert.equal((await f.tick()).state, 'blocked', key);
     const res = await f.get('/agent/command', true);
-    assert.equal(res.status, 409, key);
+    assert.equal(res.status, 404, key);
     assert.ok(!(await res.json()).command);
     f.env[key] = saved;
   }
@@ -204,12 +205,27 @@ test('every explicit active binding, secret, ID, approval and safety limit is ma
     const saved = f.configuration[key]; delete f.configuration[key];
     await f.setConfig();
     assert.equal((await f.tick()).state, 'blocked', key);
-    assert.equal((await f.get('/agent/command', true)).status, 409, key);
+    assert.equal((await f.get('/agent/command', true)).status, 404, key);
     f.configuration[key] = saved;
   }
   await f.setConfig();
   assert.equal(f.calls.length, 0);
   assert.equal((await f.incident()), null);
+});
+
+test('missing or invalid Durable Object binding blocks before health/provider fetch or a command', async (t) => {
+  const f = await fixture(t);
+  delete f.env.ARBITER_SERIALIZER;
+  let result = await f.tick();
+  assert.equal(result.reason, 'serializer_lease_unavailable');
+  assert.equal(f.calls.length, 0);
+  assert.deepEqual(f.serializer.calls, []);
+  f.env.ARBITER_SERIALIZER = { idFromName() { throw new Error('synthetic_invalid_binding'); }, get() {} };
+  result = await f.tick();
+  assert.equal(result.reason, 'serializer_lease_unavailable');
+  assert.equal(f.calls.length, 0);
+  assert.deepEqual(f.serializer.calls, []);
+  assert.equal((await f.get('/agent/command', true)).status, 404);
 });
 
 test('L7 configuration is pinned to the exact HTTPS readiness path before any observation', async (t) => {
@@ -264,11 +280,11 @@ test('only the exact healthy JSON is positive; ambiguous L7 responses reset susp
   assert.deepEqual(f.posts(), []);
 });
 
-test('duplicate cycles do not manufacture several consecutive failures', async (t) => {
+test('duplicate scheduler attempts during a live lease fail closed and do not manufacture failures', async (t) => {
   const f = await fixture(t);
   await f.tick();
-  assert.equal((await f.tick(0)).state, 'cycle_not_due');
-  assert.equal((await f.tick(1)).state, 'cycle_not_due');
+  assert.equal((await f.tick(0)).reason, 'serializer_lease_unavailable');
+  assert.equal((await f.tick(1)).reason, 'serializer_lease_unavailable');
   assert.equal((await f.incident()).failure_cycles, 1);
   assert.deepEqual(f.posts(), []);
 });
@@ -298,22 +314,17 @@ test('graceful shutdown, delay, hard power_off, repeated terminal poll, signed f
   assert.equal(publicStatus.automatic_traffic_routing_enabled, false);
   assert.equal(publicStatus.command, undefined);
   assert.ok(!JSON.stringify(publicStatus).includes(writerID));
-  assert.equal((await f.get('/agent/command')).status, 401);
-  const { command } = await (await f.get('/agent/command', true)).json();
-  assert.equal(command.payload.name, 'promotion');
-  assert.equal(command.payload.target_role, 'hostinger_standby');
-  assert.equal(command.payload.writer_role, 'do_writer');
-  assert.equal(command.payload.expires_at - command.payload.issued_at, 120);
-  assert.equal(command.signature, signature(f.configuration.AGENT_SHARED_SECRET, 'lemtel-promotion-command-v1', command.payload));
-  const receipt = command.payload.fence_receipt;
-  assert.equal(receipt.signature, signature(f.configuration.AGENT_SHARED_SECRET, 'lemtel-fence-receipt-v1', receipt.payload));
-  assert.equal(receipt.payload.incident_id, command.payload.incident_id);
-  assert.equal(receipt.payload.terminal_power_state, 'off');
-  assert.equal(receipt.payload.terminal_action_status, 'completed');
-  assert.ok(receipt.payload.confirmations >= 2);
-  assert.equal((await f.incident()).phase, 'promotion_command_dispatched');
-  assert.deepEqual(await (await f.get('/agent/command', true)).json(), { state: 'no_command' });
-  assert.equal((await f.tick()).state, 'manual_promotion_action_required');
+  // The Worker has no HTTP command-delivery surface, even with a valid authenticated header.
+  assert.equal((await f.get('/agent/command')).status, 404);
+  assert.equal((await f.get('/agent/command', true)).status, 404);
+  const prepared = await f.incident();
+  assert.equal(prepared.phase, 'promotion_command_ready');
+  assert.equal(prepared.command.payload.name, 'promotion');
+  assert.equal(prepared.command.payload.target_role, 'hostinger_standby');
+  assert.equal(prepared.command.payload.writer_role, 'do_writer');
+  assert.equal(prepared.command.payload.expires_at - prepared.command.payload.issued_at, 120);
+  assert.equal(prepared.command.signature, signature(f.configuration.AGENT_SHARED_SECRET, 'lemtel-promotion-command-v1', prepared.command.payload));
+  assert.equal((await f.tick()).state, 'promotion_command_ready');
 });
 
 test('graceful terminal state needs no hard fence; expired command is not reissued', async (t) => {
@@ -321,9 +332,10 @@ test('graceful terminal state needs no hard fence; expired command is not reissu
   await gracefulCommand(f);
   assert.deepEqual(f.posts(), ['shutdown']);
   f.now += 121;
-  assert.equal((await f.get('/agent/command', true)).status, 409);
-  assert.equal((await f.incident()).phase, 'blocked');
+  assert.equal((await f.get('/agent/command', true)).status, 404);
+  assert.equal((await f.incident()).phase, 'promotion_command_ready');
   assert.equal((await f.tick()).state, 'blocked');
+  assert.equal((await f.incident()).phase, 'blocked');
   assert.deepEqual(f.posts(), ['shutdown']);
 });
 
@@ -372,10 +384,10 @@ test('a recovered destructive intent requires manual reconciliation, not a POST 
   assert.equal(f.calls.length, 0);
 });
 
-test('HTTP handlers cannot drive provider actions; mutating methods are refused', async (t) => {
+test('HTTP is status-only: no command route exists and mutating methods are refused', async (t) => {
   const f = await fixture(t);
   assert.equal((await f.get('/status')).status, 200);
-  assert.equal((await f.get('/agent/command', true)).status, 200);
+  assert.equal((await f.get('/agent/command', true)).status, 404);
   const res = await worker.fetch(new Request(fakeURL('arbiter') + '/agent/command', { method: 'POST' }), f.env);
   assert.equal(res.status, 405);
   assert.equal(f.calls.length, 0);
@@ -391,6 +403,20 @@ test('isolate overlap protection remains held while asynchronous observation is 
   assert.equal(second.reason, 'overlapping_tick');
   release(); await first;
   assert.equal((await f.incident()).failure_cycles, 1);
+});
+
+test('a second Worker module/isolate cannot acquire the singleton lease held by a scheduler', async (t) => {
+  const f = await fixture(t);
+  let release;
+  f.healthBarrier = new Promise((done) => { release = done; });
+  const first = worker.scheduled({}, f.env);
+  while (f.calls.length === 0) await new Promise((done) => setImmediate(done));
+  const cold = (await import(`../infra/lemtel-resilience/automatic-failover/lemtel-failover-arbiter-worker.mjs?cold=${crypto.randomUUID()}`)).default;
+  const second = await cold.scheduled({}, f.env);
+  assert.equal(second.reason, 'serializer_lease_unavailable');
+  assert.equal(f.calls.length, 1, 'second isolate must not reach health/provider fetch');
+  release();
+  assert.equal((await first).state, 'incident_suspected');
 });
 
 test('agent root gates, one fixed config and isolated interpreter; preflight precedes remote poll', () => {

@@ -43,6 +43,15 @@ describe("Lemtel portal contract", () => {
     expect(source).not.toContain("localStorage");
     expect(source).not.toContain("lemtel-portal-session-memory");
   });
+  it("keeps the active organization in session-only UI context and validates membership on reload", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
+    expect(source).toContain('ACTIVE_ORGANIZATION_STORAGE_KEY = "lemtel-portal-active-organization"');
+    expect(source).toContain("window.sessionStorage");
+    expect(source).toContain("persistActiveOrganizationId");
+    expect(source).toContain("setActiveOrganizationId");
+    expect(source).toContain("organizations.some((candidate) => candidate.id === organizationId)");
+    expect(source).not.toContain("window.localStorage");
+  });
 
   it("uses only the exact create-organization body accepted by the Lemtel Edge function", () => {
     expect(buildCreateOrganizationBody({ displayName: "Lemtel : Staging", slug: "lemtel-staging", defaultLocale: "fr", owner: { email: "owner@example.com", displayName: "Owner", locale: "fr" } })).toEqual({

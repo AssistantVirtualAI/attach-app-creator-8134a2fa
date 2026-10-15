@@ -1,344 +1,233 @@
 project_id = "gejxisrqtvxavbrfcoxz"
 
-[functions.generate-agent-advice]
-verify_jwt = true
-
 [api]
-enabled = true
-port = 54321
-max_rows = 1000
-
-[db]
-major_version = 15
-
-[db.pooler]
-enabled = true
-port = 54329
-pool_mode = "transaction"
-default_pool_size = 20
-max_client_conn = 100
+  enabled = true
+  max_rows = 1000
+  port = 54321
 
 [auth]
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["https://localhost:5173"]
-jwt_expiry = 3600
-enable_signup = true
-enable_anonymous_sign_ins = false
-
-[auth.external.google]
-enabled = false
-client_id = ""
-secret = ""
-
-[functions.elevenlabs-convai-analytics]
-verify_jwt = false
-
-[functions.elevenlabs-convai-conversations]
-verify_jwt = false
-
-[functions.elevenlabs-convai-knowledge-base]
-verify_jwt = false
-
-[functions.elevenlabs-convai-agent-config]
-verify_jwt = false
-
-[functions.elevenlabs-all-agents-conversations]
-verify_jwt = false
-
-[functions.elevenlabs-all-agents-analytics]
-verify_jwt = false
-
-[functions.test-integration]
-verify_jwt = true
-
-[functions.analyze-conversation]
-verify_jwt = false
-
-[functions.connector-test]
-verify_jwt = true
-
-[functions.connector-proxy]
-verify_jwt = true
-
-[functions.webhooks-router]
-verify_jwt = false
-
-[functions.elevenlabs-signed-url]
-verify_jwt = false
-
-[functions.send-otp-email]
-verify_jwt = true
-
-[functions.stripe-addon-checkout]
-verify_jwt = true
-
-[functions.send-webhook]
-verify_jwt = true
-
-[functions.export-user-data]
-verify_jwt = true
-
-[functions.delete-user-data]
-verify_jwt = true
-
-[functions.log-audit-event]
-verify_jwt = true
-
-[functions.analyze-topics]
-verify_jwt = true
-
-[functions.start-outbound-campaign]
-verify_jwt = true
-
-[functions.google-calendar-auth]
-verify_jwt = true
-
-[functions.book-appointment]
-verify_jwt = false
-
-[functions.generate-faq]
-verify_jwt = true
-
-[functions.calculate-performance-billing]
-verify_jwt = true
-
-[functions.simulate-agent]
-verify_jwt = true
-
-[functions.twilio-phone-numbers]
-verify_jwt = true
-
-[functions.request-handoff]
-verify_jwt = false
-
-[functions.notify-handoff]
-verify_jwt = false
-
-[functions.send-satisfaction-alert]
-verify_jwt = true
-
-[functions.send-weekly-report]
-verify_jwt = false
-
-[functions.generate-global-advice]
-verify_jwt = true
-
-[functions.sync-elevenlabs-conversations]
-verify_jwt = false
-
-[functions.client-auth]
-verify_jwt = false
-
-[functions.dashboard-insights]
-verify_jwt = true
-
-[functions.realtime-conversations]
-verify_jwt = false
-
-[functions.elevenlabs-phone-numbers]
-verify_jwt = false
-
-[functions.vapi-proxy]
-verify_jwt = false
-
-[functions.retell-proxy]
-verify_jwt = false
-
-[functions.send-contact-sales]
-verify_jwt = false
-
-[functions.mcp-proxy]
-verify_jwt = true
-
-[functions.improve-prompt]
-verify_jwt = false
-
-[functions.twilio-proxy]
-verify_jwt = true
-
-[functions.twilio-voice-webhook]
-verify_jwt = false
-
-[functions.twilio-status-callback]
-verify_jwt = false
-
-[functions.twilio-recording-proxy]
-verify_jwt = true
-
-[functions.manage-org-roles]
-verify_jwt = false
-
-[functions.export-org-data]
-verify_jwt = false
-
-[functions.security-audit-run]
-verify_jwt = false
-
-[functions.elevenlabs-api-proxy]
-verify_jwt = false
-
-[functions.notify-admin-signup]
-verify_jwt = false
-
-[functions.stripe-webhook]
-verify_jwt = false
-
-[functions.send-contact-form]
-verify_jwt = false
-
-[functions.landing-chatbot]
-verify_jwt = false
-
-[functions.provision-app-user]
-verify_jwt = false
-
-[functions.realtime-stt-relay]
-verify_jwt = false
-
-[functions.extension-manage]
-verify_jwt = true
-
-[functions.ms365-mail-webhook-receiver]
-verify_jwt = false
-
-[functions.pp-mobile-profile]
-verify_jwt = false
-
-[functions.pp-ns-upload-greeting]
-verify_jwt = true
-
-[functions.pp-recording-play]
-verify_jwt = false
-
-[functions.maestro-oauth-state-info]
-verify_jwt = false
-
-[functions.maestro-oauth-callback]
-verify_jwt = true
-
-# --- Planiprêt Mobile 1.4.9 — politique JWT ---
-# Ces fonctions exigent un porteur JWT valide au niveau de la passerelle
-# (utilisateur authentifié OU vrai bearer SUPABASE_SERVICE_ROLE_KEY pour les
-# appels internes) et refont la validation d'identité dans le code.
-# Les webhooks ElevenLabs présentent également l'anon JWT configuré dans leurs
-# en-têtes, puis ava-tool-executor valide séparément la session HMAC AVA.
-
-[functions.ava-tool-executor]
-verify_jwt = true
-
-[functions.ava-agent-config]
-verify_jwt = true
-
-[functions.elevenlabs-tool-handler]
-verify_jwt = true
-
-# NetSapiens ne présente pas un JWT Supabase. La passerelle laisse donc entrer
-# la requête, puis ns-webhook-receiver exige et compare son secret partagé.
-[functions.ns-webhook-receiver]
-verify_jwt = false
-
-[functions.pp-ai-consent]
-verify_jwt = true
-
-[functions.pp-ava-chat]
-verify_jwt = true
-
-[functions.pp-feedback-notify]
-verify_jwt = true
-
-[functions.pp-ava-webrtc-token]
-verify_jwt = true
-
-[functions.pp-ava-stt]
-verify_jwt = true
-
-[functions.pp-ava-tts]
-verify_jwt = true
-
-[functions.pp-ava-brief]
-verify_jwt = true
-
-[functions.pp-ava-report]
-verify_jwt = true
-
-[functions.ava-email-analyzer]
-verify_jwt = true
-
-[functions.maestro-actions]
-verify_jwt = true
-
-[functions.maestro-appointment]
-verify_jwt = true
-
-[functions.ns-get-recording]
-verify_jwt = true
-
-[functions.ns-get-transcription]
-verify_jwt = true
-
-[functions.pp-admin-transcribe]
-verify_jwt = true
-
-[functions.pp-coach-call]
-verify_jwt = true
-
-[functions.pp-call-consent]
-verify_jwt = true
-
-[functions.pp-auto-process-call]
-verify_jwt = true
-
-[functions.maestro-cdr-retry-job]
-verify_jwt = true
-
-[functions.maestro-recording-upload]
-verify_jwt = true
-
-[functions.planipret-task-api]
-verify_jwt = true
-
-[functions.pp-maestro-machine-probe]
-verify_jwt = true
-
-[functions.pp-ns-cdr]
-verify_jwt = true
-
-[functions.maestro-client-create]
-verify_jwt = true
-
-[functions.maestro-client-lookup]
-verify_jwt = true
-
-[functions.maestro-cdr]
-verify_jwt = true
-
-[functions.call-center-sync]
-verify_jwt = true
-
-[functions.planipret-commission-reports]
-verify_jwt = true
-
-[functions.pp-address-autocomplete]
-verify_jwt = true
-
-[functions.pp-marketing-compose]
-verify_jwt = true
-
-[functions.pp-marketing-send]
-verify_jwt = true
-
-[functions.pp-marketing-track]
-verify_jwt = false
-
-[functions.lemtel-client-config]
-verify_jwt = true
-
-# Déclenché par la base ou pg_cron avec un secret Vault interne vérifié par
-# RPC service-role. Une session utilisateur ne peut jamais l’invoquer.
-[functions.pp-row-push]
-verify_jwt = false
-
-# pg_cron uses the same Vault-backed internal-trigger proof as pp-row-push;
-# source code rejects every request without that proof before it starts a sync.
-[functions.pp-commission-live-sync]
-verify_jwt = false
+  additional_redirect_urls = ["https://localhost:5173"]
+  enable_anonymous_sign_ins = false
+  enable_signup = true
+  jwt_expiry = 3600
+  site_url = "http://localhost:5173"
+  [auth.external]
+    [auth.external.google]
+      client_id = ""
+      enabled = false
+      secret = ""
+
+[db]
+  major_version = 15
+  [db.pooler]
+    default_pool_size = 20
+    enabled = true
+    max_client_conn = 100
+    pool_mode = "transaction"
+    port = 54329
+
+[functions]
+  [functions.analyze-conversation]
+    verify_jwt = false
+  [functions.analyze-topics]
+    verify_jwt = true
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.ava-agent-config]
+    verify_jwt = true
+  [functions.ava-email-analyzer]
+    verify_jwt = true
+  [functions.ava-tool-executor]
+    verify_jwt = true
+  [functions.book-appointment]
+    verify_jwt = false
+  [functions.calculate-performance-billing]
+    verify_jwt = true
+  [functions.call-center-sync]
+    verify_jwt = true
+  [functions.client-auth]
+    verify_jwt = false
+  [functions.connector-proxy]
+    verify_jwt = true
+  [functions.connector-test]
+    verify_jwt = true
+  [functions.dashboard-insights]
+    verify_jwt = true
+  [functions.delete-user-data]
+    verify_jwt = true
+  [functions.elevenlabs-all-agents-analytics]
+    verify_jwt = false
+  [functions.elevenlabs-all-agents-conversations]
+    verify_jwt = false
+  [functions.elevenlabs-api-proxy]
+    verify_jwt = false
+  [functions.elevenlabs-convai-agent-config]
+    verify_jwt = false
+  [functions.elevenlabs-convai-analytics]
+    verify_jwt = false
+  [functions.elevenlabs-convai-conversations]
+    verify_jwt = false
+  [functions.elevenlabs-convai-knowledge-base]
+    verify_jwt = false
+  [functions.elevenlabs-phone-numbers]
+    verify_jwt = false
+  [functions.elevenlabs-signed-url]
+    verify_jwt = false
+  [functions.elevenlabs-tool-handler]
+    verify_jwt = true
+  [functions.export-org-data]
+    verify_jwt = false
+  [functions.export-user-data]
+    verify_jwt = true
+  [functions.extension-manage]
+    verify_jwt = true
+  [functions.generate-agent-advice]
+    verify_jwt = true
+  [functions.generate-faq]
+    verify_jwt = true
+  [functions.generate-global-advice]
+    verify_jwt = true
+  [functions.google-calendar-auth]
+    verify_jwt = true
+  [functions.improve-prompt]
+    verify_jwt = false
+  [functions.landing-chatbot]
+    verify_jwt = false
+  [functions.lemtel-client-config]
+    verify_jwt = true
+  [functions.log-audit-event]
+    verify_jwt = true
+  [functions.maestro-actions]
+    verify_jwt = true
+  [functions.maestro-appointment]
+    verify_jwt = true
+  [functions.maestro-cdr]
+    verify_jwt = true
+  [functions.maestro-cdr-retry-job]
+    verify_jwt = true
+  [functions.maestro-client-create]
+    verify_jwt = true
+  [functions.maestro-client-lookup]
+    verify_jwt = true
+  [functions.maestro-oauth-callback]
+    verify_jwt = true
+  [functions.maestro-oauth-state-info]
+    verify_jwt = false
+  [functions.maestro-recording-upload]
+    verify_jwt = true
+  [functions.manage-org-roles]
+    verify_jwt = false
+  [functions.mcp-proxy]
+    verify_jwt = true
+  [functions.ms365-mail-webhook-receiver]
+    verify_jwt = false
+  [functions.notify-admin-signup]
+    verify_jwt = false
+  [functions.notify-handoff]
+    verify_jwt = false
+  [functions.ns-get-recording]
+    verify_jwt = true
+  [functions.ns-get-transcription]
+    verify_jwt = true
+  [functions.ns-webhook-receiver]
+    verify_jwt = false
+  [functions.planipret-commission-reports]
+    verify_jwt = true
+  [functions.planipret-task-api]
+    verify_jwt = true
+  [functions.pp-address-autocomplete]
+    verify_jwt = true
+  [functions.pp-admin-transcribe]
+    verify_jwt = true
+  [functions.pp-ai-consent]
+    verify_jwt = true
+  [functions.pp-auto-process-call]
+    verify_jwt = true
+  [functions.pp-ava-brief]
+    verify_jwt = true
+  [functions.pp-ava-chat]
+    verify_jwt = true
+  [functions.pp-ava-report]
+    verify_jwt = true
+  [functions.pp-ava-stt]
+    verify_jwt = true
+  [functions.pp-ava-tts]
+    verify_jwt = true
+  [functions.pp-ava-webrtc-token]
+    verify_jwt = true
+  [functions.pp-call-consent]
+    verify_jwt = true
+  [functions.pp-coach-call]
+    verify_jwt = true
+  [functions.pp-commission-live-sync]
+    verify_jwt = false
+  [functions.pp-feedback-notify]
+    verify_jwt = true
+  [functions.pp-maestro-machine-probe]
+    verify_jwt = true
+  [functions.pp-marketing-compose]
+    verify_jwt = true
+  [functions.pp-marketing-send]
+    verify_jwt = true
+  [functions.pp-marketing-track]
+    verify_jwt = false
+  [functions.pp-mobile-profile]
+    verify_jwt = false
+  [functions.pp-ns-cdr]
+    verify_jwt = true
+  [functions.pp-ns-upload-greeting]
+    verify_jwt = true
+  [functions.pp-recording-play]
+    verify_jwt = false
+  [functions.pp-row-push]
+    verify_jwt = false
+  [functions.provision-app-user]
+    verify_jwt = false
+  [functions.realtime-conversations]
+    verify_jwt = false
+  [functions.realtime-stt-relay]
+    verify_jwt = false
+  [functions.request-handoff]
+    verify_jwt = false
+  [functions.retell-proxy]
+    verify_jwt = false
+  [functions.security-audit-run]
+    verify_jwt = false
+  [functions.send-contact-form]
+    verify_jwt = false
+  [functions.send-contact-sales]
+    verify_jwt = false
+  [functions.send-otp-email]
+    verify_jwt = true
+  [functions.send-satisfaction-alert]
+    verify_jwt = true
+  [functions.send-webhook]
+    verify_jwt = true
+  [functions.send-weekly-report]
+    verify_jwt = false
+  [functions.simulate-agent]
+    verify_jwt = true
+  [functions.start-outbound-campaign]
+    verify_jwt = true
+  [functions.stripe-addon-checkout]
+    verify_jwt = true
+  [functions.stripe-webhook]
+    verify_jwt = false
+  [functions.sync-elevenlabs-conversations]
+    verify_jwt = false
+  [functions.test-integration]
+    verify_jwt = true
+  [functions.twilio-phone-numbers]
+    verify_jwt = true
+  [functions.twilio-proxy]
+    verify_jwt = true
+  [functions.twilio-recording-proxy]
+    verify_jwt = true
+  [functions.twilio-status-callback]
+    verify_jwt = false
+  [functions.twilio-voice-webhook]
+    verify_jwt = false
+  [functions.vapi-proxy]
+    verify_jwt = false
+  [functions.webhooks-router]
+    verify_jwt = false

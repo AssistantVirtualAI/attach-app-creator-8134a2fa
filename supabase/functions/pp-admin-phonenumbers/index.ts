@@ -585,17 +585,7 @@ Deno.serve(async (req) => {
       const { phone_number } = payload ?? {};
       if (!phone_number) return jsonResponse({ success: false, error: "phone_number requis" }, 400);
       const pn = String(phone_number).replace(/[^\d]/g, "");
-      const clearBody = {
-        "dest-application": "to-voicemail",
-        application: "to-voicemail",
-        "to-user": "",
-        "dest-user": "",
-        dest: "",
-      };
-      const r = await nsFetchFirstOk([
-        `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`,
-        `/domains/${encodeURIComponent(domain)}/phone-numbers/${encodeURIComponent(pn)}`,
-      ], { method: "PUT", body: JSON.stringify(clearBody) });
+      const rel = await releaseDid(domain, pn);
 
       try {
         const e164 = pn.length === 10 ? `+1${pn}` : `+${pn}`;
@@ -604,8 +594,8 @@ Deno.serve(async (req) => {
           .or(`phone_number_e164.eq.${e164},phone_number_digits.eq.${pn}`);
       } catch (e) { console.warn("unassign cleanup failed:", e); }
 
-      if (!r.ok) return jsonResponse({ success: false, error: `NS unassign failed (${r.status})`, detail: r.data }, 200);
-      return jsonResponse({ success: true, phone_number: pn });
+      if (!rel.released) return jsonResponse({ success: false, error: `NS unassign failed (${rel.write_status})` }, 200);
+      return jsonResponse({ success: true, phone_number: rel.phone_number });
     }
 
     return jsonResponse({ success: false, error: "Action inconnue" }, 400);

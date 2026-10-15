@@ -68,3 +68,14 @@
 
 @media (max-width: 767px) { .lt-main::before { background-size: 24px 24px; } .lt-card { border-radius: .9rem; } }
 @media (prefers-reduced-motion: reduce) { .lt-nav-item, .lt-card, .lt-btn, .lt-powered-by { transition: none; } .lt-skeleton { animation: none; } }
+
+/* Full telephony control-plane navigation: catalog-only, never an operational status surface. */
+.lt-control-nav { display: flex; gap: .5rem; overflow-x: auto; padding: .4rem; margin: 0 0 1.5rem; border: 1px solid hsl(var(--lt-border)); background: hsl(var(--lt-card) / .72); border-radius: .95rem; scrollbar-width: thin; }
+.lt-control-nav-item { display: inline-flex; align-items: center; gap: .45rem; flex: none; padding: .58rem .75rem; border-radius: .65rem; color: hsl(var(--lt-ink-2)); font-size: .78rem; font-weight: 750; text-decoration: none; transition: background .16s ease, color .16s ease, box-shadow .16s ease; }
+.lt-control-nav-item:hover { background: hsl(var(--lt-surface)); color: hsl(var(--lt-ink)); }
+.lt-control-nav-item[aria-current="page"] { color: hsl(var(--lt-ink)); background: hsl(var(--lt-cyan) / .13); box-shadow: inset 0 0 0 1px hsl(var(--lt-cyan) / .28); }
+.lt-control-overview { display: block; text-decoration: none; color: inherit; min-height: 14.25rem; }
+.lt-control-overview:hover { transform: translateY(-2px); }
+.lt-control-icon { display: inline-flex; align-items: center; justify-content: center; width: 2.45rem; height: 2.45rem; border-radius: .8rem; color: hsl(189 90% 28%); background: hsl(var(--lt-cyan) / .13); }
+.lt-control-requirement { padding: .85rem 1rem; border-radius: .8rem; border: 1px solid hsl(var(--lt-border)); background: hsl(var(--lt-surface) / .68); }
+@media (max-width: 767px) { .lt-control-nav { margin-inline: -.1rem; } .lt-control-nav-item { padding: .52rem .65rem; } }

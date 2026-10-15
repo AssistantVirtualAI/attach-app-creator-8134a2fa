@@ -9746,6 +9746,81 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_billing_items: {
+        Row: {
+          activation_fee: number
+          first_seen_at: string
+          id: string
+          kind: string
+          last_seen_at: string
+          monthly_price: number
+          name: string | null
+          ns_domain: string
+          ns_id: string
+          removed_at: string | null
+        }
+        Insert: {
+          activation_fee?: number
+          first_seen_at?: string
+          id?: string
+          kind: string
+          last_seen_at?: string
+          monthly_price?: number
+          name?: string | null
+          ns_domain?: string
+          ns_id: string
+          removed_at?: string | null
+        }
+        Update: {
+          activation_fee?: number
+          first_seen_at?: string
+          id?: string
+          kind?: string
+          last_seen_at?: string
+          monthly_price?: number
+          name?: string | null
+          ns_domain?: string
+          ns_id?: string
+          removed_at?: string | null
+        }
+        Relationships: []
+      }
+      planipret_billing_snapshots: {
+        Row: {
+          created_at: string
+          data: Json
+          emailed_at: string | null
+          month: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json
+          emailed_at?: string | null
+          month: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          emailed_at?: string | null
+          month?: string
+        }
+        Relationships: []
+      }
+      planipret_billing_trigger: {
+        Row: {
+          id: number
+          token: string
+        }
+        Insert: {
+          id?: number
+          token?: string
+        }
+        Update: {
+          id?: number
+          token?: string
+        }
+        Relationships: []
+      }
       planipret_calendar_events: {
         Row: {
           attendees: Json
@@ -18391,6 +18466,7 @@ export type Database = {
         Returns: boolean
       }
       pp_norm_name: { Args: { t: string }; Returns: string }
+      pp_run_billing_monthly: { Args: never; Returns: undefined }
       pp_run_commission_live_sync: { Args: never; Returns: undefined }
       pp_verify_internal_trigger_secret: {
         Args: { _candidate: string }

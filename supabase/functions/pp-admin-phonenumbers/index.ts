@@ -1,6 +1,7 @@
 // Manage NetSapiens DIDs (phone numbers) for the Planiprêt domain.
 // Actions: list, assign, unassign, sync_assignments
 import { corsHeaders, jsonResponse, requirePlanipretAdmin, supaAdmin } from "../_shared/ns-broker.ts";
+import { assignDidToExtension, assignSmsNumber, releaseDid } from "../_shared/pp-did-routing.ts";
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
 const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
@@ -215,6 +216,20 @@ Deno.serve(async (req) => {
         console.warn("[pp-admin-phonenumbers] local overlay failed:", e);
       }
 
+      // Texting-only numbers (e.g. the 514 lines) live in the NS SMS inventory,
+      // not in phonenumbers: merge them so the portal shows every line.
+      try {
+        const sr = await nsFetch(`/domains/${encodeURIComponent(domain)}/smsnumbers?limit=1000`);
+        const sms = Array.isArray(sr.data) ? sr.data : (sr.data?.smsnumbers ?? []);
+        const have = new Set(numbers.map((n: any) => n.e164));
+        for (const x of sms as any[]) {
+          const e164 = normalizeE164(x?.number);
+          if (!e164 || have.has(e164)) continue;
+          have.add(e164);
+          const dest = x?.application === "user" && x?.dest ? String(x.dest) : null;
+          numbers.push({ raw: String(x.number), e164, pretty: pretty(e164), extension: dest, application: dest ? "sms-user" : "sms-available", active: true, ns: x, sms_only: true } as any);
+        }
+      } catch (e) { console.warn("[pp-admin-phonenumbers] sms merge failed:", (e as Error).message); }
       return jsonResponse({ success: true, domain, count: numbers.length, numbers });
     }
 
@@ -222,6 +237,28 @@ Deno.serve(async (req) => {
       const r = await nsFetch(`/domains/${encodeURIComponent(domain)}/smsnumbers?limit=1000`);
       const list = Array.isArray(r.data) ? r.data : (r.data?.smsnumbers ?? []);
       return jsonResponse({ success: r.ok, status: r.status, count: list.length, numbers: list });
+    }
+
+    // Keep exactly one number (voice + texting) on an extension; release the others.
+    if (action === "single_did") {
+      const ext = String(payload?.extension ?? "");
+      const keep = String(payload?.keep ?? "").replace(/\D/g, "").replace(/^(\d{10})$/, "1$1");
+      const name = payload?.name ? String(payload.name) : undefined;
+      if (!/^\d{2,6}$/.test(ext) || keep.length !== 11) return jsonResponse({ success: false, error: "extension et keep requis" }, 400);
+      const pr = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers?limit=1000`);
+      const sr = await nsFetch(`/domains/${encodeURIComponent(domain)}/smsnumbers?limit=1000`);
+      const voice = (Array.isArray(pr.data) ? pr.data : []).filter((x: any) => String(x?.["dial-rule-translation-destination-user"] ?? "") === ext).map((x: any) => String(x.phonenumber));
+      const texts = (Array.isArray(sr.data) ? sr.data : []).filter((x: any) => x?.application === "user" && String(x?.dest ?? "") === ext).map((x: any) => String(x.number));
+      const kept = await assignDidToExtension(domain, keep, ext, name);
+      const keptSms = await assignSmsNumber(domain, keep, ext);
+      const released: any[] = [];
+      for (const n of voice.filter((n: string) => n !== keep)) released.push({ n, voice: (await releaseDid(domain, n)).released });
+      for (const n of texts.filter((n: string) => n !== keep)) released.push({ n, sms: (await assignSmsNumber(domain, n, null)).ok });
+      const db = supaAdmin();
+      const now = new Date().toISOString();
+      await db.from("planipret_did_assignments").upsert({ phone_number_e164: `+${keep}`, phone_number_digits: keep, extension: ext, display_name: name ?? null, callerid_name: name ?? null, status: "assigned", domain, source: "admin_ui", updated_at: now }, { onConflict: "phone_number_e164" });
+      for (const r of released) await db.from("planipret_did_assignments").update({ extension: null, display_name: null, callerid_name: null, status: "available", updated_at: now }).eq("phone_number_digits", r.n);
+      return jsonResponse({ success: kept.verified && keptSms.ok, kept: keep, voice_verified: kept.verified, sms_verified: keptSms.ok, released });
     }
 
     if (action === "assign") {

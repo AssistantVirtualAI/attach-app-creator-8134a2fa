@@ -75,6 +75,32 @@ export function sortSource<T extends { source_row: number }>(rows: T[]): T[] {
 /** Sorted-array memo: the same input array is re-sorted many times per request. */
 const sortedCache = new WeakMap<object[], object[]>();
 
+/** Day index over a source-sorted array: positions ordered by day. */
+const dayIndexCache = new WeakMap<RegisterRow[], { days: string[]; order: number[] }>();
+function dayIndex(sorted: RegisterRow[]) {
+  let ix = dayIndexCache.get(sorted);
+  if (!ix) {
+    const days = sorted.map((r) => (hasTransactionDate(r) && r.date_trans ? r.date_trans.trim().slice(0, 10) : ""));
+    const order: number[] = [];
+    for (let i = 0; i < days.length; i++) if (days[i]) order.push(i);
+    order.sort((a, b) => (days[a] < days[b] ? -1 : days[a] > days[b] ? 1 : a - b));
+    ix = { days, order };
+    dayIndexCache.set(sorted, ix);
+  }
+  return ix;
+}
+
+/** Rows of `sorted` inside the window, in the original (source) order. */
+export function rowsInWindow(sorted: RegisterRow[], w: Window): RegisterRow[] {
+  const { days, order } = dayIndex(sorted);
+  let lo = 0, hi = order.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (days[order[m]] < w.start) lo = m + 1; else hi = m; }
+  const pos: number[] = [];
+  for (let i = lo; i < order.length && days[order[i]] <= w.end; i++) pos.push(order[i]);
+  pos.sort((a, b) => a - b);
+  return pos.map((p) => sorted[p]);
+}
+
 export interface Criteria {
   institution?: string;
   mortgage_type?: string;
@@ -189,8 +215,10 @@ function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
   const candidates: RegisterRow[] = [];
   const excluded: ExcludedRow[] = [];
 
-  for (const r of sorted) {
-    if (!inWindow(r, w)) continue;
+  // Same rows, same source order as a full scan — but only the rows whose
+  // day falls in the window are visited (binary search on a per-array day
+  // index), so dozens of weekly/monthly windows no longer rescan 70k rows.
+  for (const r of rowsInWindow(sorted, w)) {
     windowRows.push(r);
     const f = flags(r);
     if (f.insurance) { excluded.push({ row: r, reason: "insurance" }); continue; }

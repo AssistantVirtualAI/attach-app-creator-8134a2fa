@@ -203,6 +203,8 @@ Deno.serve(async (req) => {
           if (a.phone_number_digits) byDigits.set(String(a.phone_number_digits), a);
         }
         for (const n of numbers) {
+          // A disabled number is a released one, whatever stale parameter remains.
+          if (String(n.ns?.enabled ?? "") === "no" || String(n.ns?.["dial-rule-translation-destination-user"] ?? "") === "[*]") { n.extension = null; continue; }
           if (n.extension) continue; // NS already provided a binding — trust it
           const digits = String(n.raw ?? "").replace(/\D/g, "");
           const hit = byE164.get(n.e164) ?? byDigits.get(digits);

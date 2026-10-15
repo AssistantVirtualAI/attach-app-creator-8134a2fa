@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({}));
   const action = String(body?.action ?? "");
-  if (!["sync", "preview", "monthly"].includes(action)) return json({ error: "invalid_action" }, 400);
+  if (!["sync", "preview", "monthly", "test_send"].includes(action)) return json({ error: "invalid_action" }, 400);
   if (isCron && action !== "monthly") return json({ error: "forbidden" }, 403);
 
   const sync = await syncItems(admin);

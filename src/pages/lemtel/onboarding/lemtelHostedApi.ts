@@ -255,6 +255,13 @@ export function buildTransferOrganizationOwnershipBody(organizationId: string, r
   return { action: "transfer_organization_ownership" as const, organizationId, recipientUserId };
 }
 
+export function buildUpdateOrganizationBody(organizationId: string, organization: { displayName: string; defaultLocale: LemtelLocale }) {
+  return { action: "update_organization" as const, organizationId, organization: { displayName: organization.displayName.trim(), defaultLocale: organization.defaultLocale } };
+}
+export function buildArchiveOrganizationBody(organizationId: string, confirmation: string) {
+  return { action: "archive_organization" as const, organizationId, confirmation };
+}
+
 export function buildReactivateDomainBody(organizationId: string, domainId: string) {
   return { action: "reactivate_domain" as const, organizationId, domainId };
 }
@@ -286,6 +293,10 @@ export const portalApi = {
     invoke<{ ok: true; delivered: boolean }>("lemtel-onboarding-admin", buildResendWelcomeBody(organizationId, recipientUserId, locale), { write: true }),
   revokeAccess: (organizationId: string, recipientUserId: string) =>
     invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "revoke_invitation", organizationId, recipientUserId }, { write: true }),
+  updateOrganization: (organizationId: string, organization: { displayName: string; defaultLocale: LemtelLocale }) =>
+    invoke<{ ok: true }>("lemtel-onboarding-admin", buildUpdateOrganizationBody(organizationId, organization), { write: true }),
+  archiveOrganization: (organizationId: string, confirmation: string) =>
+    invoke<{ ok: true }>("lemtel-onboarding-admin", buildArchiveOrganizationBody(organizationId, confirmation), { write: true }),
   createDomain: (organizationId: string, hostname: string) =>
     invoke<{ ok: true; domain: PortalDomain }>("lemtel-onboarding-admin", buildCreateDomainBody(organizationId, hostname), { write: true }),
   suspendDomain: (organizationId: string, domainId: string) =>

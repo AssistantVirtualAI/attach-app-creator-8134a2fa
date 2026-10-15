@@ -71,6 +71,13 @@ Deno.test("client session controls require exact bounded state", () => {
   assertEquals(validateBody({ action: "set_client_session_access", organizationId, recipientUserId, clientKind: "desktop", accessState: "unknown" }), { error: "invalid_access_state", status: 400 });
 });
 
+Deno.test("organization workspace updates and archives use strict, confirmed bodies", () => {
+  const organizationId = "11111111-1111-4111-8111-111111111111";
+  assertEquals(validateBody({ action: "update_organization", organizationId, organization: { displayName: "Lemtel : Staging", defaultLocale: "fr" } }), { action: "update_organization", organizationId, organization: { displayName: "Lemtel : Staging", defaultLocale: "fr" } });
+  assertEquals(validateBody({ action: "archive_organization", organizationId, confirmation: "ARCHIVE" }), { action: "archive_organization", organizationId, confirmation: "ARCHIVE" });
+  assertEquals(validateBody({ action: "archive_organization", organizationId, confirmation: "DELETE" }), { error: "archive_confirmation_required", status: 400 });
+});
+
 Deno.test("operational status accepts only the exact platform read action", () => {
   assertEquals(validateBody({ action: "get_operational_status" }), { action: "get_operational_status" });
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });

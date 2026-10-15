@@ -17,6 +17,7 @@ type UserInput = { email: string; displayName: string; role: Role; locale: Local
 type OrganizationInput = { displayName: string; slug: string; defaultLocale: Locale };
 type DomainInput = { hostname: string };
 type ExistingUserInput = { email: string; role: AssignableRole };
+type OrganizationUpdateInput = { displayName: string; defaultLocale: Locale };
 const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 type RequestBody =
   | { action: "create_organization"; organization: OrganizationInput; owner: UserInput; users: UserInput[] }
@@ -39,7 +40,9 @@ type RequestBody =
   | { action: "set_membership_role"; organizationId: string; recipientUserId: string; role: AssignableRole }
   | { action: "transfer_organization_ownership"; organizationId: string; recipientUserId: string }
   | { action: "reactivate_domain"; organizationId: string; domainId: string }
-  | { action: "set_client_session_access"; organizationId: string; recipientUserId: string; clientKind: "mobile" | "desktop" | "client"; accessState: "active" | "revoked" };
+  | { action: "set_client_session_access"; organizationId: string; recipientUserId: string; clientKind: "mobile" | "desktop" | "client"; accessState: "active" | "revoked" }
+  | { action: "update_organization"; organizationId: string; organization: OrganizationUpdateInput }
+  | { action: "archive_organization"; organizationId: string; confirmation: "ARCHIVE" };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -154,6 +157,23 @@ export function validateBody(raw: unknown): RequestBody | Failure {
     if (isFailure(parsedRecipientUserId)) return parsedRecipientUserId;
     if (raw.role !== "admin" && raw.role !== "member") return fail("invalid_role", 400);
     return { action: "set_membership_role", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId, role: raw.role };
+  }
+  if (raw.action === "update_organization") {
+    if (!exactKeys(raw, ["action", "organizationId", "organization"]) || !plainObject(raw.organization)) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const displayName = typeof raw.organization.displayName === "string" ? raw.organization.displayName.trim() : "";
+    const defaultLocale = locale(raw.organization.defaultLocale);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (!exactKeys(raw.organization, ["displayName", "defaultLocale"]) || !displayName || displayName.length > 160) return fail("invalid_organization", 400);
+    if (isFailure(defaultLocale)) return defaultLocale;
+    return { action: "update_organization", organizationId: parsedOrganizationId, organization: { displayName, defaultLocale } };
+  }
+  if (raw.action === "archive_organization") {
+    if (!exactKeys(raw, ["action", "organizationId", "confirmation"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (raw.confirmation !== "ARCHIVE") return fail("archive_confirmation_required", 400);
+    return { action: "archive_organization", organizationId: parsedOrganizationId, confirmation: "ARCHIVE" };
   }
   if (raw.action === "create_organization") {
     if (!exactKeys(raw, ["action", "organization", "owner", "users"]) || !plainObject(raw.organization)) return fail("invalid_body", 400);
@@ -780,6 +800,28 @@ export async function handler(req: Request): Promise<Response> {
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond({ ok: true, ownership: result });
   }
 
+  if (request.action === "update_organization") {
+    if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const { data, error } = await admin.from("lemtel_organizations")
+      .update({ display_name: request.organization.displayName, default_locale: request.organization.defaultLocale })
+      .eq("id", request.organizationId).eq("status", "active")
+      .select("id").maybeSingle();
+    if (error) return respond({ error: "organization_update_failed" }, 503);
+    if (!data?.id) return respond({ error: "organization_not_found" }, 404);
+    await audit(admin, request.organizationId, actor, "organization_updated", null, { default_locale: request.organization.defaultLocale });
+    return respond({ ok: true });
+  }
+  if (request.action === "archive_organization") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const { data, error } = await admin.from("lemtel_organizations")
+      .update({ status: "archived" })
+      .eq("id", request.organizationId).eq("status", "active")
+      .select("id").maybeSingle();
+    if (error) return respond({ error: "organization_archive_failed" }, 503);
+    if (!data?.id) return respond({ error: "organization_not_found" }, 404);
+    await audit(admin, request.organizationId, actor, "organization_archived", null, { lifecycle: "soft_archive" });
+    return respond({ ok: true });
+  }
   if (request.action === "create_domain") {
     if (!(await organizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
     const { data: domain, error } = await admin.from("lemtel_organization_domains")

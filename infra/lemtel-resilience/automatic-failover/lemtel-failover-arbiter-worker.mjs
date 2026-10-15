@@ -4,10 +4,38 @@ const VERSION = 'lemtel_failover_execution_v1';
 const STATUS_KEY = `${VERSION}:status`;
 const INCIDENT_KEY = `${VERSION}:incident`;
 const DRILL_KEY = `${VERSION}:production-drill`;
+const BOOTSTRAP_KEY_PATH = '/.well-known/lemtel-failover-bootstrap-key';
+const BOOTSTRAP_PATH = '/.well-known/lemtel-failover-bootstrap';
+const BOOTSTRAP_FORMAT = 'lemtel_failover_bootstrap_v1';
+const CONFIG_FORMAT = 'lemtel_failover_protected_config_v1';
+const SEALED_FORMAT = 'lemtel_failover_sealed_state_v1';
+const AUTH_CONTEXT = 'lemtel-failover-bootstrap-auth-v1';
+const TRANSPORT_CONTEXT = 'lemtel-failover-bootstrap-transport-v1';
+const STATE_CONTEXT = 'lemtel-failover-sealed-state-v1';
+const BOOTSTRAP_TTL = 300;
+const CONFIG_TTL = 3600;
+const bootstrapControllers = new WeakMap(); // Local serialization only; KV is NOT a distributed CAS.
 const ROUTING_ENABLED = false; // Routing is a separate revision, never an env toggle here.
 let tickRunning = false;
 
+const SAFE_STATES = new Set(['disabled_or_dry_run', 'bootstrap', 'blocked', 'observation',
+  'healthy', 'cycle_not_due', 'incident_suspected', 'fence_graceful_shutdown_requested',
+  'fence_hard_power_off_requested', 'fence_wait_graceful', 'fence_wait_hard', 'fence_poll_terminal',
+  'fence_verified', 'promotion_command_ready', 'manual_promotion_action_required']);
+const SAFE_REASONS = new Set([...SAFE_STATES, 'not_found', 'method_not_allowed', 'unauthorized',
+  'bootstrap_rejected', 'bootstrap_accepted', 'configuration_injection_only',
+  'protected_configuration_unavailable', 'active_configuration_incomplete', 'state_unavailable',
+  'production_drill_or_serialization_not_verified', 'state_or_drill_receipt_invalid',
+  'fence_request_outcome_unknown_manual_review', 'terminal_power_state_timeout',
+  'provider_terminal_state_ambiguous', 'terminal_power_state_changed', 'hard_fence_failed',
+  'fence_receipt_prerequisites_missing', 'overlapping_tick', 'incident_configuration_mismatch',
+  'persisted_fence_intent_requires_manual_reconciliation', 'l7_health_ambiguous_no_fencing',
+  'writer_healthy', 'promotion_command_expired', 'unknown_phase', 'state_or_protocol_error_manual_review',
+  'promotion_command_expired_or_configuration_changed', 'promotion_command_invalid',
+  'command_delivery_unknown_manual_review']);
 function status(state, reason = state) {
+  state = SAFE_STATES.has(state) ? state : 'blocked';
+  reason = SAFE_REASONS.has(reason) ? reason : 'state_or_protocol_error_manual_review';
   return { version: VERSION, state, reason, writer_role: 'do_writer', target_role: 'hostinger_standby',
     automatic_promotion_enabled: false, automatic_runtime_start_enabled: false,
     automatic_traffic_routing_enabled: ROUTING_ENABLED, automatic_failback_enabled: false };
@@ -55,20 +83,31 @@ function integer(value, min, max) {
   if (!/^\d+$/.test(String(value ?? ''))) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max ? parsed : null;
-  }
-  function config(env) {
-  if (env.FAILOVER_MODE !== 'active') return { denied: status('disabled_or_dry_run') };
+}
+const CONFIG_KEYS = ['DO_API_TOKEN', 'AGENT_SHARED_SECRET', 'DO_WRITER_L7_SECRET', 'DRILL_APPROVAL_SECRET',
+  'DO_WRITER_DROPLET_ID', 'DO_API_BASE_URL', 'DO_WRITER_L7_URL', 'ARBITER_SERIALIZATION_ACK',
+  'OBSERVATION_INTERVAL_SECONDS', 'INCIDENT_FAILURE_CYCLES', 'GRACEFUL_SHUTDOWN_DELAY_SECONDS',
+  'POWER_STATE_TIMEOUT_SECONDS', 'COMMAND_TTL_SECONDS'];
+function exactKeys(value, keys) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    Object.keys(value).sort().join(',') === [...keys].sort().join(',');
+}
+function revision(value) { return typeof value === 'string' && /^[a-z0-9-]{8,80}$/.test(value); }
+function validTimeWindow(issued, expiry, now, maximum) {
+  return Number.isSafeInteger(issued) && Number.isSafeInteger(expiry) &&
+    issued <= now && expiry > now && expiry > issued && expiry - issued <= maximum;
+}
+function validateConfiguration(env) {
+  if (!exactKeys(env, CONFIG_KEYS)) return { denied: status('blocked', 'active_configuration_incomplete') };
   const missing = [];
   for (const name of ['DO_API_TOKEN', 'AGENT_SHARED_SECRET', 'DO_WRITER_L7_SECRET', 'DRILL_APPROVAL_SECRET']) {
-    if (typeof env[name] !== 'string' || env[name].length < 32) missing.push(name);
+    if (typeof env[name] !== 'string' || env[name].length < 32 || env[name].length > 4096) missing.push(name);
   }
-  if (!/^[1-9]\d*$/.test(env.DO_WRITER_DROPLET_ID || '')) missing.push('DO_WRITER_DROPLET_ID');
-  if (!env.STATE || typeof env.STATE.get !== 'function' || typeof env.STATE.put !== 'function') missing.push('STATE');
+  if (typeof env.DO_WRITER_DROPLET_ID !== 'string' || !/^[1-9]\d{0,19}$/.test(env.DO_WRITER_DROPLET_ID)) missing.push('DO_WRITER_DROPLET_ID');
   const provider = httpsURL(env.DO_API_BASE_URL);
   const health = l7URL(env.DO_WRITER_L7_URL);
   if (!provider || !provider.endsWith('/v2')) missing.push('DO_API_BASE_URL');
   if (!health || health === provider || health.startsWith(`${provider}/`)) missing.push('DO_WRITER_L7_URL');
-  if (!/^[a-z0-9-]{8,80}$/.test(env.CONFIG_REVISION || '')) missing.push('CONFIG_REVISION');
   if (env.ARBITER_SERIALIZATION_ACK !== 'reviewed_single_serialized_scheduler') missing.push('ARBITER_SERIALIZATION_ACK');
   const interval = integer(env.OBSERVATION_INTERVAL_SECONDS, 60, 900);
   const cycles = integer(env.INCIDENT_FAILURE_CYCLES, 3, 20);
@@ -80,8 +119,147 @@ function integer(value, min, max) {
   if (!grace) missing.push('GRACEFUL_SHUTDOWN_DELAY_SECONDS');
   if (!powerTimeout || powerTimeout <= grace) missing.push('POWER_STATE_TIMEOUT_SECONDS');
   if (!ttl) missing.push('COMMAND_TTL_SECONDS');
-  return missing.length ? { denied: status('blocked', 'active_configuration_incomplete'), missing } :
+  return missing.length ? { denied: status('blocked', 'active_configuration_incomplete') } :
     { provider, health, interval, cycles, grace, powerTimeout, ttl };
+}
+function validProtectedPayload(payload, env, now) {
+  return exactKeys(payload, ['format', 'config_revision', 'issued_at', 'expires_at', 'configuration']) &&
+    payload.format === CONFIG_FORMAT && revision(env.CONFIG_REVISION) &&
+    payload.config_revision === env.CONFIG_REVISION &&
+    validTimeWindow(payload.issued_at, payload.expires_at, now, CONFIG_TTL) &&
+    !validateConfiguration(payload.configuration).denied;
+}
+function bytes(text, length, maximum = length) {
+  if (typeof text !== 'string' || !/^[A-Za-z0-9_-]+$/.test(text) || text.length > Math.ceil(maximum * 4 / 3)) throw new Error('invalid');
+  const raw = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+  const result = Uint8Array.from(raw, (part) => part.charCodeAt(0));
+  if (result.length < length || result.length > maximum || base64url(result) !== text) throw new Error('invalid');
+  return result;
+}
+function base64url(value) {
+  return btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function encoded(context, value) { return new TextEncoder().encode(`${context}\n${canonical(value)}`); }
+async function digest(value) { return base64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))); }
+function stateAvailable(env) { return env.STATE && typeof env.STATE.get === 'function' && typeof env.STATE.put === 'function'; }
+async function stateKey(env) {
+  // Exclusively a runtime secret binding; never a property of the accepted configuration.
+  return crypto.subtle.importKey('raw', bytes(env.CONFIG_STATE_ENCRYPTION_KEY, 32), 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+async function publicIdentity(env) {
+  const jwk = JSON.parse(env.CONFIG_DECRYPTION_PUBLIC_JWK);
+  if (!jwk || Object.keys(jwk).some((name) => !['kty', 'n', 'e', 'alg', 'ext', 'key_ops'].includes(name)) ||
+      jwk.kty !== 'RSA' || jwk.e !== 'AQAB' || (jwk.alg !== undefined && jwk.alg !== 'RSA-OAEP-256') ||
+      (jwk.key_ops !== undefined && canonical(jwk.key_ops) !== '["encrypt"]') ||
+      (jwk.ext !== undefined && jwk.ext !== true)) throw new Error('invalid');
+  bytes(jwk.n, 384, 512); // RSA 3072–4096 bits, public components only.
+  const public_jwk = { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RSA-OAEP-256', ext: true, key_ops: ['encrypt'] };
+  await crypto.subtle.importKey('jwk', public_jwk, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+  return { public_jwk, kid: await digest(canonical({ e: jwk.e, kty: 'RSA', n: jwk.n })) };
+}
+async function sealState(env, kind, payload, issued_at, expires_at) {
+  const metadata = { format: SEALED_FORMAT, version: 1, algorithm: 'AES-256-GCM', kind,
+    config_revision: env.CONFIG_REVISION, issued_at, expires_at };
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128,
+    additionalData: encoded(STATE_CONTEXT, metadata) }, await stateKey(env), new TextEncoder().encode(JSON.stringify(payload)));
+  return { ...metadata, iv: base64url(iv), ciphertext: base64url(ciphertext) };
+}
+async function openState(env, kind, raw, now) {
+  const record = JSON.parse(raw);
+  if (!exactKeys(record, ['format', 'version', 'algorithm', 'kind', 'config_revision', 'issued_at', 'expires_at', 'iv', 'ciphertext']) ||
+      record.format !== SEALED_FORMAT || record.version !== 1 || record.algorithm !== 'AES-256-GCM' ||
+      record.kind !== kind || record.config_revision !== env.CONFIG_REVISION ||
+      !validTimeWindow(record.issued_at, record.expires_at, now, CONFIG_TTL)) throw new Error('invalid');
+  const { iv, ciphertext, ...metadata } = record;
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(iv, 12), tagLength: 128,
+    additionalData: encoded(STATE_CONTEXT, metadata) }, await stateKey(env), bytes(ciphertext, 17, 65536));
+  return { record, payload: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plaintext)) };
+}
+async function config(env, now) {
+  if (env.FAILOVER_MODE !== 'active') return { denied: status('disabled_or_dry_run') };
+  try {
+    if (!stateAvailable(env) || !revision(env.CONFIG_REVISION)) throw new Error('invalid');
+    const receipt = JSON.parse(await env.STATE.get(`${VERSION}:bootstrap-consumed:${env.CONFIG_REVISION}`));
+    if (!exactKeys(receipt, ['format', 'version']) || receipt.format !== 'lemtel_bootstrap_consumed_v1' ||
+        receipt.version !== 1) throw new Error('invalid');
+    const { record, payload } = await openState(env, 'configuration',
+      await env.STATE.get(`${VERSION}:sealed-config:${env.CONFIG_REVISION}`), now);
+    if (!validProtectedPayload(payload, env, now) || record.issued_at !== payload.issued_at ||
+        record.expires_at !== payload.expires_at) throw new Error('invalid');
+    // No fallback to plaintext operational env bindings. Only this decrypted, validated object is used.
+    return { ...validateConfiguration(payload.configuration), runtime: { ...payload.configuration,
+      STATE: env.STATE, CONFIG_REVISION: env.CONFIG_REVISION, CONFIG_STATE_ENCRYPTION_KEY: env.CONFIG_STATE_ENCRYPTION_KEY,
+      protectedIssuedAt: payload.issued_at, protectedExpiresAt: payload.expires_at } };
+  } catch { return { denied: status('blocked', 'protected_configuration_unavailable') }; }
+}
+async function bootstrap(request, env, path, now) {
+  // HTTP bootstrap is disjoint from readiness/tick/provider/command delivery. Never changes mode.
+  if (path === BOOTSTRAP_KEY_PATH) {
+    if (request.method !== 'GET') return json(status('blocked', 'method_not_allowed'), 405);
+    try { return json({ format: 'lemtel_failover_bootstrap_key_v1', version: 1,
+      algorithm: 'RSA-OAEP-256+A256GCM', ...await publicIdentity(env) }); }
+    catch { return json(status('blocked', 'bootstrap_rejected'), 409); }
+  }
+  if (path !== BOOTSTRAP_PATH) return json(status('bootstrap', 'not_found'), 404);
+  if (request.method !== 'POST') return json(status('blocked', 'method_not_allowed'), 405);
+  if (!stateAvailable(env)) return json(status('blocked', 'bootstrap_rejected'), 409);
+  let controller = bootstrapControllers.get(env.STATE);
+  if (!controller) { controller = { running: false, consumed: new Set() }; bootstrapControllers.set(env.STATE, controller); }
+  if (controller.running) return json(status('blocked', 'bootstrap_rejected'), 409);
+  controller.running = true;
+  try {
+    if (!revision(env.CONFIG_REVISION) || typeof env.BOOTSTRAP_AUTH_SECRET !== 'string' ||
+        env.BOOTSTRAP_AUTH_SECRET.length < 32 || env.BOOTSTRAP_AUTH_SECRET.length > 4096 ||
+        request.headers.get('content-type')?.toLowerCase().split(';')[0].trim() !== 'application/json' ||
+        request.headers.get('content-encoding')) throw new Error('invalid');
+    const envelope = await responseJSON(request);
+    if (!exactKeys(envelope, ['format', 'version', 'algorithm', 'kid', 'config_revision', 'nonce', 'issued_at',
+      'expires_at', 'wrapped_key', 'iv', 'ciphertext']) || envelope.format !== BOOTSTRAP_FORMAT ||
+        envelope.version !== 1 || envelope.algorithm !== 'RSA-OAEP-256+A256GCM' ||
+        envelope.config_revision !== env.CONFIG_REVISION ||
+        !validTimeWindow(envelope.issued_at, envelope.expires_at, now, BOOTSTRAP_TTL)) throw new Error('invalid');
+    bytes(envelope.nonce, 32);
+    if (!await verify(env.BOOTSTRAP_AUTH_SECRET, AUTH_CONTEXT, envelope,
+      request.headers.get('x-lemtel-bootstrap-proof'))) return json(status('blocked', 'unauthorized'), 401);
+    const identity = await publicIdentity(env);
+    if (envelope.kid !== identity.kid) throw new Error('invalid');
+    const privateJWK = JSON.parse(env.CONFIG_DECRYPTION_PRIVATE_JWK);
+    if (privateJWK.kty !== 'RSA' || privateJWK.n !== identity.public_jwk.n || privateJWK.e !== identity.public_jwk.e) throw new Error('invalid');
+    const key = await crypto.subtle.importKey('jwk', { ...privateJWK, ext: false, key_ops: ['decrypt'] },
+      { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['decrypt']);
+    const { wrapped_key, iv, ciphertext, ...metadata } = envelope;
+    const label = encoded(TRANSPORT_CONTEXT, metadata);
+    const transportKey = await crypto.subtle.decrypt({ name: 'RSA-OAEP', label }, key,
+      bytes(wrapped_key, bytes(identity.public_jwk.n, 384, 512).length));
+    if (transportKey.byteLength !== 32) throw new Error('invalid');
+    const aes = await crypto.subtle.importKey('raw', transportKey, 'AES-GCM', false, ['decrypt']);
+    new Uint8Array(transportKey).fill(0); // Best effort; engine copies/JS objects cannot be guaranteed zeroized.
+    const clear = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(iv, 12), tagLength: 128,
+      additionalData: label }, aes, bytes(ciphertext, 17, 32768));
+    const payload = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(clear));
+    new Uint8Array(clear).fill(0);
+    const checkedAt = Math.floor(Date.now() / 1000);
+    if (!validTimeWindow(envelope.issued_at, envelope.expires_at, checkedAt, BOOTSTRAP_TTL) ||
+        !validProtectedPayload(payload, env, checkedAt) || payload.issued_at !== envelope.issued_at ||
+        payload.expires_at < envelope.expires_at) throw new Error('invalid');
+    const sealed = await sealState(env, 'configuration', payload, payload.issued_at, payload.expires_at);
+    const revisionKey = `${VERSION}:bootstrap-consumed:${env.CONFIG_REVISION}`;
+    const nonceKey = `${VERSION}:bootstrap-nonce:${await digest(envelope.nonce)}`;
+    const configKey = `${VERSION}:sealed-config:${env.CONFIG_REVISION}`;
+    if (controller.consumed.has(revisionKey) || controller.consumed.has(nonceKey) ||
+        await env.STATE.get(revisionKey) !== null || await env.STATE.get(nonceKey) !== null ||
+        await env.STATE.get(configKey) !== null) throw new Error('invalid');
+    if (!validTimeWindow(envelope.issued_at, envelope.expires_at, Math.floor(Date.now() / 1000), BOOTSTRAP_TTL)) throw new Error('invalid');
+    // Burn revision AND nonce before writes; any uncertain outcome requires a fresh revision/nonce.
+    controller.consumed.add(revisionKey); controller.consumed.add(nonceKey);
+    const tombstone = JSON.stringify({ format: 'lemtel_bootstrap_consumed_v1', version: 1 });
+    await env.STATE.put(revisionKey, tombstone);
+    await env.STATE.put(nonceKey, tombstone); // No TTL: expiring/deleting config never rearms a revision.
+    await env.STATE.put(configKey, JSON.stringify(sealed));
+    return json(status('bootstrap', 'bootstrap_accepted'), 201);
+  } catch { return json(status('blocked', 'bootstrap_rejected'), 409); }
+  finally { controller.running = false; }
 }
 async function storeStatus(env, value) {
   try {
@@ -93,7 +271,7 @@ async function readiness(env, cfg, now) {
   if (cfg.denied) return cfg.denied;
   try {
     const raw = await env.STATE.get(DRILL_KEY);
-    const receipt = raw ? JSON.parse(raw) : null;
+    const receipt = raw ? (await openState(env, 'drill', raw, now)).payload : null;
     const proof = receipt?.payload;
     if (!proof || proof.format !== 'lemtel_production_destructive_drill_v1' ||
         proof.config_revision !== env.CONFIG_REVISION || proof.writer_role !== 'do_writer' ||
@@ -152,8 +330,13 @@ function healthyL7Marker(body, now) {
     body.definitive === true && Number.isSafeInteger(body.observed_at) &&
     body.observed_at <= now + 15 && now - body.observed_at <= 120 && body.status === 'healthy';
 }
+function protectedStillValid(env) {
+  const now = Math.floor(Date.now() / 1000);
+  return validTimeWindow(env.protectedIssuedAt, env.protectedExpiresAt, now, CONFIG_TTL);
+}
 async function observe(env, cfg, now) {
   try {
+    if (!protectedStillValid(env)) throw new Error('invalid');
     const observation = await requestL7(cfg.health,
       { headers: { authorization: `Bearer ${env.DO_WRITER_L7_SECRET}` } });
     if (observation.code === 404) return 'unhealthy';
@@ -161,6 +344,7 @@ async function observe(env, cfg, now) {
   } catch { return 'ambiguous'; } // Timeout, transport failure and arbitrary 5xx are NOT proof of writer failure.
 }
 async function provider(env, cfg, path, actionType) {
+  if (!protectedStillValid(env)) throw new Error('invalid');
   const options = { headers: { authorization: `Bearer ${env.DO_API_TOKEN}`, 'content-type': 'application/json' } };
   if (actionType) { options.method = 'POST'; options.body = JSON.stringify({ type: actionType }); }
   return (await requestJSON(`${cfg.provider}${path}`, options, actionType ? [201, 202] : [200])).body;
@@ -171,7 +355,11 @@ function validAction(action, env, expectedType, expectedID) {
     action.type === expectedType && (!expectedID || action.id === expectedID) &&
     ['in-progress', 'completed', 'errored'].includes(action.status);
 }
-async function persist(env, incident) { await env.STATE.put(INCIDENT_KEY, JSON.stringify(incident)); }
+async function persist(env, incident) {
+  // The signed command/fence receipt contains a writer identifier; it is never plaintext in KV.
+  const sealed = await sealState(env, 'incident', incident, env.protectedIssuedAt, env.protectedExpiresAt);
+  await env.STATE.put(INCIDENT_KEY, JSON.stringify(sealed));
+}
 async function blockIncident(env, incident, reason) {
   incident.phase = 'blocked'; incident.reason = reason;
   await persist(env, incident);
@@ -219,6 +407,7 @@ async function issueCommand(env, cfg, incident, now) {
   // A fresh terminal poll is mandatory even if a previous tick said fence_verified.
   const checked = await pollFence(env, cfg, incident, now);
   if (checked.state !== 'fence_verified') return checked;
+  if (!protectedStillValid(env)) return blockIncident(env, incident, 'protected_configuration_unavailable');
   if (incident.last_definitive_observation !== 'unhealthy' || incident.failure_cycles < cfg.cycles ||
       incident.power_confirmations < 2 || now - incident.terminal_observed_at > cfg.interval) {
     return blockIncident(env, incident, 'fence_receipt_prerequisites_missing');
@@ -239,14 +428,17 @@ async function issueCommand(env, cfg, incident, now) {
   return storeStatus(env, status(incident.phase, 'manual_promotion_action_required'));
 }
 async function tick(env) {
-  const cfg = config(env), now = Math.floor(Date.now() / 1000);
+  if (env.FAILOVER_MODE === 'bootstrap') return status('bootstrap', 'configuration_injection_only');
+  if (env.FAILOVER_MODE !== 'active') return status('disabled_or_dry_run');
+  const now = Math.floor(Date.now() / 1000), cfg = await config(env, now);
+  if (cfg.runtime) env = cfg.runtime;
   const denied = await readiness(env, cfg, now);
   if (denied) return await storeStatus(env, denied);
   if (tickRunning) return await storeStatus(env, status('blocked', 'overlapping_tick'));
   tickRunning = true;
   try {
     const raw = await env.STATE.get(INCIDENT_KEY);
-    let incident = raw ? JSON.parse(raw) : { version: VERSION, config_revision: env.CONFIG_REVISION,
+    let incident = raw ? (await openState(env, 'incident', raw, now)).payload : { version: VERSION, config_revision: env.CONFIG_REVISION,
       phase: 'observation', failure_cycles: 0, last_cycle_at: 0 };
     if (incident.version !== VERSION || incident.config_revision !== env.CONFIG_REVISION) {
       return await storeStatus(env, status('blocked', 'incident_configuration_mismatch'));
@@ -301,25 +493,34 @@ async function authenticated(request, secret) {
 
 export default {
   async fetch(request, env) {
-    const cfg = config(env), now = Math.floor(Date.now() / 1000);
+    const path = new URL(request.url).pathname, now = Math.floor(Date.now() / 1000);
+    if (env.FAILOVER_MODE === 'bootstrap') return bootstrap(request, env, path, now);
+    if (path === BOOTSTRAP_KEY_PATH || path === BOOTSTRAP_PATH) return json(status('blocked', 'not_found'), 404);
+    // No reads/writes, observations, fencing or command delivery in disabled/unknown modes.
+    if (env.FAILOVER_MODE !== 'active') return json(status('disabled_or_dry_run'));
+    const cfg = await config(env, now);
+    if (cfg.runtime) env = cfg.runtime;
     const denied = await readiness(env, cfg, now);
     if (denied) {
       const saved = await storeStatus(env, denied);
       return json(saved, saved.state === 'blocked' ? 409 : 200);
     }
-    const path = new URL(request.url).pathname;
     if (request.method !== 'GET') return json(status('blocked', 'method_not_allowed'), 405);
     if (path === '/healthz' || path === '/status') {
-      try { return json(JSON.parse(await env.STATE.get(STATUS_KEY) || 'null') || status('observation')); }
+      try {
+        const saved = JSON.parse(await env.STATE.get(STATUS_KEY) || 'null');
+        return json(saved ? status(saved.state, saved.reason) : status('observation'));
+      }
       catch { return json(status('blocked', 'state_unavailable'), 503); }
     }
     if (path !== '/agent/command') return json(status('blocked', 'not_found'), 404);
     if (!await authenticated(request, env.AGENT_SHARED_SECRET)) return json(status('blocked', 'unauthorized'), 401);
     try {
-      const incident = JSON.parse(await env.STATE.get(INCIDENT_KEY) || 'null');
+      const raw = await env.STATE.get(INCIDENT_KEY);
+      const incident = raw ? (await openState(env, 'incident', raw, now)).payload : null;
       if (!incident || incident.phase !== 'promotion_command_ready') return json({ state: 'no_command' });
       if (incident.version !== VERSION || incident.config_revision !== env.CONFIG_REVISION ||
-          incident.command.payload.expires_at <= now) {
+          incident.command.payload.expires_at <= Math.floor(Date.now() / 1000) || !protectedStillValid(env)) {
         await blockIncident(env, incident, 'promotion_command_expired_or_configuration_changed');
         return json(status('blocked', 'promotion_command_invalid'), 409);
       }

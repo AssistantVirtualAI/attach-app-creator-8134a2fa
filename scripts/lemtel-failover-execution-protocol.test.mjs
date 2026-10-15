@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { resolve } from 'node:path';
 import worker from '../infra/lemtel-resilience/automatic-failover/lemtel-failover-arbiter-worker.mjs';
+import { createBootstrapSession, createBootstrapEnvelope, canonical, protocol }
+  from '../infra/lemtel-resilience/automatic-failover/lemtel-sealed-bootstrap-controller.mjs';
 
 // All endpoints, credentials and numeric bindings below are synthetic fixtures.
 // global fetch is replaced in every behavioral test: no network access is possible.
@@ -21,47 +23,75 @@ const drillKey = `${prefix}:production-drill`;
 const fakeURL = (name) => `https://${[name, 'test', 'invalid'].join('.')}`;
 const writerID = '7'.repeat(9);
 const secret = (name) => `synthetic-${name}-${'x'.repeat(48)}`;
-function canonical(value) {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
-  return JSON.stringify(value);
-}
+const sessionPromise = createBootstrapSession('synthetic-config-v1');
+const decode = (value) => Buffer.from(value, 'base64url');
+const encode = (context, value) => new TextEncoder().encode(`${context}\n${canonical(value)}`);
 function signature(key, context, payload) {
   return createHmac('sha256', key).update(`${context}\n${canonical(payload)}`).digest('hex');
 }
 function response(body, code = 200) {
   return new Response(JSON.stringify(body), { status: code, headers: { 'content-type': 'application/json' } });
 }
-function fixture(t) {
+async function fixture(t) {
+  const session = await sessionPromise;
   const values = new Map();
   const f = { now: Math.floor(Date.UTC(2030, 0, 1) / 1000), values, calls: [],
     health: 'unhealthy', power: 'active', actionStatus: 'in-progress', actionType: 'shutdown',
     actionID: 11, failPost: false, failPoll: false, failIntent: false };
+  const aes = await crypto.subtle.importKey('raw', decode(session.secretBindings.CONFIG_STATE_ENCRYPTION_KEY),
+    'AES-GCM', false, ['encrypt', 'decrypt']);
+  f.open = async (raw) => {
+    const { iv, ciphertext, ...metadata } = JSON.parse(raw);
+    return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM',
+      iv: decode(iv), tagLength: 128, additionalData: encode(protocol.stateContext, metadata) }, aes, decode(ciphertext))));
+  };
+  f.seal = async (kind, payload) => {
+    const metadata = { format: 'lemtel_failover_sealed_state_v1', version: 1, algorithm: 'AES-256-GCM', kind,
+      config_revision: f.env.CONFIG_REVISION, issued_at: f.now, expires_at: f.now + 3600 };
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128,
+      additionalData: encode(protocol.stateContext, metadata) }, aes, new TextEncoder().encode(JSON.stringify(payload)));
+    return JSON.stringify({ ...metadata, iv: Buffer.from(iv).toString('base64url'), ciphertext: Buffer.from(ciphertext).toString('base64url') });
+  };
   const STATE = {
     async get(key) { return values.get(key) ?? null; },
     async put(key, value) {
-      if (f.failIntent && key === incidentKey && JSON.parse(value).phase === 'fence_graceful_shutdown_requested') throw new Error('synthetic_kv_failure');
+      if (f.failIntent && key === incidentKey && (await f.open(value)).phase === 'fence_graceful_shutdown_requested') throw new Error('synthetic_kv_failure');
       values.set(key, value);
     },
   };
-  f.env = { FAILOVER_MODE: 'active', STATE, DO_API_TOKEN: secret('provider'),
+  f.configuration = { DO_API_TOKEN: secret('provider'),
     DO_WRITER_DROPLET_ID: writerID, AGENT_SHARED_SECRET: secret('agent'),
     DO_WRITER_L7_SECRET: secret('l7'), DRILL_APPROVAL_SECRET: secret('approval'),
     DO_API_BASE_URL: `${fakeURL('provider')}/v2`, DO_WRITER_L7_URL: `${fakeURL('writer')}/lemtel-lb-ready`,
-    CONFIG_REVISION: 'synthetic-config-v1', ARBITER_SERIALIZATION_ACK: 'reviewed_single_serialized_scheduler',
+    ARBITER_SERIALIZATION_ACK: 'reviewed_single_serialized_scheduler',
     OBSERVATION_INTERVAL_SECONDS: '60', INCIDENT_FAILURE_CYCLES: '3',
     GRACEFUL_SHUTDOWN_DELAY_SECONDS: '180', POWER_STATE_TIMEOUT_SECONDS: '1800', COMMAND_TTL_SECONDS: '120' };
+  f.env = { FAILOVER_MODE: 'bootstrap', STATE, ...session.textBindings, ...session.secretBindings };
+  const descriptor = await (await worker.fetch(new Request(fakeURL('arbiter') + protocol.keyPath), f.env)).json();
+  const injection = await createBootstrapEnvelope({ session, publicDescriptor: descriptor, configuration: f.configuration, now: f.now });
+  t.mock.method(Date, 'now', () => f.now * 1000);
+  assert.equal((await worker.fetch(new Request(fakeURL('arbiter') + protocol.bootstrapPath, { method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-lemtel-bootstrap-proof': injection.proof },
+    body: JSON.stringify(injection.envelope) }), f.env)).status, 201);
+  f.env = { FAILOVER_MODE: 'active', STATE, CONFIG_REVISION: session.configRevision,
+    CONFIG_STATE_ENCRYPTION_KEY: session.secretBindings.CONFIG_STATE_ENCRYPTION_KEY };
+  f.setConfig = async () => values.set(`${prefix}:sealed-config:${f.env.CONFIG_REVISION}`, await f.seal('configuration',
+    { format: 'lemtel_failover_protected_config_v1', config_revision: f.env.CONFIG_REVISION,
+      issued_at: f.now, expires_at: f.now + 3600, configuration: f.configuration }));
+  f.setIncident = async (payload) => values.set(incidentKey, await f.seal('incident', payload));
+  f.setDrill = async (payload) => values.set(drillKey, await f.seal('drill', payload));
   const readyMarker = (observedAt = f.now) => ({ format: 'lemtel_do_writer_l7_ready_v1', writer_role: 'do_writer',
     definitive: true, observed_at: observedAt, status: 'healthy' });
-  const l7Response = (body, code = 200, url = f.env.DO_WRITER_L7_URL, redirected = false) => {
+  const l7Response = (body, code = 200, url = f.configuration.DO_WRITER_L7_URL, redirected = false) => {
     const raw = response(body, code);
     return { status: raw.status, headers: raw.headers, body: raw.body, url, redirected };
   };
-  const l7TextResponse = (body, code = 200, url = f.env.DO_WRITER_L7_URL) => {
+  const l7TextResponse = (body, code = 200, url = f.configuration.DO_WRITER_L7_URL) => {
     const raw = new Response(body, { status: code, headers: { 'content-type': 'application/json' } });
     return { status: raw.status, headers: raw.headers, body: raw.body, url, redirected: false };
   };
-  const l7EmptyResponse = (code = 404, url = f.env.DO_WRITER_L7_URL) => {
+  const l7EmptyResponse = (code = 404, url = f.configuration.DO_WRITER_L7_URL) => {
     const raw = new Response(null, { status: code });
     return { status: raw.status, headers: raw.headers, body: raw.body, url, redirected: false };
   };
@@ -69,13 +99,12 @@ function fixture(t) {
     writer_role: 'do_writer', target_role: 'hostinger_standby', writer_droplet_id: writerID,
     destructive_drill_validated: true, serialized_execution_verified: true,
     validated_at: f.now - 60, expires_at: f.now + 3600 };
-  values.set(drillKey, JSON.stringify({ payload, signature: signature(f.env.DRILL_APPROVAL_SECRET, 'lemtel-production-drill-v1', payload) }));
-  t.mock.method(Date, 'now', () => f.now * 1000);
+  await f.setDrill({ payload, signature: signature(f.configuration.DRILL_APPROVAL_SECRET, 'lemtel-production-drill-v1', payload) });
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     f.calls.push({ url, options });
     assert.equal(options.redirect, 'error');
     assert.ok(options.signal instanceof AbortSignal);
-    if (url === f.env.DO_WRITER_L7_URL) {
+    if (url === f.configuration.DO_WRITER_L7_URL) {
       if (f.healthBarrier) await f.healthBarrier;
       if (f.health === 'timeout') throw new Error('synthetic_transport_failure');
       if (f.health === 'unhealthy') return l7EmptyResponse();
@@ -86,12 +115,12 @@ function fixture(t) {
       if (f.health === 'arbitrary_5xx') return l7Response({ error: 'opaque' }, 503);
       if (f.health === 'wrong_host') return l7EmptyResponse(404, `${fakeURL('other-writer')}/lemtel-lb-ready`);
       if (f.health === 'wrong_path') return l7EmptyResponse(404, `${fakeURL('writer')}/unexpected`);
-      if (f.health === 'redirect') return l7Response(readyMarker(), 200, f.env.DO_WRITER_L7_URL, true);
+      if (f.health === 'redirect') return l7Response(readyMarker(), 200, f.configuration.DO_WRITER_L7_URL, true);
       return l7Response(readyMarker());
     }
-    assert.ok(url.startsWith(`${f.env.DO_API_BASE_URL}/`), 'only the configured fake provider can be requested');
+    assert.ok(url.startsWith(`${f.configuration.DO_API_BASE_URL}/`), 'only the configured fake provider can be requested');
     if (options.method === 'POST') {
-      assert.equal(JSON.parse(values.get(incidentKey)).phase,
+      assert.equal((await f.incident()).phase,
         JSON.parse(options.body).type === 'shutdown' ? 'fence_graceful_shutdown_requested' : 'fence_hard_power_off_requested');
       if (f.failPost) throw new Error('synthetic_unknown_post_outcome');
       f.actionType = JSON.parse(options.body).type;
@@ -102,7 +131,7 @@ function fixture(t) {
     if (f.failPoll) throw new Error('synthetic_unknown_power_state');
     if (url.endsWith(`/actions/${f.actionID}`)) return response({ action: { id: f.actionID, type: f.actionType,
       resource_id: Number(writerID), resource_type: 'droplet', status: f.actionStatus } });
-    assert.equal(url, `${f.env.DO_API_BASE_URL}/droplets/${writerID}`);
+    assert.equal(url, `${f.configuration.DO_API_BASE_URL}/droplets/${writerID}`);
     return response({ droplet: { id: Number(writerID), status: f.power } });
   });
   f.tick = async (advance = 60) => {
@@ -113,10 +142,10 @@ function fixture(t) {
     await waited;
     return result;
   };
-  f.incident = () => JSON.parse(values.get(incidentKey) || 'null');
+  f.incident = async () => values.has(incidentKey) ? f.open(values.get(incidentKey)) : null;
   f.posts = () => f.calls.filter((call) => call.options.method === 'POST').map((call) => JSON.parse(call.options.body).type);
   f.get = (path, authorized = false) => worker.fetch(new Request(fakeURL('arbiter') + path,
-    { headers: authorized ? { authorization: `Bearer ${f.env.AGENT_SHARED_SECRET}` } : {} }), f.env);
+    { headers: authorized ? { authorization: `Bearer ${f.configuration.AGENT_SHARED_SECRET}` } : {} }), f.env);
   return f;
 }
 async function suspicion(f) {
@@ -147,7 +176,7 @@ test('default export exposes fetch and scheduled, with no imports or real endpoi
 });
 
 test('absent, disabled, dry-run and non-exact active mode never call health/provider or deliver commands', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   for (const mode of [undefined, 'disabled', 'dry_run', 'ACTIVE', 'active ']) {
     f.env.FAILOVER_MODE = mode;
     assert.equal((await f.tick()).state, 'disabled_or_dry_run');
@@ -157,12 +186,12 @@ test('absent, disabled, dry-run and non-exact active mode never call health/prov
     assert.ok(!result.command);
   }
   assert.equal(f.calls.length, 0);
-  assert.equal(f.incident(), null);
-  assert.equal(JSON.parse(f.values.get(statusKey)).state, 'disabled_or_dry_run');
+  assert.equal((await f.incident()), null);
+  assert.equal(f.values.has(statusKey), false, 'disabled has no KV writes');
 });
 
 test('every explicit active binding, secret, ID, approval and safety limit is mandatory before any outbound call', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   for (const key of Object.keys(f.env).filter((key) => key !== 'FAILOVER_MODE')) {
     const saved = f.env[key]; delete f.env[key];
     assert.equal((await f.tick()).state, 'blocked', key);
@@ -171,28 +200,37 @@ test('every explicit active binding, secret, ID, approval and safety limit is ma
     assert.ok(!(await res.json()).command);
     f.env[key] = saved;
   }
+  for (const key of Object.keys(f.configuration)) {
+    const saved = f.configuration[key]; delete f.configuration[key];
+    await f.setConfig();
+    assert.equal((await f.tick()).state, 'blocked', key);
+    assert.equal((await f.get('/agent/command', true)).status, 409, key);
+    f.configuration[key] = saved;
+  }
+  await f.setConfig();
   assert.equal(f.calls.length, 0);
-  assert.equal(f.incident(), null);
+  assert.equal((await f.incident()), null);
 });
 
 test('L7 configuration is pinned to the exact HTTPS readiness path before any observation', async (t) => {
-  const f = fixture(t);
-  f.env.DO_WRITER_L7_URL = `${fakeURL('writer')}/unexpected`;
+  const f = await fixture(t);
+  f.configuration.DO_WRITER_L7_URL = `${fakeURL('writer')}/unexpected`;
+  await f.setConfig();
   assert.equal((await f.tick()).state, 'blocked');
   assert.equal(f.calls.length, 0);
 });
 
 test('unsigned, expired, missing or config-mismatched production drill is fail-closed', async (t) => {
-  const f = fixture(t), original = f.values.get(drillKey);
+  const f = await fixture(t), original = f.values.get(drillKey);
   for (const change of [null, { signature: '0'.repeat(64) }, { payload: { expires_at: f.now - 1 } },
     { payload: { config_revision: 'wrong-revision' } }, { payload: { serialized_execution_verified: false } }]) {
     if (change === null) f.values.delete(drillKey);
     else {
-      const receipt = JSON.parse(original);
+      const receipt = await f.open(original);
       if (change.payload) Object.assign(receipt.payload, change.payload);
       if (change.signature) receipt.signature = change.signature;
-      else receipt.signature = signature(f.env.DRILL_APPROVAL_SECRET, 'lemtel-production-drill-v1', receipt.payload);
-      f.values.set(drillKey, JSON.stringify(receipt));
+      else receipt.signature = signature(f.configuration.DRILL_APPROVAL_SECRET, 'lemtel-production-drill-v1', receipt.payload);
+      await f.setDrill(receipt);
     }
     assert.equal((await f.tick()).state, 'blocked');
   }
@@ -200,43 +238,43 @@ test('unsigned, expired, missing or config-mismatched production drill is fail-c
 });
 
 test('exact 404 marker absence is definitive unhealthy and exact healthy JSON resets suspicion', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   const unavailable = await f.tick();
   assert.equal(unavailable.state, 'incident_suspected');
-  assert.equal(f.incident().last_definitive_observation, 'unhealthy');
-  assert.equal(f.incident().failure_cycles, 1);
+  assert.equal((await f.incident()).last_definitive_observation, 'unhealthy');
+  assert.equal((await f.incident()).failure_cycles, 1);
   f.health = 'healthy';
   const healthy = await f.tick();
   assert.equal(healthy.state, 'healthy');
-  assert.equal(f.incident().last_definitive_observation, 'healthy');
-  assert.equal(f.incident().failure_cycles, 0);
+  assert.equal((await f.incident()).last_definitive_observation, 'healthy');
+  assert.equal((await f.incident()).failure_cycles, 0);
   assert.deepEqual(f.posts(), []);
 });
 
 test('only the exact healthy JSON is positive; ambiguous L7 responses reset suspicion and never fence', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   for (const health of ['healthy', 'timeout', 'invalid', 'enriched', 'non_json', 'stale', 'arbitrary_5xx', 'wrong_host', 'wrong_path', 'redirect']) {
     f.health = 'unhealthy'; await f.tick(); await f.tick();
     f.health = health;
     const result = await f.tick();
     assert.equal(result.state, health === 'healthy' ? 'healthy' : 'blocked');
-    assert.equal(f.incident().failure_cycles, 0);
-    assert.equal(f.incident().phase, 'observation');
+    assert.equal((await f.incident()).failure_cycles, 0);
+    assert.equal((await f.incident()).phase, 'observation');
   }
   assert.deepEqual(f.posts(), []);
 });
 
 test('duplicate cycles do not manufacture several consecutive failures', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   await f.tick();
   assert.equal((await f.tick(0)).state, 'cycle_not_due');
   assert.equal((await f.tick(1)).state, 'cycle_not_due');
-  assert.equal(f.incident().failure_cycles, 1);
+  assert.equal((await f.incident()).failure_cycles, 1);
   assert.deepEqual(f.posts(), []);
 });
 
 test('graceful shutdown, delay, hard power_off, repeated terminal poll, signed fence and expiring promotion command', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   await suspicion(f);
   await f.tick(); await f.tick();
   assert.deepEqual(f.posts(), ['shutdown']);
@@ -245,8 +283,15 @@ test('graceful shutdown, delay, hard power_off, repeated terminal poll, signed f
   f.power = 'off'; f.actionStatus = 'completed';
   assert.equal((await f.tick()).state, 'fence_poll_terminal');
   assert.equal((await f.tick()).state, 'fence_verified');
-  assert.equal(f.incident().command, undefined);
+  assert.equal((await f.incident()).command, undefined);
   assert.equal((await f.tick()).state, 'promotion_command_ready');
+  for (const value of f.values.values()) {
+    for (const name of ['DO_API_TOKEN', 'AGENT_SHARED_SECRET', 'DO_WRITER_L7_SECRET', 'DRILL_APPROVAL_SECRET',
+      'DO_WRITER_DROPLET_ID', 'DO_API_BASE_URL', 'DO_WRITER_L7_URL']) {
+      assert.ok(!value.includes(f.configuration[name]), 'KV contains ciphertext, never operational configuration values');
+      assert.ok(!value.includes(name), 'KV has no clear operational field names');
+    }
+  }
   const publicStatus = await (await f.get('/status')).json();
   assert.equal(publicStatus.automatic_promotion_enabled, false);
   assert.equal(publicStatus.automatic_runtime_start_enabled, false);
@@ -259,76 +304,76 @@ test('graceful shutdown, delay, hard power_off, repeated terminal poll, signed f
   assert.equal(command.payload.target_role, 'hostinger_standby');
   assert.equal(command.payload.writer_role, 'do_writer');
   assert.equal(command.payload.expires_at - command.payload.issued_at, 120);
-  assert.equal(command.signature, signature(f.env.AGENT_SHARED_SECRET, 'lemtel-promotion-command-v1', command.payload));
+  assert.equal(command.signature, signature(f.configuration.AGENT_SHARED_SECRET, 'lemtel-promotion-command-v1', command.payload));
   const receipt = command.payload.fence_receipt;
-  assert.equal(receipt.signature, signature(f.env.AGENT_SHARED_SECRET, 'lemtel-fence-receipt-v1', receipt.payload));
+  assert.equal(receipt.signature, signature(f.configuration.AGENT_SHARED_SECRET, 'lemtel-fence-receipt-v1', receipt.payload));
   assert.equal(receipt.payload.incident_id, command.payload.incident_id);
   assert.equal(receipt.payload.terminal_power_state, 'off');
   assert.equal(receipt.payload.terminal_action_status, 'completed');
   assert.ok(receipt.payload.confirmations >= 2);
-  assert.equal(f.incident().phase, 'promotion_command_dispatched');
+  assert.equal((await f.incident()).phase, 'promotion_command_dispatched');
   assert.deepEqual(await (await f.get('/agent/command', true)).json(), { state: 'no_command' });
   assert.equal((await f.tick()).state, 'manual_promotion_action_required');
 });
 
 test('graceful terminal state needs no hard fence; expired command is not reissued', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   await gracefulCommand(f);
   assert.deepEqual(f.posts(), ['shutdown']);
   f.now += 121;
   assert.equal((await f.get('/agent/command', true)).status, 409);
-  assert.equal(f.incident().phase, 'blocked');
+  assert.equal((await f.incident()).phase, 'blocked');
   assert.equal((await f.tick()).state, 'blocked');
   assert.deepEqual(f.posts(), ['shutdown']);
 });
 
 test('writer power returns active before receipt issuance: block, never sign a command', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   await suspicion(f); f.power = 'off'; f.actionStatus = 'completed';
   await f.tick(); await f.tick();
   f.power = 'active';
   const result = await f.tick();
   assert.equal(result.state, 'blocked');
   assert.equal(result.reason, 'terminal_power_state_changed');
-  assert.equal(f.incident().command, undefined);
+  assert.equal((await f.incident()).command, undefined);
 });
 
 test('ambiguous provider polling never permits hard fence or a receipt', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   await suspicion(f); f.failPoll = true;
   assert.equal((await f.tick(180)).state, 'blocked');
   assert.equal((await f.tick()).state, 'blocked');
   assert.deepEqual(f.posts(), ['shutdown']);
-  assert.equal(f.incident().command, undefined);
+  assert.equal((await f.incident()).command, undefined);
 });
 
 test('unknown destructive POST outcome is persisted and never retried', async (t) => {
-  const f = fixture(t); f.failPost = true;
+  const f = await fixture(t); f.failPost = true;
   await f.tick(); await f.tick();
   assert.equal((await f.tick()).state, 'blocked');
   assert.equal((await f.tick()).state, 'blocked');
   assert.deepEqual(f.posts(), ['shutdown']);
-  assert.equal(f.incident().command, undefined);
+  assert.equal((await f.incident()).command, undefined);
 });
 
 test('a failed intent write prevents a provider POST entirely', async (t) => {
-  const f = fixture(t); f.failIntent = true;
+  const f = await fixture(t); f.failIntent = true;
   await f.tick(); await f.tick();
   assert.equal((await f.tick()).state, 'blocked');
   assert.deepEqual(f.posts(), []);
 });
 
 test('a recovered destructive intent requires manual reconciliation, not a POST retry', async (t) => {
-  const f = fixture(t);
-  f.values.set(incidentKey, JSON.stringify({ version: prefix, config_revision: f.env.CONFIG_REVISION,
-    phase: 'fence_graceful_shutdown_requested', last_cycle_at: 0 }));
+  const f = await fixture(t);
+  await f.setIncident({ version: prefix, config_revision: f.env.CONFIG_REVISION,
+    phase: 'fence_graceful_shutdown_requested', last_cycle_at: 0 });
   const result = await f.tick();
   assert.equal(result.reason, 'persisted_fence_intent_requires_manual_reconciliation');
   assert.equal(f.calls.length, 0);
 });
 
 test('HTTP handlers cannot drive provider actions; mutating methods are refused', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   assert.equal((await f.get('/status')).status, 200);
   assert.equal((await f.get('/agent/command', true)).status, 200);
   const res = await worker.fetch(new Request(fakeURL('arbiter') + '/agent/command', { method: 'POST' }), f.env);
@@ -337,7 +382,7 @@ test('HTTP handlers cannot drive provider actions; mutating methods are refused'
 });
 
 test('isolate overlap protection remains held while asynchronous observation is pending', async (t) => {
-  const f = fixture(t);
+  const f = await fixture(t);
   let release;
   f.healthBarrier = new Promise((done) => { release = done; });
   const first = worker.scheduled({}, f.env);
@@ -345,7 +390,7 @@ test('isolate overlap protection remains held while asynchronous observation is 
   const second = await worker.scheduled({}, f.env);
   assert.equal(second.reason, 'overlapping_tick');
   release(); await first;
-  assert.equal(f.incident().failure_cycles, 1);
+  assert.equal((await f.incident()).failure_cycles, 1);
 });
 
 test('agent root gates, one fixed config and isolated interpreter; preflight precedes remote poll', () => {

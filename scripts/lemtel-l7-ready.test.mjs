@@ -16,7 +16,7 @@ test('L7 readiness is writer-only and content-free',()=>{
   assert.doesNotMatch(refresh,/auth_container='supabase-auth'/);
 });
 test('route is exact, transactional and does not activate Cloudflare routing',()=>{
-  for (const expected of ["canonical_host='lemtel.assistantvirtualai.com'", 'index($0, canonical_host)', 'matches != 1','path /lemtel-lb-ready','root * /etc/caddy','rewrite * /lemtel-lb-ready','caddy reload','cloudflare_routing_changed=false','automatic_traffic_failover_enabled=false']) assert.match(deploy,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for (const expected of ["canonical_host='lemtel.assistantvirtualai.com'", 'index($0, canonical_host)', 'matches != 1','path /lemtel-lb-ready','route_marker_count','existing_route_invalid','route_marker_ambiguous','route_state','root * /etc/caddy','rewrite * /lemtel-lb-ready','caddy reload','cloudflare_routing_changed=false','automatic_traffic_failover_enabled=false']) assert.match(deploy,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   assert.doesNotMatch(deploy,/cloudflare\.request|pg_ctl promote|fencing_executed=true/i);
   assert.match(timer,/\[ -f \"\$source_script\" \] \|\| fail readiness_source_missing/);
   assert.match(timer,/install -o root -g root -m 0750/);

@@ -32,22 +32,34 @@ site_line="$(awk -v canonical_host="$canonical_host" '
   END { if (matches != 1) exit 1 }
 ' "$caddyfile")" || fail canonical_site_unexpected
 [ -n "$site_line" ] || fail canonical_site_unexpected
-! grep -Fq "$route_marker" "$caddyfile" || fail route_already_present
+route_marker_count="$(grep -Fc "$route_marker" "$caddyfile" || true)"
+case "$route_marker_count" in
+  0) route_state='installed' ;;
+  1)
+    grep -Fq '@lemtel_load_balancer_ready path /lemtel-lb-ready' "$caddyfile" || fail existing_route_invalid
+    grep -Fq 'rewrite * /lemtel-lb-ready' "$caddyfile" || fail existing_route_invalid
+    route_state='already_present'
+    ;;
+  *) fail route_marker_ambiguous ;;
+esac
 exec 9>"$lock_file"; flock -n 9 || fail concurrent_deploy
 backup_dir="/var/lib/lemtel-ha/l7-ready/backups/$(date -u +%Y%m%dT%H%M%SZ)"; install -d -o root -g root -m 0700 "$backup_dir"
 backup="$backup_dir/Caddyfile"; candidate="$(mktemp "${caddyfile}.l7-ready.XXXXXX")"; temporary="$(mktemp "${caddyfile}.live.XXXXXX")"; replaced=false
 rollback() { if [ "$replaced" = true ]; then cp -- "$backup" "$caddyfile"; docker exec "$caddy_container" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || true; fi; rm -f "$candidate" "$temporary"; }
 trap rollback ERR INT TERM
-awk -v site="$site_line" -v marker="$route_marker" '$0 == site { print; print "  " marker; print "  @lemtel_load_balancer_ready path /lemtel-lb-ready"; print "  handle @lemtel_load_balancer_ready {"; print "    root * /etc/caddy"; print "    rewrite * /lemtel-lb-ready"; print "    file_server"; print "  }"; next } { print }' "$caddyfile" > "$candidate"
-docker exec -i "$caddy_container" caddy adapt --config /dev/stdin --adapter caddyfile < "$candidate" >/dev/null || fail caddy_candidate_invalid
-cp --preserve=mode,ownership,timestamps -- "$caddyfile" "$backup"
-cp -- "$candidate" "$temporary"; chmod --reference="$caddyfile" "$temporary"; mv -f "$temporary" "$caddyfile"; replaced=true
-docker exec "$caddy_container" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail caddy_live_invalid
-docker exec "$caddy_container" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail caddy_reload_failed
+if [ "$route_state" = installed ]; then
+  awk -v site="$site_line" -v marker="$route_marker" '$0 == site { print; print "  " marker; print "  @lemtel_load_balancer_ready path /lemtel-lb-ready"; print "  handle @lemtel_load_balancer_ready {"; print "    root * /etc/caddy"; print "    rewrite * /lemtel-lb-ready"; print "    file_server"; print "  }"; next } { print }' "$caddyfile" > "$candidate"
+  docker exec -i "$caddy_container" caddy adapt --config /dev/stdin --adapter caddyfile < "$candidate" >/dev/null || fail caddy_candidate_invalid
+  cp --preserve=mode,ownership,timestamps -- "$caddyfile" "$backup"
+  cp -- "$candidate" "$temporary"; chmod --reference="$caddyfile" "$temporary"; mv -f "$temporary" "$caddyfile"; replaced=true
+  docker exec "$caddy_container" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail caddy_live_invalid
+  docker exec "$caddy_container" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail caddy_reload_failed
+fi
 LEMTEL_HA_EXECUTE=enable_digitalocean_writer_l7_ready_timer LEMTEL_HA_ROLE=digitalocean_promoted_writer LEMTEL_L7_READY_SOURCE="$refresh_source" bash "$timer_source"
-replaced=false; trap - ERR INT TERM; rm -f "$candidate"
+replaced=false; trap - ERR INT TERM; rm -f "$candidate" "$temporary"
 printf 'do_writer_l7_route_deploy_format=lemtel_do_writer_l7_route_v1\n'
 printf 'writer=digitalocean_promoted_writer\n'
+printf 'route_state=%s\n' "$route_state"
 printf 'route_deployed=true\n'
 printf 'marker_timer_enabled=true\n'
 printf 'dns_change_executed=false\n'

@@ -18,7 +18,7 @@ Le contrat de base conserve tous les flags d’activation à `false`, notamment 
 
 Le failover automatique est **bloqué fail-closed** tant que les preuves suivantes ne sont pas fournies et validées pour l’incident :
 
-1. attestation locale signée de fencing du `do_writer`, reçue de façon sécurisée hors bande ;
+1. reçu HMAC de fencing du `do_writer`, validé par l’agent puis persisté root-only, lié au même incident et avec deux confirmations terminales ;
 2. drill de fencing fournisseur et drill de promotion Hostinger ;
 3. preuve du standby privé en recovery/streaming, de l’intégrité stockage et de l’absence de listener PostgreSQL public ;
 4. preuve de writer unique après promotion ;
@@ -31,9 +31,9 @@ Le module `scripts/lemtel-current-topology-failover-gate.mjs` est volontairement
 
 > Cet ordre est une barrière de sécurité : aucune étape ultérieure ne compense une étape antérieure absente ou ambiguë.
 
-1. **Fencing fournisseur du writer DO** — recevoir et vérifier hors bande l’attestation signée que `do_writer` ne peut plus écrire.
-2. **Promotion Hostinger** — seulement après la preuve de fencing ; le garde-fou de promotion vérifie recovery/streaming, stage chiffré arrêté et absence de base publique, mais ne promeut jamais lui-même.
-3. **Runtime Hostinger** — seulement après un état local de promotion existant et une preuve signée de writer unique ; le garde-fou post-promotion ne démarre jamais le runtime.
+1. **Fencing fournisseur du writer DO** — l’arbitre vérifie `shutdown`/`power_off`, action terminale, état `off` et deux confirmations ; l’agent Hostinger valide le reçu HMAC puis le persiste root-only.
+2. **Promotion Hostinger** — seulement après le reçu persisté ; le script de promotion vérifie incident, recovery/streaming, stage chiffré arrêté, absence de base publique et fencé DO avant de promouvoir.
+3. **Runtime Hostinger** — seulement après un état local de promotion existant et le même reçu HMAC ; le script de runtime vérifie writer promu, Storage et absence de listener PostgreSQL public avant de démarrer le runtime.
 4. **Routage Cloudflare** — seulement après les trois étapes précédentes et une configuration Load Balancer/routage explicitement autorisée. Le monitor Cloudflare observe ; il ne fence pas et ne promeut pas.
 
 Le **failback automatique est désactivé**. Tout retour vers DO exige une nouvelle procédure humaine, des preuves fraîches et un drill validé ; il ne doit pas être inféré d’un retour de santé.
@@ -43,9 +43,10 @@ Le **failback automatique est désactivé**. Tout retour vers DO exige une nouve
 | Fichier | Rôle limité |
 |---|---|
 | `infra/lemtel-resilience/automatic-failover/current-topology-contract.json` | Contrat strict de la topologie actuelle, de ses exclusions et de ses gates. |
-| `lemtel-ha-do-writer-provider-fence-evidence.sh` | Contrat root-only de réception hors bande ; aucun appel fournisseur et aucun fencing réel. |
-| `lemtel-ha-hostinger-auto-promotion-guard.sh` | Vérification locale root-only de readiness ; aucune promotion ni démarrage runtime. |
-| `lemtel-ha-hostinger-post-promotion-runtime-guard.sh` | Vérification locale root-only post-promotion ; aucun démarrage runtime ni routage. |
+| `lemtel-failover-arbiter-worker.mjs` | Fencing DO via API fournisseur seulement après ses gates, puis émission d’un reçu HMAC à durée limitée. |
+| `lemtel-ha-hostinger-failover-agent.sh` | Validation HMAC, ledger one-time, persistance root-only du reçu et orchestration locale `review`/`execute`. |
+| `lemtel-ha-hostinger-current-topology-promote.sh` | Promotion locale uniquement après reçu HMAC, stage et gates PostgreSQL. |
+| `lemtel-ha-hostinger-current-topology-runtime-start.sh` | Démarrage runtime local uniquement après promotion et reçu HMAC ; aucun routage. |
 | `scripts/lemtel-current-topology-failover-gate.mjs` | Évaluation pure en mémoire, bloquée par défaut. |
 
 Ces fichiers **remplacent pour l’état actuel** le chemin historique à rôles inversés (`hostinger_primary` / `digitalocean_standby`). Les scripts historiques sont conservés sans modification : ils peuvent documenter un drill ancien et **ne doivent pas automatiser** la topologie actuelle `do_writer` / `hostinger_private_hot_standby`.

@@ -6,7 +6,7 @@
 
 Un **agent installé en `disabled` n’est pas une activation** : il sort `blocked` (code `78`), sans lecture de commande distante, sans guard, sans promotion ni démarrage runtime. L’absence de `FAILOVER_MODE` a le même effet. Les unités sont des modèles **non installés**, sans section `[Install]` et sans lien à une cible de démarrage. Un démarrage explicite du timer ne serait pas une autorisation de promotion.
 
-Le contrat et les guards de [PR234](CURRENT_AUTOMATIC_FAILOVER_GATES.md) sont **inchangés**, tous leurs flags restent à `false`. Les rôles du nouveau protocole sont exclusivement **`do_writer` → `hostinger_standby`**, un standby chaud privé. À la seule frontière d’appel du guard PR234, `hostinger_standby` est traduit vers son nom existant `hostinger_private_hot_standby` ; il ne s’agit ni d’une inversion de rôles ni d’une modification du contrat.
+Le contrat de [gates actuelles](CURRENT_AUTOMATIC_FAILOVER_GATES.md) conserve tous les flags d’activation à `false` tant que les prérequis de production ne sont pas prouvés. Les rôles du nouveau protocole sont exclusivement **`do_writer` → `hostinger_standby`**, un standby chaud privé. Le rôle opérationnel `hostinger_standby` correspond au nom de contrat `hostinger_private_hot_standby` ; il ne s’agit ni d’une inversion de rôles ni d’une modification du contrat.
 
 **Le routage Cloudflare est une révision séparée**, pas une variable permettant de contourner cette livraison : `automatic_traffic_routing_enabled` est toujours `false`. Aucune API LB, pool, DNS ou routage n’est utilisée. Aucun failback automatique. Aucun périmètre Planipret, Avastatistic, PBX/legacy Lemtel, FusionPBX ou téléphonie n’est touché.
 
@@ -15,7 +15,7 @@ Le contrat et les guards de [PR234](CURRENT_AUTOMATIC_FAILOVER_GATES.md) sont **
 | Artefact | Responsabilité maximale |
 |---|---|
 | `lemtel-failover-arbiter-worker.mjs` | Worker sans dépendance ; HTTP de statut/boîte à commande, observation L7 et machine de fencing uniquement après toutes les gates. |
-| `lemtel-ha-hostinger-failover-agent.sh` | Agent root-only ; preflight local ou collecte d’une commande, HMAC, échéance, ledger one-time et guard PR234 en lecture seule. |
+| `lemtel-ha-hostinger-failover-agent.sh` | Agent root-only ; preflight local ou collecte d’une commande, HMAC, échéance, ledger one-time et persistance root-only du reçu de fencing vérifié. |
 | `.service` / `.timer` | Modèles non installés et non activés ; aucun auto-installeur et aucune section d’activation. |
 | `scripts/lemtel-failover-execution-protocol.test.mjs` | Tests Node et contrôles de texte ; KV, horloge et HTTP simulés, aucun appel externe. |
 
@@ -52,7 +52,7 @@ La signature est HMAC-SHA256 en hexadécimal minuscule, sous `DRILL_APPROVAL_SEC
 
 **KV n’est pas un verrou transactionnel, ne fournit ni CAS ni garantie de lecture globale immédiate.** Le verrou d’isolate du Worker évite seulement un chevauchement local. La production exige une revue et une preuve d’un exécuteur réellement sérialisé, avec persistence cohérente ; si une primitive de verrouillage forte est nécessaire, elle doit faire l’objet d’une révision avant autorisation. Ne jamais remplir l’accusé ou signer le reçu pour masquer cette limitation. Le ledger atomique local de l’agent empêche une seconde consommation du même incident, mais ne remplace pas la sérialisation du fencing côté Worker.
 
-Après revue du code, choix d’une sérialisation sûre, configuration sécurisée, preflight et préparation des procédures de récupération, **un drill destructif reste la dernière gate**, supervisée et autorisée séparément. La réception d’un reçu n’autorise dans cet artefact que le chemin de fencing et la commande de readiness : elle ne rend pas les flags PR234 positifs et n’autorise pas une promotion, un runtime ou du trafic automatiques.
+Après revue du code, choix d’une sérialisation sûre, configuration sécurisée, preflight et préparation des procédures de récupération, **un drill destructif reste la dernière gate**, supervisée et autorisée séparément. Le reçu ne déverrouille jamais Cloudflare/DNS, un failback ou une nouvelle émission : seule la chaîne locale explicitement configurée peut consommer une commande valide une fois.
 
 ## Écriture planifiée du Worker et endpoints
 
@@ -75,16 +75,16 @@ Une intention destructive est persistée **avant** chaque POST fournisseur. Une 
 3. **Fencing graceful** : intention persistée puis une action DO `shutdown` ; l’action et son propriétaire sont validés.
 4. **Délai puis hard fence** : polling de l’action et de la puissance. `power_off` seulement si le writer n’a pas été confirmé éteint et après le délai graceful ; jamais sur une réponse provider ambiguë.
 5. **Polling terminal** : action `completed` et droplet `off`, avec deux confirmations espacées. Une nouvelle vérification terminale est exigée juste avant l’émission ; un retour à `active` bloque.
-6. **Reçu de fence signé** : incident, writer, droplet configuré, action, état `off`, confirmations et timestamp liés sous HMAC, contexte `lemtel-fence-receipt-v1`. Ce reçu n’est **pas** une substitution à l’attestation GPG hors bande exigée par PR234.
-7. **Commande `promotion`** : enveloppe signée, contexte `lemtel-promotion-command-v1`, avec `incident_id`, nonce, rôles, `issued_at`, `expires_at` et reçu signé. Le nom décrit la phase visée ; **ce n’est pas une instruction permettant une promotion effective dans l’agent actuel**.
-8. **Hostinger : guards seulement** : vérification cryptographique, échéance, correspondance du writer et claim durable de l’incident, puis guard local PR234. Si succès : `manual_promotion_action_required`. Si échec/crash : incident quand même consommé, `blocked`, revue humaine. Aucune promotion effective.
-9. **Séquence future hors de cet artefact** : promotion manuelle distinctement autorisée, preuve signée de writer unique, guard PR234 post-promotion, démarrage runtime distinctement autorisé ; ensuite seulement éventuelle révision de routage Cloudflare, drill de trafic/retry et procédure de reverse failback. Ne jamais enchaîner ces actions depuis cet agent.
+6. **Reçu de fence HMAC** : incident, writer, droplet configuré, action, état `off`, confirmations et timestamp sont liés sous HMAC, contexte `lemtel-fence-receipt-v1`.
+7. **Commande `promotion`** : enveloppe HMAC, contexte `lemtel-promotion-command-v1`, avec `incident_id`, nonce, rôles, `issued_at`, `expires_at` et reçu de fencing HMAC.
+8. **Hostinger : persistance puis exécution contrôlée** : l’agent valide les deux HMAC, l’échéance et le writer, crée un ledger durable à usage unique, puis persiste le reçu sous `/var/lib/lemtel-ha/current-topology-evidence/do-writer-fence-receipt.state` (root `0600`) avant l’attestation locale du runtime. En `review`, il s’arrête sur `manual_promotion_action_required`. En `execute`, uniquement après l’accusé explicite de configuration, il appelle les scripts locaux de promotion puis de runtime ; chaque action exige ce reçu root-only, l’incident exact et ses propres gates PostgreSQL/Storage.
+9. **Routage et failback** : l’agent ne modifie jamais Cloudflare/DNS. Le routage reste la responsabilité du Load Balancer Cloudflare, après sa configuration et son drill. Le failback automatique reste interdit.
 
-La boîte à commande marque l’intention de livraison avant réponse et ne réémet pas automatiquement. La consommation one-time est garantie localement par un fichier `.consumed` créé atomiquement avec `O_EXCL`/`O_NOFOLLOW` et synchronisé sur disque **avant le guard**. Une livraison perdue, une réponse réseau incertaine ou une expiration demande une intervention humaine, pas une nouvelle commande sur le même incident.
+La boîte à commande marque l’intention de livraison avant réponse et ne réémet pas automatiquement. La consommation one-time est garantie localement par un fichier `.consumed` créé atomiquement avec `O_EXCL`/`O_NOFOLLOW` et synchronisé sur disque **avant l’attestation locale du runtime**. Une livraison perdue, une réponse réseau incertaine ou une expiration demande une intervention humaine, pas une nouvelle commande sur le même incident.
 
 ## Agent root-only et preflight
 
-L’agent nécessite Linux, Bash, `/usr/bin/python3` standard (mode isolé `-I`), et les dépendances de lecture des guards PR234. Il ne s’installe et ne se lance jamais lui-même. Gate d’entrée exacte : `LEMTEL_HA_EXECUTE=run_hostinger_failover_agent` et `LEMTEL_HA_ROLE=hostinger_standby`, avec UID root. Aucune valeur de mode ou de secret héritée du processus n’est utilisée comme configuration.
+L’agent nécessite Linux, Bash, `/usr/bin/python3` standard (mode isolé `-I`) et les outils locaux de vérification PostgreSQL/Storage. Il ne s’installe et ne se lance jamais lui-même. Gate d’entrée exacte : `LEMTEL_HA_EXECUTE=run_hostinger_failover_agent` et `LEMTEL_HA_ROLE=hostinger_standby`, avec UID root. Aucune valeur de mode ou de secret héritée du processus n’est utilisée comme configuration.
 
 Le seul fichier chargé est `/etc/lemtel-ha/failover-agent.env`, propriétaire root, fichier régulier `0600`, sans symlink, dans une chaîne de répertoires root non inscriptibles par groupe/autres. Parsing strict de lignes littérales `KEY=value` : pas de `source`, `eval`, expansion, quotes, variable inconnue ou doublon. Clés autorisées :
 
@@ -94,11 +94,11 @@ Le seul fichier chargé est `/etc/lemtel-ha/failover-agent.env`, propriétaire r
 | `ARBITER_URL` | Origine HTTPS sans credentials, query, fragment ou autre chemin ; seule route distante `/agent/command`, pas de redirection/proxy. |
 | `AGENT_SHARED_SECRET` | Même secret que le Worker, jamais en argument CLI ou en sortie. |
 | `DO_WRITER_DROPLET_ID` | Writer attendu ; doit correspondre au reçu signé. |
-| `LEMTEL_HA_LOCAL_POSTGRES_CONTAINER` | Container standby local à inspecter par PR234, pas une cible distante. |
+| `LEMTEL_HA_LOCAL_POSTGRES_CONTAINER` | Container PostgreSQL standby local utilisé par l’attestation de promotion, jamais une cible distante. |
 
-Le chemin de guard fixe est `/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-auto-promotion-guard.sh`, root `0755` dans une chaîne de répertoires non inscriptibles par d’autres utilisateurs. Le ledger privé est `/var/lib/lemtel-ha/failover-agent` (`0700`, fichiers `0600`). L’installation de ces chemins n’est pas effectuée par cette livraison.
+Les scripts fixes de stage, promotion et démarrage runtime sont sous `/opt/lemtel-ha/automatic-failover/`, root `0750` et dans une chaîne de répertoires non inscriptibles par d’autres utilisateurs. Le ledger privé est `/var/lib/lemtel-ha/failover-agent` (`0700`, fichiers `0600`) et le reçu de fencing validé est conservé dans `current-topology-evidence` (`0700`, fichier `0600`). L’installation de ces chemins n’est pas effectuée par cette livraison.
 
-`preflight` est le mode par défaut : contrôles root/gate/rôle, fichier et configuration, chemin de guard ; **aucune requête réseau, aucun fichier d’incident créé et aucun guard exécuté**. Un preflight en disabled sort `blocked`, jamais « prêt pour promotion ». Un preflight positif ne vérifie ni la connectivité ni les secrets distants ni les preuves de PR234.
+`preflight` est le mode par défaut : contrôles root/gate/rôle, fichier, configuration et chemins locaux ; **aucune requête réseau, aucun fichier d’incident créé et aucune promotion**. Un preflight en disabled sort `blocked`, jamais « prêt pour promotion ». Un preflight positif ne vérifie ni la connectivité ni les secrets distants ni les preuves de drill.
 
 Exemple d’invocation **uniquement sur une installation locale revue, pour lecture**, sans secret sur la ligne de commande :
 
@@ -108,7 +108,7 @@ sudo env LEMTEL_HA_EXECUTE=run_hostinger_failover_agent \
   /usr/bin/bash /opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-failover-agent.sh preflight
 ```
 
-Le mode explicite `poll` n’exécute qu’un appel authentifié à l’arbitre. Le guard PR234 conserve ses exigences : attestation GPG fournisseur hors bande, incident concordant, recovery/streaming, stage chiffré arrêté et absence de listener public. L’agent ne fabrique ni attestation, ni promotion state, ni preuve de writer unique. Il masque les sorties du guard et toutes les exceptions réseau/config pour éviter une fuite de secrets.
+Le mode explicite `poll` n’exécute qu’un appel authentifié à l’arbitre. Les actions locales de promotion/runtime exigent le reçu HMAC déjà vérifié et persisté, le même incident, recovery/streaming, stage chiffré arrêté, intégrité Storage et absence de listener PostgreSQL public. L’agent ne fabrique ni preuve de fournisseur, ni état de promotion, ni preuve de writer unique ; il ne conserve que les champs validés du reçu émis par l’arbitre. Il masque les sorties des scripts locaux et toutes les exceptions réseau/config pour éviter une fuite de secrets.
 
 ## Validation locale livrée
 

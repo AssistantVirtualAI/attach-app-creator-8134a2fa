@@ -108,6 +108,22 @@ Deno.serve(async (req) => {
     return json({ sync, report: await report(admin, start, end) });
   }
 
+  if (action === "test_send") {
+    const start = monthStart(now.getUTCFullYear(), now.getUTCMonth());
+    const end = monthStart(now.getUTCFullYear(), now.getUTCMonth() + 1);
+    const rep = await report(admin, start, end);
+    const to = RECIPIENTS[0];
+    try {
+      const r = await sendTemplateEmail("planipret-monthly-billing", to, {
+        templateData: { report: rep },
+        idempotencyKey: `billing-test-${Date.now()}`,
+      });
+      return json({ test: true, sent: r.sent, reason: r.sent ? undefined : r.reason });
+    } catch (e) {
+      return json({ test: true, sent: false, reason: (e as any)?.code ?? "error" }, 502);
+    }
+  }
+
   // monthly: previous month
   const start = monthStart(now.getUTCFullYear(), now.getUTCMonth() - 1);
   const end = monthStart(now.getUTCFullYear(), now.getUTCMonth());

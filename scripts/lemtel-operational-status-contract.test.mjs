@@ -52,6 +52,8 @@ test('operational status has its own immutable offline deployment package', () =
   }
   assert.match(deploymentManifest.forbidden_actions.join(' '), /hostinger_start_or_rebuild/);
   assert.match(deploymentManifest.forbidden_actions.join(' '), /automatic_promotion/);
+  assert.ok(!deploymentManifest.sources.some((entry) => entry.path.includes('0017_lemtel_traffic_samples')));
+  assert.ok(!deploymentManifest.required_preconditions.includes('approved_lemtel_traffic_samples_schema_write'));
 });
 
 test('operational status schema is Lemtel-only and denies browser table access', () => {

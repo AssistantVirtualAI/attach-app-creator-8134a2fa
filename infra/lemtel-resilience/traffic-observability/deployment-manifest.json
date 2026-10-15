@@ -1,0 +1,114 @@
+{
+  "package_version": "lemtel_traffic_observability_deployment_v1",
+  "scope": "offline_transactional_lemtel_traffic_observability_package",
+  "deployment_authorized": false,
+  "activation_authorized": false,
+  "collector_timer_enable_authorized": false,
+  "sources": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0017_lemtel_traffic_samples.sql",
+      "sha256": "4b49f8c0692295094033bc0f46dc470a87f876092492c6f8a7f7743768be0947"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/migrations/lemtel-traffic-manifest.json",
+      "sha256": "91299ed91f97751461f683a53b8e7a8e008d071275ef781a09112c52ef078ccf"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.ts",
+      "sha256": "62908084ed504ac312e25a408e6a263f93bf62064eff90dc0df68c4f95b30c9e"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/manifest.json",
+      "sha256": "8527408f59085ff606ca2b3180f5ea01dcf511f727516bc013d227d0b3a7bc1c"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/lemtel-traffic-collect.sh",
+      "sha256": "282cc7c32fadf9c2cca5ed42aafc6cfe438fa77e1253663b748fcd24af5c27f6"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/lemtel-traffic-timer-enable.sh",
+      "sha256": "ac88320e62ccbee78575f01bbb6b3aa76ed1c92f7260ff81c7be824ae8df92da"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
+      "sha256": "09634032de24b6becf254eb6ff3215c28f72749df8bc71f4dc931c1e83ef7a60"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
+      "sha256": "69b299e9ded89b65752f5f19a9a06a665db3bac970575d7efe4fb2f58c5aa295"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/LemtelTrafficPanel.tsx",
+      "sha256": "8a8d8a5af4da5feada36965fd088a1459ecf91681cb1e7f6f0fecf82e38f89cd"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/LemtelOperationalStatus.tsx",
+      "sha256": "d60c2f116141c1fac06edf6a229a8d6d26194d76498a5c9fbf73dcaf6616b110"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/lemtelHostedApi.ts",
+      "sha256": "26d85d9505eacef43b041425ecb8a59281e2bd5e7e2b488256209ea324ed66d4"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/lemtelI18n.ts",
+      "sha256": "d74dd2bf2733bc4fc44edee1add3b561cac3e95474099bd23f6f05fd639da8b3"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/README.md",
+      "sha256": "c544ae150b98ca8787de32a724340006be1e54d51b9f3e6d0a705b44cdc1e0f9"
+    }
+  ],
+  "validation_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.test.ts",
+      "sha256": "91922056dbd973c368ffbbacd8cca3627dd303c73700127216d5546b6503820c"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/traffic.test.ts",
+      "sha256": "e33de81c243f6fc14896f7c375f48e6b9c8d8d2b493359f7191c70a6f9a99ed5"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/__tests__/LemtelTrafficObservability.test.tsx",
+      "sha256": "bee1ae957b8df25697c29b07f54b958b7590328b37093af0a1c7f93061403671"
+    },
+    {
+      "path": "scripts/lemtel-traffic-observability-contract.test.mjs",
+      "sha256": "f13a820d39deb1939b549af83dab51f8751d1a656033fff89098e6df7f4fa266"
+    }
+  ],
+  "external_router_configuration": {
+    "managed_in_repository": false,
+    "route": "lemtel-traffic-ingest",
+    "verify_jwt": false,
+    "route_specific_only": true,
+    "hmac_required": true,
+    "access_logs_permitted": false,
+    "configuration_status": "external_router_configuration_required_before_activation"
+  },
+  "required_preconditions": [
+    "approved_transactional_schema_edge_router_package",
+    "external_router_route_specific_verify_jwt_false_only_for_lemtel_traffic_ingest",
+    "strict_hmac_sha256_required_for_lemtel_traffic_ingest",
+    "gateway_proxy_edge_access_logs_disabled_for_lemtel_traffic_ingest",
+    "root_only_collector_configuration_verified",
+    "synthetic_hmac_and_platform_admin_rbac_tests",
+    "explicit_separate_collector_activation_approval"
+  ],
+  "activation_sequence": [
+    "review_transactional_package",
+    "apply_approved_schema_and_edge_route_bundle",
+    "verify_route_specific_jwt_bypass_hmac_and_access_log_prohibition",
+    "install_root_only_collector_configuration",
+    "explicitly_enable_each_collector"
+  ],
+  "explicitly_excluded": [
+    "global_jwt_bypass",
+    "gateway_proxy_edge_access_logs",
+    "planipret_import",
+    "pbx_or_sip_change",
+    "ip_or_source_url_collection",
+    "automatic_failover",
+    "automatic_collector_activation",
+    "external_provider_or_topology_mutation"
+  ]
+}

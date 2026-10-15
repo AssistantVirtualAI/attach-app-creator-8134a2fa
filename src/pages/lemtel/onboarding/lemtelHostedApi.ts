@@ -218,6 +218,27 @@ export type LemtelOperationalTrendSample = {
   standby: "hostinger_streaming_standby" | "hostinger_fenced_rebuild_required" | "unknown";
 };
 
+export type LemtelTrafficNodeRole = "do_writer" | "hostinger_standby";
+export type LemtelTrafficSample = {
+  observedAt: string;
+  periodSeconds: number;
+  rxBytes: number;
+  txBytes: number;
+  tcpEstablished: number;
+};
+export type LemtelTrafficRoleTrend = {
+  nodeRole: LemtelTrafficNodeRole;
+  collectorState: "collecting" | "pending";
+  latest?: LemtelTrafficSample;
+  samples: LemtelTrafficSample[];
+};
+export type LemtelTrafficTrend = {
+  windowStart: string;
+  windowEnd: string;
+  bucketSeconds: number;
+  roles: LemtelTrafficRoleTrend[];
+};
+
 export function buildCreateOrganizationBody(input: {
   displayName: string;
   slug: string;
@@ -290,6 +311,7 @@ export const portalApi = {
   getConfig: () => invoke<PortalConfig>("lemtel-onboarding-admin", { action: "get_config" }),
   getOperationalStatus: () => invoke<LemtelOperationalStatus>("lemtel-onboarding-admin", { action: "get_operational_status" }),
   getOperationalTrend: () => invoke<{ samples: LemtelOperationalTrendSample[] }>("lemtel-onboarding-admin", { action: "get_operational_trend" }),
+  getTrafficTrend: () => invoke<LemtelTrafficTrend>("lemtel-onboarding-admin", { action: "get_traffic_trend" }),
   listPeople: (organizationId: string) => invoke<{ people: PortalPerson[] }>("lemtel-onboarding-admin", { action: "list_people", organizationId }),
   listInvitations: (organizationId: string) => invoke<{ invitations: PortalInvitation[] }>("lemtel-onboarding-admin", { action: "list_invitations", organizationId }),
   listActivity: (organizationId: string) => invoke<{ events: PortalActivity[] }>("lemtel-onboarding-admin", { action: "list_activity", organizationId }),

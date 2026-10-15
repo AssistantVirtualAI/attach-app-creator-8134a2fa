@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_email_onboarding_portal_admin_v11",
+  "package_version": "lemtel_email_onboarding_portal_admin_v12",
   "scope": "offline_function_source_only",
   "deployment_authorized": false,
   "client_cutover_authorized": false,
@@ -28,7 +28,8 @@
     "organization_soft_archive",
     "platform_administrator_list",
     "platform_administrator_grant_with_server_audit",
-    "platform_administrator_revoke_with_last_admin_protection"
+    "platform_administrator_revoke_with_last_admin_protection",
+    "authenticated_platform_traffic_trend_read"
   ],
   "explicitly_excluded": [
     "planipret_import",
@@ -82,6 +83,8 @@
     "synthetic_owner_transfer_and_domain_reactivation_rbac_test",
     "approved_lemtel_client_session_controls_migration",
     "approved_lemtel_organization_lifecycle_migration",
-    "approved_lemtel_platform_administrator_audit_migration"
+    "approved_lemtel_platform_administrator_audit_migration",
+    "approved_lemtel_traffic_samples_migration",
+    "synthetic_platform_admin_traffic_trend_rbac_test"
   ]
 }

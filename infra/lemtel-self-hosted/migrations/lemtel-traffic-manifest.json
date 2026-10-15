@@ -1,0 +1,59 @@
+{
+  "package_version": "lemtel_traffic_schema_edge_prerequisite_v1",
+  "scope": "offline_lemtel_traffic_schema_and_edge_prerequisite",
+  "deployment_authorized": false,
+  "activation_authorized": false,
+  "schema_apply_authorized": false,
+  "migration_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0017_lemtel_traffic_samples.sql",
+      "sha256": "4b49f8c0692295094033bc0f46dc470a87f876092492c6f8a7f7743768be0947"
+    }
+  ],
+  "edge_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.ts",
+      "sha256": "62908084ed504ac312e25a408e6a263f93bf62064eff90dc0df68c4f95b30c9e"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/manifest.json",
+      "sha256": "8527408f59085ff606ca2b3180f5ea01dcf511f727516bc013d227d0b3a7bc1c"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
+      "sha256": "09634032de24b6becf254eb6ff3215c28f72749df8bc71f4dc931c1e83ef7a60"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
+      "sha256": "69b299e9ded89b65752f5f19a9a06a665db3bac970575d7efe4fb2f58c5aa295"
+    }
+  ],
+  "required_baseline_migration": "0016_lemtel_platform_administrator_audit.sql",
+  "external_router_configuration": {
+    "managed_in_repository": false,
+    "route": "lemtel-traffic-ingest",
+    "verify_jwt": false,
+    "route_specific_only": true,
+    "hmac_required": true,
+    "access_logs_permitted": false,
+    "configuration_status": "external_router_configuration_required_before_activation"
+  },
+  "required_preconditions": [
+    "approved_transactional_schema_edge_router_package",
+    "external_router_route_specific_verify_jwt_false_only_for_lemtel_traffic_ingest",
+    "strict_hmac_sha256_required_for_lemtel_traffic_ingest",
+    "gateway_proxy_edge_access_logs_disabled_for_lemtel_traffic_ingest",
+    "root_only_collector_configuration_verified",
+    "synthetic_hmac_and_platform_admin_rbac_tests",
+    "explicit_separate_collector_activation_approval"
+  ],
+  "explicitly_excluded": [
+    "global_jwt_bypass",
+    "access_logging_on_ingress_route",
+    "planipret_import",
+    "pbx_or_sip_change",
+    "source_network_identifier_collection",
+    "automatic_failover",
+    "automatic_collector_activation"
+  ]
+}

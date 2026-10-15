@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Cloud, Database, HardDrive, RefreshCw, Route, Server, ShieldCheck, Smartphone, WifiOff } from "lucide-react";
-import { LemtelError, portalApi, type LemtelOperationalStatus, type LemtelOperationalTrendSample, type PortalConfig } from "./lemtelHostedApi";
+import { LemtelError, portalApi, type LemtelOperationalStatus, type LemtelOperationalTrendSample, type LemtelTrafficTrend, type PortalConfig } from "./lemtelHostedApi";
 import type { LemtelDict, Lang } from "./lemtelI18n";
+import LemtelTrafficPanel from "./LemtelTrafficPanel";
 
 type Props = { t: LemtelDict; lang: Lang; config: PortalConfig; readonly: boolean };
 type Health = LemtelOperationalStatus["overall"];
@@ -76,18 +77,28 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
   const [data, setData] = useState<LemtelOperationalStatus | null>(null);
   const [trend, setTrend] = useState<LemtelOperationalTrendSample[] | null>(null);
   const [loading, setLoading] = useState(!readonly);
+  const [traffic, setTraffic] = useState<LemtelTrafficTrend | null>(null);
+  const [trafficLoading, setTrafficLoading] = useState(!readonly);
+  const [trafficUnavailable, setTrafficUnavailable] = useState(readonly);
   const [error, setError] = useState<"not_allowed" | "unavailable" | null>(null);
 
   const refresh = useCallback(async () => {
-    if (readonly) { setData(null); setError("unavailable"); setLoading(false); return; }
+    if (readonly) { setData(null); setTraffic(null); setTrafficUnavailable(true); setTrafficLoading(false); setError("unavailable"); setLoading(false); return; }
     setLoading(true); setError(null);
+    setTraffic(null); setTrafficLoading(true); setTrafficUnavailable(false);
+    // Failure is not an empty/provisioning result, and health reads never gate traffic reads.
+    const trafficRequest = (async () => {
+      try { setTraffic(await portalApi.getTrafficTrend()); }
+      catch { setTraffic(null); setTrafficUnavailable(true); }
+      finally { setTrafficLoading(false); }
+    })();
     try {
       setData(await portalApi.getOperationalStatus());
       const history = await portalApi.getOperationalTrend().catch(() => ({ samples: [] }));
       setTrend(history.samples);
     } catch (cause) {
       setError(cause instanceof LemtelError && cause.key === "not_allowed" ? "not_allowed" : "unavailable");
-    } finally { setLoading(false); }
+    } finally { await trafficRequest; setLoading(false); }
   }, [readonly]);
 
   useEffect(() => {
@@ -129,8 +140,10 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4"><div><div className="flex items-center gap-2"><Activity className="w-5 h-5" style={{ color: "hsl(var(--lt-cyan))" }} /><h2 className="font-semibold">{lang === "fr" ? "Tendance de disponibilité" : "Availability trend"}</h2></div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "Échantillons de santé redigés publiés par le writer, sans adresses ni secrets." : "Redacted health samples published by the writer, without addresses or secrets."}</p></div><span className={`lt-chip ${sampleCount > 0 ? "lt-chip-cyan" : "lt-chip-warn"}`}>{sampleCount} {lang === "fr" ? "échantillon(s)" : "sample(s)"}</span></div>
         <AvailabilityChart samples={trend ?? []} lang={lang} />
       </div>
-      <div className="lt-card p-5 space-y-4"><div><div className="text-sm lt-ink-2">{lang === "fr" ? "Santé observée" : "Observed health"}</div><div className="text-3xl font-semibold mt-1">{sampleCount ? `${healthySamples}/${sampleCount}` : "—"}</div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "échantillons sains" : "healthy samples"}</p></div><div className="pt-3 border-t" style={{ borderColor: "hsl(var(--lt-border))" }}><div className="text-sm font-medium">{lang === "fr" ? "Trafic serveur" : "Server traffic"}</div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "Aucun collecteur de trafic n’est encore provisionné : aucun chiffre n’est inventé." : "No traffic collector is provisioned yet: no numbers are fabricated."}</p><span className="lt-chip lt-chip-warn mt-2">{lang === "fr" ? "Non collecté" : "Not collected"}</span></div></div>
+      <div className="lt-card p-5 space-y-4"><div><div className="text-sm lt-ink-2">{lang === "fr" ? "Santé observée" : "Observed health"}</div><div className="text-3xl font-semibold mt-1">{sampleCount ? `${healthySamples}/${sampleCount}` : "—"}</div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "échantillons sains" : "healthy samples"}</p></div></div>
     </section>
+
+    <LemtelTrafficPanel t={t} lang={lang} trend={traffic} loading={trafficLoading} unavailable={trafficUnavailable} />
 
     <section className="grid xl:grid-cols-[1.25fr_.75fr] gap-5">
       <div className="lt-card p-5">

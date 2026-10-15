@@ -1,0 +1,20 @@
+{
+  "package_version": "lemtel_traffic_ingest_v1",
+  "scope": "offline_function_source_only",
+  "deployment_authorized": false,
+  "collector_activation_authorized": false,
+  "verify_jwt": false,
+  "authentication": "strict_hmac_sha256_exact_compact_body",
+  "signature_header": "X-Lemtel-Traffic-Signature",
+  "cors": "no_allow_origin_no_reflection_origin_requests_denied",
+  "success_status": 204,
+  "response_body": "none",
+  "runtime_requirements": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "LEMTEL_TRAFFIC_COLLECTOR_SECRET"],
+  "secret_format": "64_lowercase_hex_characters_32_random_bytes_as_utf8_hmac_key_no_value_in_bundle",
+  "envelope_fields": ["nodeRole", "observedAt", "periodSeconds", "rxBytes", "txBytes", "tcpEstablished"],
+  "node_roles": ["do_writer", "hostinger_standby"],
+  "bounds": {"max_body_bytes": 512, "past_skew_seconds": 180, "future_skew_seconds": 120, "period_seconds": [30, 300], "byte_delta": [0, 1000000000000], "tcp_established": [0, 1000000]},
+  "migration": "infra/lemtel-self-hosted/migrations/0017_lemtel_traffic_samples.sql",
+  "test": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.test.ts",
+  "prerequisites": ["approved_transactional_schema_edge_router_package", "route_specific_jwt_bypass_not_global", "gateway_access_logs_disabled_for_ingress", "root_only_collector_config", "synthetic_hmac_and_platform_admin_rbac_tests", "separate_activation_approval"]
+}

@@ -218,6 +218,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, domain, count: numbers.length, numbers });
     }
 
+    if (action === "sms_inventory") {
+      const r = await nsFetch(`/domains/${encodeURIComponent(domain)}/smsnumbers`);
+      const list = Array.isArray(r.data) ? r.data : (r.data?.smsnumbers ?? []);
+      return jsonResponse({ success: r.ok, status: r.status, count: list.length, numbers: list });
+    }
+
     if (action === "assign") {
       const { phone_number, extension } = payload ?? {};
       if (!phone_number || !extension) {

@@ -46,9 +46,23 @@ else
   trap - EXIT
   receipt_state='registered'
 fi
+previous_receipt='none'
 if [ -e "$current_digest_file" ]; then
+  [ -f "$current_digest_file" ] || fail current_receipt_type_invalid
   current_digest="$(tr -d '[:space:]' < "$current_digest_file")"
-  [ "$current_digest" = "$expected_direct_sha" ] || fail artifact_receipt_conflict
+  [[ "$current_digest" =~ ^[a-f0-9]{64}$ ]] || fail current_receipt_digest_invalid
+  if [ "$current_digest" != "$expected_direct_sha" ]; then
+    current_artifact="$artifact_dir/$current_digest.tgz"
+    [ -f "$current_artifact" ] || fail current_artifact_missing
+    [ "$(sha256sum "$current_artifact" | awk '{print $1}')" = "$current_digest" ] || fail current_artifact_digest_mismatch
+    history_dir="$artifact_dir/history"
+    install -d -o root -g root -m 0700 "$history_dir"
+    previous_tmp="$(mktemp "$history_dir/.previous.XXXXXX")"
+    printf '%s\n' "$current_digest" > "$previous_tmp"
+    chmod 0600 "$previous_tmp"
+    mv -- "$previous_tmp" "$history_dir/$(date -u +%Y%m%dT%H%M%SZ)-current.sha256"
+    previous_receipt='preserved'
+  fi
 fi
 current_digest_tmp="$(mktemp "$artifact_dir/.current.XXXXXX")"
 printf '%s\n' "$expected_direct_sha" > "$current_digest_tmp"
@@ -58,6 +72,7 @@ printf 'hostinger_direct_envelope_receipt_format=lemtel_hostinger_direct_envelop
 printf 'standby=hostinger_private_standby\n'
 printf 'runtime_stage_existing_verified=true\n'
 printf 'artifact_receipt=%s\n' "$receipt_state"
+printf 'previous_artifact_receipt=%s\n' "$previous_receipt"
 printf 'artifact_digest_verified=true\n'
 printf 'runtime_started=false\n'
 printf 'public_listener_enabled=false\n'

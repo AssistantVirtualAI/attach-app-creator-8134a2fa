@@ -34,3 +34,24 @@ test('portal labels every telephony capability as not provisioned and names the 
   assert.match(docs, /informations fournisseur approuvées par Kenny\/Phil/);
   assert.match(docs, /Aucune capacité ne peut évoluer vers une configuration active/);
 });
+
+
+test('telephony preparation stores only a server-owned review marker and never provisions telephony', () => {
+  const schema = readFileSync(resolve(repo, 'infra/lemtel-self-hosted/migrations/0018_lemtel_telephony_preparation_governance.sql'), 'utf8');
+  const manifest = JSON.parse(readFileSync(resolve(repo, 'infra/lemtel-self-hosted/migrations/lemtel-telephony-preparation-manifest.json'), 'utf8'));
+  const client = readFileSync(resolve(repo, 'src/pages/lemtel/onboarding/lemtelHostedApi.ts'), 'utf8');
+  assert.match(schema, /lemtel_telephony_preparation_states/);
+  assert.match(schema, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(schema, /REVOKE ALL ON TABLE public\.lemtel_telephony_preparation_states FROM PUBLIC, anon, authenticated/);
+  assert.match(schema, /state = 'review_ready'/);
+  assert.match(schema, /lemtel_set_telephony_preparation_state/);
+  assert.match(edgeSource, /set_telephony_preparation_state/);
+  assert.match(edgeSource, /TELEPHONY_CAPABILITY_KEYS/);
+  assert.match(edgeSource, /activeOrganization\(admin, request\.organizationId\)/);
+  assert.match(client, /write: true/);
+  assert.match(uiSource, /Mark review ready/);
+  assert.match(uiSource, /does not change any provider/);
+  assert.equal(manifest.activation_authorized, false);
+  assert.ok(manifest.explicitly_excluded.includes('provider_pbx_sip_wss_turn_telephony_configuration_write'));
+  assert.doesNotMatch(schema, /(?:Deno\.env|fetch\(|provider_|sip_password|wss:|turn:|telephone_number)/i);
+});

@@ -192,6 +192,14 @@ export type PortalTelephonyCapability = {
   activationRequirementEn: string;
   status: "not_provisioned";
 };
+/** A server-owned preparation marker; it is never PBX/provider configuration. */
+export type PortalTelephonyPreparationState = "not_started" | "review_ready";
+export type PortalTelephonyPreparation = {
+  capabilityKey: string;
+  state: "review_ready";
+  revision: number;
+  updatedAt: string;
+};
 export type OperationalHealth = "healthy" | "degraded" | "unknown";
 export type LemtelOperationalStatus = {
   telemetry: "live" | "not_configured";
@@ -295,6 +303,10 @@ export function buildReactivateDomainBody(organizationId: string, domainId: stri
   return { action: "reactivate_domain" as const, organizationId, domainId };
 }
 
+export function buildSetTelephonyPreparationStateBody(organizationId: string, capabilityKey: string, state: PortalTelephonyPreparationState) {
+  return { action: "set_telephony_preparation_state" as const, organizationId, capabilityKey, state };
+}
+
 export function buildSetClientSessionAccessBody(organizationId: string, recipientUserId: string, clientKind: "mobile" | "desktop" | "client", accessState: "active" | "revoked") {
   return { action: "set_client_session_access" as const, organizationId, recipientUserId, clientKind, accessState };
 }
@@ -317,7 +329,10 @@ export const portalApi = {
   listActivity: (organizationId: string) => invoke<{ events: PortalActivity[] }>("lemtel-onboarding-admin", { action: "list_activity", organizationId }),
   listDomains: (organizationId: string) => invoke<{ domains: PortalDomain[] }>("lemtel-onboarding-admin", { action: "list_domains", organizationId }),
   listClientConnections: (organizationId: string) => invoke<{ connections: PortalClientConnection[] }>("lemtel-onboarding-admin", { action: "list_client_connections", organizationId }),
-  getTelephonyReadiness: (organizationId: string) => invoke<{ capabilities: PortalTelephonyCapability[] }>("lemtel-onboarding-admin", { action: "get_telephony_readiness", organizationId }),
+  getTelephonyReadiness: (organizationId: string) => invoke<{ capabilities: PortalTelephonyCapability[]; preparations: PortalTelephonyPreparation[] }>("lemtel-onboarding-admin", { action: "get_telephony_readiness", organizationId }),
+  listTelephonyPreparationStates: (organizationId: string) => invoke<{ preparations: PortalTelephonyPreparation[] }>("lemtel-onboarding-admin", { action: "list_telephony_preparation_states", organizationId }),
+  setTelephonyPreparationState: (organizationId: string, capabilityKey: string, state: PortalTelephonyPreparationState) =>
+    invoke<{ ok: true; preparation: { capabilityKey: string; state: PortalTelephonyPreparationState; revision: number; updatedAt?: string } }>("lemtel-onboarding-admin", buildSetTelephonyPreparationStateBody(organizationId, capabilityKey, state), { write: true }),
   createOrganization: (input: Parameters<typeof buildCreateOrganizationBody>[0]) =>
     invoke<{ ok: true; organization: { id: string } }>("lemtel-onboarding-admin", buildCreateOrganizationBody(input), { write: true }),
   provisionUsers: (organizationId: string, users: ProvisionedUser[]) =>

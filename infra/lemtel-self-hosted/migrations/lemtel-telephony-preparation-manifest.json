@@ -1,0 +1,46 @@
+{
+  "package_version": "lemtel_telephony_preparation_schema_edge_prerequisite_v1",
+  "scope": "offline_lemtel_telephony_preparation_schema_and_edge_prerequisite",
+  "deployment_authorized": false,
+  "activation_authorized": false,
+  "schema_apply_authorized": false,
+  "migration_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0018_lemtel_telephony_preparation_governance.sql",
+      "sha256": "0ed364dfcdd225b7c9119d3e0758cca77fd9f25309ba5e5de89eb39f960584fd"
+    }
+  ],
+  "edge_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
+      "sha256": "dbccd26868765e3b281a57f3554d9affec3b386b69c5bb209e2bbee042ba6c3d"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts",
+      "sha256": "507cee0ff049bbef4c27e09a0123a4f1182bfecaa9b2de12ade1eaa2cbbe391d"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
+      "sha256": "4c3befc66a00655df895e44b94d62579a40c36b56f7162ef7ec35a01c4222ee8"
+    }
+  ],
+  "required_baseline_migration": "0017_lemtel_traffic_samples.sql",
+  "required_preconditions": [
+    "approved_lemtel_telephony_preparation_governance_schema_write",
+    "synthetic_telephony_preparation_tenant_rbac_test",
+    "approved_edge_deployment"
+  ],
+  "explicitly_excluded": [
+    "planipret_import",
+    "avastatistic_import",
+    "fusionpbx",
+    "provider_connection",
+    "provider_pbx_sip_wss_turn_telephony_configuration_write",
+    "telephony_secret_storage",
+    "telephone_number_storage",
+    "call_media_message_storage",
+    "automatic_failover",
+    "automatic_promotion",
+    "automatic_dns_change"
+  ]
+}

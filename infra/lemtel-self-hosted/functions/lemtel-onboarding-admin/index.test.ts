@@ -78,6 +78,20 @@ Deno.test("organization workspace updates and archives use strict, confirmed bod
   assertEquals(validateBody({ action: "archive_organization", organizationId, confirmation: "DELETE" }), { error: "archive_confirmation_required", status: 400 });
 });
 
+Deno.test("telephony preparation transitions require exact catalog-scoped, bounded bodies", () => {
+  const organizationId = "11111111-1111-4111-8111-111111111111";
+  assertEquals(validateBody({ action: "list_telephony_preparation_states", organizationId }), { action: "list_telephony_preparation_states", organizationId });
+  assertEquals(validateBody({ action: "set_telephony_preparation_state", organizationId, capabilityKey: "extensions", state: "review_ready" }), {
+    action: "set_telephony_preparation_state", organizationId, capabilityKey: "extensions", state: "review_ready",
+  });
+  assertEquals(validateBody({ action: "set_telephony_preparation_state", organizationId, capabilityKey: "extensions", state: "not_started" }), {
+    action: "set_telephony_preparation_state", organizationId, capabilityKey: "extensions", state: "not_started",
+  });
+  assertEquals(validateBody({ action: "set_telephony_preparation_state", organizationId, capabilityKey: "unknown_capability", state: "review_ready" }), { error: "invalid_telephony_capability", status: 400 });
+  assertEquals(validateBody({ action: "set_telephony_preparation_state", organizationId, capabilityKey: "extensions", state: "active" }), { error: "invalid_telephony_preparation_state", status: 400 });
+  assertEquals(validateBody({ action: "set_telephony_preparation_state", organizationId, capabilityKey: "extensions", state: "review_ready", ignored: true }), { error: "invalid_body", status: 400 });
+});
+
 Deno.test("operational status accepts only the exact platform read action", () => {
   assertEquals(validateBody({ action: "get_operational_status" }), { action: "get_operational_status" });
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });

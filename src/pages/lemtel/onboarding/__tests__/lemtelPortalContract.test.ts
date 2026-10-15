@@ -152,6 +152,17 @@ describe("Lemtel portal contract", () => {
     });
   });
 
+  it("exposes every telephony control-plane domain through dedicated catalog navigation", () => {
+    const app = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
+    const control = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelTelephonyControl.tsx"), "utf8");
+    expect(app).toContain('path={`${BASE}/telephony/*`}');
+    expect(app).toContain('basePath={`${BASE}/telephony`}');
+    ["Inventaire téléphonie", "Routage et IVR", "Centre d’appels", "Médias et analytique", "Communications", "Supervision", "Administration téléphonie"].forEach((label) => expect(control).toContain(label));
+    expect(control).toContain('SECTION_KEYS');
+    expect(control).toContain('portalApi.getTelephonyReadiness');
+    expect(control).toContain('Non provisionné');
+  });
+
   it("uses absolute fallback routes so malformed operations URLs cannot recurse", () => {
     const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
     expect(source).toContain('path={`${BASE}/operations/*`} element={<Navigate to={`${BASE}/operations`} replace />}');

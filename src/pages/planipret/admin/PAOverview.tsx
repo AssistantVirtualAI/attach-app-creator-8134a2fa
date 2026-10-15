@@ -14,6 +14,7 @@ import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import AvaElevenLabsOverviewCard from "@/components/planipret/admin/ava/AvaElevenLabsOverviewCard";
+import BillingServicesCard from "@/components/planipret/admin/BillingServicesCard";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 
 const ACCENT = "#2E9BDC";
@@ -558,6 +559,8 @@ export default function PAOverview() {
       </div>
 
 
+
+      <BillingServicesCard />
 
       {/* Engagement strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -54,7 +54,7 @@ const MonthlyBilling = ({ report }: { report?: any }) => {
             <table width="100%" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse' }}>
               <thead><tr>
                 <th style={th}>Service</th><th style={th}>Existants</th><th style={th}>Ajoutés</th><th style={th}>Total</th>
-                <th style={th}>11,99 $/mois</th><th style={th}>Activation (100 $)</th>
+                <th style={th}>Mensuel (premier gratuit)</th><th style={th}>Activation (100 $)</th>
               </tr></thead>
               <tbody>
                 {r.services.map((s: any) => (

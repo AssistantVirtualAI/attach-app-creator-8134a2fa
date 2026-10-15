@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "sms_inventory") {
-      const r = await nsFetch(`/domains/${encodeURIComponent(domain)}/smsnumbers`);
+      const r = await nsFetch(`/domains/${encodeURIComponent(domain)}/smsnumbers?limit=1000`);
       const list = Array.isArray(r.data) ? r.data : (r.data?.smsnumbers ?? []);
       return jsonResponse({ success: r.ok, status: r.status, count: list.length, numbers: list });
     }

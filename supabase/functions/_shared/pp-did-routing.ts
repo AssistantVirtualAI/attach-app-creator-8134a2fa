@@ -75,7 +75,7 @@ export function routingSnapshotOf(raw: any) {
 }
 
 /** Charge utile SÛRE : refuse toute écriture sans destination explicite. */
-export function safeDidPayload(extension: string, domain: string, current: any) {
+export function safeDidPayload(extension: string, domain: string, current: any, description?: string) {
   const ext = String(extension ?? "").trim();
   if (!/^[0-9]{2,10}$/.test(ext)) throw new Error(`extension invalide: "${extension}"`);
   const cur = one(current) ?? {};
@@ -85,7 +85,10 @@ export function safeDidPayload(extension: string, domain: string, current: any) 
     "dial-rule-translation-destination-user": ext,
     "dial-rule-translation-destination-host": domain,
     "dial-rule-translation-source-name": "[*]",
-    ...(cur["dial-rule-description"] ? { "dial-rule-description": cur["dial-rule-description"] } : {}),
+    ...(description
+      ? { "dial-rule-description": description.slice(0, 80) }
+      : cur["dial-rule-description"] && !/^AVAILABLE/i.test(String(cur["dial-rule-description"]))
+        ? { "dial-rule-description": cur["dial-rule-description"] } : {}),
     enabled: "yes",
   };
 }
@@ -121,11 +124,12 @@ export async function assignDidToExtension(
   domain: string,
   rawNumber: string,
   extension: string,
+  description?: string,
 ): Promise<DidWriteResult> {
   const pn = pbxNumberId(rawNumber);
   const ext = String(extension ?? "").trim();
   const current = await nsCall(pnPath(domain, pn));
-  const payload = safeDidPayload(ext, domain, current.data);
+  const payload = safeDidPayload(ext, domain, current.data, description);
   const write = await nsCall(pnPath(domain, pn), { method: "PUT", body: JSON.stringify(payload) });
   const live = await readDidRouting(domain, pn, ext);
   const verified = live.destination_user === ext && live.dial_rule_parameter === `user_${ext}`;
@@ -208,4 +212,15 @@ export async function listLiveDids(domain: string): Promise<Map<string, string>>
     map.set(pn, destinationUserOf(row) ?? "");
   }
   return map;
+}
+
+/** Route the texting side of a number to one extension (NS smsnumbers), then read back. */
+export async function assignSmsNumber(domain: string, rawNumber: string, extension: string | null) {
+  const pn = pbxNumberId(rawNumber);
+  const path = `/domains/${encodeURIComponent(domain)}/smsnumbers/${pn}`;
+  const body = extension ? { application: "user", dest: extension } : { application: "available", dest: "" };
+  const w = await nsCall(path, { method: "PUT", body: JSON.stringify(body) });
+  const r = await nsCall(path);
+  const live = Array.isArray(r.data) ? r.data[0] : r.data;
+  return { ok: (extension ? String(live?.dest ?? "") === extension : String(live?.application ?? "") === "available"), write_status: w.status };
 }

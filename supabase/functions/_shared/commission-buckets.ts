@@ -169,9 +169,27 @@ export async function ensureBuckets(admin: any, kind: BucketKind): Promise<{ fre
 export async function readBuckets(admin: any, kind: BucketKind, years: number[]): Promise<Record<string, unknown>[] | null> {
   const { data: meta } = await admin.from(TABLE).select("bucket_key").eq("bucket_key", `meta:${kind}`).maybeSingle();
   if (!meta) return null;
-  const { data, error } = await admin.from(TABLE).select("rows").eq("kind", kind).in("fiscal_year", years);
-  if (error) throw new Error(error.message);
+  // Small slices keep peak memory low (one huge response = 3 copies in RAM).
+  const { data: keys, error: kErr } = await admin.from(TABLE).select("bucket_key,row_count").eq("kind", kind).in("fiscal_year", years);
+  if (kErr) throw new Error(kErr.message);
   const out: Record<string, unknown>[] = [];
-  for (const b of (data ?? []) as any[]) out.push(...unpack(Array.isArray(b.rows) ? b.rows : [], COLS[kind]));
+  const cols = COLS[kind];
+  let batch: string[] = [], size = 0;
+  const flush = async () => {
+    if (!batch.length) return;
+    const { data, error } = await admin.from(TABLE).select("rows").in("bucket_key", batch);
+    if (error) throw new Error(error.message);
+    for (const b of (data ?? []) as any[]) {
+      const rows = Array.isArray(b.rows) ? b.rows : [];
+      for (const a of rows) { const o: Record<string, unknown> = {}; for (let i = 0; i < cols.length; i++) o[cols[i]] = a?.[i] ?? null; out.push(o); }
+      b.rows = null;
+    }
+    batch = []; size = 0;
+  };
+  for (const k of (keys ?? []) as any[]) {
+    batch.push(k.bucket_key); size += Number(k.row_count ?? 0);
+    if (size >= 3000) await flush();
+  }
+  await flush();
   return out;
 }

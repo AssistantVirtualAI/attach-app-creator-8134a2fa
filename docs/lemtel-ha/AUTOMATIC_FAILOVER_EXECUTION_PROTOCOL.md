@@ -2,7 +2,9 @@
 
 ## État de livraison : aucune bascule automatisée maintenant
 
-**Ces fichiers ne sont ni déployés, ni installés, ni activés. Aucun secret, aucune configuration de production et aucun drill de production ne sont appliqués par cette livraison.** Le Worker est fermé par défaut ; l’agent ne peut jamais effectuer une promotion effective, même avec une commande valide. Le résultat maximal de l’agent est `manual_promotion_action_required`.
+**Cette livraison ne déploie, n’installe et n’active rien. Aucun secret, aucune configuration de production et aucun drill de production ne sont appliqués.** Le Worker est fermé par défaut. L’agent exige ses propres gates ; en mode `review`, son résultat maximal est `manual_promotion_action_required`. Le chemin `execute` exige une autorisation distincte et toutes les preuves locales.
+
+Le [bootstrap scellé](SEALED_ARBITER_BOOTSTRAP.md) ajoute uniquement une fenêtre transitoire `bootstrap`, sans observation, fencing ou commande. **La configuration active doit désormais provenir du payload chiffré accepté**, pas des anciens bindings opérationnels. Retour obligatoire à `disabled` après injection ; l’active reste bloqué sans toutes les gates et le drill signé. Aucune modification du runtime existant n’est effectuée ici.
 
 Un **agent installé en `disabled` n’est pas une activation** : il sort `blocked` (code `78`), sans lecture de commande distante, sans guard, sans promotion ni démarrage runtime. L’absence de `FAILOVER_MODE` a le même effet. Les unités sont des modèles **non installés**, sans section `[Install]` et sans lien à une cible de démarrage. Un démarrage explicite du timer ne serait pas une autorisation de promotion.
 
@@ -19,14 +21,16 @@ Le contrat de [gates actuelles](CURRENT_AUTOMATIC_FAILOVER_GATES.md) conserve to
 | `.service` / `.timer` | Modèles non installés et non activés ; aucun auto-installeur et aucune section d’activation. |
 | `scripts/lemtel-failover-execution-protocol.test.mjs` | Tests Node et contrôles de texte ; KV, horloge et HTTP simulés, aucun appel externe. |
 
-## Bindings et secrets du Worker — uniquement des noms, aucune valeur
+## Configuration du Worker — uniquement des noms, aucune valeur
 
-L’absence d’un seul prérequis en mode actif retourne/stocke `blocked`, **avant toute requête de santé ou de fournisseur et avant toute livraison de commande**. Un autre mode retourne/stocke `disabled_or_dry_run` ; le dry-run ne contacte pas non plus les fournisseurs.
+L’absence d’un seul prérequis en mode actif retourne/stocke `blocked`, **avant toute requête de santé ou de fournisseur et avant toute livraison de commande**. Les modes désactivés/inconnus retournent `disabled_or_dry_run` sans aucune lecture/écriture KV. Le mode `bootstrap` n’autorise que les deux endpoints de configuration décrits dans la documentation scellée ; son cron reste sans effet.
+
+Dans la liste ci-dessous, **seuls `FAILOVER_MODE`, `STATE` et `CONFIG_REVISION` sont des bindings runtime**. Les autres noms sont les champs obligatoires de `configuration` dans le payload protégé, sans fallback sur des bindings en clair. Les trois secrets runtime de scellement et le JWK public sont décrits dans [SEALED_ARBITER_BOOTSTRAP.md](SEALED_ARBITER_BOOTSTRAP.md).
 
 | Nom | Rôle / validation |
 |---|---|
-| `FAILOVER_MODE` | Seule valeur permettant de considérer une exécution : `active`. Absent, `disabled`, `dry_run` ou toute autre valeur : aucune action. |
-| `STATE` | Binding Workers KV avec `get` et `put` ; états, incident, commande et reçu de drill. Une panne de KV bloque. |
+| `FAILOVER_MODE` | `active` peut considérer une exécution seulement après déchiffrement et toutes les gates. `bootstrap` : injection uniquement. Absent, `disabled`, `dry_run` ou valeur inconnue : aucune action. |
+| `STATE` | Binding Workers KV avec `get` et `put` ; config, incident/commande et drill intégralement chiffrés, statuts et marqueurs one-use redacted. Une panne de KV bloque. |
 | `DO_API_TOKEN` | Secret fournisseur limité au writer et aux lectures/actions de puissance nécessaires. Au moins 32 caractères, jamais retourné ou journalisé. |
 | `DO_WRITER_DROPLET_ID` | Identifiant du seul writer DO autorisé. Les réponses d’action et de puissance doivent correspondre exactement. Aucune valeur intégrée au source. |
 | `DO_API_BASE_URL` | URL HTTPS de l’API DO, terminée par le chemin `/v2`, fournie hors code. Pas de credentials, query, fragment ou redirection. |
@@ -44,7 +48,7 @@ L’absence d’un seul prérequis en mode actif retourne/stocke `blocked`, **av
 
 ### Dernière gate : autorisation signée après drill destructif
 
-Même avec `FAILOVER_MODE=active` et toutes les variables présentes, le Worker reste bloqué sans reçu signé valide sous la clé KV `lemtel_failover_execution_v1:production-drill`.
+Même avec `FAILOVER_MODE=active` et un bootstrap scellé valide et non expiré, le Worker reste bloqué sans reçu signé valide sous la clé KV `lemtel_failover_execution_v1:production-drill`. **Ce reçu doit désormais être stocké dans un record AES-256-GCM de kind `drill`**, avec la clé runtime de scellement ; un ancien reçu en clair est refusé. Le contrôleur ne signe ni ne fabrique le drill.
 
 Ce reçu est une enveloppe `{payload, signature}`. Le payload comporte `format=lemtel_production_destructive_drill_v1`, `config_revision`, `writer_role=do_writer`, `target_role=hostinger_standby`, `writer_droplet_id`, `destructive_drill_validated`, `serialized_execution_verified`, `validated_at` et `expires_at`. Les deux validations doivent être booléennes positives, la révision et le writer doivent correspondre, les timestamps sont des secondes Unix entières, la validité maximale est de 24 heures. **Aucun reçu signé n’est fourni ici.**
 
@@ -60,11 +64,13 @@ La configuration Workers et son cron doivent être préparés dans une étape s�
 
 | Entrée | Effet limité |
 |---|---|
+| `GET /.well-known/lemtel-failover-bootstrap-key` | Seulement en mode bootstrap : JWK public et métadonnées non sensibles ; sinon `404`. |
+| `POST /.well-known/lemtel-failover-bootstrap` | Seulement en mode bootstrap : HMAC, RSA-OAEP/SHA-256 + AES-GCM, nonce/révision one-use, échéances et validation complète ; aucun changement de mode ni commande. |
 | `GET /healthz`, `GET /status` | État de sécurité sans secrets, IDs fournisseur ou commande. Pas un signal autorisant le routage. |
 | `GET /agent/command` | Nécessite toutes les gates et `Authorization: Bearer` sous le secret partagé ; ne livre qu’une commande disponible et non expirée. |
 | Autres méthodes/chemins en actif | Refus ; aucun endpoint permettant de lancer un incident ou de réinitialiser un fence. |
 
-Les clés KV `lemtel_failover_execution_v1:status` et `lemtel_failover_execution_v1:incident` sont écrites par la machine ; l’incident conserve la révision, les compteurs, phases, intentions/actions et éventuellement une enveloppe de commande. Le statut public ne contient que des états de sécurité. En mode désactivé, seul le statut peut être écrit ; l’incident existant n’est pas effacé ni réarmé.
+Les clés KV `lemtel_failover_execution_v1:status` et `lemtel_failover_execution_v1:incident` sont écrites par la machine active ; **l’incident entier est chiffré AES-256-GCM**, y compris révision, compteurs, phases, intentions/actions et éventuellement commande/reçu. Le statut public est reconstruit sur allowlist et ne contient que des états de sécurité. En mode désactivé, **rien n’est lu ni écrit** ; l’incident existant n’est pas effacé ni réarmé. La commande authentifiée conserve son reçu liant l’identité writer conformément au contrat de l’agent ; aucun secret/token/URL de configuration n’est retourné.
 
 Une intention destructive est persistée **avant** chaque POST fournisseur. Une intention retrouvée après interruption, un résultat inconnu, un état terminal ambigu, un timeout ou une phase inconnue bloque durablement l’incident ; aucune relance implicite du POST. La remise en état exige une procédure humaine distincte avec preuves fraîches, pas une suppression opportuniste du KV ou du ledger.
 
@@ -114,7 +120,8 @@ Le mode explicite `poll` n’exécute qu’un appel authentifié à l’arbitre.
 
 ```bash
 bash -n infra/lemtel-resilience/automatic-failover/lemtel-ha-hostinger-failover-agent.sh
-node --test scripts/lemtel-failover-execution-protocol.test.mjs
+node --check infra/lemtel-resilience/automatic-failover/lemtel-failover-arbiter-worker.mjs
+node --test scripts/lemtel-failover-arbiter.test.mjs scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs
 node --test scripts/lemtel-current-topology-failover-gate.test.mjs scripts/lemtel-current-topology-failover-guards.test.mjs
 git diff --check
 ```

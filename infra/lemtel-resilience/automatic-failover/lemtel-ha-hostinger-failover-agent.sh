@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Prepared, NOT installed: only polls the arbiter and runs a PR234 readiness guard.
-# The default preflight is read-only and makes no network request.
+# Prepared, NOT installed: validates a signed arbiter command for the current
+# DO writer -> Hostinger private standby topology. Default review mode never
+# promotes or starts runtime; execute mode requires an exact root-only config.
 set +x
 set -euo pipefail
 umask 077
@@ -33,7 +34,10 @@ import urllib.request
 
 CONFIG = '/etc/lemtel-ha/failover-agent.env'
 STATE = '/var/lib/lemtel-ha/failover-agent'
+STAGE_ATTEST = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-stage-attest.sh'
 GUARD = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-auto-promotion-guard.sh'
+PROMOTION = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-promote.sh'
+RUNTIME = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-runtime-start.sh'
 MAX_BODY = 65536
 
 class Blocked(Exception):
@@ -68,7 +72,8 @@ def load_config():
     if len(text) > MAX_BODY:
         deny('configuration_too_large')
     allowed = {'FAILOVER_MODE', 'ARBITER_URL', 'AGENT_SHARED_SECRET',
-               'DO_WRITER_DROPLET_ID', 'LEMTEL_HA_LOCAL_POSTGRES_CONTAINER'}
+               'DO_WRITER_DROPLET_ID', 'LEMTEL_HA_LOCAL_POSTGRES_CONTAINER',
+               'PROMOTION_EXECUTION_MODE', 'EXECUTION_ACK'}
     values = {}
     for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith('#'):
@@ -92,7 +97,16 @@ def load_config():
         deny('expected_writer_binding_required')
     if not re.fullmatch(r'[a-zA-Z0-9_.-]+', values.get('LEMTEL_HA_LOCAL_POSTGRES_CONTAINER', '')):
         deny('local_standby_container_required')
+    mode = values.get('PROMOTION_EXECUTION_MODE', 'review')
+    if mode not in ('review', 'execute'):
+        deny('promotion_execution_mode_invalid')
+    if mode == 'execute' and values.get('EXECUTION_ACK') != 'I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER':
+        deny('automatic_execution_acknowledgement_required')
+    secure_path(STAGE_ATTEST, 0o750)
     secure_path(GUARD, 0o755)
+    secure_path(PROMOTION, 0o750)
+    secure_path(RUNTIME, 0o750)
+    values['PROMOTION_EXECUTION_MODE'] = mode
     return values
 
 def unique_object(pairs):
@@ -204,6 +218,41 @@ def claim_incident(incident_id):
     sync_directory(STATE)
     return path
 
+def write_ledger(path, state):
+    secure_path(path, 0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
+    with os.fdopen(fd, 'w') as handle:
+        handle.write('status=' + state + '\n')
+        handle.flush()
+        os.fsync(handle.fileno())
+    sync_directory(STATE)
+
+def execution_environment(incident, cfg, phase):
+    env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C',
+           'LEMTEL_HA_INCIDENT_ID': incident}
+    if phase == 'stage_attest':
+        env.update({'LEMTEL_HA_EXECUTE': 'attest_current_topology_hostinger_runtime_stage',
+                    'LEMTEL_HA_ROLE': 'hostinger_private_hot_standby'})
+    elif phase == 'guard':
+        env.update({'LEMTEL_HA_GUARD_MODE': 'verify_hostinger_promotion_readiness_only',
+                    'LEMTEL_HA_ROLE': 'hostinger_private_hot_standby',
+                    'LEMTEL_HA_LOCAL_POSTGRES_CONTAINER': cfg['LEMTEL_HA_LOCAL_POSTGRES_CONTAINER']})
+    elif phase == 'promotion':
+        env.update({'LEMTEL_HA_EXECUTE': 'promote_current_topology_hostinger_after_verified_fence',
+                    'LEMTEL_HA_ROLE': 'hostinger_private_hot_standby',
+                    'LEMTEL_HA_ALLOW_CURRENT_TOPOLOGY_PROMOTION': 'I_UNDERSTAND_HOSTINGER_BECOMES_THE_ONLY_WRITER'})
+    else:
+        env.update({'LEMTEL_HA_EXECUTE': 'activate_current_topology_hostinger_runtime',
+                    'LEMTEL_HA_ROLE': 'hostinger_promoted_writer',
+                    'LEMTEL_HA_ALLOW_CURRENT_TOPOLOGY_RUNTIME_START': 'I_UNDERSTAND_PROMOTED_HOSTINGER_RUNTIME_WILL_START'})
+    return env
+
+def run_local(path, env, timeout):
+    result = subprocess.run(['/usr/bin/bash', path], env=env, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            timeout=timeout, check=False)
+    return result.returncode == 0
+
 def main():
     cfg = load_config()
     if sys.argv[1] == 'preflight':
@@ -219,26 +268,26 @@ def main():
         deny('no_valid_command')
     incident = validate_command(reply['command'], cfg)
     ledger = claim_incident(incident)
-    # Compatibility boundary only: PR234 calls this same standby hostinger_private_hot_standby.
-    # Do not invoke its post-promotion guard: no actual promotion exists in this phase.
-    guard_env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C',
-                 'LEMTEL_HA_GUARD_MODE': 'verify_hostinger_promotion_readiness_only',
-                 'LEMTEL_HA_ROLE': 'hostinger_private_hot_standby',
-                 'LEMTEL_HA_INCIDENT_ID': incident,
-                 'LEMTEL_HA_LOCAL_POSTGRES_CONTAINER': cfg['LEMTEL_HA_LOCAL_POSTGRES_CONTAINER']}
-    result = subprocess.run(['/usr/bin/bash', GUARD], env=guard_env, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, check=False)
-    if result.returncode != 0:
-        deny('pr234_readiness_guard_blocked_incident_consumed')
-    secure_path(ledger, 0o600)
-    fd = os.open(ledger, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
-    with os.fdopen(fd, 'w') as handle:
-        handle.write('status=manual_promotion_action_required\n')
-        handle.flush()
-        os.fsync(handle.fileno())
-    sync_directory(STATE)
-    print('hostinger_failover_agent_status=manual_promotion_action_required')
-    print('promotion_executed=false\nruntime_start_executed=false\nautomatic_traffic_routing_enabled=false')
+    if not run_local(STAGE_ATTEST, execution_environment(incident, cfg, 'stage_attest'), 45):
+        deny('runtime_stage_attestation_blocked_incident_consumed')
+    if not run_local(GUARD, execution_environment(incident, cfg, 'guard'), 30):
+        deny('promotion_readiness_guard_blocked_incident_consumed')
+    if cfg['PROMOTION_EXECUTION_MODE'] == 'review':
+        write_ledger(ledger, 'manual_promotion_action_required')
+        print('hostinger_failover_agent_status=manual_promotion_action_required')
+        print('promotion_executed=false\nruntime_start_executed=false\nautomatic_traffic_routing_enabled=false')
+        return
+    write_ledger(ledger, 'promotion_execution_started')
+    if not run_local(PROMOTION, execution_environment(incident, cfg, 'promotion'), 240):
+        write_ledger(ledger, 'promotion_execution_failed_manual_recovery_required')
+        deny('promotion_execution_failed_manual_recovery_required')
+    write_ledger(ledger, 'runtime_start_started')
+    if not run_local(RUNTIME, execution_environment(incident, cfg, 'runtime'), 180):
+        write_ledger(ledger, 'runtime_start_failed_manual_recovery_required')
+        deny('runtime_start_failed_manual_recovery_required')
+    write_ledger(ledger, 'promotion_and_runtime_completed')
+    print('hostinger_failover_agent_status=promotion_and_runtime_completed')
+    print('promotion_executed=true\nruntime_start_executed=true\nautomatic_traffic_routing_enabled=false')
 
 try:
     main()

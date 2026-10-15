@@ -1,0 +1,11 @@
+# Prepared template only: NOT installed, NOT enabled, NOT started.
+# No Install section: no automatic boot/start target is connected.
+[Unit]
+Description=Lemtel Hostinger readiness-only failover agent timer (explicit start only)
+
+[Timer]
+OnActiveSec=60s
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Persistent=false
+Unit=lemtel-ha-hostinger-failover-agent.service

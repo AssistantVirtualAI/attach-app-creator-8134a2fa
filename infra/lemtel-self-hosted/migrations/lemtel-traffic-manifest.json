@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_traffic_schema_edge_prerequisite_v1",
+  "package_version": "lemtel_traffic_schema_edge_prerequisite_v2",
   "scope": "offline_lemtel_traffic_schema_and_edge_prerequisite",
   "deployment_authorized": false,
   "activation_authorized": false,
@@ -30,19 +30,20 @@
   ],
   "required_baseline_migration": "0016_lemtel_platform_administrator_audit.sql",
   "external_router_configuration": {
-    "managed_in_repository": false,
+    "managed_in_repository": true,
+    "topology": "direct_caddy_to_edge_no_gateway",
+    "gateway_jwt_bypass": "not_applicable_no_gateway",
     "route": "lemtel-traffic-ingest",
-    "verify_jwt": false,
     "route_specific_only": true,
     "hmac_required": true,
     "access_logs_permitted": false,
-    "configuration_status": "external_router_configuration_required_before_activation"
+    "configuration_status": "separate_root_only_caddy_route_transaction_required_before_activation"
   },
   "required_preconditions": [
-    "approved_transactional_schema_edge_router_package",
-    "external_router_route_specific_verify_jwt_false_only_for_lemtel_traffic_ingest",
-    "strict_hmac_sha256_required_for_lemtel_traffic_ingest",
-    "gateway_proxy_edge_access_logs_disabled_for_lemtel_traffic_ingest",
+    "approved_transactional_schema_edge_caddy_package",
+    "direct_caddy_edge_route_hmac_only_for_lemtel_traffic_ingest",
+    "gateway_absence_or_noninterference_attested",
+    "caddy_access_logs_disabled_for_lemtel_traffic_ingest",
     "root_only_collector_configuration_verified",
     "synthetic_hmac_and_platform_admin_rbac_tests",
     "explicit_separate_collector_activation_approval"

@@ -562,7 +562,27 @@ Deno.serve(async (req) => {
 
       // Destination interne (poste 2–6 chiffres) → message de chat interne
       // NetSapiens : pas de DID requis, l'expéditeur est le poste du courtier.
-      const toDigits = String(to).replace(/\D/g, "");
+      let toDigits = String(to).replace(/\D/g, "");
+      // Fil ouvert depuis un nom de collègue (aucun chiffre) : résoudre le nom
+      // vers le poste du MÊME domaine NetSapiens, sinon erreur claire.
+      if (!toDigits) {
+        const wanted = String(to).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+        try {
+          const r = await nsFetch(`/domains/${encodeURIComponent(ctx.nsDomain)}/users?limit=1000`, { method: "GET" });
+          const list = r.ok ? await r.json().catch(() => []) : [];
+          const arr: any[] = Array.isArray(list) ? list : (list?.data ?? []);
+          const norm = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+          const hits = arr.filter((u) => {
+            const full = norm(`${u?.["name-first-name"] ?? ""} ${u?.["name-last-name"] ?? ""}`);
+            return full === wanted || norm(u?.["name-full-name"]) === wanted;
+          });
+          if (hits.length === 1) toDigits = String(hits[0]?.user ?? "").replace(/\D/g, "");
+        } catch { /* résolution best-effort */ }
+        if (!toDigits) {
+          return jsonResponse({ ok: false, error_code: "recipient_unresolved", error: `Destinataire introuvable : « ${to} ». Utilisez son poste ou son numéro.` }, 200);
+        }
+        console.info("[pp-ns-sms] recipient name resolved to extension");
+      }
       const isInternal = /^\d{2,6}$/.test(toDigits);
 
       // Resolve the sender on EVERY external SMS, then enforce that a client

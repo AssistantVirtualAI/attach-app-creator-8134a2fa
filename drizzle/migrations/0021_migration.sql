@@ -1,0 +1,1 @@
+SELECT cron.schedule('pp-billing-monthly', '0 11 1 * *', $$SELECT public.pp_run_billing_monthly();$$);

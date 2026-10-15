@@ -9,6 +9,9 @@ test('Hostinger received artifact staging is encrypted, private and dormant',()=
   assert.match(script,/age -d -i "\$age_identity"/);
   assert.match(script,/resolve_standby_postgres/);
   assert.match(script,/standby_postgres_unresolved/);
+  assert.match(script,/unexpected_direct_envelope_path/);
+  assert.match(script,/direct_envelope_sha256_mismatch/);
+  assert.match(script,/\[ \"\$direct_envelope\" = '\/tmp\/lemtel-hostinger-runtime\.age' \]/);
   assert.doesNotMatch(script,/postgres_container='lemtel-postgres-standby'/);
   assert.match(script,/docker compose --env-file/);
   assert.match(script,/work_tar=\"\$\(mktemp/);

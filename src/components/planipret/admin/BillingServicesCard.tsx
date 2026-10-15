@@ -35,7 +35,7 @@ export default function BillingServicesCard() {
         <div>
           <h2 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)" }}>Facturation du mois {month && `— ${month}`}</h2>
           <p style={{ fontSize: 11, color: "var(--pp-text-faint)" }} className="mt-0.5">
-            Existants vs ajoutés par forfait, files d'attente et IVR NetSapiens (11,99 $/mois chacun, 100 $ d'activation une seule fois). Envoyé le 1er du mois.
+            Existants vs ajoutés par forfait; files d'attente et IVR NetSapiens : le premier est gratuit, chaque service additionnel 11,99 $/mois (100 $ d'activation une seule fois à l'ajout). Envoyé le 1er du mois.
           </p>
         </div>
         <button onClick={load} disabled={loading} className="pp-btn-ghost flex items-center gap-1 text-xs" aria-label="Actualiser">

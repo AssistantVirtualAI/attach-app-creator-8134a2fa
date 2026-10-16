@@ -116,9 +116,9 @@ export default function MMessages() {
 
 
   return (
-    <div className="h-full flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
+    <div className="h-full min-h-0 flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
       <div
-        className="px-4 pt-5 pb-3"
+        className="shrink-0 px-4 pt-5 pb-3"
         style={{ background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
       >
         <h1 className="text-2xl font-bold mb-3" style={{ color: "var(--pp-text-primary)" }}>{t("messages.title")}</h1>
@@ -161,7 +161,7 @@ export default function MMessages() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {visited.has("sms") && <div className="h-full" hidden={sub !== "sms"}><SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} active={sub === "sms"} initialTo={qTo} /></div>}
         {visited.has("team") && <div className="h-full" hidden={sub !== "team"}><TeamChat profile={profile} /></div>}
         {visited.has("teams365") && <div className="h-full" hidden={sub !== "teams365"}><Teams365Panel profile={profile} /></div>}
@@ -450,7 +450,10 @@ function SmsList({ profile, openDialer, registerRefresh, active = true, initialT
   }
 
   return (
-    <div className="p-3">
+    <div
+      className="h-full min-h-0 overflow-y-auto overscroll-contain p-3"
+      style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+    >
       <div className="flex justify-end mb-2 gap-2">
         <button
           onClick={() => void load(true)}

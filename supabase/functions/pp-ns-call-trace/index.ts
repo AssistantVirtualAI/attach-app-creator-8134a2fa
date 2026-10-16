@@ -60,31 +60,34 @@ Deno.serve(async (req) => {
 
   const dom = encodeURIComponent(row.ns_domain);
   const start = new Date(row.started_at);
-  const s = new Date(start.getTime() - 120_000).toISOString().replace("T", " ").slice(0, 19);
-  const e = new Date(start.getTime() + ((row.duration_seconds ?? 0) + 180) * 1000).toISOString().replace("T", " ").slice(0, 19);
   const ids = [...new Set([row.ns_orig_callid, row.ns_term_callid, row.ns_callid, row.ns_call_id].filter(Boolean).map(String))];
   const attempts: Array<{ path: string; status: number }> = [];
   const traces: Array<{ which: number; events: unknown[] }> = [];
-  for (const [i, cid] of ids.entries()) {
-    const c = encodeURIComponent(cid);
-    const q = `start-datetime=${encodeURIComponent(s)}&end-datetime=${encodeURIComponent(e)}`;
-    const candidates = [
-      `/domains/${dom}/calls/${c}/trace?${q}`,
-      `/calltrace?callid=${c}&domain=${dom}&${q}`,
-      `/domains/${dom}/cdrs/${c}/trace`,
-      `/calls/${c}/trace?${q}`,
-    ];
-    for (const p of candidates) {
-      try {
-        const r = await nsFetch(p, { method: "GET" }, { functionName: "pp-ns-call-trace" });
-        const t = await r.text();
-        attempts.push({ path: p.replace(c, `id${i}`).replace(dom, "dom").split("?")[0], status: r.status });
-        if (r.ok && t && /SIP\/2\.0/.test(t.replace(/\\r\\n/g, "\n"))) {
-          traces.push({ which: i, events: summarize(t.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n")) });
-          break;
-        }
-      } catch { attempts.push({ path: "error", status: 0 }); }
+  const fmt = (d: Date) => d.toISOString().replace("T", " ").slice(0, 19);
+  const q = `start_time=${encodeURIComponent(fmt(new Date(start.getTime() - 120_000)))}&end_time=${encodeURIComponent(fmt(new Date(start.getTime() + ((row.duration_seconds ?? 0) + 180) * 1000)))}`;
+  const candidates: string[] = [];
+  if (row.ns_cdr_id) candidates.push(`/domains/${dom}/cdrs/${encodeURIComponent(row.ns_cdr_id)}/sipflow?type=csv`);
+  if (ids.length) {
+    for (const srv of ["core1.cluster1.ucstack.io", "core2.cluster1.ucstack.io"]) {
+      candidates.push(`/sipflow?type=csv&servers=${srv}&callids=${encodeURIComponent(ids.join(","))}&${q}`);
     }
+  }
+  for (const p of candidates) {
+    try {
+      const r = await nsFetch(p, { method: "GET" }, { functionName: "pp-ns-call-trace" });
+      let t = await r.text();
+      attempts.push({ path: p.split("?")[0].replace(dom, "dom").replace(/cdrs\/[^/]+/, "cdrs/id"), status: r.status });
+      if (!r.ok) continue;
+      try {
+        const j = JSON.parse(t);
+        const b = typeof j === "string" ? j : (j?.data ?? j?.base64 ?? j?.file ?? j?.content ?? "");
+        if (typeof b === "string" && b && !/SIP\/2\.0/.test(b)) { try { t = atob(b); } catch { t = b; } }
+        else if (typeof b === "string" && b) t = b;
+      } catch { /* raw */ }
+      t = t.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/""/g, "\"");
+      if (/SIP\/2\.0/.test(t)) { traces.push({ which: 0, events: summarize(t) }); break; }
+      attempts.push({ path: "no_sip_in_body", status: t.length });
+    } catch { attempts.push({ path: "error", status: 0 }); }
   }
   return jsonResponse({
     ok: true, extension: row.extension, direction: row.direction, duration: row.duration_seconds,

@@ -548,7 +548,7 @@ try:
     print('collector_do_active=true\ntimer_enabled=true\ntimer_active=true')
     print('config_owner=root\nconfig_mode=0600\nconfig_regular=true\nconfig_symlink=false\nconfig_links=1')
     print('route=ready\nedge_running=true\nfirst_baseline_status=baseline_pending\nmetrics_visibility=not_verified')
-        print('edge_compose_inputs_persisted=true\nrollback_backup_verified=true')
+    print('edge_compose_inputs_persisted=true\nrollback_backup_verified=true')
     for line in SCOPE:
         print(line)
 except BaseException:

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -51,6 +52,18 @@ test('new activation entry fails closed on independent operator gates before any
   assert.match(source, /pending_secret = transaction.prepare\(\)[\s\S]*transaction.apply\(pending_secret\)/u);
   assert.ok(apply.indexOf('self.create(LOCK') < apply.indexOf('self.edge_attempted = True'));
   assert.match(prepare, /secrets.token_hex\(32\)/u);
+});
+
+test('embedded Python is parsed without executing the transaction', () => {
+  const start = source.indexOf("<<'PY'\n");
+  const end = source.lastIndexOf('\nPY\n');
+  assert.ok(start >= 0 && end > start);
+  const program = source.slice(start + "<<'PY'\n".length, end + 1);
+  execFileSync('/usr/bin/python3', ['-c', 'import ast, sys; ast.parse(sys.stdin.read())'], {
+    input: program,
+    encoding: 'utf8',
+    stdio: ['pipe', 'ignore', 'pipe'],
+  });
 });
 
 test('credential handling is memory-only crypto then exactly two exclusive root-only files; no shell/argv value', () => {
@@ -200,8 +213,9 @@ test('separate source package allowlist and digests bind unchanged helpers witho
     assert.doesNotMatch(item.path, /\.sql$|\.env$|portal|config\.toml|Caddyfile|backup|traffic\.json/u);
   }
   const testSource = readFileSync(new URL(import.meta.url), 'utf8');
-  assert.doesNotMatch(testSource, /^import .*from 'node:child_process'/mu);
-  assert.doesNotMatch(testSource, /\b(?:spawnSync|execFileSync|execSync|spawn|execFile)\s*\(/u);
+  assert.match(testSource, /import \{ execFileSync \} from 'node:child_process'/u);
+  assert.match(testSource, /execFileSync\('\/usr\/bin\/python3', \['-c', 'import ast, sys; ast\.parse\(sys\.stdin\.read\(\)\)'\]/u);
+  assert.doesNotMatch(testSource, /\b(?:spawnSync|execSync|spawn|execFile)\s*\(/u);
   const staticHexLiterals = [...source.matchAll(/'([a-f0-9]{64})'/gu)].map((match) => match[1]);
   assert.deepEqual(staticHexLiterals.sort(), manifest.sources.filter((item) => item.path.endsWith('.sh') && item.path !== entry).map((item) => item.sha256).sort());
 });

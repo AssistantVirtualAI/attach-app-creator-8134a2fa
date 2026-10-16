@@ -1,0 +1,99 @@
+{
+  "package_version": "lemtel_node_status_observability_source_v1",
+  "scope": "offline_lemtel_node_status_observation_only_source_package",
+  "deployment_authorized": false,
+  "activation_authorized": false,
+  "schema_apply_authorized": false,
+  "publisher_install_authorized": false,
+  "publisher_timer_enable_authorized": false,
+  "secrets_in_bundle": false,
+  "provider_contacted": false,
+  "cloudflare_or_dns_changed": false,
+  "runtime_started": false,
+  "promotion_executed": false,
+  "fencing_executed": false,
+  "automatic_failover_enabled": false,
+  "sources": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0020_lemtel_node_status_observations.sql",
+      "sha256": "dca41b32c98520f93e6e87fa01bd92ac977c8db323649b7c5d1904e3839f6568"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/migrations/lemtel-node-status-manifest.json",
+      "sha256": "787a58168b3a0e1d9259f36e4dee04ad5272b36e85e4fb5f590db1ac54a0260a"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-status-ingest/index.ts",
+      "sha256": "2960280b644827db611008395a0165af96dbdfef2f012b5360c0d6fdd5ac2eaa"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-status-ingest/manifest.json",
+      "sha256": "923acd09e746a33e2430511d089dbf6cc71a226ecc699ff248a489f0ff0d9cc0"
+    },
+    {
+      "path": "infra/lemtel-resilience/node-status-observability/lemtel-node-status-publish.sh",
+      "sha256": "8b86841527f3218679d0ec0b9b51475878c82ad239185ab0d0031a53ea1bec1e"
+    },
+    {
+      "path": "infra/lemtel-resilience/node-status-observability/systemd/lemtel-node-status-publisher.service",
+      "sha256": "3176711d3a0aaaa9bed76bfafd7854a873bf848893bb9ef2b9c7dee2f2cbb5b6"
+    },
+    {
+      "path": "infra/lemtel-resilience/node-status-observability/systemd/lemtel-node-status-publisher.timer",
+      "sha256": "573f0cdce4b6a3d9c734b70dbf7565059f87cbfdf62c30d5b85d7e99bbbfb21b"
+    },
+    {
+      "path": "infra/lemtel-resilience/node-status-observability/README.md",
+      "sha256": "940ab4ed37e14690239938ed71015c124c52fcf470e0e129c99d28496c640e7c"
+    },
+    {
+      "path": "docs/lemtel-ha/NODE_STATUS_OBSERVABILITY_THREAT_MODEL.md",
+      "sha256": "11012f2d987613d5cf6ac343db72e7a3e551fc48f86cf6cd1883d1f335fca9d7"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
+      "sha256": "d7c9e4eca110ec0afcdcd86952e85362dfd72dfbe8f844f9329ce4df9fa1ba37"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
+      "sha256": "aab5f0fc2ceaf218f323113982a2b23bd2f1ef1ed0539c7c04ce8b2fa80951f1"
+    }
+  ],
+  "validation_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-status-ingest/index.test.ts",
+      "sha256": "a6bd4b664825534cc06e32397d07fb4e050cd1da17c7559608b24eae84176672"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/node-status.test.ts",
+      "sha256": "6b461d365992e1e8707c61d091369ac50b9101379b12fa8e3c38bb0dcbe68469"
+    },
+    {
+      "path": "scripts/lemtel-node-status-observability-contract.test.mjs",
+      "sha256": "5406f580f5ae0df1781c4fd0dd2c0587f2db23d0bf33cd7876f167cfbf4cc21b"
+    }
+  ],
+  "required_preconditions": [
+    "approved_schema_edge_route_package",
+    "route_specific_hmac_ingress_and_access_log_redaction_review",
+    "two_separate_runtime_role_secrets_created_outside_repository",
+    "root_only_configuration_review_on_each_node",
+    "synthetic_hmac_sql_rls_and_platform_admin_rbac_tests",
+    "separate_installation_activation_and_rollback_approval"
+  ],
+  "explicitly_excluded": [
+    "planipret",
+    "avastatistic",
+    "legacy_pbx",
+    "fusionpbx",
+    "telephony",
+    "provider_api_calls",
+    "remote_commands",
+    "runtime_start",
+    "promotion",
+    "routing",
+    "dns",
+    "automatic_failover",
+    "timer_enablement"
+  ]
+}

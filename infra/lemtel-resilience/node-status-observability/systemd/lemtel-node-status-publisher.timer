@@ -1,0 +1,14 @@
+# Source-only timer. It is not installed or enabled by this change.
+[Unit]
+Description=Lemtel private redacted node-status publisher interval
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=60s
+RandomizedDelaySec=10s
+AccuracySec=1s
+Persistent=false
+Unit=lemtel-node-status-publisher.service
+
+[Install]
+WantedBy=timers.target

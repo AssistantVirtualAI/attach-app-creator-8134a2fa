@@ -69,7 +69,7 @@ Après réussite, les deux entrées Compose créées par ce run restent dans `ed
 
 ## Diagnostic de phase et rollback automatique
 
-En cas de refus, l’attestation ajoute `activation_phase` : une étiquette redacted parmi `preflight`, `configuration`, `edge_recreate`, `ingress_route`, `baseline`, `timer` et `final_attestation`. Cette valeur sert uniquement à orienter une revue locale ; elle ne contient ni chemin, ni commande, ni sortie de conteneur, ni secret et ne transforme pas un refus en autorisation.
+En cas de refus, l’attestation ajoute `activation_phase` : une étiquette redacted parmi `preflight`, `configuration`, `edge_recreate`, `ingress_route`, `baseline`, `timer` et `final_attestation`. Lors d’un refus de prévol, `activation_guard` précise seulement l’une des catégories fixes suivantes : `source_integrity`, `runtime_preflight`, `edge_identity`, `compose_integrity`, `caddy_integrity`, `schema_presence`, `collector_absence`, `local_locks`, `clock_sync` ou `secret_generation`. Ces valeurs servent uniquement à orienter une revue locale ; elles ne contiennent ni chemin, ni commande, ni sortie de conteneur, ni secret et ne transforment pas un refus en autorisation.
 
 ## Rollback automatique et manuel sûr
 

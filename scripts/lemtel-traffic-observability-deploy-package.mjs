@@ -287,6 +287,8 @@ function metadata(sourceRevision, provenance) {
     personal_data_in_bundle: false,
     ip_addresses_in_bundle: false,
     traffic_content_in_bundle: false,
+    database_mutation: true,
+    database_business_data_mutation: false,
     collector_activation: false,
     collector_timer_enabled: false,
     gateway_route_changed: false,

@@ -54,6 +54,12 @@ test('Caddy anchor accepts only one non-comment canonical site declaration',()=>
   assert.match(program,/matches != 1/);
 });
 
+test('bundle verification resolves every packaged source from the supplied bundle directory',()=>{
+  assert.match(deploy,/for file in "\$\{bundle_sources\[@\]\}"; do\n    \[ -f "\$bundle\/\$file" \] && \[ ! -L "\$bundle\/\$file" \] \|\| fail bundle_file_missing\n  done/);
+  assert.match(deploy,/\[ -f "\$manifest" \] && \[ ! -L "\$manifest" \] \|\| fail bundle_file_missing/);
+  assert.doesNotMatch(deploy,/for file in "\$\{bundle_sources\[@\]\}" "\$manifest"; do\n    \[ -f "\$file" \]/);
+});
+
 test('package build is reproducible, digest-bound, L7-only, and emits a review-gated macOS launcher',()=>{
   const sandbox=mkdtempSync(resolve(tmpdir(),'lemtel-l7-ready-'));
   try {

@@ -61,7 +61,7 @@ KEY = 'LEMTEL_TRAFFIC_COLLECTOR_SECRET'
 SCHEMA_SOURCE = Path('/home/lemtelops/lemtel-traffic-observability-deployment/0017_lemtel_traffic_samples.sql')
 HELPERS = {
     'lemtel-ha-do-writer-traffic-runtime-preflight.sh': '7c3301b8b45fc684e703166f2c141e97f3e6aeebb92e60252f14fb7e2ec56744',
-    'lemtel-ha-do-writer-traffic-ingress-route-apply.sh': 'e479f553e0bbd9ff55336a123de352866be8717f48ad836b1b0233ccff7bb4c3',
+    'lemtel-ha-do-writer-traffic-ingress-route-apply.sh': 'e6862ae72055798259527a89dfa8c97118f273827fe6d0ae53ba7556ab715157',
     'lemtel-traffic-collect.sh': '282cc7c32fadf9c2cca5ed42aafc6cfe438fa77e1253663b748fcd24af5c27f6',
     'lemtel-traffic-timer-enable.sh': '1c6fb338ef29698cb90c66905415014eae63172aac3b788f498cfb2f0398ccf8',
 }
@@ -185,6 +185,47 @@ def ready_route(data):
             and re.fullmatch(r'reverse_proxy [A-Za-z0-9._-]+:[0-9]+', block[3]))
     require(text.count(INGRESS_PATH) == 1)
 
+def functions_upstream(lines):
+    # Accept one direct functions handler or one generic named matcher; exclude our exact ingress matcher.
+    target = re.compile(r'[A-Za-z0-9._-]+:[0-9]+')
+    matcher_names = set()
+    for index, line in enumerate(lines):
+        simple = re.match(r'^\s*@([A-Za-z0-9_-]+)\s+path\s+.*\/functions', line)
+        if simple:
+            matcher_names.add(simple.group(1))
+            continue
+        block = re.match(r'^\s*@([A-Za-z0-9_-]+)\s*\{\s*$', line)
+        if block:
+            for nested in lines[index + 1:]:
+                if re.match(r'^\s*}\s*$', nested):
+                    break
+                if re.match(r'^\s*path\s+.*\/functions', nested):
+                    matcher_names.add(block.group(1))
+                    break
+    candidates = []
+    for index, line in enumerate(lines):
+        handle = re.match(r'^\s*(?:handle|handle_path)\s+(.+)\{\s*$', line)
+        if handle:
+            selector = handle.group(1).strip()
+            eligible = ('/functions' in selector or (selector.startswith('@') and selector[1:] in matcher_names
+                        and selector != '@lemtel_traffic_ingest'))
+            if eligible:
+                for nested in lines[index + 1:]:
+                    if re.match(r'^\s*}\s*$', nested):
+                        break
+                    parts = nested.split()
+                    if len(parts) >= 2 and parts[0] == 'reverse_proxy' and target.fullmatch(parts[1]):
+                        candidates.append(parts[1])
+                        break
+        parts = line.split()
+        if len(parts) >= 3 and parts[0] == 'reverse_proxy':
+            if ('/functions' in parts[1] or (parts[1].startswith('@') and parts[1][1:] in matcher_names
+                                               and parts[1] != '@lemtel_traffic_ingest')):
+                if target.fullmatch(parts[2]):
+                    candidates.append(parts[2])
+    require(len(candidates) == 1)
+    return candidates[0]
+
 def anticipated_route(data, already_ready):
     # Mirror only the existing helper's prerequisites and insertion, to prove all other routes stay byte-identical.
     text = data.decode('utf-8', errors='strict')
@@ -193,18 +234,7 @@ def anticipated_route(data, already_ready):
     sites = [line for line in lines if not line.lstrip().startswith('#')
              and CANONICAL_HOST in line and re.search(r'[{]\s*$', line)]
     require(len(sites) == 1)
-    active = False
-    upstream = None
-    for line in lines:
-        if re.search(r'^\s*(handle|handle_path)\s+.*\/functions', line):
-            active = True
-            continue
-        if active and re.search(r'^\s*reverse_proxy\s+', line):
-            upstream = line.split()[1]
-            break
-        if active and re.search(r'^\s*}\s*$', line):
-            active = False
-    require(upstream is not None and re.fullmatch(r'[A-Za-z0-9._-]+:[0-9]+', upstream))
+    upstream = functions_upstream(lines)
     if already_ready:
         ready_route(data)
         return data

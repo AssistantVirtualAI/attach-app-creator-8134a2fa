@@ -16,15 +16,15 @@
   "sources": [
     {
       "path": "docs/lemtel-ha/TRAFFIC_OBSERVABILITY_ACTIVATION_TRANSACTION.md",
-      "sha256": "41cfd89c0cdf4f2e328cdf19ee7fdc131fd2c1d6aa4cdd53087e4c3f45863e27"
+      "sha256": "0484ca7542b67bc0ce4b0a6a4b046df4372449c604991a68ba6a6788897151e6"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-activation-apply.sh",
-      "sha256": "6ec961fe54540f4e2173b0181f146b01322b13f1bff0cb5f6b157608b6a97f33"
+      "sha256": "dee5c8272843c754c6b6e9516d2c6ca478ff95ee69219d2047fb9b9c528799e5"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-ingress-route-apply.sh",
-      "sha256": "e479f553e0bbd9ff55336a123de352866be8717f48ad836b1b0233ccff7bb4c3"
+      "sha256": "e6862ae72055798259527a89dfa8c97118f273827fe6d0ae53ba7556ab715157"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-runtime-preflight.sh",
@@ -44,7 +44,7 @@
     },
     {
       "path": "scripts/lemtel-traffic-activation-transaction.test.mjs",
-      "sha256": "efcba76e0095501c8684ececa2273bd38544876c752864f5822b5410e796af36"
+      "sha256": "ee96a95f2ad470878e3fd5ecd3f4df0769242081653ef9043adeae74a759c7e9"
     }
   ]
 }

@@ -63,7 +63,7 @@
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-ingress-route-apply.sh",
-      "sha256": "e479f553e0bbd9ff55336a123de352866be8717f48ad836b1b0233ccff7bb4c3"
+      "sha256": "e6862ae72055798259527a89dfa8c97118f273827fe6d0ae53ba7556ab715157"
     },
     {
       "path": "scripts/lemtel-traffic-observability-deploy-package.mjs",
@@ -93,7 +93,7 @@
     },
     {
       "path": "scripts/lemtel-traffic-ingress-route.test.mjs",
-      "sha256": "3a324e1b91b0e1257184bb4f96610e326c8a1d6c47d61ea68897cd66189f0bb8"
+      "sha256": "a218b5fdfaa326ed062d97b4faabebbdf2e4729005024a4f5f236e6f9628843d"
     },
     {
       "path": "scripts/lemtel-traffic-observability-deploy-package.test.mjs",

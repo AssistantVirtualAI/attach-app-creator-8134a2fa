@@ -74,6 +74,32 @@ test('embedded Python is parsed without executing the transaction', () => {
   });
 });
 
+test('Caddy upstream resolver accepts exactly one generic functions route across direct and named-matcher forms', () => {
+  const start = source.indexOf('def functions_upstream(lines):');
+  const end = source.indexOf('\ndef anticipated_route(', start);
+  assert.ok(start >= 0 && end > start);
+  const resolver = source.slice(start, end);
+  const program = `import re
+class Refusal(Exception): pass
+def require(condition):
+    if not condition: raise Refusal()
+${resolver}
+upstream = 'supabase-edge-functions:9000'
+fixtures = [
+    ['handle /functions/* {', '  reverse_proxy ' + upstream, '}'],
+    ['@functions path /functions/*', 'reverse_proxy @functions ' + upstream],
+    ['@functions {', '  path /functions/*', '}', 'handle @functions {', '  reverse_proxy ' + upstream, '}'],
+    ['@functions path /functions/*', 'reverse_proxy @functions ' + upstream, '@lemtel_traffic_ingest path /functions/v1/lemtel-traffic-ingest', 'handle @lemtel_traffic_ingest {', '  reverse_proxy ' + upstream, '}'],
+]
+for fixture in fixtures: assert functions_upstream(fixture) == upstream
+try:
+    functions_upstream(['handle /functions/a {', ' reverse_proxy ' + upstream, '}', 'handle /functions/b {', ' reverse_proxy ' + upstream, '}'])
+    raise AssertionError('ambiguous route accepted')
+except Refusal: pass
+`;
+  execFileSync('/usr/bin/python3', ['-c', program], { encoding: 'utf8', stdio: 'pipe' });
+});
+
 test('credential handling is memory-only crypto then exactly two exclusive root-only files; no shell/argv value', () => {
   assert.match(prepare, /require\(re.fullmatch\(r'\[a-f0-9\]\{64\}', secret\) is not None\)/u);
   assert.equal((source.match(/secrets\.token_hex\(32\)/gu) ?? []).length, 1);

@@ -127,7 +127,25 @@ export function deterministicTar(entries) {
   return Buffer.concat(chunks);
 }
 
+export function checkedOutRevision(root = ROOT) {
+  try {
+    execFileSync('git', ['-C', root, 'symbolic-ref', '-q', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    fail('source_revision_not_detached');
+  } catch (error) {
+    if (error instanceof PackageError) throw error;
+  }
+  try {
+    const revision = execFileSync('git', ['-C', root, 'rev-parse', '--verify', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    if (!SOURCE_REVISION_RE.test(revision)) fail('source_revision_metadata_unavailable');
+    return revision;
+  } catch (error) {
+    if (error instanceof PackageError) throw error;
+    fail('source_revision_metadata_unavailable');
+  }
+}
+
 export function sourceAtRevision(sourceRevision, source, root = ROOT) {
+  if (checkedOutRevision(root) !== sourceRevision) fail('source_revision_not_checked_out');
   try {
     return execFileSync('git', ['-C', root, 'show', `${sourceRevision}:${source}`], { encoding: null, stdio: ['ignore', 'pipe', 'pipe'] });
   } catch {
@@ -207,6 +225,7 @@ function validateMetadata(bytes, sourceRevision) {
 /** Testable offline sealing primitive. sourceReader must return the committed bytes for a source. */
 export function assemblePackage({ output, sourceRevision, sourceReader = sourceAtRevision }) {
   if (!SOURCE_REVISION_RE.test(sourceRevision)) fail('source_revision_invalid', false);
+  if (checkedOutRevision() !== sourceRevision) fail('source_revision_not_checked_out');
   if (existsSync(output) || existsSync(`${output}.sha256`)) fail('output_already_exists', false);
   const files = new Map();
   for (const [destination, source] of SOURCE_FILES) {

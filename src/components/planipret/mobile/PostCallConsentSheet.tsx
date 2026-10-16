@@ -20,6 +20,7 @@ import {
   clientNumberOf,
   followupIdempotencyKey,
   pickEndedCall,
+  requiresPostCallDecision,
   type ConsentCall,
   type EndedDetail,
 } from "@/lib/planipret/postCallConsent";
@@ -75,6 +76,7 @@ export default function PostCallConsentSheet() {
   const sending = useRef(false);
   const handled = useRef<Set<string>>(new Set());
   const loadingFor = useRef<Set<string>>(new Set());
+  const callRef = useRef<ConsentCall | null>(null);
 
   const reset = useCallback(() => {
     setStep("consent"); setKind(null); setDraft(""); setConfirmed(false);
@@ -135,8 +137,39 @@ export default function PostCallConsentSheet() {
       if (!picked || handled.current.has(picked.id)) return;
       handled.current.add(picked.id);
       endedAt.current = endedIso;
+      callRef.current = picked;
       setCall(picked);
       reset();
+  }, [reset]);
+
+  // Balayage de secours : l'événement « fin d'appel » peut être manqué
+  // (raccrochage distant, app en arrière-plan, dossier arrivé en retard).
+  // On relit alors les appels répondus des 12 dernières heures encore sans
+  // décision, à l'ouverture de l'app et à chaque retour au premier plan.
+  const sweepPending = useCallback(async () => {
+    if (callRef.current) return; // une feuille est déjà affichée
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return;
+    setUserId(uid);
+    const { data: prof } = await supabase
+      .from("planipret_profiles").select("id").eq("user_id", uid).maybeSingle();
+    const owners = [uid, (prof as any)?.id].filter(Boolean).map(String);
+    const since = new Date(Date.now() - 12 * 3_600_000).toISOString();
+    const { data } = await supabase
+      .from("planipret_phone_calls").select(SELECT)
+      .in("user_id", owners)
+      .is("save_consent", null)
+      .or(`ended_at.gte.${since},and(ended_at.is.null,created_at.gte.${since})`)
+      .order("created_at", { ascending: false }).limit(50);
+    const rows = (data as any as ConsentCall[]) ?? [];
+    const candidate = rows.find((r) => requiresPostCallDecision(r) && !handled.current.has(r.id));
+    if (!candidate) return;
+    handled.current.add(candidate.id);
+    endedAt.current = candidate.ended_at ?? candidate.created_at ?? null;
+    callRef.current = candidate;
+    setCall(candidate);
+    reset();
   }, [reset]);
 
   useEffect(() => {
@@ -144,7 +177,11 @@ export default function PostCallConsentSheet() {
       const detail = ((e as CustomEvent).detail ?? {}) as EndedDetail;
       void loadEndedCall(detail);
     };
+    const onResume = () => { void sweepPending(); };
+    const onVisible = () => { if (document.visibilityState === "visible") onResume(); };
     window.addEventListener("pp:call-ended", onEnded as EventListener);
+    window.addEventListener("focus", onResume);
+    document.addEventListener("visibilitychange", onVisible);
     try {
       const raw = localStorage.getItem(PENDING_KEY);
       if (raw) {
@@ -152,8 +189,13 @@ export default function PostCallConsentSheet() {
         void loadEndedCall(pending, pending.endedAt);
       }
     } catch { /* invalid local recovery state is ignored */ }
-    return () => window.removeEventListener("pp:call-ended", onEnded as EventListener);
-  }, [loadEndedCall]);
+    void sweepPending();
+    return () => {
+      window.removeEventListener("pp:call-ended", onEnded as EventListener);
+      window.removeEventListener("focus", onResume);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadEndedCall, sweepPending]);
 
   const clientNumber = useMemo(() => (call ? clientNumberOf(call) : ""), [call]);
   const [failed, setFailed] = useState(false);
@@ -169,6 +211,7 @@ export default function PostCallConsentSheet() {
     if (resolved) {
       try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
     }
+    callRef.current = null;
     setCall(null);
     reset();
     try { window.speechSynthesis?.cancel?.(); } catch { /* ignore */ }
@@ -204,6 +247,7 @@ export default function PostCallConsentSheet() {
       } else {
         toast.success("Appel conservé dans AVA, sans envoi au CRM.");
         close(true);
+        void sweepPending();
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Action impossible — rien n'a été envoyé.");
@@ -239,6 +283,7 @@ export default function PostCallConsentSheet() {
       if (!(data as any)?.ok) throw new Error(String((data as any)?.error ?? "Envoi refusé par le serveur."));
       toast.success((data as any)?.idempotent_replay ? "Déjà envoyé — aucun deuxième envoi." : "Suivi envoyé.");
       close(true);
+      void sweepPending();
     } catch (e: any) {
       toast.error(e?.message ?? "Envoi impossible. Rien n'a été envoyé.");
       sending.current = false;
@@ -290,7 +335,7 @@ export default function PostCallConsentSheet() {
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <button style={btn(kind === "sms" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("sms"); setConfirmed(false); }}>{tr("Texto", "Text")}</button>
               <button style={btn(kind === "email" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("email"); setConfirmed(false); setRecipient(""); }}>{tr("Courriel", "Email")}</button>
-               <button style={btn("rgba(255,255,255,0.14)")} onClick={() => close(true)}>{tr("Aucun", "None")}</button>
+               <button style={btn("rgba(255,255,255,0.14)")} onClick={() => { close(true); void sweepPending(); }}>{tr("Aucun", "None")}</button>
             </div>
 
             {kind && (

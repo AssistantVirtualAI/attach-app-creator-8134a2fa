@@ -308,6 +308,11 @@ Deno.serve(async (req) => {
         : "Chaîne d'appel complète et cohérente.",
     checks,
     cdr_e2e: { verdict: e2e.verdict, summary: e2e.summary, last_call_at: lastCallAt, last_maestro_push_at: lastPushAt },
+    // Admin-only, read-only: device settings with every credential-like field removed.
+    ...(body?.raw_devices === true && (wanted || wantedUser)
+      ? { device_fields: devices.map((d) => Object.fromEntries(Object.entries(d ?? {})
+          .filter(([k]) => !/pass|secret|auth|token|key/i.test(k)))) }
+      : {}),
     checked_at: new Date().toISOString(),
   });
 });

@@ -1,3 +1,4 @@
+import { queueWidgetResourceEvent } from "../_shared/maestro-widget-sync.ts";
 import { aiFetch } from "../_shared/claude-compat.ts";
 // pp-admin-transcribe — Transcribe a planipret_phone_calls row via Lovable AI.
 // Resolves a fresh recording URL, fetches the audio, and stores the transcript.
@@ -123,6 +124,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ call_id: callId, transcript }),
           });
         } catch (_) { /* best-effort */ }
+        queueWidgetResourceEvent(admin, row.user_id, "transcript_ready", callId);
         return json({ ok: true, transcript, segments: nsTx.segments, source: "ns-api" });
       }
     } catch (_) { /* fallback to audio STT below */ }
@@ -206,6 +208,8 @@ Deno.serve(async (req) => {
       })
       .eq("id", callId);
     if (sttUpErr) return json({ ok: false, error: "DB_UPDATE_FAILED", hint: sttUpErr.message }, 500);
+
+    queueWidgetResourceEvent(admin, row.user_id, "transcript_ready", callId);
 
     // Chain to Claude-powered coaching (same config as /planipret/admin) so the record is
     // instantly enriched with corrected transcript + summary + coaching + score.

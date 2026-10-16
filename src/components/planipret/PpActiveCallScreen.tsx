@@ -92,6 +92,16 @@ export default function PpActiveCallScreen({
 
   const [widgetRegistered, setWidgetRegistered] = useState(false);
   const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffState, setHandoffState] = useState<"idle" | "pending" | "done" | "failed">("idle");
+  useEffect(() => { setHandoffState("idle"); }, [snap.callId]);
+  useEffect(() => {
+    // Local termination alone is not proof that the target answered.
+  }, [snap.callState, handoffState]);
+  useEffect(() => {
+    if (handoffState !== "pending") return;
+    const timer = setTimeout(() => setHandoffState("failed"), 22000);
+    return () => clearTimeout(timer);
+  }, [handoffState]);
   useEffect(() => {
     let cancelled = false;
     setWidgetRegistered(false);
@@ -108,13 +118,13 @@ export default function PpActiveCallScreen({
   }, [snap.callState, snap.callId]);
   const handoffToWidget = async () => {
     setHandoffBusy(true);
+    setHandoffState("pending");
     try {
       const { data, error } = await supabase.functions.invoke("pp-call-handoff", {
         body: { target: "widget", ...(snap.callId ? { call_id: snap.callId } : {}) },
       });
-      if (error || !data?.ok) toast.error("Impossible de reprendre l’appel sur le widget.");
-      else toast.success("Reprise demandée sur le widget.");
-    } catch { toast.error("Impossible de reprendre l’appel sur le widget."); }
+      if (error || !data?.ok) { setHandoffState("failed"); toast.error("Échec, appel conservé"); }
+    } catch { setHandoffState("failed"); toast.error("Échec, appel conservé"); }
     finally { setHandoffBusy(false); }
   };
 
@@ -422,9 +432,9 @@ export default function PpActiveCallScreen({
 
 
         {view === "main" && widgetRegistered && (snap.callState === "active" || snap.callState === "held") && (
-          <button disabled={handoffBusy} onClick={() => void handoffToWidget()}
+          <button disabled={handoffBusy || handoffState === "pending" || handoffState === "done"} onClick={() => void handoffToWidget()}
             className="mx-5 mb-3 rounded-xl border border-white/30 px-4 py-3 text-sm text-white disabled:opacity-50">
-            {handoffBusy ? "Reprise en cours…" : "Continuer sur le widget"}
+            {handoffState === "pending" ? "Bascule en cours…" : handoffState === "done" ? "Continué sur le widget" : handoffState === "failed" ? "Échec, appel conservé" : "Continuer sur le widget"}
           </button>
         )}
 

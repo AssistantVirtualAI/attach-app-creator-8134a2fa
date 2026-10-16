@@ -102,3 +102,30 @@ export function queueWidgetCallEvent(admin: SupabaseClient, value: WidgetCallEve
   })().catch(() => console.warn("[widget-call] delivery_failed"));
   if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
 }
+
+export type WidgetResourceEvent = {
+  event: "recording_ready" | "transcript_ready" | "sms";
+  user_id: string; external_user_id: string; resource_id: string;
+  direction?: "inbound" | "outbound";
+};
+export function buildWidgetResourcePayload(value: WidgetResourceEvent, enabled = Deno.env.get("PP_WIDGET_CALL_EVENTS") === "1"): WidgetResourceEvent | null {
+  if (!enabled || !["recording_ready", "transcript_ready", "sms"].includes(value.event) ||
+    !value.user_id || !value.external_user_id || !value.resource_id ||
+    (value.event === "sms" && !["inbound", "outbound"].includes(value.direction ?? ""))) return null;
+  return { event: value.event, user_id: value.user_id, external_user_id: value.external_user_id,
+    resource_id: value.resource_id, ...(value.event === "sms" ? { direction: value.direction } : {}) };
+}
+/** Resolve either profile UUID or auth UUID without exposing message/media content. */
+export function queueWidgetResourceEvent(admin: SupabaseClient, owner: string, event: WidgetResourceEvent["event"], resourceId: string, direction?: "inbound" | "outbound") {
+  if (Deno.env.get("PP_WIDGET_CALL_EVENTS") !== "1") return;
+  const task = (async () => {
+    const { data: profile } = await admin.from("planipret_profiles")
+      .select("maestro_broker_id,extension,ns_extension").or(`user_id.eq.${owner},id.eq.${owner}`).single();
+    const payload = buildWidgetResourcePayload({ event, user_id: String(profile?.maestro_broker_id ?? ""),
+      external_user_id: String(profile?.extension || profile?.ns_extension || ""), resource_id: resourceId, direction });
+    if (!payload || shouldDebounce(`resource:${payload.user_id}:${event}:${resourceId}`)) return;
+    const cfg = await getMaestroTelecomConfig(admin);
+    if (cfg.url && cfg.key) await maestroTelecomFetch(cfg, "/sync", { method: "POST", body: payload, maxAttempts: 2, timeoutMs: 5000 });
+  })().catch(() => console.warn("[widget-resource] delivery_failed"));
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(task);
+}

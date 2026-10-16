@@ -16,11 +16,11 @@
   "sources": [
     {
       "path": "docs/lemtel-ha/TRAFFIC_OBSERVABILITY_ACTIVATION_TRANSACTION.md",
-      "sha256": "7f17d39fb4bceed0065c1254b0d62c7438d82d10366abf9e8ab7536c14b628bd"
+      "sha256": "41cfd89c0cdf4f2e328cdf19ee7fdc131fd2c1d6aa4cdd53087e4c3f45863e27"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-activation-apply.sh",
-      "sha256": "87258065424363ff6cc9e7bad2931cd4101097ce75838372fd2f653ee18ab175"
+      "sha256": "6ec961fe54540f4e2173b0181f146b01322b13f1bff0cb5f6b157608b6a97f33"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-ingress-route-apply.sh",
@@ -44,7 +44,7 @@
     },
     {
       "path": "scripts/lemtel-traffic-activation-transaction.test.mjs",
-      "sha256": "e77e2ed6d23899ac7305905f4fc7550fad6b371d30c99e39d98fcbd4bfc6509e"
+      "sha256": "efcba76e0095501c8684ececa2273bd38544876c752864f5822b5410e796af36"
     }
   ]
 }

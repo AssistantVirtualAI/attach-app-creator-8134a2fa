@@ -217,6 +217,7 @@ class Transaction:
     def __init__(self):
         # Redacted diagnostic only; never includes a path, value, command output or credential.
         self.stage = 'preflight'
+        self.guard = 'source_integrity'
         self.files = {}
         self.directories = []
         self.lock_fd = None
@@ -298,6 +299,7 @@ class Transaction:
         require(not exists(Path('/.env')))
         for name, digest in HELPERS.items():
             require(hashlib.sha256(read_protected(SOURCE / name)).hexdigest() == digest)
+        self.guard = 'runtime_preflight'
         stdout, stderr = command(['bash', str(SOURCE / 'lemtel-ha-do-writer-traffic-runtime-preflight.sh')],
                                  {'LEMTEL_HA_ROLE': 'digitalocean_writer'})
         require(not stderr)
@@ -313,6 +315,7 @@ class Transaction:
                 and fields.get('collector_timer') == 'absent'
                 and fields.get('collector_service') == 'absent')
         self.route_was_ready = fields.get('ingress_route') == 'ready'
+        self.guard = 'edge_identity'
         self.edge = container_for('supabase-edge-functions')
         self.caddy = container_for('supabase-caddy')
         self.project = label(self.edge, 'com.docker.compose.project')
@@ -322,6 +325,7 @@ class Transaction:
         require(label(self.edge, 'com.docker.compose.container-number') == '1'
                 and label(self.edge, 'com.docker.compose.oneoff') == 'False'
                 and docker_value(PRESENCE, self.edge) == '')
+        self.guard = 'compose_integrity'
         self.config_files = path_list(label(self.edge, 'com.docker.compose.project.config_files'))
         working_label = label(self.edge, 'com.docker.compose.project.working_dir')
         self.working_dir = checked_path(working_label) if working_label else self.config_files[0].parent
@@ -344,19 +348,23 @@ class Transaction:
         self.original_hash = self.initial_hash()
         require(label(self.edge, 'com.docker.compose.config-hash') == self.original_hash)
         self.verify_edge(False)
+        self.guard = 'caddy_integrity'
         self.caddyfile = mount_for(self.caddy, '/etc/caddy') / 'Caddyfile'
         self.caddy_metadata = secure_file(self.caddyfile)
         self.caddy_before = read_protected(self.caddyfile)
         self.caddy_digest = hashlib.sha256(self.caddy_before).digest()
         self.caddy_expected_digest = hashlib.sha256(anticipated_route(self.caddy_before, self.route_was_ready)).digest()
         # FS presence only: this is NOT a database verification or a migration executor.
+        self.guard = 'schema_presence'
         require(secure_file(SCHEMA_SOURCE, parents=False).st_size > 0)
         functions = mount_for(self.edge, '/home/deno/functions')
         for relative in ('lemtel-traffic-ingest/index.ts', 'lemtel-traffic-ingest/manifest.json', 'lemtel-onboarding-admin/index.ts'):
             require(secure_file(functions / relative).st_size > 0)
+        self.guard = 'collector_absence'
         for path in (CONFIG, STATE, LIB, TIMER, SERVICE, WANTS, LOCK):
             require(not exists(path))
             future_directory(path.parent)
+        self.guard = 'local_locks'
         future_directory(ROOT)
         # The existing route helper uses timestamp backups. Refuse any prior backup tree rather than risk an overwrite.
         require(not exists(ROUTE_BACKUPS))
@@ -368,9 +376,11 @@ class Transaction:
             secure_file(ROUTE_LOCK, 0o600, parents=False)
         # The helper's /var/lock must resolve to this exact local lock directory.
         require(Path('/var/lock').resolve() == ROUTE_LOCK.parent)
+        self.guard = 'clock_sync'
         synchronized, stderr = command(['timedatectl', 'show', '--property=NTPSynchronized', '--value'])
         require(not stderr and synchronized == 'yes\n')
         # Crypto failure or an unexpected format fails BEFORE creating any local file.
+        self.guard = 'secret_generation'
         secret = secrets.token_hex(32)
         require(re.fullmatch(r'[a-f0-9]{64}', secret) is not None)
         return secret
@@ -378,6 +388,7 @@ class Transaction:
     def apply(self, secret):
         # All entry gates, integrated preflight and read-only checks precede this first mutation.
         self.stage = 'configuration'
+        self.guard = 'apply'
         self.create(LOCK, b'')
         self.lock_fd = os.open(LOCK, os.O_RDWR | os.O_NOFOLLOW)
         fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -565,6 +576,7 @@ except BaseException:
     rollback_status = transaction.rollback() if transaction.files else 'not_required'
     print('traffic_activation_status=failed\nreason=activation_refused')
     print('activation_phase=' + transaction.stage)
+    print('activation_guard=' + transaction.guard)
     print('rollback_status=' + rollback_status)
     for line in SCOPE:
         print(line)

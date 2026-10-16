@@ -51,10 +51,13 @@ test('new activation entry fails closed on independent operator gates before any
   assert.doesNotMatch(prepare, /self\.(?:create|mkdir)\(|\.unlink\(|\.rmdir\(|os\.(?:replace|mkdir)\(|O_CREAT/u);
   assert.match(source, /pending_secret = transaction.prepare\(\)[\s\S]*transaction.apply\(pending_secret\)/u);
   assert.match(source, /self\.stage = 'preflight'/u);
+  const guards = ['source_integrity', 'runtime_preflight', 'edge_identity', 'compose_integrity', 'caddy_integrity', 'schema_presence', 'collector_absence', 'local_locks', 'clock_sync', 'secret_generation', 'apply'];
+  for (const guard of guards) assert.ok(source.includes(`self.guard = '${guard}'`), guard);
   for (const stage of ['configuration', 'edge_recreate', 'ingress_route', 'baseline', 'timer', 'final_attestation']) {
     assert.ok(source.includes(`self.stage = '${stage}'`), stage);
   }
   assert.match(source, /print\('activation_phase=' \+ transaction\.stage\)/u);
+  assert.match(source, /print\('activation_guard=' \+ transaction\.guard\)/u);
   assert.ok(apply.indexOf('self.create(LOCK') < apply.indexOf('self.edge_attempted = True'));
   assert.match(prepare, /secrets.token_hex\(32\)/u);
 });

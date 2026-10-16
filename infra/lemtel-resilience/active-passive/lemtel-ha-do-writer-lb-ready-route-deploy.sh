@@ -160,11 +160,12 @@ for line in lines[marker_index + 3:handler_end]:
         continue
     directives.append(stripped)
 legacy = ['root * /etc/caddy', 'rewrite * /lemtel-lb-ready', 'file_server']
-current = ['root * /etc/caddy', 'rewrite * /lemtel-lb-ready', 'header Content-Type application/json', 'file_server']
+obsolete_header_contract = ['root * /etc/caddy', 'rewrite * /lemtel-lb-ready', 'header Content-Type application/json', 'file_server']
+current = ['root * /etc/caddy', 'rewrite * /lemtel-lb-ready.json', 'file_server']
 if directives == current:
     print('current')
     sys.exit(0)
-if directives != legacy:
+if directives not in (legacy, obsolete_header_contract):
     reject()
 
 if destination != '-':
@@ -175,8 +176,7 @@ if destination != '-':
         f'{indent}@lemtel_load_balancer_ready path /lemtel-lb-ready\n',
         f'{indent}handle @lemtel_load_balancer_ready {{\n',
         f'{child}root * /etc/caddy\n',
-        f'{child}rewrite * /lemtel-lb-ready\n',
-        f'{child}header Content-Type application/json\n',
+        f'{child}rewrite * /lemtel-lb-ready.json\n',
         f'{child}file_server\n',
         f'{indent}}}\n',
     ]
@@ -283,8 +283,7 @@ if [ "$route_state" = installed ]; then
       print "  @lemtel_load_balancer_ready path /lemtel-lb-ready"
       print "  handle @lemtel_load_balancer_ready {"
       print "    root * /etc/caddy"
-      print "    rewrite * /lemtel-lb-ready"
-      print "    header Content-Type application/json"
+      print "    rewrite * /lemtel-lb-ready.json"
       print "    file_server"
       print "  }"
       next

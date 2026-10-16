@@ -16,7 +16,7 @@ const packager=readFileSync(packagePath,'utf8');
 const escaped=(value)=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
 test('L7 readiness is writer-only and exposes only the minimal healthy JSON marker',()=>{
-  for (const expected of ['digitalocean_promoted_writer','database_not_writer','database_streaming_absent','storage_attestation_stale','lemtel-ha-do-writer-storage-sync.timer','observed_at="$(date -u +%s)"','lemtel_do_writer_l7_ready_v1','"writer_role":"do_writer"','"definitive":true','"status":"healthy"','automatic_traffic_failover_enabled=false']) assert.match(refresh,new RegExp(escaped(expected)));
+  for (const expected of ['digitalocean_promoted_writer','database_not_writer','database_streaming_absent','storage_attestation_stale','lemtel-ha-do-writer-storage-sync.timer',"marker_name='lemtel-lb-ready.json'","legacy_marker_name='lemtel-lb-ready'",'observed_at="$(date -u +%s)"','lemtel_do_writer_l7_ready_v1','"writer_role":"do_writer"','"definitive":true','"status":"healthy"','automatic_traffic_failover_enabled=false']) assert.match(refresh,new RegExp(escaped(expected)));
   assert.doesNotMatch(refresh,/printf 'ready\\n'/);
   assert.doesNotMatch(refresh,/FUSIONPBX|SIP_|WSS|TURN|POSTGRES_PASSWORD|SERVICE_ROLE|Bearer/i);
   assert.match(refresh,/resolve_runtime_container/);
@@ -30,7 +30,7 @@ test('route is exact, archive-verified, transactional and does not activate Clou
   for (const expected of [
     "canonical_host='lemtel.assistantvirtualai.com'", 'index($0, canonical_host)', 'matches != 1',
     'path /lemtel-lb-ready', 'route_marker_count', 'existing_route_invalid', 'route_marker_ambiguous',
-    'route_state', 'root * /etc/caddy', 'rewrite * /lemtel-lb-ready', 'header Content-Type application/json',
+    'route_state', 'root * /etc/caddy', 'rewrite * /lemtel-lb-ready.json', 'obsolete_header_contract',
     'LEMTEL_L7_READY_ARCHIVE', 'LEMTEL_L7_READY_ARCHIVE_DIGESTS', 'archive_digest_mismatch',
     'archive_layout_invalid', 'manifest_digest_mismatch', 'sha256sum -c --status', 'tar -tzf',
     'caddy validate', 'caddy reload', 'backup_root', 'trap cleanup EXIT',
@@ -81,11 +81,15 @@ test('a strictly recognized legacy marker block is reconciled to JSON while fore
     const mode=execFileSync('python3',['-',caddyfile,canonical,marker,candidate],{input:program,encoding:'utf8'}).trim();
     assert.equal(mode,'legacy');
     const reconciled=readFileSync(candidate,'utf8');
-    assert.match(reconciled,/header Content-Type application\/json/);
+    assert.match(reconciled,/rewrite \* \/lemtel-lb-ready\.json/);
+    assert.doesNotMatch(reconciled,/header Content-Type application\/json/);
     assert.match(reconciled,/reverse_proxy \/functions\/\* supabase-kong:8000/);
     assert.equal((reconciled.match(/LEMTEL_LOAD_BALANCER_READY_V1/g)??[]).length,1);
     writeFileSync(caddyfile,reconciled);
     assert.equal(execFileSync('python3',['-',caddyfile,canonical,marker,'-'],{input:program,encoding:'utf8'}).trim(),'current');
+    writeFileSync(caddyfile,legacy.replace('    file_server','    header Content-Type application/json\n    file_server'));
+    assert.equal(execFileSync('python3',['-',caddyfile,canonical,marker,candidate],{input:program,encoding:'utf8'}).trim(),'legacy');
+    assert.match(readFileSync(candidate,'utf8'),/rewrite \* \/lemtel-lb-ready\.json/);
     writeFileSync(caddyfile,legacy.replace('file_server','respond "unexpected"'));
     assert.throws(()=>execFileSync('python3',['-',caddyfile,canonical,marker,candidate],{input:program,encoding:'utf8'}));
   } finally {

@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       } catch { /* raw */ }
       t = t.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/""/g, "\"");
       if (/SIP\/2\.0/.test(t)) { traces.push({ which: 0, events: summarize(t) }); break; }
-      attempts.push({ path: "no_sip_in_body", status: t.length });
+      attempts.push({ path: "no_sip_in_body:" + t.slice(0, 400).replace(/\d/g, "#").replace(/[A-Za-z0-9+/=]{40,}/g, "<b64>"), status: t.length });
     } catch { attempts.push({ path: "error", status: 0 }); }
   }
   return jsonResponse({

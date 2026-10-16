@@ -7,7 +7,7 @@ vi.mock("recharts", () => ({
   ResponsiveContainer: () => null, BarChart: () => null, Bar: () => null,
   XAxis: () => null, YAxis: () => null, CartesianGrid: () => null, Tooltip: () => null,
   PieChart: () => null, Pie: () => null, Cell: () => null, Legend: () => null,
-  ComposedChart: () => null, Line: () => null,
+  ComposedChart: () => null, Line: () => null, AreaChart: () => null, Area: () => null,
 }));
 import PendingCommissionsCard from "./PendingCommissionsCard";
 

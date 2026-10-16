@@ -35,6 +35,7 @@ type RequestBody =
   | { action: "get_operational_status" }
   | { action: "get_operational_trend" }
   | { action: "get_traffic_trend" }
+  | { action: "get_node_status" }
   | { action: "list_people"; organizationId: string }
   | { action: "list_invitations"; organizationId: string }
   | { action: "list_activity"; organizationId: string }
@@ -98,7 +99,7 @@ function userList(value: unknown, allowOwner: boolean): UserInput[] | Failure {
 
 export function validateBody(raw: unknown): RequestBody | Failure {
   if (!plainObject(raw) || typeof raw.action !== "string") return fail("invalid_body", 400);
-  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend" || raw.action === "get_traffic_trend") {
+  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend" || raw.action === "get_traffic_trend" || raw.action === "get_node_status") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
   if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections" || raw.action === "get_telephony_readiness" || raw.action === "list_telephony_preparation_states") {
@@ -823,6 +824,7 @@ type TrafficSample = { observedAt: string; periodSeconds: number; rxBytes: numbe
 const NODE_ROLES: NodeRole[] = ["do_writer", "hostinger_standby"];
 const BUCKET_MS = 300_000;
 const TRAFFIC_READ_TIMEOUT_MS = 4_000;
+const NODE_STATUS_READ_TIMEOUT_MS = 2_000;
 const boundedInteger = (value: unknown, max: number): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= max;
 
@@ -884,6 +886,52 @@ export async function trafficTrend(admin: Pick<SupabaseClient, "from">, now = Da
   return redactedTrafficTrend(rows, now);
 }
 
+type NodeStatusState = "healthy" | "degraded" | "unknown";
+type RuntimeNodeStatusState = "ready" | "degraded" | "unknown";
+type ReplicationNodeStatusState = "streaming" | "degraded" | "unknown";
+type StorageNodeStatusState = "synced" | "degraded" | "unknown";
+const nodeStatusState = (value: unknown): NodeStatusState => value === "healthy" || value === "degraded" ? value : "unknown";
+const runtimeNodeStatusState = (value: unknown): RuntimeNodeStatusState => value === "ready" || value === "degraded" ? value : "unknown";
+const replicationNodeStatusState = (value: unknown): ReplicationNodeStatusState => value === "streaming" || value === "degraded" ? value : "unknown";
+const storageNodeStatusState = (value: unknown): StorageNodeStatusState => value === "synced" || value === "degraded" ? value : "unknown";
+
+/** Converts at most two trusted table rows into the exact browser-safe node projection. */
+export function redactedNodeStatus(rows: unknown[], now = Date.now()) {
+  const latest = new Map<NodeRole, { at: number; row: Record<string, unknown> }>();
+  for (const raw of rows) {
+    if (!plainObject(raw) || (raw.node_role !== "do_writer" && raw.node_role !== "hostinger_standby") || typeof raw.observed_at !== "string") continue;
+    const at = Date.parse(raw.observed_at);
+    if (!Number.isFinite(at) || at % 60_000 !== 0 || at < Date.UTC(2026, 0, 1) || at >= Date.UTC(2100, 0, 1)) continue;
+    const role = raw.node_role;
+    if (!latest.has(role) || at > latest.get(role)!.at) latest.set(role, { at, row: raw });
+  }
+  return {
+    telemetry: latest.size ? "live" as const : "not_configured" as const,
+    roles: NODE_ROLES.map((nodeRole) => {
+      const entry = latest.get(nodeRole);
+      const stale = !entry || now - entry.at > 180_000 || entry.at > now + 120_000;
+      const row = entry?.row;
+      return {
+        nodeRole,
+        ...(entry ? { observedAt: new Date(entry.at).toISOString() } : {}),
+        agentState: stale ? "unknown" as const : nodeStatusState(row?.agent_state),
+        runtimeState: stale ? "unknown" as const : runtimeNodeStatusState(row?.runtime_state),
+        replicationState: stale ? "unknown" as const : replicationNodeStatusState(row?.replication_state),
+        storageState: stale ? "unknown" as const : storageNodeStatusState(row?.storage_state),
+      };
+    }),
+  };
+}
+
+/** Current table has a primary key on the two fixed roles; query and wait are bounded. */
+export async function nodeStatus(admin: Pick<SupabaseClient, "from">, now = Date.now(), timeoutMs = NODE_STATUS_READ_TIMEOUT_MS) {
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const { data, error } = await admin.from("lemtel_node_status_current")
+    .select("node_role,observed_at,agent_state,runtime_state,replication_state,storage_state")
+    .order("node_role", { ascending: true }).limit(2).abortSignal(deadline);
+  return error ? { error: "node_status_unavailable", status: 503 } : redactedNodeStatus(data ?? [], now);
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   if (req.method !== "POST") return respond({ error: "method_not_allowed" }, 405);
@@ -930,6 +978,11 @@ export async function handler(req: Request): Promise<Response> {
   if (request.action === "get_traffic_trend") {
     if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
     const result = await trafficTrend(admin);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+  if (request.action === "get_node_status") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await nodeStatus(admin);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
   if (request.action === "get_telephony_readiness" || request.action === "list_telephony_preparation_states") {

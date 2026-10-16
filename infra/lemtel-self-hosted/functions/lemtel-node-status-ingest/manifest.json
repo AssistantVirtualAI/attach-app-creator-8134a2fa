@@ -1,0 +1,27 @@
+{
+  "package_version": "lemtel_node_status_ingest_v1",
+  "scope": "offline_function_source_only_observation_only",
+  "deployment_authorized": false,
+  "publisher_activation_authorized": false,
+  "verify_jwt": false,
+  "authentication": "strict_hmac_sha256_exact_compact_body_role_separated_runtime_secret",
+  "signature_header": "X-Lemtel-Node-Status-Signature",
+  "cors": "none_origin_and_sec_fetch_mode_requests_denied",
+  "success_status": 204,
+  "response_body": "none",
+  "runtime_requirements": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "LEMTEL_NODE_STATUS_DO_WRITER_SECRET", "LEMTEL_NODE_STATUS_HOSTINGER_STANDBY_SECRET"],
+  "secret_format": "two_distinct_64_lowercase_hex_character_runtime_values_never_bundled_or_logged",
+  "envelope_fields": ["nodeRole", "observedAt", "agentState", "runtimeState", "replicationState", "storageState"],
+  "node_roles": ["do_writer", "hostinger_standby"],
+  "enum_allowlists": {
+    "agentState": ["healthy", "degraded", "unknown"],
+    "runtimeState": ["ready", "degraded", "unknown"],
+    "replicationState": ["streaming", "degraded", "unknown"],
+    "storageState": ["synced", "degraded", "unknown"]
+  },
+  "bounds": {"max_body_bytes": 384, "past_skew_seconds": 180, "future_skew_seconds": 120, "utc_minute_only": true},
+  "migration": "infra/lemtel-self-hosted/migrations/0020_lemtel_node_status_observations.sql",
+  "test": "infra/lemtel-self-hosted/functions/lemtel-node-status-ingest/index.test.ts",
+  "explicitly_excluded": ["browser_access", "node_commands", "remote_commands", "provider_calls", "cloudflare_or_dns", "runtime_start", "promotion", "fencing", "failover", "telephony", "identifiers", "raw_errors", "metrics", "content"],
+  "prerequisites": ["approved_schema_edge_route_package", "route_specific_hmac_only_ingress", "edge_and_route_access_logs_disabled", "two_distinct_runtime_secrets", "root_only_publisher_configuration", "synthetic_hmac_and_platform_admin_rbac_tests", "separate_activation_approval"]
+}

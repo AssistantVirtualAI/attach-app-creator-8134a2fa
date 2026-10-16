@@ -1,0 +1,62 @@
+{
+  "package_version": "lemtel_node_status_schema_edge_prerequisite_v1",
+  "scope": "offline_lemtel_node_status_schema_and_edge_prerequisite",
+  "deployment_authorized": false,
+  "activation_authorized": false,
+  "schema_apply_authorized": false,
+  "migration_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0020_lemtel_node_status_observations.sql",
+      "sha256": "dca41b32c98520f93e6e87fa01bd92ac977c8db323649b7c5d1904e3839f6568"
+    }
+  ],
+  "edge_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-status-ingest/index.ts",
+      "sha256": "2960280b644827db611008395a0165af96dbdfef2f012b5360c0d6fdd5ac2eaa"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-status-ingest/manifest.json",
+      "sha256": "923acd09e746a33e2430511d089dbf6cc71a226ecc699ff248a489f0ff0d9cc0"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
+      "sha256": "d7c9e4eca110ec0afcdcd86952e85362dfd72dfbe8f844f9329ce4df9fa1ba37"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
+      "sha256": "aab5f0fc2ceaf218f323113982a2b23bd2f1ef1ed0539c7c04ce8b2fa80951f1"
+    }
+  ],
+  "required_baseline_migration": "0019_lemtel_transactional_email_delivery_states.sql",
+  "external_router_configuration": {
+    "managed_in_repository": false,
+    "route": "lemtel-node-status-ingest",
+    "route_specific_only": true,
+    "hmac_required": true,
+    "access_logs_permitted": false,
+    "configuration_status": "separate_approved_route_review_required_before_activation"
+  },
+  "required_preconditions": [
+    "approved_transactional_schema_edge_route_package",
+    "route_specific_hmac_only_ingress",
+    "edge_and_route_access_logs_disabled_attested",
+    "two_distinct_runtime_role_secrets_verified",
+    "root_only_publisher_configuration_verified",
+    "synthetic_hmac_sql_rls_and_platform_admin_rbac_tests",
+    "explicit_separate_publisher_activation_approval"
+  ],
+  "explicitly_excluded": [
+    "global_jwt_bypass",
+    "browser_access",
+    "planipret_import",
+    "pbx_or_sip_change",
+    "source_network_identifier_collection",
+    "runtime_start",
+    "promotion",
+    "fencing",
+    "cloudflare_or_dns_change",
+    "automatic_failover",
+    "automatic_publisher_activation"
+  ]
+}

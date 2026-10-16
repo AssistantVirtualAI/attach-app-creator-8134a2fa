@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Network
 
 #if canImport(pjsua)
 import pjsua
@@ -77,6 +78,17 @@ private func ppPjsipOnCallMediaState(_ callId: pjsua_call_id) {
     PjsipEngine.shared.handleCallMediaState(callId: callId, info: info)
 }
 
+/// Journalise chaque connexion/déconnexion du transport TLS d'appel, pour
+/// corréler une coupure à un changement de réseau (absent jusqu'ici).
+private func ppPjsipOnTransportState(
+    _ tp: UnsafeMutablePointer<pjsip_transport>?,
+    _ state: pjsip_transport_state,
+    _ info: UnsafePointer<pjsip_transport_state_info>?
+) {
+    let status = info.map { Int32($0.pointee.status) } ?? 0
+    NSLog("[PpPjsip] transport state=%d status=%d", Int32(state.rawValue), status)
+}
+
 private func ppPjsipEnterContext(_ userData: UnsafeMutableRawPointer?) {
     PjsipEngine.shared.runScheduledWork()
 }
@@ -138,6 +150,9 @@ final class PjsipEngine {
     private var scheduledWork: (() -> Void)?
     private var strings: [UnsafeMutablePointer<CChar>] = []
     private var pjThreadDescs: [UnsafeMutableRawPointer] = []
+    private var pathMonitor: NWPathMonitor?
+    private var lastPathSignature: String?
+    private var pathChangeWork: DispatchWorkItem?
 
 
     // Sonde
@@ -346,6 +361,15 @@ final class PjsipEngine {
         // Les session timers sont également inutiles sur ce trunk et peuvent
         // provoquer une seconde renégociation SDP. Le keep-alive TCP suffit.
         acc.use_timer = PJSUA_SIP_TIMER_INACTIVE
+
+        // Prise d'appel entrant : le 200 OK doit annoncer l'adresse publique
+        // vue par le serveur (rport/received), pas l'IP privée locale, sinon
+        // l'ACK part vers une adresse injoignable derrière certains routeurs
+        // (200 OK ×11 puis BYE 408 à 32 s). Keep-alive TLS pour garder le
+        // trou NAT ouvert entre deux appels.
+        acc.allow_via_rewrite = pj_bool_t(1)
+        acc.contact_use_src_port = pj_bool_t(1)
+        acc.ka_interval = 15
 
         // Un seul `+sip.instance` : on laisse RFC5626 le générer avec NOTRE
         // UUID stable au lieu d'ajouter un second param manuel (pjsua émettait
@@ -1097,6 +1121,7 @@ final class PjsipEngine {
         cfg.cb.on_incoming_call = ppPjsipOnIncomingCall
         cfg.cb.on_call_state = ppPjsipOnCallState
         cfg.cb.on_call_media_state = ppPjsipOnCallMediaState
+        cfg.cb.on_transport_state = ppPjsipOnTransportState
         cfg.max_calls = 2
 
         var logCfg = pjsua_logging_config()
@@ -1134,6 +1159,52 @@ final class PjsipEngine {
 
         started = true
         NSLog("[PpPjsip] stack started (TLS 5061 transport id=%d)", transportId)
+        startPathMonitor()
+    }
+
+    // MARK: Changement de réseau (Wi-Fi ↔ LTE)
+
+    /// Le basculement Wi-Fi/LTE existant ne couvrait que la socket WSS de
+    /// veille. La socket TLS du moteur d'appel restait liée à l'ancienne
+    /// interface : le Contact/Via du 200 OK devenait injoignable, l'ACK ne
+    /// revenait jamais et PJSIP coupait à Timer H (32 s, BYE 408).
+    /// On notifie donc PJSIP de chaque vrai changement d'interface.
+    private func startPathMonitor() {
+        guard pathMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard let self = self else { return }
+            let sig = path.status == .satisfied
+                ? path.availableInterfaces.map { "\($0.type)" }.joined(separator: ",")
+                    + (path.usesInterfaceType(.wifi) ? "|wifi" : path.usesInterfaceType(.cellular) ? "|cell" : "|other")
+                : "none"
+            self.lock.lock()
+            let previous = self.lastPathSignature
+            self.lastPathSignature = sig
+            self.lock.unlock()
+            // Premier relevé ou aucun changement réel : rien à faire.
+            guard let prev = previous, prev != sig, path.status == .satisfied else { return }
+            NSLog("[PpPjsip] network path changed %@ → %@ : pjsua_handle_ip_change", prev, sig)
+            self.pathChangeWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.handleIpChange() }
+            self.pathChangeWork = work
+            // Anti-rebond : iOS publie souvent plusieurs mises à jour d'affilée.
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0, execute: work)
+        }
+        monitor.start(queue: DispatchQueue(label: "ca.planipret.pjsip.path"))
+        pathMonitor = monitor
+    }
+
+    private func handleIpChange() {
+        scheduleOnPjsipThread { [weak self] in
+            guard let self = self, self.started else { return }
+            var param = pjsua_ip_change_param()
+            pjsua_ip_change_param_default(&param)
+            param.restart_listener = pj_bool_t(1)
+            param.restart_lis_delay = 100
+            let status = pjsua_handle_ip_change(&param)
+            NSLog("[PpPjsip] pjsua_handle_ip_change status=%d", status)
+        }
     }
 
     /// Par défaut PJSIP propose Speex en premier : entre deux postes de l'app,

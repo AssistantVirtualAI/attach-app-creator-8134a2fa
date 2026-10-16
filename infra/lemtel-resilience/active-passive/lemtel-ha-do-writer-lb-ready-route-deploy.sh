@@ -39,9 +39,10 @@ verify_bundle() {
   actual_archive_listing="$(tar -tzf "$archive")" || fail archive_unreadable
   [ "$actual_archive_listing" = "$expected_archive_listing" ] || fail archive_layout_invalid
   [ "$(readlink -f -- "$0")" = "$(readlink -f -- "$self_source")" ] || fail bundle_entrypoint_invalid
-  for file in "${bundle_sources[@]}" "$manifest"; do
-    [ -f "$file" ] && [ ! -L "$file" ] || fail bundle_file_missing
+  for file in "${bundle_sources[@]}"; do
+    [ -f "$bundle/$file" ] && [ ! -L "$bundle/$file" ] || fail bundle_file_missing
   done
+  [ -f "$manifest" ] && [ ! -L "$manifest" ] || fail bundle_file_missing
   [ "$(wc -l < "$manifest" | tr -d '[:space:]')" = "${#bundle_sources[@]}" ] || fail manifest_ambiguous
   expected_manifest_listing="$(printf '%s\n' "${bundle_sources[@]}")"
   actual_manifest_listing="$(awk 'NF == 2 && $1 ~ /^[0-9a-f]{64}$/ { print $2 }' "$manifest")"

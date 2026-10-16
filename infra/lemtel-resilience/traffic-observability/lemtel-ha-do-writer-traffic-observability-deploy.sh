@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Root-only, transactional deployment of the inactive Lemtel traffic observability plane on DO writer.
 # This script NEVER enables collectors, configures JWT bypass, writes secrets, changes traffic routing or changes HA state.
+# The separate ingress-route and collector phases retain their own access-log attestation gate.
 set -euo pipefail
 fail() { printf 'traffic_observability_deploy_status=failed\nreason=%s\n' "$1" >&2; exit 1; }
 [ "$(id -u)" -eq 0 ] || fail root_required
@@ -9,7 +10,6 @@ fail() { printf 'traffic_observability_deploy_status=failed\nreason=%s\n' "$1" >
 [ "${LEMTEL_TRAFFIC_DEPLOY_BACKUP_ATTESTATION:-}" = FRESH_ENCRYPTED_WRITER_BACKUP_VERIFIED ] || fail fresh_backup_attestation_required
 [ "${LEMTEL_TRAFFIC_DEPLOY_REVIEW_APPROVAL:-}" = REVIEWED_DO_WRITER_TRAFFIC_DEPLOY ] || fail review_approval_required
 [ "${LEMTEL_TRAFFIC_DEPLOY_SNAPSHOT_ATTESTATION:-}" = DO_WRITER_SNAPSHOT_CREATED_AND_RESTORE_REVIEWED ] || fail snapshot_restore_attestation_required
-[ "${LEMTEL_TRAFFIC_EDGE_LOG_ATTESTATION:-}" = EDGE_AND_ROUTE_ACCESS_LOGS_DISABLED_VERIFIED ] || fail ingress_log_attestation_required
 bundle="${LEMTEL_TRAFFIC_DEPLOY_BUNDLE:-/home/lemtelops/lemtel-traffic-observability-deployment}"
 manifest="$bundle/manifest.sha256"
 metadata="$bundle/deployment-metadata.json"

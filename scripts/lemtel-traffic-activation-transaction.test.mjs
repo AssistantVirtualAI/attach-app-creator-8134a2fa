@@ -51,7 +51,7 @@ test('new activation entry fails closed on independent operator gates before any
   assert.doesNotMatch(prepare, /self\.(?:create|mkdir)\(|\.unlink\(|\.rmdir\(|os\.(?:replace|mkdir)\(|O_CREAT/u);
   assert.match(source, /pending_secret = transaction.prepare\(\)[\s\S]*transaction.apply\(pending_secret\)/u);
   assert.match(source, /self\.stage = 'preflight'/u);
-  const guards = ['source_integrity', 'runtime_preflight', 'edge_identity', 'compose_integrity', 'caddy_integrity', 'schema_presence', 'collector_absence', 'local_locks', 'clock_sync', 'secret_generation', 'apply'];
+  const guards = ['source_integrity', 'runtime_preflight', 'edge_identity', 'compose_integrity', 'caddy_integrity', 'schema_contract', 'collector_absence', 'local_locks', 'clock_sync', 'secret_generation', 'apply'];
   for (const guard of guards) assert.ok(source.includes(`self.guard = '${guard}'`), guard);
   for (const stage of ['configuration', 'edge_recreate', 'ingress_route', 'baseline', 'timer', 'final_attestation']) {
     assert.ok(source.includes(`self.stage = '${stage}'`), stage);
@@ -208,9 +208,10 @@ test('new source has no forbidden topology, business-data, network command or ou
   assert.doesNotMatch(source, /\b(?:ssh|scp|rsync|socat|nc|doctl|hcloud|nsupdate|psql|sqlcmd|pg_promote|pg_ctl|pg_dump)\b/iu);
   assert.doesNotMatch(source, /\b(?:SELECT|INSERT|UPDATE|DELETE|ALTER|CREATE|TRUNCATE|DROP)\s+(?:TABLE|FROM|INTO|DATABASE)\b/iu);
   assert.doesNotMatch(source, /planipret|avastatistic|fusionpbx|\bpbx_|\bsip\b|api\.cloudflare|failover-agent|fence-execute/iu);
-  assert.match(prepare, /secure_file\(SCHEMA_SOURCE, parents=False\).st_size > 0/u);
+  assert.match(source, /INGRESS_SOURCE_SHA256 = '[a-f0-9]{64}'/u);
+  assert.match(prepare, /hashlib\.sha256\(read_protected\(ingress_source\)\)\.hexdigest\(\) == INGRESS_SOURCE_SHA256/u);
   assert.match(prepare, /secure_file\(functions \/ relative\).st_size > 0/u);
-  assert.doesNotMatch(source, /read_protected\((?:SCHEMA_SOURCE|functions)|\.Config\.(?:Cmd|Entrypoint)|json \.Config|json \.Mounts/u);
+  assert.doesNotMatch(source, /SCHEMA_SOURCE|\.Config\.(?:Cmd|Entrypoint)|json \.Config|json \.Mounts/u);
   for (const text of [source, doc]) {
     assert.doesNotMatch(text, /https?:\/\/[^\s'"+]+|\b(?:\d{1,3}\.){3}\d{1,3}\b|secret\s+actual\s+values|BEGIN (?:RSA |EC )?PRIVATE KEY/iu);
     for (const line of text.split('\n').filter((line) => /\b(?:print|printf)\(/u.test(line))) {
@@ -252,7 +253,11 @@ test('separate source package allowlist and digests bind unchanged helpers witho
   assert.match(testSource, /execFileSync\('\/usr\/bin\/python3', \['-c', 'import ast, sys; ast\.parse\(sys\.stdin\.read\(\)\)'\]/u);
   assert.doesNotMatch(testSource, /\b(?:spawnSync|execSync|spawn|execFile)\s*\(/u);
   const staticHexLiterals = [...source.matchAll(/'([a-f0-9]{64})'/gu)].map((match) => match[1]);
-  assert.deepEqual(staticHexLiterals.sort(), manifest.sources.filter((item) => item.path.endsWith('.sh') && item.path !== entry).map((item) => item.sha256).sort());
+  const expectedStaticDigests = [
+    ...manifest.sources.filter((item) => item.path.endsWith('.sh') && item.path !== entry).map((item) => item.sha256),
+    createHash('sha256').update(readFileSync(resolve(root, 'infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.ts'))).digest('hex'),
+  ];
+  assert.deepEqual(staticHexLiterals.sort(), expectedStaticDigests.sort());
 });
 
 function tarEntries(archive) {
@@ -336,7 +341,6 @@ test('new transaction has exhaustive local action and fixed-path allowlists, not
     '/etc/systemd/system/timers.target.wants/lemtel-traffic-collector.timer',
     '/var/lib/lemtel-ha/traffic-observability', '/run/lemtel-traffic-activation.lock',
     '/run/lock/lemtel-traffic-ingress-route.lock', '/.env', '/run', '/var/lock',
-    '/home/lemtelops/lemtel-traffic-observability-deployment/0017_lemtel_traffic_samples.sql',
   ].sort());
   const pythonImports = source.split('\n').filter((line) => /^(?:import |from \w+ import )/u.test(line));
   assert.deepEqual(pythonImports, [

@@ -110,8 +110,8 @@ Deno.serve(async (req) => {
       continue;
     }
     const expiry = Number(d["device-sip-registration-expiry-seconds"] ?? 0);
-    const transport = String(d["device-sip-transport-type"] ?? d["transport"] ?? "?").toUpperCase();
-    const nat = String(d["device-sip-nat-traversal-enabled"] ?? "?");
+    const transport = String(d["device-sip-transport-type"] ?? d["transport"] ?? (String(d["device-sip-registration-contact"] ?? "").match(/transport=(\w+)/i)?.[1]) ?? "?").toUpperCase();
+    const nat = String(d["device-sip-nat-traversal"] ?? d["device-sip-nat-traversal-enabled"] ?? "?");
     const problems: string[] = [];
     // Expiry NS par défaut = 60s : le device est vu « non enregistré » entre
     // deux REGISTER et l'appel part en messagerie.
@@ -308,6 +308,11 @@ Deno.serve(async (req) => {
         : "Chaîne d'appel complète et cohérente.",
     checks,
     cdr_e2e: { verdict: e2e.verdict, summary: e2e.summary, last_call_at: lastCallAt, last_maestro_push_at: lastPushAt },
+    // Admin-only, read-only: device settings with every credential-like field removed.
+    ...(body?.raw_devices === true && (wanted || wantedUser)
+      ? { device_fields: devices.map((d) => Object.fromEntries(Object.entries(d ?? {})
+          .filter(([k]) => !/pass|secret|auth|token|key/i.test(k)))) }
+      : {}),
     checked_at: new Date().toISOString(),
   });
 });

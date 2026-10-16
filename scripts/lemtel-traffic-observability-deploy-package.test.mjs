@@ -133,7 +133,7 @@ test('GitHub Actions provenance is exact, successful, non-expired and SHA-256-at
 test('CLI is GitHub-Actions-artifact-only and has no deployment, activation, route, JWT-bypass, provider, telephony, or failover action', () => {
   for (const required of [
     '--github-run-id', '--source-revision', 'repos/${REPOSITORY}/actions/runs/${githubRunId}',
-    'github_actions_artifact_digest_mismatch', 'actions/artifacts/${artifact.id}/zip', 'sha256(readFileSync(zip))',
+    'github_actions_artifact_digest_mismatch', 'github_actions_artifact_write_failed', 'actions/artifacts/${artifact.id}/zip', 'writeFileSync(zip, downloadedZip', 'sha256(readFileSync(zip))',
     'deployment_executed: false', 'activation_executed: false', 'collector_timer_enabled: false',
     'global_jwt_bypass: false', 'gateway_route_changed: false', 'hostinger_contacted: false',
     'cloudflare_contacted: false', 'telephony_contacted: false', 'failover_contacted: false',

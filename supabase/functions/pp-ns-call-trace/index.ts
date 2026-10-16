@@ -9,19 +9,51 @@ import { nsFetch, requirePlanipretBroker, jsonResponse } from "../_shared/planip
 const maskHost = (h: string) =>
   h.replace(/\b(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}\b/g, "$1.$2.x.x");
 
+
+// Minimal PHP unserialize (arrays, strings, ints) for NetSapiens sipflow csv.
+function phpUnser(src: string): unknown {
+  const bytes = new TextEncoder().encode(src);
+  const dec = new TextDecoder();
+  let i = 0;
+  const readUntil = (ch: number) => { const s = i; while (bytes[i] !== ch) i++; const v = dec.decode(bytes.slice(s, i)); i++; return v; };
+  const parse = (): unknown => {
+    const t = String.fromCharCode(bytes[i]); i += 2;
+    if (t === "N") return null;
+    if (t === "i" || t === "d" || t === "b") return Number(readUntil(59));
+    if (t === "s") { const n = Number(readUntil(58)); i++; const v = dec.decode(bytes.slice(i, i + n)); i += n + 2; return v; }
+    if (t === "a") { const n = Number(readUntil(58)); i++; const out: unknown[] = []; for (let k = 0; k < n; k++) { parse(); out.push(parse()); } i++; return out; }
+    throw new Error("php_unser_" + t);
+  };
+  return parse();
+}
+
+function rowsToSip(rows: unknown): string {
+  if (!Array.isArray(rows)) return "";
+  const head = (rows[0] as unknown[]) ?? [];
+  const ti = head.findIndex((h) => String(h).toLowerCase() === "text");
+  const tsi = head.findIndex((h) => /time/i.test(String(h)));
+  const hi = head.findIndex((h) => String(h).toLowerCase() === "host");
+  return rows.slice(1).map((r) => {
+    const a = r as unknown[];
+    return `@@ ${a[tsi] ?? ""} host=${maskHost(String(a[hi] ?? ""))}\n${String(a[ti] ?? "")}`;
+  }).join("\n");
+}
+
 function summarize(text: string) {
   const lines = text.split(/\r?\n/);
   const events: Array<Record<string, string>> = [];
   let cur: Record<string, string> | null = null;
+  let pendingTs = "", pendingHost = "";
   for (const raw of lines) {
     const l = raw.trim();
+    const at = l.match(/^@@ (.*?) host=(.*)$/);
+    if (at) { pendingTs = at[1]; pendingHost = at[2]; continue; }
     const start = l.match(/^(INVITE|ACK|BYE|CANCEL|UPDATE|PRACK|OPTIONS|INFO|REFER|NOTIFY|REGISTER)\s+sip:\S+\s+SIP\/2\.0/i)
       ?? l.match(/^SIP\/2\.0\s+(\d{3})\b(.*)$/);
     if (start) {
       if (cur) events.push(cur);
       cur = { msg: /^SIP/.test(l) ? `${start[1]}${start[2] ? " " + start[2].trim().slice(0, 30) : ""}` : start[1].toUpperCase() };
-      const ts = lines[Math.max(0, lines.indexOf(raw) - 1)]?.match(/\d{2}:\d{2}:\d{2}(\.\d+)?/);
-      if (ts) cur.time = ts[0];
+      cur.time = pendingTs; cur.host = pendingHost;
       continue;
     }
     if (!cur) continue;
@@ -80,6 +112,12 @@ Deno.serve(async (req) => {
       if (!r.ok) continue;
       try {
         const j = JSON.parse(t);
+        const csv = Array.isArray(j) ? j[0]?.csv : j?.csv;
+        if (typeof csv === "string") {
+          const raw = new TextDecoder().decode(Uint8Array.from(atob(csv), (ch) => ch.charCodeAt(0)));
+          t = rowsToSip(phpUnser(raw));
+          if (/SIP\/2\.0/.test(t)) { traces.push({ which: 0, events: summarize(t) }); break; }
+        }
         const b = typeof j === "string" ? j : (j?.data ?? j?.base64 ?? j?.file ?? j?.content ?? "");
         if (typeof b === "string" && b && !/SIP\/2\.0/.test(b)) { try { t = atob(b); } catch { t = b; } }
         else if (typeof b === "string" && b) t = b;

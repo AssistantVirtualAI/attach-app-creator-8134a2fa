@@ -206,9 +206,9 @@ attest_l7_response() {
   local response metadata http_code content_type
   response="$(mktemp)"
   response_file="$response"
-  metadata="$(curl --silent --show-error --output "$response" --write-out '%{http_code}\n%{content_type}' \
+  metadata="$(curl --silent --show-error --output "$response" --write-out '%{http_code}|%{content_type}' \
     --connect-timeout 5 --max-time 15 --proto '=https' --max-redirs 0 "$public_l7_url")" || return 1
-  IFS=$'\n' read -r http_code content_type <<< "$metadata"
+  IFS='|' read -r http_code content_type <<< "$metadata"
   [ "$http_code" = 200 ] || return 1
   [ "$content_type" = application/json ] || return 1
   python3 - "$response" <<'PY'

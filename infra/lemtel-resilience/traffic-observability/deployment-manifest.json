@@ -67,7 +67,7 @@
     },
     {
       "path": "scripts/lemtel-traffic-observability-deploy-package.mjs",
-      "sha256": "a2cc3bc2c67f19faba3fd263f6bfdb46cd7c019a2a8a6a1b88d31f194203fd72"
+      "sha256": "7e1faca17fe8efb66aaa50dc65de5947e2792b648edb7e02f21dc2068b2c3fe6"
     }
   ],
   "validation_sources": [
@@ -97,7 +97,7 @@
     },
     {
       "path": "scripts/lemtel-traffic-observability-deploy-package.test.mjs",
-      "sha256": "6acf2e22a1d2bd4293453decb827bd6b64d81bd19826d9ce3e3bf87bb97f166e"
+      "sha256": "eeb64bee7fd8e401d548eaf40d3c10a670be7bc32af37651ddbd3e32c41db562"
     }
   ],
   "external_router_configuration": {

@@ -244,9 +244,11 @@ function retrievePortalArtifact({ githubRunId, sourceRevision }) {
   const zip = join(temporary, 'portal.zip');
   const extracted = join(temporary, 'extracted');
   try {
-    try {
-      execFileSync('gh', ['api', `repos/${REPOSITORY}/actions/artifacts/${artifact.id}/zip`, '--method', 'GET', '--output', zip], { stdio: ['ignore', 'pipe', 'pipe'] });
-    } catch { fail('github_actions_artifact_download_failed'); }
+    let downloadedZip;
+    try { downloadedZip = execFileSync('gh', ['api', `repos/${REPOSITORY}/actions/artifacts/${artifact.id}/zip`, '--method', 'GET'], { encoding: null, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    catch { fail('github_actions_artifact_download_failed'); }
+    try { writeFileSync(zip, downloadedZip, { mode: 0o600, flag: 'wx' }); }
+    catch { fail('github_actions_artifact_write_failed'); }
     if (!existsSync(zip) || !lstatSync(zip).isFile() || sha256(readFileSync(zip)) !== artifact.verified_digest) fail('github_actions_artifact_digest_mismatch');
     listZipEntries(zip);
     mkdirSync(extracted, { mode: 0o700 });

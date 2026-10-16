@@ -33,6 +33,8 @@ const completeEvidence = () => ({
 test('current Lemtel topology is strict, private, synchronous, and non-activating', () => {
   const value = contract();
   assert.equal(validateCurrentTopologyContract(value), true);
+  assert.equal(value.contract_version, 'lemtel_current_ha_topology_v2');
+  assert.equal(value.scope, 'prepared_current_topology_execution_agent_uninstalled');
   assert.equal(value.current_topology.writer, 'do_writer');
   assert.equal(value.current_topology.standby, 'hostinger_private_hot_standby');
   assert.equal(value.current_topology.postgresql.replication, 'synchronous');
@@ -49,6 +51,10 @@ test('current Lemtel topology is strict, private, synchronous, and non-activatin
   assert.equal(value.cloudflare.monitor_never_promotes, true);
   assert.ok(Object.values(value.fail_closed_gates).every((entry) => entry === false));
   assert.ok(Object.values(value.activation).every((entry) => entry === false));
+  assert.equal(value.prepared_execution_agent.default_mode, 'review');
+  assert.equal(value.prepared_execution_agent.service_installed, false);
+  assert.equal(value.prepared_execution_agent.timer_enabled, false);
+  assert.equal(value.prepared_execution_agent.execute_mode_configured, false);
 });
 
 test('contract rejects unsafe topology, activation, and schema changes', () => {
@@ -64,6 +70,8 @@ test('contract rejects unsafe topology, activation, and schema changes', () => {
     (value) => { value.activation.automatic_promotion = true; },
     (value) => { value.activation.automatic_failback = true; },
     (value) => { value.boundaries.planipret_change = true; },
+    (value) => { value.prepared_execution_agent.default_mode = 'execute'; },
+    (value) => { value.prepared_execution_agent.timer_enabled = true; },
     (value) => { value.unexpected = true; },
   ]) {
     const value = contract();

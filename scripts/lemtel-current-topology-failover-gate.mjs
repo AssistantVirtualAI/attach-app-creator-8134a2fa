@@ -8,11 +8,21 @@ const CONTRACT_KEYS = [
   'fail_closed_gates',
   'activation',
   'boundaries',
+  'prepared_execution_agent',
 ];
 const TOPOLOGY_KEYS = ['writer', 'standby', 'postgresql', 'storage_integrity', 'hostinger_runtime'];
 const POSTGRESQL_KEYS = ['replication', 'standby_state', 'public_listener'];
 const STORAGE_KEYS = ['required', 'dual_durable_write_acknowledgement', 'immutable_runtime_artifact_staged'];
 const RUNTIME_KEYS = ['encrypted_staged', 'running'];
+const PREPARED_EXECUTION_AGENT_KEYS = [
+  'hostinger_promotion_script_prepared',
+  'hostinger_runtime_start_script_prepared',
+  'default_mode',
+  'service_installed',
+  'timer_enabled',
+  'execute_mode_configured',
+  'routing_owned_by_cloudflare_load_balancer',
+];
 const CLOUDFLARE_KEYS = [
   'monitor_present',
   'do_pool_present',
@@ -72,8 +82,8 @@ const isIncidentId = (value) => typeof value === 'string' && /^[a-z0-9][a-z0-9-]
 
 export function validateCurrentTopologyContract(contract) {
   return exactKeys(contract, CONTRACT_KEYS) &&
-    contract.contract_version === 'lemtel_current_ha_topology_v1' &&
-    contract.scope === 'current_topology_readiness_only_no_remote_activation' &&
+    contract.contract_version === 'lemtel_current_ha_topology_v2' &&
+    contract.scope === 'prepared_current_topology_execution_agent_uninstalled' &&
     exactKeys(contract.current_topology, TOPOLOGY_KEYS) &&
     contract.current_topology.writer === 'do_writer' &&
     contract.current_topology.standby === 'hostinger_private_hot_standby' &&
@@ -109,7 +119,15 @@ export function validateCurrentTopologyContract(contract) {
     contract.boundaries.planipret_change === false &&
     contract.boundaries.avastatistic_change === false &&
     contract.boundaries.fusionpbx_or_telephony_change === false &&
-    contract.boundaries.legacy_inverse_role_scripts_automate_current_topology === false;
+    contract.boundaries.legacy_inverse_role_scripts_automate_current_topology === false &&
+    exactKeys(contract.prepared_execution_agent, PREPARED_EXECUTION_AGENT_KEYS) &&
+    contract.prepared_execution_agent.hostinger_promotion_script_prepared === true &&
+    contract.prepared_execution_agent.hostinger_runtime_start_script_prepared === true &&
+    contract.prepared_execution_agent.default_mode === 'review' &&
+    contract.prepared_execution_agent.service_installed === false &&
+    contract.prepared_execution_agent.timer_enabled === false &&
+    contract.prepared_execution_agent.execute_mode_configured === false &&
+    contract.prepared_execution_agent.routing_owned_by_cloudflare_load_balancer === true;
 }
 
 export function validateInMemoryEvidence(evidence) {

@@ -34,9 +34,10 @@ test('route is exact, archive-verified, transactional and does not activate Clou
     'LEMTEL_L7_READY_ARCHIVE', 'LEMTEL_L7_READY_ARCHIVE_DIGESTS', 'archive_digest_mismatch',
     'archive_layout_invalid', 'manifest_digest_mismatch', 'sha256sum -c --status', 'tar -tzf',
     'caddy validate', 'caddy reload', 'backup_root', 'trap cleanup EXIT',
-    'l7_http_attestation_failed', "[ \"$http_code\" = 200 ]", "[ \"$content_type\" = application/json ]",
+    'l7_http_attestation_failed', "--write-out '%{http_code}|%{content_type}'", "IFS='|' read -r http_code content_type", "[ \"$http_code\" = 200 ]", "[ \"$content_type\" = application/json ]",
     'lemtel_do_writer_l7_ready_v1', 'cloudflare_routing_changed=false', 'automatic_traffic_failover_enabled=false'
   ]) assert.match(deploy,new RegExp(escaped(expected)));
+  assert.doesNotMatch(deploy,/IFS=\$'\\n' read -r http_code content_type/);
   assert.doesNotMatch(deploy,/caddy fmt(?:\s|$)/i);
   assert.doesNotMatch(deploy,/cloudflare\.request|pg_ctl promote|fencing_executed=true|authorization:|Bearer/i);
   assert.match(timer,/\[ -f "\$source_script" \] \|\| fail readiness_source_missing/);
@@ -52,6 +53,13 @@ test('Caddy anchor accepts only one non-comment canonical site declaration',()=>
   assert.match(program,/\/\^\[\[:space:\]\]\*#\//);
   assert.match(program,/index\(\$0, canonical_host\)/);
   assert.match(program,/matches != 1/);
+});
+
+test('strict attestation keeps HTTP status and Content-Type in one parseable record',()=>{
+  const parsed=execFileSync('bash',['-c',"metadata='200|application/json'; IFS='|' read -r http_code content_type <<< \"$metadata\"; printf '%s|%s' \"$http_code\" \"$content_type\""],{encoding:'utf8'});
+  assert.equal(parsed,'200|application/json');
+  assert.match(deploy,/--write-out '%\{http_code\}\|%\{content_type\}'/);
+  assert.match(deploy,/IFS='\|' read -r http_code content_type/);
 });
 
 test('a strictly recognized legacy marker block is reconciled to JSON while foreign blocks remain rejected',()=>{

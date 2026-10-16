@@ -28,13 +28,14 @@ auth_container="$(resolve_runtime_container '(^|/)gotrue(:|$)|supabase/gotrue(:|
 [ -n "$auth_container" ] || fail auth_container_unresolved
 storage_attestation='/var/lib/lemtel-ha/storage-sync-manifests/last-success'
 max_storage_freshness_seconds=900
-marker_name='lemtel-lb-ready'
+marker_name='lemtel-lb-ready.json'
+legacy_marker_name='lemtel-lb-ready'
 marker_path=''
 
 clear_marker() {
   local mount
   mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy"}}{{.Source}}{{end}}{{end}}' "$caddy_container" 2>/dev/null || true)"
-  [ -n "$mount" ] && rm -f -- "$mount/$marker_name"
+  [ -n "$mount" ] && rm -f -- "$mount/$marker_name" "$mount/$legacy_marker_name"
   [ -n "$marker_path" ] && rm -f -- "$marker_path"
 }
 
@@ -75,6 +76,7 @@ observed_at="$(date -u +%s)"
 printf '{"format":"lemtel_do_writer_l7_ready_v1","writer_role":"do_writer","definitive":true,"observed_at":%s,"status":"healthy"}\n' "$observed_at" > "$tmp"
 chmod 0644 "$tmp"
 mv -f -- "$tmp" "$marker_path"
+rm -f -- "$caddy_mount/$legacy_marker_name"
 
 printf 'do_writer_l7_ready_format=lemtel_do_writer_l7_ready_v1\n'
 printf 'writer=digitalocean_promoted_writer\n'

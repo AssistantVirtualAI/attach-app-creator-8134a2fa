@@ -44,6 +44,23 @@ L’installateur `lemtel-traffic-timer-enable.sh` ne peut être appelé que dans
 
 Avant toute activation réelle : approbation de changement DO writer explicitement revue; snapshot DO créé par l’opérateur et restauration revue (jamais automatisés par le paquet); backup et rollback vérifiés; schema 0017 + Edge ingress + admin + route et secrets assemblés en paquet transactionnel revu; attestation de suppression/vérification des logs d’accès **Caddy et Edge** sur toute la route; clock sync; tests SQL des droits/contraintes/retention, HMAC synthetic et RBAC réels; application atomique approuvée; configuration root-only sur chaque rôle; puis activation locale explicitement autorisée. L’installateur du timer seul **n’est pas** le paquet transactionnel de déploiement. Aucun provisioning Cloudflare/DigitalOcean/Hostinger depuis ce sous-travail.
 
+## Générateur du paquet transactionnel redacted
+
+`scripts/lemtel-traffic-observability-deploy-package.mjs` scelle une archive `tar` reproductible et son sidecar SHA-256. L’archive ne contient que `manifest.sha256`, `deployment-metadata.json`, la migration **0017**, `portal.tar`, et les deux paires source/manifest Edge que le déployeur `lemtel-ha-do-writer-traffic-observability-deploy.sh` exige. Elle exclut donc le collecteur, l’installateur du timer, l’applicateur Caddy, toute configuration globale JWT, les secrets, relevés, sauvegardes, adresses IP et données de contenu/PII.
+
+Le portail est obtenu **uniquement** par téléchargement de l’artefact GitHub Actions nommé `lemtel-operations-portal-<run-id>`. Avant lecture, le générateur vérifie via l’API GitHub que le run est le workflow `.github/workflows/lemtel-operations-portal-build.yml`, terminé avec succès sur `lemtel/integration`, avec le même `head_sha` que `--source-revision`; il exige ensuite un artefact unique, non expiré, et un digest API `sha256:` puis recalcule ce SHA-256 sur le ZIP téléchargé. Les sources SQL/Edge sont lues depuis ce même objet Git, pas depuis le worktree. Il ne prend ni `--portal-dir` ni une sortie de build locale et ne lance ni déployeur, ni route Caddy, ni timer/collector, ni contact Hostinger/Cloudflare/téléphonie/failover.
+
+Commande future, seulement lorsqu’une preuve existe :
+
+```sh
+node scripts/lemtel-traffic-observability-deploy-package.mjs \
+  --github-run-id <run-id> \
+  --source-revision <head-sha-du-run> \
+  --output /chemin/prive/lemtel-traffic-observability.tar
+```
+
+Le résultat `package_status=blocked` est attendu et sûr pour tout run, digest, branche, révision, ZIP ou artefact manquant/non conforme; aucun fichier de paquet n’est alors créé. Lors de la validation de cette branche (base `ce156b4391cc92f8e052c61dc1fd7df608cb2a71`), aucun run réussi du workflow portail ne correspond à cette révision : les runs disponibles les plus récents précèdent cette base, et l’artefact a une rétention de trois jours. **Aucun paquet réel n’a donc été produit et aucun fallback de build local n’est autorisé.**
+
 ## UI et validation
 
 Exploitation affiche les deux cartes responsive, derniers deltas/intervalle et TCP total, badges collecting/pending, SVG RX cyan et TX violet pointillé, aire RX, fenêtre 24 h, légende et titres accessibles. Les groupes séparés ne relient pas les buckets manquants. Sans aucun relevé, message exact :

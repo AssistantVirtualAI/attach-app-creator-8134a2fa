@@ -973,8 +973,11 @@ async function nodeStatusForPlatformOverview(admin: Pick<SupabaseClient, "from">
 }
 
 function configuredPlatformClientAccess() {
+  const configuredValue = (environmentKey: string) => {
+    try { return Deno.env.get(environmentKey)?.trim() ?? ""; } catch { return ""; }
+  };
   const configured = (client: "desktop" | "ios" | "android", environmentKey: string) => {
-    const url = safeHttpsUrl(Deno.env.get(environmentKey)?.trim() ?? "");
+    const url = safeHttpsUrl(configuredValue(environmentKey));
     return url ? { client, state: "configured" as const, url } : { client, state: "pending" as const };
   };
   // No release URL is inferred from a fallback: availability requires a server-set,

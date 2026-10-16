@@ -13,7 +13,7 @@
   "edge_sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "d584ab16468238cc225ea0ad62f93edc7205b6bbf51b6fd32340ffa108557ac1"
+      "sha256": "c7d390c40d0361b9e2d403bc4aba0c2b807c9f9dfbb99bcdf5b11d8acce62b61"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/lemtelTelephonyReadiness.ts",

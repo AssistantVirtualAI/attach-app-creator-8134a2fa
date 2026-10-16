@@ -15,7 +15,9 @@ const ingest = read('infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/in
 const ingestManifest = json('infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/manifest.json');
 const admin = read('infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts');
 const adminManifest = json('infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json');
-const trafficAdmin = admin.slice(admin.indexOf('type NodeRole'), admin.indexOf('export async function handler'));
+// The platform aggregate is intentionally outside this bounded traffic projection:
+// it counts membership rows internally but never reads or emits traffic identities.
+const trafficAdmin = admin.slice(admin.indexOf('type NodeRole'), admin.indexOf('type PlatformOverviewNodeRole'));
 const collector = read('infra/lemtel-resilience/traffic-observability/lemtel-traffic-collect.sh');
 const timer = read('infra/lemtel-resilience/traffic-observability/lemtel-traffic-timer-enable.sh');
 const readme = read('infra/lemtel-resilience/traffic-observability/README.md');

@@ -13,9 +13,9 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const SOURCE_REVISION_RE = /^[a-f0-9]{40}$/u;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
 // These two manifests are bundled but cannot hash themselves in their own
-// source manifests. They are pinned to origin/lemtel/integration cb9c175...
-const DEPLOYMENT_MANIFEST_SHA256 = 'ea24b4008d6c89aa33c8c212b38282de0e9348be3b22806bea8439e5096fe17e';
-const ONBOARDING_MANIFEST_SHA256 = 'aab5f0fc2ceaf218f323113982a2b23bd2f1ef1ed0539c7c04ce8b2fa80951f1';
+// source manifests. Their reviewed SHA-256 values are pinned explicitly here.
+const DEPLOYMENT_MANIFEST_SHA256 = '152d596a406d5a370c3782e7a17e8c41ed1cfee13636ff72122909990cae658f';
+const ONBOARDING_MANIFEST_SHA256 = '8c53a72ee6007e1f28462c80c3f7b06b5dac06d596c4b70f58768babf7848bff';
 
 /** Payload names are the exact archive allowlist; manifest.sha256 is added separately. */
 export const PACKAGE_FILES = [

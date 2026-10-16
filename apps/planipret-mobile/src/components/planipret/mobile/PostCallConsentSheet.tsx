@@ -76,6 +76,7 @@ export default function PostCallConsentSheet() {
   const sending = useRef(false);
   const handled = useRef<Set<string>>(new Set());
   const loadingFor = useRef<Set<string>>(new Set());
+  const callRef = useRef<ConsentCall | null>(null);
 
   const reset = useCallback(() => {
     setStep("consent"); setKind(null); setDraft(""); setConfirmed(false);

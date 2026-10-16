@@ -247,6 +247,7 @@ export default function PostCallConsentSheet() {
       } else {
         toast.success("Appel conservé dans AVA, sans envoi au CRM.");
         close(true);
+        void sweepPending();
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Action impossible — rien n'a été envoyé.");
@@ -282,6 +283,7 @@ export default function PostCallConsentSheet() {
       if (!(data as any)?.ok) throw new Error(String((data as any)?.error ?? "Envoi refusé par le serveur."));
       toast.success((data as any)?.idempotent_replay ? "Déjà envoyé — aucun deuxième envoi." : "Suivi envoyé.");
       close(true);
+      void sweepPending();
     } catch (e: any) {
       toast.error(e?.message ?? "Envoi impossible. Rien n'a été envoyé.");
       sending.current = false;
@@ -333,7 +335,7 @@ export default function PostCallConsentSheet() {
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <button style={btn(kind === "sms" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("sms"); setConfirmed(false); }}>{tr("Texto", "Text")}</button>
               <button style={btn(kind === "email" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("email"); setConfirmed(false); setRecipient(""); }}>{tr("Courriel", "Email")}</button>
-               <button style={btn("rgba(255,255,255,0.14)")} onClick={() => close(true)}>{tr("Aucun", "None")}</button>
+               <button style={btn("rgba(255,255,255,0.14)")} onClick={() => { close(true); void sweepPending(); }}>{tr("Aucun", "None")}</button>
             </div>
 
             {kind && (

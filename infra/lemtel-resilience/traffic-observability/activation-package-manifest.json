@@ -1,0 +1,50 @@
+{
+  "package_format": "lemtel_do_writer_traffic_activation_source_v1",
+  "target_role": "digitalocean_writer",
+  "source_only": true,
+  "operator_gated_transaction": true,
+  "activation_authorized": false,
+  "deployment_authorized": false,
+  "secrets_in_package": false,
+  "database_mutation": false,
+  "hostinger_contacted": false,
+  "cloudflare_or_dns_changed": false,
+  "automatic_failover_enabled": false,
+  "fencing_executed": false,
+  "telephony_contacted": false,
+  "credential_values_emitted": false,
+  "sources": [
+    {
+      "path": "docs/lemtel-ha/TRAFFIC_OBSERVABILITY_ACTIVATION_TRANSACTION.md",
+      "sha256": "6ff58a4f50ce4264bc6731acd3b9ab8944823d837c6e65128ac256528ce4c2ee"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-activation-apply.sh",
+      "sha256": "dea1a5400f500e6cf15753bdebca058864e2bf6d6eaa3595b32cc8736ead2445"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-ingress-route-apply.sh",
+      "sha256": "e479f553e0bbd9ff55336a123de352866be8717f48ad836b1b0233ccff7bb4c3"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/lemtel-ha-do-writer-traffic-runtime-preflight.sh",
+      "sha256": "7c3301b8b45fc684e703166f2c141e97f3e6aeebb92e60252f14fb7e2ec56744"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/lemtel-traffic-collect.sh",
+      "sha256": "282cc7c32fadf9c2cca5ed42aafc6cfe438fa77e1253663b748fcd24af5c27f6"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/lemtel-traffic-timer-enable.sh",
+      "sha256": "1c6fb338ef29698cb90c66905415014eae63172aac3b788f498cfb2f0398ccf8"
+    },
+    {
+      "path": "scripts/lemtel-traffic-activation-package.mjs",
+      "sha256": "2bd715827c80dc0de930878378397a28dd3cc15c6238a6b8c9061df5fe003ea7"
+    },
+    {
+      "path": "scripts/lemtel-traffic-activation-transaction.test.mjs",
+      "sha256": "d446ddc41c69da659f06d342af7ce9d37795b0f4ad8e05f9119190502d5e14d6"
+    }
+  ]
+}

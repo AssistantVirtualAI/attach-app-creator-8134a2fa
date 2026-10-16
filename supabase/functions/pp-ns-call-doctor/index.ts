@@ -110,8 +110,8 @@ Deno.serve(async (req) => {
       continue;
     }
     const expiry = Number(d["device-sip-registration-expiry-seconds"] ?? 0);
-    const transport = String(d["device-sip-transport-type"] ?? d["transport"] ?? "?").toUpperCase();
-    const nat = String(d["device-sip-nat-traversal-enabled"] ?? "?");
+    const transport = String(d["device-sip-transport-type"] ?? d["transport"] ?? (String(d["device-sip-registration-contact"] ?? "").match(/transport=(\w+)/i)?.[1]) ?? "?").toUpperCase();
+    const nat = String(d["device-sip-nat-traversal"] ?? d["device-sip-nat-traversal-enabled"] ?? "?");
     const problems: string[] = [];
     // Expiry NS par défaut = 60s : le device est vu « non enregistré » entre
     // deux REGISTER et l'appel part en messagerie.

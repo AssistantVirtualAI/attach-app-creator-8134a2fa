@@ -177,6 +177,8 @@ final class PjsipEngine {
 
     /// Appel sortant en cours (piloté par CallKit côté PpVoipCall).
     private var outgoingCall: pjsua_call_id = pjsua_call_id(-1)
+    /// INVITE concurrents refusés en 486 pendant un appel actif (protégé par `lock`).
+    private var rejectedConcurrentCallIds = Set<Int32>()
     /// Incrémente pour chaque dialogue. Un call-id PJSIP peut être réutilisé;
     /// la reprise différée d'un raccrochage ne doit jamais toucher l'appel qui
     /// lui succède, même si son ID numérique est identique.
@@ -794,7 +796,13 @@ final class PjsipEngine {
             return
         }
         // Un seul appel simultané : tout INVITE concurrent est refusé (486).
-        if activeCall >= 0 {
+        // Le dialogue refusé est mémorisé pour que sa déconnexion ne coupe
+        // jamais l'audio ni l'état de l'appel en cours.
+        if activeCall >= 0 || outgoingPending {
+            lock.lock()
+            rejectedConcurrentCallIds.insert(Int32(callId))
+            lock.unlock()
+            NSLog("[PpPjsip] concurrent INVITE rejected 486 callId=%d active=%d", callId, activeCall)
             pjsua_call_answer(callId, 486, nil, nil)
             return
         }
@@ -839,6 +847,19 @@ final class PjsipEngine {
     }
 
     func handleCallState(callId: pjsua_call_id, state: pjsip_inv_state, lastCode: Int, remoteUri: String) {
+        // Dialogue concurrent refusé (486) : aucun événement ni nettoyage audio,
+        // sinon l'appel en cours perd son son et paraît coupé.
+        lock.lock()
+        let isRejectedConcurrent = rejectedConcurrentCallIds.contains(Int32(callId))
+            && activeCall != callId && outgoingCall != callId
+        if isRejectedConcurrent, state == PJSIP_INV_STATE_DISCONNECTED {
+            rejectedConcurrentCallIds.remove(Int32(callId))
+        }
+        lock.unlock()
+        if isRejectedConcurrent {
+            NSLog("[PpPjsip] rejected concurrent call state ignored callId=%d state=%d", callId, state.rawValue)
+            return
+        }
         let label: String
         switch state {
         case PJSIP_INV_STATE_CALLING, PJSIP_INV_STATE_EARLY: label = "ringing"

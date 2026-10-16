@@ -18,6 +18,8 @@ test('traffic ingress Caddy route is exact, HMAC-only, no-log and refuses unrela
     '@lemtel_traffic_ingest path /functions/v1/lemtel-traffic-ingest',
     'log_skip',
     'functions_proxy_upstream_unresolved',
+    'named matcher',
+    "selector != '@lemtel_traffic_ingest'",
     'caddy adapt',
     'caddy validate',
     'caddy reload',

@@ -29,12 +29,54 @@ site_line="$(awk -v host="$canonical_host" '
 ' "$caddyfile")" || fail canonical_site_unexpected
 [ -n "$site_line" ] || fail canonical_site_unexpected
 
-# Obtain, but do not print, the existing internal Edge upstream used by the generic functions route.
-functions_upstream="$(awk '
-  /^[[:space:]]*(handle|handle_path)[[:space:]].*\/functions/ { active=1; next }
-  active && /^[[:space:]]*reverse_proxy[[:space:]]+/ { print $2; exit }
-  active && /^[[:space:]]*}[[:space:]]*$/ { active=0 }
-' "$caddyfile")"
+# Obtain, but do not print, the one generic internal Edge upstream. The writer uses a named matcher,
+# while a direct handle/handle_path form remains supported. The traffic matcher itself is excluded.
+functions_upstream="$(python3 - "$caddyfile" <<'PY'
+import re
+import sys
+
+lines = open(sys.argv[1], encoding='utf-8').read().splitlines()
+target = re.compile(r'^[A-Za-z0-9._-]+:[0-9]+$')
+names = set()
+for index, line in enumerate(lines):
+    simple = re.match(r'^\s*@([A-Za-z0-9_-]+)\s+path\s+.*\/functions', line)
+    if simple:
+        names.add(simple.group(1))
+        continue
+    block = re.match(r'^\s*@([A-Za-z0-9_-]+)\s*\{\s*$', line)
+    if block:
+        for nested in lines[index + 1:]:
+            if re.match(r'^\s*}\s*$', nested):
+                break
+            if re.match(r'^\s*path\s+.*\/functions', nested):
+                names.add(block.group(1))
+                break
+
+candidates = []
+for index, line in enumerate(lines):
+    handle = re.match(r'^\s*(?:handle|handle_path)\s+(.+)\{\s*$', line)
+    if handle:
+        selector = handle.group(1).strip()
+        eligible = '/functions' in selector or (selector.startswith('@') and selector[1:] in names and selector != '@lemtel_traffic_ingest')
+        if eligible:
+            for nested in lines[index + 1:]:
+                if re.match(r'^\s*}\s*$', nested):
+                    break
+                parts = nested.split()
+                if len(parts) >= 2 and parts[0] == 'reverse_proxy' and target.fullmatch(parts[1]):
+                    candidates.append(parts[1])
+                    break
+    parts = line.split()
+    if len(parts) >= 3 and parts[0] == 'reverse_proxy':
+        if '/functions' in parts[1] or (parts[1].startswith('@') and parts[1][1:] in names and parts[1] != '@lemtel_traffic_ingest'):
+            if target.fullmatch(parts[2]):
+                candidates.append(parts[2])
+
+if len(candidates) != 1:
+    raise SystemExit(1)
+print(candidates[0])
+PY
+)" || fail functions_proxy_upstream_unresolved
 [[ "$functions_upstream" =~ ^[A-Za-z0-9._-]+:[0-9]+$ ]] || fail functions_proxy_upstream_unresolved
 marker_count="$(grep -Fc "$route_marker" "$caddyfile" || true)"
 case "$marker_count" in

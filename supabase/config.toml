@@ -236,3 +236,6 @@ project_id = "gejxisrqtvxavbrfcoxz"
   verify_jwt = false
 [functions.pp-billing-monthly]
   verify_jwt = false
+
+[functions.pp-call-handoff]
+verify_jwt = false

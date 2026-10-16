@@ -1,3 +1,4 @@
+import { queueWidgetResourceEvent } from "../_shared/maestro-widget-sync.ts";
 import { authBroker, corsHeaders, jsonResponse, logAudit, nsBrokerFetch, nsEnv } from "../_shared/ns-broker.ts";
 
 type Seg = { speaker: string; text: string; start?: number; end?: number };
@@ -122,9 +123,11 @@ Deno.serve(async (req) => {
     const transcriptText = segments.map((s) => `${s.speaker}: ${s.text}`).join("\n");
 
     // Persist on planipret_phone_calls (best-effort — call_id might match ns_call_id or id)
-    await admin.from("planipret_phone_calls")
+    const { error: persistError } = await admin.from("planipret_phone_calls")
       .update({ transcript: transcriptText, transcript_segments: segments })
       .or(`ns_call_id.eq.${callId},id.eq.${callId}`);
+
+    if (!persistError) queueWidgetResourceEvent(admin, profile.id, "transcript_ready", callId);
 
     await logAudit(admin, req, {
       user_id: profile.id, action: "TRANSCRIPT_ACCESS",

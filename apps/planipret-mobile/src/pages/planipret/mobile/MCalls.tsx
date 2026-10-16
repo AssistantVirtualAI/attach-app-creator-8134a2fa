@@ -118,11 +118,16 @@ const UNRESOLVED_FR = "Numéro non résolu";
 const UNRESOLVED_EN = "Unresolved number";
 function callDeviceLabel(call: Call): string | null {
   const m = call.metadata ?? {};
-  if (m.device === "mobile") return "cellulaire";
-  if (m.device === "widget") return "widget";
+  if (m.device === "mobile") return "Cellulaire";
+  if (m.device === "widget") return "Widget";
+  const cdr = m.netSapiens ?? m.ns_cdr ?? {};
+  const aors = [cdr["call-orig-user"], cdr["call-term-user"], cdr.orig_user, cdr.term_user, cdr.device]
+    .map((v) => String(v ?? "").replace(/^sip:/i, "").split("@")[0]);
+  if (aors.some((v) => /^\d+M$/.test(v))) return "Cellulaire";
+  if (aors.some((v) => /^\d+[xW]$/.test(v))) return "Widget";
   const aor = String(m.device_name ?? m.call_orig_user ?? "").replace(/^sip:/i, "").split("@")[0];
-  if (/^\d+(M|_mobile)$/i.test(aor)) return "cellulaire";
-  if (/^\d+(x|W|_web)$/i.test(aor)) return "widget";
+  if (/^\d+(M|_mobile)$/i.test(aor)) return "Cellulaire";
+  if (/^\d+(x|W|_web)$/i.test(aor)) return "Widget";
   return null;
 }
 
@@ -293,7 +298,17 @@ export default function MCalls() {
       );
 
       // Fallback : si NS ne renvoie rien, montrer le cache local
-      const next = (all.length ? all : (visibleLocal as Call[])) as Call[];
+      const groups = new Map<string, Call>();
+      for (const call of (all.length ? all : visibleLocal as Call[])) {
+        const key = call.ns_orig_callid || call.id;
+        const previous = groups.get(key);
+        if (!previous) groups.set(key, call);
+        else groups.set(key, { ...previous,
+          recording_url: previous.recording_url || call.recording_url,
+          transcript: previous.transcript || call.transcript,
+        });
+      }
+      const next = [...groups.values()];
       setCalls(next);
       writeScreenCache(`calls:list:${userId}`, next);
 

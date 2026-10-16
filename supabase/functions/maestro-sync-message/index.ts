@@ -1,3 +1,4 @@
+import { queueWidgetResourceEvent } from "../_shared/maestro-widget-sync.ts";
 // POST /functions/v1/maestro-sync-message
 // Body: { message_id: uuid, force?: boolean }
 //
@@ -36,6 +37,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!msg) return json({ success: false, error: "message_not_found" }, 404);
 
+    queueWidgetResourceEvent(admin, msg.user_id, "sms", msg.id, msg.direction === "outbound" ? "outbound" : "inbound");
     const meta = (msg.metadata ?? {}) as Record<string, unknown>;
     if ((msg.maestro_synced || meta.maestro_synced_at) && !force) {
       return json({ success: true, skipped: "already_synced" });

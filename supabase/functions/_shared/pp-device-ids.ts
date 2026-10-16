@@ -7,8 +7,9 @@
  * part. The convention is therefore:
  *
  *   mobile app  ->  <ext>M   (e.g. 113M)   — legacy: <ext>_mobile
- *   web/widget  ->  <ext>W   (e.g. 113W)   — legacy: <ext>_web
+ *   web         ->  <ext>W   (e.g. 113W)   — legacy: <ext>_web
  *
+ * Widget handoff always uses <ext>x, never stored legacy <ext>W.
  * Migration is create-new + delete-legacy, handled by ns-provision-broker-devices.
  */
 export const MOBILE_SUFFIX = "M";

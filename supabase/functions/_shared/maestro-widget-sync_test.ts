@@ -36,3 +36,14 @@ Deno.test("call event is flag gated and allowlisted", async () => {
   assertEquals(Object.keys(payload).sort(), ["event", "user_id", "external_user_id", "call_id", "direction", "started_at", "device"].sort());
   assertEquals(JSON.stringify(payload).includes("must_not_leave"), false);
 });
+
+Deno.test("resource events are gated and redact content", async () => {
+  const { buildWidgetResourcePayload } = await import("./maestro-widget-sync.ts");
+  for (const event of ["recording_ready", "transcript_ready", "sms"] as const) {
+    const input = { event, user_id: "crm", external_user_id: "200", resource_id: "opaque", direction: "inbound" as const, body: "private", url: "private" };
+    assertEquals(buildWidgetResourcePayload(input, false), null);
+    const output = buildWidgetResourcePayload(input, true)!;
+    assertEquals(JSON.stringify(output).includes("private"), false);
+    assertEquals(output.event, event);
+  }
+});

@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { normalizeNsEvents, nsCallKey, nsCdrExtensionCandidates, shouldProcessCall } from "../_shared/ns-call-events.ts";
 import { parseServiceAccount, sendFcmDataMessage } from "../_shared/fcm.ts";
-import { queueWidgetSync, queueWidgetCallEvent } from "../_shared/maestro-widget-sync.ts";
+import { queueWidgetSync, queueWidgetCallEvent, queueWidgetResourceEvent } from "../_shared/maestro-widget-sync.ts";
 
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
@@ -117,8 +117,8 @@ Deno.serve(async (req) => {
           const profile = profiles[0];
           const aors = [data?.["call-orig-user"], data?.["call-term-user"], data?.orig_user, data?.term_user, data?.device]
             .map((v) => String(v ?? "").replace(/^sip:/i, "").split("@")[0]);
-          const mobile = aors.includes(profile.ns_mobile_device_id || `${extension}M`);
-          const widget = aors.includes(profile.ns_widget_device_id || `${extension}x`);
+          const mobile = aors.includes(`${extension}M`);
+          const widget = aors.includes(`${extension}x`);
           if (mobile === widget) continue; // Never guess the device.
           const state = String(data?.state ?? data?.["call-state"] ?? data?.status ?? "").toLowerCase();
           const ended = String(data?.remove ?? "").toLowerCase() === "yes" || ["ended", "terminated", "disconnected"].includes(state);
@@ -433,7 +433,10 @@ async function processEvent(event: any) {
       // ID. Update that original row when any leg matches, so its owner and
       // consent sheet remain attached to the completed call.
       const existing = await findExistingCdrCall(identities);
-      const cdrMetadata = { ...(existing?.metadata ?? {}), ns_cdr: data, cdr_identities: identities };
+      const cdrAors = [data["call-orig-user"], data["call-term-user"], data.orig_user, data.term_user, data.device]
+        .map((v) => String(v ?? "").replace(/^sip:/i, "").split("@")[0]);
+      const cdrDevice = cdrAors.some((v) => /^\d+M$/.test(v)) ? "mobile" : cdrAors.some((v) => /^\d+[xW]$/.test(v)) ? "widget" : null;
+      const cdrMetadata = { device: cdrDevice, ...(existing?.metadata ?? {}), ns_cdr: data, cdr_identities: identities };
       const callPatch: Record<string, unknown> = {
         ns_cdr_id: cdrId,
         ns_callid: parentCallId ?? origCallId ?? termCallId,
@@ -447,6 +450,7 @@ async function processEvent(event: any) {
         status: "completed",
         metadata: cdrMetadata,
       };
+      if (recUrl && (existing?.user_id || userId)) queueWidgetResourceEvent(admin, String(existing?.user_id || userId), "recording_ready", String(existing?.id || cdrId));
       let localCallId: string | null = null;
       if (existing?.id) {
         let { data: updated, error: updateError } = await admin.from("planipret_phone_calls")

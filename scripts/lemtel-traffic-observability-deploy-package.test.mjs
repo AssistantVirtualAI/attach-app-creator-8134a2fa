@@ -68,6 +68,8 @@ test('sealed package is byte-reproducible, SHA-256 covered, and contains exactly
     const metadata = JSON.parse(readFileSync(join(unpacked, 'deployment-metadata.json'), 'utf8'));
     assert.equal(metadata.scope, 'lemtel_traffic_observability');
     assert.deepEqual(metadata.github_actions_portal_artifact, provenance);
+    assert.equal(metadata.database_mutation, true, 'the package explicitly authorizes only the 0017 schema migration');
+    assert.equal(metadata.database_business_data_mutation, false, 'the package must never mutate business data');
     for (const key of [
       'secrets_in_bundle', 'personal_data_in_bundle', 'ip_addresses_in_bundle', 'traffic_content_in_bundle',
       'collector_activation', 'collector_timer_enabled', 'gateway_route_changed', 'global_jwt_bypass',

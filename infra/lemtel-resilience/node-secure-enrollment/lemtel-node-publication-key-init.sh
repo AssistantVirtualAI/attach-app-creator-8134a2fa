@@ -53,6 +53,7 @@ recorded="$(cat "$archive_digest")"
 required=(
   'deployment-metadata.json'
   'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts'
+  'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs'
   'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh'
   'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts'
   'manifest.sha256'
@@ -74,6 +75,7 @@ import sys
 root = sys.argv[1]
 required = [
     'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts',
+    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs',
     'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh',
     'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts',
 ]
@@ -98,6 +100,7 @@ try:
         'allowed_roles': ['do_writer', 'hostinger_standby'],
         'runtime_key_generation_requires_explicit_local_gate': True,
         'runtime_key_generation_authorized_by_package': False,
+        'local_crypto_runtimes': ['deno_2', 'node_webcrypto_18_or_newer'],
         'network_access': False,
         'package_install_persistent': False,
         'secrets_configured': False,
@@ -124,16 +127,30 @@ fi
 # No runtime is installed. A pre-existing directory is ambiguous and is never reused.
 [ ! -e "$config" ] && [ ! -e "$state" ] || fail local_state_exists_requires_review
 for parent in /etc /var /var/lib; do secure_directory_parent "$parent" || fail parent_security_invalid; done
-command -v deno >/dev/null 2>&1 || fail deno_missing
-DENO_BIN="$(command -v deno)"
-[ -x "$DENO_BIN" ] || fail deno_invalid
-version="$($DENO_BIN --version 2>/dev/null | awk 'NR == 1 {print $2}')" || fail deno_version_unavailable
-[[ "$version" =~ ^2\.[0-9]+\.[0-9]+$ ]] || fail deno_version_unsupported
-
+runtime=''
+if command -v deno >/dev/null 2>&1; then
+  DENO_BIN="$(command -v deno)"
+  [ -x "$DENO_BIN" ] || fail deno_invalid
+  version="$($DENO_BIN --version 2>/dev/null | awk 'NR == 1 {print $2}')" || fail deno_version_unavailable
+  [[ "$version" =~ ^2\.[0-9]+\.[0-9]+$ ]] || fail deno_version_unsupported
+  runtime='deno'
+elif command -v node >/dev/null 2>&1; then
+  NODE_BIN="$(command -v node)"
+  [ -x "$NODE_BIN" ] || fail node_invalid
+  version="$($NODE_BIN --version 2>/dev/null)" || fail node_version_unavailable
+  [[ "$version" =~ ^v(1[89]|[2-9][0-9])\.[0-9]+\.[0-9]+$ ]] || fail node_version_unsupported
+  runtime='node'
+else
+  fail secure_runtime_missing
+fi
 install -d -o root -g root -m 0700 "$config" "$state"
 secure_directory_parent "$config" || fail config_directory_security_invalid
 secure_directory_parent "$state" || fail state_directory_security_invalid
-result="$(env LEMTEL_NODE_LOCAL_APPROVAL=generate_publication_keys_only "$DENO_BIN" run --quiet --no-prompt --no-config --no-lock --deny-net --allow-env=LEMTEL_NODE_LOCAL_APPROVAL --allow-read="$config","$state" --allow-write="$config","$state" --allow-sys=uid "$stage/infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts" init 2>&1)" || fail local_key_generation_failed
+if [ "$runtime" = deno ]; then
+  result="$(env LEMTEL_NODE_LOCAL_APPROVAL=generate_publication_keys_only "$DENO_BIN" run --quiet --no-prompt --no-config --no-lock --deny-net --allow-env=LEMTEL_NODE_LOCAL_APPROVAL --allow-read="$config","$state" --allow-write="$config","$state" --allow-sys=uid "$stage/infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts" init 2>&1)" || fail local_key_generation_failed
+else
+  result="$(env LEMTEL_NODE_LOCAL_APPROVAL=generate_publication_keys_only "$NODE_BIN" "$stage/infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs" init 2>&1)" || fail local_key_generation_failed
+fi
 fingerprint="$(printf '%s\n' "$result" | sed -n 's/^status=initialized fingerprint=\(sha256:[a-f0-9]\{64\}\)$/\1/p')"
 [ "$(printf '%s\n' "$result" | wc -l | tr -d ' ')" = 1 ] && [[ "$fingerprint" =~ ^sha256:[a-f0-9]{64}$ ]] || fail local_key_generation_output_invalid
 secure_regular_file "$config/keys.json" || fail key_file_security_invalid

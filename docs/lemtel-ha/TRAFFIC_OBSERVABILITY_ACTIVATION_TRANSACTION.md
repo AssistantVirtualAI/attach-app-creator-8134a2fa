@@ -67,9 +67,13 @@ Le timer peut ensuite suivre sa cadence normale. **Aucune métrique visible n’
 
 Après réussite, les deux entrées Compose créées par ce run restent dans `edge-config` root 0700 : un env-file root 0600 contenant le secret et un override root 0600 qui ne contient qu’une interpolation. Le secret persiste ainsi seulement dans la configuration collecteur root 0600, l’env-file Edge root 0600 et la configuration interne du conteneur Edge ; aucun secret n’est placé dans l’override. Les labels Compose du nouvel Edge pointent donc vers des fichiers stables et protégés, ce qui permet une re-création ultérieure depuis la configuration réelle plutôt que depuis un chemin éphémère. Ce programme reste one-shot : un nouveau lancement refuse la configuration et les unités existantes, sans les modifier. La sauvegarde Caddy et ses métadonnées root-only restent disponibles pour restauration.
 
+## Diagnostic de phase et rollback automatique
+
+En cas de refus, l’attestation ajoute `activation_phase` : une étiquette redacted parmi `preflight`, `configuration`, `edge_recreate`, `ingress_route`, `baseline`, `timer` et `final_attestation`. Cette valeur sert uniquement à orienter une revue locale ; elle ne contient ni chemin, ni commande, ni sortie de conteneur, ni secret et ne transforme pas un refus en autorisation.
+
 ## Rollback automatique et manuel sûr
 
-Sur erreur ou interruption gérée après la première mutation, les diagnostics restent génériques. Les sous-processus interrompus sont terminés par groupe avant rollback. Le programme :
+Sur erreur ou interruption gérée après la première mutation, les diagnostics restent redacted. Les sous-processus interrompus sont terminés par groupe avant rollback. Le programme :
 
 1. désactive/arrête uniquement le timer puis le service **si l’installateur a été tenté par ce run**, avec préexistence déjà exclue;
 2. restaure Caddy depuis sa copie 0600 vérifiée, avec mode/ownership initiaux, sous le verrou de route puis validation et reload local;

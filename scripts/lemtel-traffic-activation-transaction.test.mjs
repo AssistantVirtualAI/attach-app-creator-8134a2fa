@@ -50,6 +50,11 @@ test('new activation entry fails closed on independent operator gates before any
   assert.match(prepare, /command\(\['bash', str\(SOURCE \/ 'lemtel-ha-do-writer-traffic-runtime-preflight.sh'\)\]/u);
   assert.doesNotMatch(prepare, /self\.(?:create|mkdir)\(|\.unlink\(|\.rmdir\(|os\.(?:replace|mkdir)\(|O_CREAT/u);
   assert.match(source, /pending_secret = transaction.prepare\(\)[\s\S]*transaction.apply\(pending_secret\)/u);
+  assert.match(source, /self\.stage = 'preflight'/u);
+  for (const stage of ['configuration', 'edge_recreate', 'ingress_route', 'baseline', 'timer', 'final_attestation']) {
+    assert.ok(source.includes(`self.stage = '${stage}'`), stage);
+  }
+  assert.match(source, /print\('activation_phase=' \+ transaction\.stage\)/u);
   assert.ok(apply.indexOf('self.create(LOCK') < apply.indexOf('self.edge_attempted = True'));
   assert.match(prepare, /secrets.token_hex\(32\)/u);
 });
@@ -190,6 +195,7 @@ test('new source has no forbidden topology, business-data, network command or ou
     assert.ok(doc.includes(invariant));
   }
   assert.match(source, /print\('rollback_status=' \+ rollback_status\)/u);
+  assert.match(source, /print\('activation_phase=' \+ transaction\.stage\)/u);
   assert.match(source, /except BaseException:[\s\S]*rollback_status = transaction.rollback\(\) if transaction.files else 'not_required'/u);
 });
 

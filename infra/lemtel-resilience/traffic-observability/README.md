@@ -46,6 +46,8 @@ Avant toute activation réelle : approbation de changement DO writer expliciteme
 
 Le déployeur du **plan inactif** applique seulement 0017, le portail et les sources Edge. Il ne crée aucune route Caddy directe, aucun bypass JWT, aucun collecteur, aucun timer et ne peut donc recevoir aucun relevé. Il exige toujours la revue et le snapshot du writer, mais l’attestation des logs d’accès reste intentionnellement une gate du script distinct d’application de route et de la phase d’activation : elle ne peut jamais être contournée pour la collecte réelle.
 
+Le package vérifie toujours le manifeste source de l’administration Edge. Sur un writer legacy où `lemtel-onboarding-admin/index.ts` existe sans fichier `manifest.json` runtime, le déployeur remplace transactionnellement **uniquement** `index.ts` et conserve ce format existant ; il ne crée aucun manifeste runtime nouveau. Si un manifeste runtime régulier existe déjà, il est sauvegardé, mis à jour et restauré avec la même transaction.
+
 ## Générateur du paquet transactionnel redacted
 
 `scripts/lemtel-traffic-observability-deploy-package.mjs` scelle une archive `tar` reproductible et son sidecar SHA-256. L’archive ne contient que `manifest.sha256`, `deployment-metadata.json`, la migration **0017**, `portal.tar`, et les deux paires source/manifest Edge que le déployeur `lemtel-ha-do-writer-traffic-observability-deploy.sh` exige. Elle exclut donc le collecteur, l’installateur du timer, l’applicateur Caddy, toute configuration globale JWT, les secrets, relevés, sauvegardes, adresses IP et données de contenu/PII.

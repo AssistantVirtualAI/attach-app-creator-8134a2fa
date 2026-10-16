@@ -1,5 +1,5 @@
 {
-  "package_version": "lemtel_email_onboarding_portal_admin_v14",
+  "package_version": "lemtel_email_onboarding_portal_admin_v15",
   "scope": "offline_function_source_only",
   "deployment_authorized": false,
   "client_cutover_authorized": false,
@@ -31,6 +31,7 @@
     "platform_administrator_revoke_with_last_admin_protection",
     "authenticated_platform_traffic_trend_read",
     "authenticated_platform_redacted_node_status_read",
+    "authenticated_platform_global_overview_read",
     "authenticated_portal_telephony_preparation_state_read",
     "organization_scoped_telephony_preparation_review_state_update",
     "localized_access_delivery_status_visibility",

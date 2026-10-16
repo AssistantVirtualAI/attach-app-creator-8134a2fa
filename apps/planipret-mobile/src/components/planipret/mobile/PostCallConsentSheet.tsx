@@ -211,6 +211,7 @@ export default function PostCallConsentSheet() {
     if (resolved) {
       try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
     }
+    callRef.current = null;
     setCall(null);
     reset();
     try { window.speechSynthesis?.cancel?.(); } catch { /* ignore */ }

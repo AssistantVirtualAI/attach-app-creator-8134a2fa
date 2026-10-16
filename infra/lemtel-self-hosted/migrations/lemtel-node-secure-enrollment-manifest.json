@@ -1,0 +1,58 @@
+{
+  "package_version": "lemtel_node_secure_enrollment_schema_v1",
+  "scope": "offline_schema_rpc_audit",
+  "deployment_authorized": false,
+  "activation_authorized": false,
+  "schema_apply_authorized": false,
+  "runtime_key_generation_authorized": false,
+  "remote_commands_authorized": false,
+  "migration_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0021_lemtel_node_secure_enrollment.sql",
+      "sha256": "7535ed3603086159b489351b256029c67787e9772cd65c2597d4faed1dd1f19e"
+    }
+  ],
+  "edge_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts",
+      "sha256": "bf613cf5c0d752089e062fc74e98e7fcc3f415fce4dd51d3d0d2bee14c956fc7"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollmentBackend.ts",
+      "sha256": "1ea84571dcc4bb8c3bcb864e7feb8e4accfd268826eb2e898d99ca20010bb56d"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.ts",
+      "sha256": "4bb824e2fbbf9fc0ebd7c8774fb72d4ea9586dc94a9cca267cdf645137cc09c6"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment/manifest.json",
+      "sha256": "1c355343236af06478277ba2337e0f6441046281c1d1fc7d668597b7cb4bb8be"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment-admin/index.ts",
+      "sha256": "031892dcd6c7b4bb669ed7910c1b7931684a8a79aa09d5e1ceeeecaa279ebc47"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment-admin/manifest.json",
+      "sha256": "476014af10762b8813f4d8f4320f13682fbe166d5c7f4c27e54d40ae608b1ca7"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-status-signed-ingest/index.ts",
+      "sha256": "1c47d6c514e48388d330a9d9c6196f4cf834934eea5f6c76da6e4dfc4ae6aa52"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-status-signed-ingest/manifest.json",
+      "sha256": "253ee241d1b93c51bdd2a5ea5d1d3ac5bf127f536f6c3774a7a823a07d89616d"
+    }
+  ],
+  "dependencies": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0020_lemtel_node_status_observations.sql",
+      "sha256": "dca41b32c98520f93e6e87fa01bd92ac977c8db323649b7c5d1904e3839f6568"
+    }
+  ],
+  "requires_existing_table": "public.lemtel_platform_administrators",
+  "browser_table_or_rpc_permissions": false,
+  "service_direct_table_permissions": false
+}

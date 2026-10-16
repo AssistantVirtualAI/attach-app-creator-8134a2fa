@@ -1,0 +1,20 @@
+# Source only; no [Install] section. No key generation or publication command.
+[Unit]
+Description=Lemtel publication-only local preflight (disabled source)
+ConditionPathExists=/etc/lemtel-node-publication/activation.approved
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/bin/deno run --no-prompt --allow-read=/etc/lemtel-node-publication,/var/lib/lemtel-node-publication --allow-sys=uid /opt/lemtel/infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts check
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+StandardOutput=null
+StandardError=null

@@ -1,0 +1,9 @@
+# Source only; no [Install] section, no persistence or activation authority.
+[Unit]
+Description=Lemtel local publication preflight timer (disabled source)
+ConditionPathExists=/etc/lemtel-node-publication/activation.approved
+
+[Timer]
+OnUnitActiveSec=60s
+Unit=lemtel-node-publication-preflight.service
+Persistent=false

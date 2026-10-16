@@ -7,6 +7,7 @@ import LemtelTrafficPanel from "./LemtelTrafficPanel";
 type Props = { t: LemtelDict; lang: Lang; config: PortalConfig; readonly: boolean };
 type Health = LemtelOperationalStatus["overall"];
 type ReplicationState = LemtelOperationalStatus["replication"]["database"] | LemtelOperationalStatus["replication"]["storage"];
+export const TRAFFIC_READ_DEADLINE_MS = 8_000;
 
 const healthClass: Record<Health, string> = {
   healthy: "lt-chip-ok",
@@ -28,6 +29,17 @@ function replicationHealth(value: ReplicationState): Health {
   if (value === "streaming" || value === "integrity_verified") return "healthy";
   if (value === "sync_attention") return "degraded";
   return "unknown";
+}
+
+/** Keeps a non-essential redacted read from blocking the whole Operations view indefinitely. */
+function boundedTrafficRead() {
+  let timeout: number | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = window.setTimeout(() => reject(new Error("traffic_read_deadline")), TRAFFIC_READ_DEADLINE_MS);
+  });
+  return Promise.race([portalApi.getTrafficTrend(), deadline]).finally(() => {
+    if (timeout !== undefined) window.clearTimeout(timeout);
+  });
 }
 
 const unknownOperationalStatus: LemtelOperationalStatus = {
@@ -88,7 +100,7 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
     setTraffic(null); setTrafficLoading(true); setTrafficUnavailable(false);
     // Failure is not an empty/provisioning result, and health reads never gate traffic reads.
     const trafficRequest = (async () => {
-      try { setTraffic(await portalApi.getTrafficTrend()); }
+      try { setTraffic(await boundedTrafficRead()); }
       catch { setTraffic(null); setTrafficUnavailable(true); }
       finally { setTrafficLoading(false); }
     })();

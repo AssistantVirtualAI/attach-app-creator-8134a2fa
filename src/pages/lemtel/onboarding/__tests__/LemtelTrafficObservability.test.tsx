@@ -1,9 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LemtelTrafficTrend } from "../lemtelHostedApi";
 const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn() }));
 vi.mock("../lemtelHostedApi", () => ({ portalApi: api, LemtelError: class extends Error { key = "unavailable"; } }));
-import LemtelOperationalStatus from "../LemtelOperationalStatus";
+import LemtelOperationalStatus, { TRAFFIC_READ_DEADLINE_MS } from "../LemtelOperationalStatus";
 import LemtelTrafficPanel from "../LemtelTrafficPanel";
 import { LEMTEL_DICT } from "../lemtelI18n";
 
@@ -57,6 +57,16 @@ describe("Lemtel private traffic observability", () => {
     fireEvent.click(screen.getByRole("button", { name: "Actualiser" }));
     await screen.findByText(LEMTEL_DICT.fr.operations.traffic.unavailable);
     expect(screen.queryByText("2 KiB")).toBeNull(); expect(screen.queryByText(LEMTEL_DICT.fr.operations.traffic.empty)).toBeNull();
+  });
+  it("ends a stalled traffic read at the bounded deadline without blocking Operations", async () => {
+    vi.useFakeTimers();
+    api.getTrafficTrend.mockImplementation(() => new Promise(() => undefined));
+    try {
+      operations();
+      await act(async () => { await vi.advanceTimersByTimeAsync(TRAFFIC_READ_DEADLINE_MS); });
+      expect(screen.getByText(LEMTEL_DICT.fr.operations.traffic.unavailable)).toBeInTheDocument();
+      expect(api.getOperationalStatus).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
   });
   it("loads traffic even when health telemetry is unavailable, and readonly never calls the API", async () => {
     api.getOperationalStatus.mockRejectedValue(new Error("hidden")); api.getTrafficTrend.mockResolvedValue(measured);

@@ -76,14 +76,128 @@ site_line="$(awk -v canonical_host="$canonical_host" '
   END { if (matches != 1) exit 1 }
 ' "$caddyfile")" || fail canonical_site_unexpected
 [ -n "$site_line" ] || fail canonical_site_unexpected
+
+exec 9>"$lock_file"
+flock -n 9 || fail concurrent_deploy
+
+reconcile_existing_route() {
+  local destination="$1"
+  python3 - "$caddyfile" "$site_line" "$route_marker" "$destination" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+
+path = Path(sys.argv[1])
+site_line = sys.argv[2]
+marker = sys.argv[3]
+destination = sys.argv[4]
+
+
+def reject():
+    sys.exit(1)
+
+
+def brace_delta(line):
+    return line.split('#', 1)[0].count('{') - line.split('#', 1)[0].count('}')
+
+
+try:
+    lines = path.read_text(encoding='utf-8').splitlines(keepends=True)
+except (OSError, UnicodeError):
+    reject()
+
+site_indices = [index for index, line in enumerate(lines) if line.rstrip('\n') == site_line]
+if len(site_indices) != 1:
+    reject()
+site_start = site_indices[0]
+depth = brace_delta(lines[site_start])
+if depth <= 0:
+    reject()
+site_end = None
+for index in range(site_start + 1, len(lines)):
+    depth += brace_delta(lines[index])
+    if depth == 0:
+        site_end = index
+        break
+    if depth < 0:
+        reject()
+if site_end is None:
+    reject()
+
+marker_indices = [index for index, line in enumerate(lines) if line.strip() == marker]
+if len(marker_indices) != 1:
+    reject()
+marker_index = marker_indices[0]
+if not site_start < marker_index < site_end:
+    reject()
+if marker_index + 2 >= site_end:
+    reject()
+if not re.fullmatch(r'\s*@lemtel_load_balancer_ready\s+path\s+/lemtel-lb-ready\s*', lines[marker_index + 1].rstrip('\n')):
+    reject()
+if not re.fullmatch(r'\s*handle\s+@lemtel_load_balancer_ready\s*\{\s*', lines[marker_index + 2].rstrip('\n')):
+    reject()
+
+handler_depth = brace_delta(lines[marker_index + 2])
+if handler_depth != 1:
+    reject()
+handler_end = None
+for index in range(marker_index + 3, site_end):
+    delta = brace_delta(lines[index])
+    handler_depth += delta
+    if handler_depth == 0:
+        handler_end = index
+        break
+    if handler_depth < 0 or delta != 0:
+        reject()
+if handler_end is None:
+    reject()
+
+directives = []
+for line in lines[marker_index + 3:handler_end]:
+    stripped = line.strip()
+    if not stripped or stripped.startswith('#'):
+        continue
+    directives.append(stripped)
+legacy = ['root * /etc/caddy', 'rewrite * /lemtel-lb-ready', 'file_server']
+current = ['root * /etc/caddy', 'rewrite * /lemtel-lb-ready', 'header Content-Type application/json', 'file_server']
+if directives == current:
+    print('current')
+    sys.exit(0)
+if directives != legacy:
+    reject()
+
+if destination != '-':
+    indent = re.match(r'^(\s*)', lines[marker_index]).group(1)
+    child = f'{indent}  '
+    replacement = [
+        f'{indent}{marker}\n',
+        f'{indent}@lemtel_load_balancer_ready path /lemtel-lb-ready\n',
+        f'{indent}handle @lemtel_load_balancer_ready {{\n',
+        f'{child}root * /etc/caddy\n',
+        f'{child}rewrite * /lemtel-lb-ready\n',
+        f'{child}header Content-Type application/json\n',
+        f'{child}file_server\n',
+        f'{indent}}}\n',
+    ]
+    try:
+        Path(destination).write_text(''.join(lines[:marker_index] + replacement + lines[handler_end + 1:]), encoding='utf-8')
+    except (OSError, UnicodeError):
+        reject()
+print('legacy')
+PY
+}
+
 route_marker_count="$(grep -Fc "$route_marker" "$caddyfile" || true)"
 case "$route_marker_count" in
   0) route_state='installed' ;;
   1)
-    grep -Fq '@lemtel_load_balancer_ready path /lemtel-lb-ready' "$caddyfile" || fail existing_route_invalid
-    grep -Fq 'rewrite * /lemtel-lb-ready' "$caddyfile" || fail existing_route_invalid
-    grep -Fq 'header Content-Type application/json' "$caddyfile" || fail existing_route_invalid
-    route_state='already_present'
+    existing_route_mode="$(reconcile_existing_route -)" || fail existing_route_invalid
+    case "$existing_route_mode" in
+      current) route_state='already_present' ;;
+      legacy) route_state='legacy_reconciled' ;;
+      *) fail existing_route_invalid ;;
+    esac
     ;;
   *) fail route_marker_ambiguous ;;
 esac
@@ -130,8 +244,6 @@ except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
 PY
 }
 
-exec 9>"$lock_file"
-flock -n 9 || fail concurrent_deploy
 backup_root='/var/lib/lemtel-ha/l7-ready/backups'
 install -d -o root -g root -m 0700 "$backup_root"
 backup_dir="$(mktemp -d "$backup_root/caddy.XXXXXX")"
@@ -179,6 +291,13 @@ if [ "$route_state" = installed ]; then
     }
     { print }
   ' "$caddyfile" > "$candidate"
+elif [ "$route_state" = legacy_reconciled ]; then
+  candidate="$(mktemp "${caddyfile}.l7-ready.XXXXXX")"
+  temporary="$(mktemp "${caddyfile}.l7-ready.live.XXXXXX")"
+  [ "$(reconcile_existing_route "$candidate")" = legacy ] || fail existing_route_invalid
+fi
+
+if [ -n "$candidate" ]; then
   docker exec -i "$caddy_container" caddy adapt --config /dev/stdin --adapter caddyfile < "$candidate" >/dev/null || fail caddy_candidate_invalid
   cp --preserve=mode,ownership,timestamps -- "$candidate" "$temporary"
   chmod --reference="$caddyfile" "$temporary"

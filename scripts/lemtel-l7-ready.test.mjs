@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -52,6 +52,45 @@ test('Caddy anchor accepts only one non-comment canonical site declaration',()=>
   assert.match(program,/\/\^\[\[:space:\]\]\*#\//);
   assert.match(program,/index\(\$0, canonical_host\)/);
   assert.match(program,/matches != 1/);
+});
+
+test('a strictly recognized legacy marker block is reconciled to JSON while foreign blocks remain rejected',()=>{
+  const match=deploy.match(/reconcile_existing_route\(\) \{\n  local destination="\$1"\n  python3 - "\$caddyfile" "\$site_line" "\$route_marker" "\$destination" <<'PY'\n([\s\S]*?)\nPY\n\}/);
+  assert.ok(match,'route reconciliation program is present');
+  const program=match[1];
+  const sandbox=mkdtempSync(resolve(tmpdir(),'lemtel-l7-reconcile-'));
+  const caddyfile=resolve(sandbox,'Caddyfile');
+  const candidate=resolve(sandbox,'candidate');
+  const canonical='lemtel.assistantvirtualai.com {';
+  const marker='# LEMTEL_LOAD_BALANCER_READY_V1';
+  const legacy=[
+    canonical,
+    `  ${marker}`,
+    '  @lemtel_load_balancer_ready path /lemtel-lb-ready',
+    '  handle @lemtel_load_balancer_ready {',
+    '    root * /etc/caddy',
+    '    rewrite * /lemtel-lb-ready',
+    '    file_server',
+    '  }',
+    '  reverse_proxy /functions/* supabase-kong:8000',
+    '}',
+    '',
+  ].join('\n');
+  try {
+    writeFileSync(caddyfile,legacy);
+    const mode=execFileSync('python3',['-',caddyfile,canonical,marker,candidate],{input:program,encoding:'utf8'}).trim();
+    assert.equal(mode,'legacy');
+    const reconciled=readFileSync(candidate,'utf8');
+    assert.match(reconciled,/header Content-Type application\/json/);
+    assert.match(reconciled,/reverse_proxy \/functions\/\* supabase-kong:8000/);
+    assert.equal((reconciled.match(/LEMTEL_LOAD_BALANCER_READY_V1/g)??[]).length,1);
+    writeFileSync(caddyfile,reconciled);
+    assert.equal(execFileSync('python3',['-',caddyfile,canonical,marker,'-'],{input:program,encoding:'utf8'}).trim(),'current');
+    writeFileSync(caddyfile,legacy.replace('file_server','respond "unexpected"'));
+    assert.throws(()=>execFileSync('python3',['-',caddyfile,canonical,marker,candidate],{input:program,encoding:'utf8'}));
+  } finally {
+    rmSync(sandbox,{recursive:true,force:true});
+  }
 });
 
 test('bundle verification resolves every packaged source from the supplied bundle directory',()=>{

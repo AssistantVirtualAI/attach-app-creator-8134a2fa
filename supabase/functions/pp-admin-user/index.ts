@@ -1,4 +1,5 @@
 import { authBroker, corsHeaders, jsonResponse, logAudit, supaAdmin } from "../_shared/ns-broker.ts";
+import { queueWidgetSync } from "../_shared/maestro-widget-sync.ts";
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
 const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
@@ -427,6 +428,7 @@ Deno.serve(async (req) => {
         }).catch(() => null);
       } catch (e) { console.error("welcome sequence", e); }
 
+      queueWidgetSync(admin, { userId: created.user.id, extension: String(ns_extension) });
       return jsonResponse({
         success: true,
         user_id: created.user.id,
@@ -515,6 +517,7 @@ Deno.serve(async (req) => {
         metadata: { email, extension, updates },
       });
 
+      if (userId) queueWidgetSync(admin, { userId });
       return jsonResponse({ success: true, user_id: userId, profile_id: profileId });
     }
 
@@ -595,6 +598,7 @@ Deno.serve(async (req) => {
         admin_id: profile.id, action: "USER_UPDATE",
         resource_type: "user", resource_id: user_id, metadata: allowed,
       });
+      queueWidgetSync(admin, { userId: user_id });
       return jsonResponse({ success: true, elevenlabs_agent_id: provisionedAgentId, elevenlabs_error: provisionError });
     }
 
@@ -604,9 +608,10 @@ Deno.serve(async (req) => {
 
       const { data: target } = await admin
         .from("planipret_profiles")
-        .select("id, extension, ns_extension, ns_domain")
+        .select("id, extension, ns_extension, ns_domain, maestro_broker_id")
         .eq("user_id", user_id)
         .maybeSingle();
+      if ((target as any)?.maestro_broker_id) queueWidgetSync(admin, { userId: user_id, crmId: (target as any).maestro_broker_id, released: true, force: true });
 
       let nsResult: any = null;
       if (target) {
@@ -791,6 +796,7 @@ Deno.serve(async (req) => {
       const { error } = await admin.auth.admin.updateUserById(targetUserId, { password: newPassword });
       if (error) return jsonResponse({ success: false, error: error.message }, 200);
       await logAudit(admin, req, { admin_id: profile.id, action: "PASSWORD_SET_DIRECT", metadata: { email, user_id: targetUserId } });
+      queueWidgetSync(admin, { userId: targetUserId, force: true });
       return jsonResponse({ success: true });
     }
 

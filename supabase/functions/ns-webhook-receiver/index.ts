@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { normalizeNsEvents, nsCallKey, nsCdrExtensionCandidates, shouldProcessCall } from "../_shared/ns-call-events.ts";
 import { parseServiceAccount, sendFcmDataMessage } from "../_shared/fcm.ts";
+import { queueWidgetSync } from "../_shared/maestro-widget-sync.ts";
 
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
@@ -82,6 +83,20 @@ Deno.serve(async (req) => {
 
   let body: any;
   try { body = await req.json(); } catch { return ok(); }
+
+  // `subscriber` model (user/number changes made directly in NetSapiens) →
+  // push the broker's telecom profile to the Maestro widget. Never touches calls.
+  if (url.searchParams.get("model") === "subscriber") {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const items: any[] = Array.isArray(body) ? body : [body];
+    for (const it of items) {
+      const ext = String(it?.user ?? it?.extension ?? "").trim();
+      if (!/^[0-9]{2,10}$/.test(ext)) continue;
+      const removed = String(it?.remove ?? "").toLowerCase() === "yes";
+      queueWidgetSync(admin, { extension: ext, released: removed });
+    }
+    return ok();
+  }
 
   // NS-API v2 posts an ARRAY of resource objects (docs/netsapiens/webhooks.md).
   const events = normalizeNsEvents(body);

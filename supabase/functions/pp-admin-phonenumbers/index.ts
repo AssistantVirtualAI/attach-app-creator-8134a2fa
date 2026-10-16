@@ -1,6 +1,7 @@
 // Manage NetSapiens DIDs (phone numbers) for the Planiprêt domain.
 // Actions: list, assign, unassign, sync_assignments
 import { corsHeaders, jsonResponse, requirePlanipretAdmin, supaAdmin } from "../_shared/ns-broker.ts";
+import { queueWidgetSync } from "../_shared/maestro-widget-sync.ts";
 import { assignDidToExtension, assignNumberToExtension, assignSmsNumber, releaseDid, setExtensionCallerId } from "../_shared/pp-did-routing.ts";
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
@@ -279,6 +280,7 @@ Deno.serve(async (req) => {
       for (const r of res.steps.released.filter((r) => r.ok)) {
         await db.from("planipret_did_assignments").update({ extension: null, display_name: null, callerid_name: null, status: "available", updated_at: now }).eq("phone_number_digits", r.number);
       }
+      if (res.steps.voice) queueWidgetSync(db, { extension: ext, force: true });
       return jsonResponse({ ...res, error: res.success ? undefined : res.diagnostic }, 200);
     }
 
@@ -571,6 +573,7 @@ Deno.serve(async (req) => {
       const { phone_number } = payload ?? {};
       if (!phone_number) return jsonResponse({ success: false, error: "phone_number requis" }, 400);
       const pn = String(phone_number).replace(/[^\d]/g, "");
+      const { data: prevAsg } = await supaAdmin().from("planipret_did_assignments").select("extension").eq("phone_number_digits", pn).maybeSingle();
       const rel = await releaseDid(domain, pn);
 
       try {
@@ -581,6 +584,7 @@ Deno.serve(async (req) => {
       } catch (e) { console.warn("unassign cleanup failed:", e); }
 
       if (!rel.released) return jsonResponse({ success: false, error: `NS unassign failed (${rel.write_status})` }, 200);
+      if ((prevAsg as any)?.extension) queueWidgetSync(supaAdmin(), { extension: String((prevAsg as any).extension), force: true });
       return jsonResponse({ success: true, phone_number: rel.phone_number });
     }
 

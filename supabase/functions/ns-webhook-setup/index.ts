@@ -32,10 +32,12 @@ Deno.serve(async (req) => {
 
     const urlOf = (s: any) => String(s["post-url"] ?? s.post_url ?? s.target_url ?? s.url ?? s.callback_url ?? "");
     const modelOf = (s: any) => s.model ?? s.event ?? s.event_type ?? s.type;
-    const matches = (s: any, ev: string) => modelOf(s) === ev && urlOf(s) === target;
+    // `subscriber` posts are tagged so the receiver routes them without guessing.
+    const targetFor = (ev: string) => ev === "subscriber" ? `${target}${target.includes("?") ? "&" : "?"}model=subscriber` : target;
+    const matches = (s: any, ev: string) => modelOf(s) === ev && urlOf(s) === targetFor(ev);
     // Same model + our receiver but WITHOUT the secret → stale, must be replaced.
     const stale = (s: any, ev: string) =>
-      modelOf(s) === ev && urlOf(s).startsWith(base) && urlOf(s) !== target;
+      modelOf(s) === ev && urlOf(s).startsWith(base) && urlOf(s) !== targetFor(ev);
 
     const created: any[] = [];
     const kept: any[] = [];
@@ -54,7 +56,7 @@ Deno.serve(async (req) => {
         // Documented v2 payload: model + post-url (+ scope filters).
         body: JSON.stringify({
           model: event,
-          "post-url": target,
+          "post-url": targetFor(event),
           "subscription-geo-support": "yes",
           domain: nsDomain,
           user: "*",

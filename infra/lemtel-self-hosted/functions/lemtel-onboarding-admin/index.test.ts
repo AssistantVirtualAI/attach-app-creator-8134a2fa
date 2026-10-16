@@ -97,34 +97,27 @@ Deno.test("operational status accepts only the exact platform read action", () =
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });
 });
 
-Deno.test("global platform overview is an exact platform read with an honest node fallback", async () => {
+Deno.test("global platform overview is an exact business read with unprovisioned telephony", async () => {
   assertEquals(validateBody({ action: "get_platform_overview" }), { action: "get_platform_overview" });
   assertEquals(validateBody({ action: "get_platform_overview", ignored: true }), { error: "invalid_body", status: 400 });
-  assertEquals(noObservationNodeStatus(), {
-    schemaVersion: "lemtel-node-status/v1", observation: "no_observation",
-    roles: [
-      { nodeRole: "do_writer", agentState: "unknown", runtimeState: "unknown", replicationState: "unknown", storageState: "unknown" },
-      { nodeRole: "hostinger_standby", agentState: "unknown", runtimeState: "unknown", replicationState: "unknown", storageState: "unknown" },
-    ],
-  });
   const result = await platformOverview({ from(table: string) {
-    if (table === "lemtel_organizations" || table === "lemtel_organization_memberships" || table === "lemtel_platform_administrators") {
-      const count = table === "lemtel_organizations" ? 2 : table === "lemtel_organization_memberships" ? 5 : 1;
+    if (table === "lemtel_organizations" || table === "lemtel_organization_domains" || table === "lemtel_platform_administrators") {
+      const count = table === "lemtel_organizations" ? 2 : table === "lemtel_organization_domains" ? 4 : 1;
       return { select: () => ({ eq: () => Promise.resolve({ data: null, count, error: null }) }) };
     }
-    if (table === "lemtel_operational_status") return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { observed_at: "2026-10-15T12:00:00Z", overall_status: "healthy", payload: { topology: { automatic_failover: true }, services: { runtime: "healthy" }, replication: {} } }, error: null }) }) }) };
-    if (table === "lemtel_traffic_samples") return { select: () => ({ gte: () => ({ lt: () => ({ order: () => ({ order: () => ({ range: () => ({ abortSignal: () => Promise.resolve({ data: [], error: null }) }) }) }) }) }) }) };
-    if (table === "lemtel_node_status_current") return { select: () => ({ order: () => ({ limit: () => ({ abortSignal: () => Promise.resolve({ data: null, error: { code: "42P01" } }) }) }) }) };
+    if (table === "lemtel_organization_memberships") return { select: () => ({ eq: () => Promise.resolve({ data: [{ user_id: "user-a" }, { user_id: "user-b" }, { user_id: "user-a" }], error: null }) }) };
     throw new Error(`unexpected table ${table}`);
-  } } as any, Date.parse("2026-10-15T12:01:00Z"));
+  } } as any);
   if ("error" in result) throw new Error(`unexpected overview failure: ${result.error}`);
-  assertEquals(result.schemaVersion, "lemtel-platform-overview/v1");
+  assertEquals(result.schemaVersion, "lemtel-platform-overview/v2");
   assertEquals(result.observation, "observed");
-  assertEquals(result.aggregates, { activeOrganizations: 2, activeMemberships: 5, platformAdministrators: 1 });
-  assertEquals(result.operational.topology.automaticFailover, false);
-  assertEquals(result.standby.observation, "no_observation");
-  assertEquals(result.traffic.observation, "no_observation");
-  assert(!JSON.stringify(result).match(/42P01|hostname|secret|address|telephony/i));
+  assertEquals(result.aggregates, { activeOrganizations: 2, activeDomains: 4, activeUsers: 2, platformAdministrators: 1 });
+  assertEquals(result.telephony, {
+    provisioning: "not_provisioned",
+    metrics: { totalCalls: "unavailable", incomingCalls: "unavailable", outgoingCalls: "unavailable", missedCalls: "unavailable", activeCalls: "unavailable", voicemail: "unavailable" },
+  });
+  assert(!("operational" in result) && !("traffic" in result) && !("standby" in result));
+  assert(!JSON.stringify(result).match(/hostname|secret|address|provider/i));
 });
 
 Deno.test("telephony readiness is an organization-scoped, exact and fail-closed read", () => {

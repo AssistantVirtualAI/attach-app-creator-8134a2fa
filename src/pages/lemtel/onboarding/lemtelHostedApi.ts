@@ -262,13 +262,20 @@ export type LemtelPlatformNodeStatus = {
   }>;
 };
 export type LemtelPlatformOverview = {
-  schemaVersion: "lemtel-platform-overview/v1";
-  observation: "observed" | "no_observation";
-  aggregates: { activeOrganizations?: number; activeMemberships?: number; platformAdministrators?: number };
-  operational: LemtelOperationalStatus;
-  standby: LemtelPlatformNodeStatus;
-  traffic: { observation: "observed" | "no_observation" | "unavailable"; trend: LemtelTrafficTrend };
-  clientAccess: Array<{ client: "desktop" | "ios" | "android"; state: "configured" | "pending"; url?: string }>;
+  schemaVersion: "lemtel-platform-overview/v2";
+  observation: "observed";
+  aggregates: { activeOrganizations?: number; activeDomains?: number; activeUsers?: number; platformAdministrators?: number };
+  telephony: {
+    provisioning: "not_provisioned";
+    metrics: {
+      totalCalls: "unavailable";
+      incomingCalls: "unavailable";
+      outgoingCalls: "unavailable";
+      missedCalls: "unavailable";
+      activeCalls: "unavailable";
+      voicemail: "unavailable";
+    };
+  };
 };
 
 export function buildCreateOrganizationBody(input: {

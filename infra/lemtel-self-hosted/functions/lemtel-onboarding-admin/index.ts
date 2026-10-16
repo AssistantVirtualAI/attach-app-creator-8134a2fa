@@ -990,57 +990,49 @@ function configuredPlatformClientAccess() {
 }
 
 async function platformOverviewAggregates(admin: any) {
-  const [organizations, memberships, administrators] = await Promise.all([
+  const [organizations, domains, memberships, administrators] = await Promise.all([
     admin.from("lemtel_organizations").select("id", { count: "exact", head: true }).eq("status", "active"),
-    admin.from("lemtel_organization_memberships").select("user_id", { count: "exact", head: true }).eq("status", "active"),
+    admin.from("lemtel_organization_domains").select("id", { count: "exact", head: true }).eq("status", "active"),
+    admin.from("lemtel_organization_memberships").select("user_id").eq("status", "active"),
     admin.from("lemtel_platform_administrators").select("user_id", { count: "exact", head: true }).eq("status", "active"),
   ]);
-  if (organizations.error || memberships.error || administrators.error) return fail("platform_overview_aggregate_unavailable", 503);
+  if (organizations.error || domains.error || memberships.error || administrators.error) return fail("platform_overview_aggregate_unavailable", 503);
   // A count that is not explicitly returned remains absent. It is never rendered as
   // a fictional zero by the client contract.
   const count = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined;
+  const userIds = new Set((memberships.data ?? []).flatMap((entry: any) => typeof entry?.user_id === "string" ? [entry.user_id] : []));
   return {
     activeOrganizations: count(organizations.count),
-    activeMemberships: count(memberships.count),
+    activeDomains: count(domains.count),
+    activeUsers: userIds.size,
     platformAdministrators: count(administrators.count),
   };
 }
 
 /**
- * Authoritative platform-only dashboard contract. It contains only Lemtel table
- * counts and fixed redacted observability enums; it never returns tenant records,
- * identifiers, addresses, secrets, raw errors, provider state or telephony data.
+ * Authoritative business dashboard contract. It contains only aggregate Lemtel
+ * organization data and fixed telephony provisioning enums; Operations owns every
+ * server/traffic/HA view. No tenant record, identifier, address, secret, raw error,
+ * provider state or telephony event crosses this boundary.
  */
-export async function platformOverview(admin: any, now = Date.now()) {
-  const [aggregates, operational, traffic, standby] = await Promise.all([
-    platformOverviewAggregates(admin),
-    operationalStatus(admin),
-    trafficTrend(admin, now),
-    nodeStatusForPlatformOverview(admin),
-  ]);
+export async function platformOverview(admin: any) {
+  const aggregates = await platformOverviewAggregates(admin);
   if (isFailure(aggregates)) return aggregates;
-  const status = isFailure(operational) ? emptyOperationalStatus() : operational;
-  const safeStatus = {
-    ...status,
-    // Gates are not attested by this read. Automatic promotion therefore remains
-    // explicitly false even if a stale or malformed upstream payload says otherwise.
-    topology: { ...status.topology, automaticFailover: false },
-  };
-  const safeTraffic = isFailure(traffic) ? redactedTrafficTrend([], now) : traffic;
-  const trafficObservation = isFailure(traffic)
-    ? "unavailable" as const
-    : safeTraffic.roles.some((role) => role.samples.length > 0)
-      ? "observed" as const
-      : "no_observation" as const;
-  const hasObservation = safeStatus.telemetry === "live" || standby.observation === "observed" || trafficObservation === "observed";
   return {
-    schemaVersion: "lemtel-platform-overview/v1" as const,
-    observation: hasObservation ? "observed" as const : "no_observation" as const,
+    schemaVersion: "lemtel-platform-overview/v2" as const,
+    observation: "observed" as const,
     aggregates,
-    operational: safeStatus,
-    standby,
-    traffic: { observation: trafficObservation, trend: safeTraffic },
-    clientAccess: configuredPlatformClientAccess(),
+    telephony: {
+      provisioning: "not_provisioned" as const,
+      metrics: {
+        totalCalls: "unavailable" as const,
+        incomingCalls: "unavailable" as const,
+        outgoingCalls: "unavailable" as const,
+        missedCalls: "unavailable" as const,
+        activeCalls: "unavailable" as const,
+        voicemail: "unavailable" as const,
+      },
+    },
   };
 }
 

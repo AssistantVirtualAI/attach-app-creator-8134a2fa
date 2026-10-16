@@ -27,3 +27,12 @@ Deno.test("not configured makes no request", async () => {
   const r = await postWidgetSync({ url: "", key: "" }, { user_id: "1" }, fake);
   assertEquals(r.skipped, "not_configured"); assertEquals(called, false);
 });
+
+Deno.test("call event is flag gated and allowlisted", async () => {
+  const { buildWidgetCallPayload } = await import("./maestro-widget-sync.ts");
+  const value = { event: "call_active" as const, user_id: "crm", external_user_id: "200", call_id: "opaque", direction: "inbound" as const, started_at: "2026-10-16T12:00:00Z", device: "mobile" as const, secret: "must_not_leave", from_number: "must_not_leave" };
+  assertEquals(buildWidgetCallPayload(value, false), null);
+  const payload = buildWidgetCallPayload(value, true)!;
+  assertEquals(Object.keys(payload).sort(), ["event", "user_id", "external_user_id", "call_id", "direction", "started_at", "device"].sort());
+  assertEquals(JSON.stringify(payload).includes("must_not_leave"), false);
+});

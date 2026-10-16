@@ -77,3 +77,28 @@ export function queueWidgetSync(admin: SupabaseClient, sel: Parameters<typeof sy
   const p = syncBrokerToWidget(admin, sel).catch((e) => console.warn("[widget-sync] failed", String(e).slice(0, 120)));
   if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
 }
+
+export type WidgetCallEvent = {
+  event: "call_active" | "call_ended"; user_id: string; external_user_id: string;
+  call_id: string; direction: "inbound" | "outbound"; started_at: string; device: "mobile" | "widget";
+};
+/** Allowlist only: never forward the raw provider event (parties, tokens, URIs). */
+export function buildWidgetCallPayload(value: WidgetCallEvent, enabled = Deno.env.get("PP_WIDGET_CALL_EVENTS") === "1"): WidgetCallEvent | null {
+  if (!enabled || !value.user_id || !value.external_user_id || !value.call_id ||
+    !["call_active", "call_ended"].includes(value.event) || !["mobile", "widget"].includes(value.device) ||
+    !["inbound", "outbound"].includes(value.direction) || !Number.isFinite(Date.parse(value.started_at))) return null;
+  return { event: value.event, user_id: value.user_id, external_user_id: value.external_user_id,
+    call_id: value.call_id, direction: value.direction, started_at: value.started_at, device: value.device };
+}
+
+export function queueWidgetCallEvent(admin: SupabaseClient, value: WidgetCallEvent) {
+  const payload = buildWidgetCallPayload(value);
+  if (!payload || shouldDebounce(`call:${payload.user_id}:${payload.call_id}:${payload.event}:${payload.device}`)) return;
+  const p = (async () => {
+    const cfg = await getMaestroTelecomConfig(admin);
+    if (!cfg.url || !cfg.key) return;
+    // Provisional contract; disabled until Scott confirms the event schema.
+    await maestroTelecomFetch(cfg, "/sync", { method: "POST", body: payload, maxAttempts: 2, timeoutMs: 5000 });
+  })().catch(() => console.warn("[widget-call] delivery_failed"));
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
+}

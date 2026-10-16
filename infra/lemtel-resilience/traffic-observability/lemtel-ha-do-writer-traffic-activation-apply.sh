@@ -58,7 +58,7 @@ ROUTE_LOCK = Path('/run/lock/lemtel-traffic-ingress-route.lock')
 CANONICAL_HOST = 'lemtel.assistantvirtualai.com'
 INGRESS_PATH = '/functions/v1/lemtel-traffic-ingest'
 KEY = 'LEMTEL_TRAFFIC_COLLECTOR_SECRET'
-SCHEMA_SOURCE = Path('/home/lemtelops/lemtel-traffic-observability-deployment/0017_lemtel_traffic_samples.sql')
+INGRESS_SOURCE_SHA256 = '62908084ed504ac312e25a408e6a263f93bf62064eff90dc0df68c4f95b30c9e'
 HELPERS = {
     'lemtel-ha-do-writer-traffic-runtime-preflight.sh': '7c3301b8b45fc684e703166f2c141e97f3e6aeebb92e60252f14fb7e2ec56744',
     'lemtel-ha-do-writer-traffic-ingress-route-apply.sh': 'e6862ae72055798259527a89dfa8c97118f273827fe6d0ae53ba7556ab715157',
@@ -384,11 +384,12 @@ class Transaction:
         self.caddy_before = read_protected(self.caddyfile)
         self.caddy_digest = hashlib.sha256(self.caddy_before).digest()
         self.caddy_expected_digest = hashlib.sha256(anticipated_route(self.caddy_before, self.route_was_ready)).digest()
-        # FS presence only: this is NOT a database verification or a migration executor.
-        self.guard = 'schema_presence'
-        require(secure_file(SCHEMA_SOURCE, parents=False).st_size > 0)
+        # Contract-only: no SQL query or migration. The separate schema/RBAC attestation is an entry gate.
+        self.guard = 'schema_contract'
         functions = mount_for(self.edge, '/home/deno/functions')
-        for relative in ('lemtel-traffic-ingest/index.ts', 'lemtel-traffic-ingest/manifest.json', 'lemtel-onboarding-admin/index.ts'):
+        ingress_source = functions / 'lemtel-traffic-ingest/index.ts'
+        require(hashlib.sha256(read_protected(ingress_source)).hexdigest() == INGRESS_SOURCE_SHA256)
+        for relative in ('lemtel-traffic-ingest/manifest.json', 'lemtel-onboarding-admin/index.ts'):
             require(secure_file(functions / relative).st_size > 0)
         self.guard = 'collector_absence'
         for path in (CONFIG, STATE, LIB, TIMER, SERVICE, WANTS, LOCK):

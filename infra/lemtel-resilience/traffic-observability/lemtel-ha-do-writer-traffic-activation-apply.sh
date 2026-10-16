@@ -215,6 +215,8 @@ def anticipated_route(data, already_ready):
 
 class Transaction:
     def __init__(self):
+        # Redacted diagnostic only; never includes a path, value, command output or credential.
+        self.stage = 'preflight'
         self.files = {}
         self.directories = []
         self.lock_fd = None
@@ -375,6 +377,7 @@ class Transaction:
 
     def apply(self, secret):
         # All entry gates, integrated preflight and read-only checks precede this first mutation.
+        self.stage = 'configuration'
         self.create(LOCK, b'')
         self.lock_fd = os.open(LOCK, os.O_RDWR | os.O_NOFOLLOW)
         fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -406,6 +409,7 @@ class Transaction:
         require(not stderr and stdout == 'status=config_ready\n')
         quiet(self.compose_command(True) + ['config', '--quiet'])
         self.initial_files_unchanged()
+        self.stage = 'edge_recreate'
         self.edge_attempted = True
         command(self.compose_command(True) + ['up', '--no-deps', '--force-recreate', '--no-build', '--pull', 'never', '-d', self.service])
         self.verify_edge(True)
@@ -416,6 +420,7 @@ class Transaction:
             os.close(fd)
         require(hashlib.sha256(read_protected(self.caddyfile)).digest() == self.caddy_digest)
         require(not exists(ROUTE_BACKUPS))
+        self.stage = 'ingress_route'
         self.route_attempted = True
         command(['bash', str(SOURCE / 'lemtel-ha-do-writer-traffic-ingress-route-apply.sh')], {
             'LEMTEL_HA_ROLE': 'digitalocean_writer',
@@ -431,12 +436,14 @@ class Transaction:
         require(not stderr and stdout == 'status=config_ready\n')
         # Exactly one baseline, before the timer exists. With absent state this does not send a measurement.
         require(not exists(STATE))
+        self.stage = 'baseline'
         self.baseline_attempted = True
         stdout, stderr = command(['bash', str(SOURCE / 'lemtel-traffic-collect.sh')])
         require(not stderr and stdout == 'status=baseline_pending\n')
         self.first_baseline_status = 'baseline_pending'
         for path in (LIB, TIMER, SERVICE, WANTS):
             require(not exists(path))
+        self.stage = 'timer'
         self.timer_attempted = True
         stdout, stderr = command(['bash', str(SOURCE / 'lemtel-traffic-timer-enable.sh'), 'enable-lemtel-traffic-collector'], {
             'LEMTEL_TRAFFIC_ACTIVATION_APPROVED': 'transactional-package-ready',
@@ -449,6 +456,7 @@ class Transaction:
         active, stderr = command(['systemctl', 'is-active', 'lemtel-traffic-collector.timer'])
         require(not stderr and active == 'active\n')
         secure_file(CONFIG, 0o600)
+        self.stage = 'final_attestation'
         ready_route(read_protected(self.caddyfile))
         self.verify_edge(True)
         # Keep root-only Compose inputs referenced by the new container labels for deterministic future re-creation.
@@ -556,6 +564,7 @@ except BaseException:
         signal.signal(number, signal.SIG_IGN)
     rollback_status = transaction.rollback() if transaction.files else 'not_required'
     print('traffic_activation_status=failed\nreason=activation_refused')
+    print('activation_phase=' + transaction.stage)
     print('rollback_status=' + rollback_status)
     for line in SCOPE:
         print(line)

@@ -7,43 +7,61 @@ vi.mock("../lemtelHostedApi", () => ({ portalApi: api, LemtelError: class extend
 import LemtelGlobalOverview, { normalizePlatformOverview } from "../LemtelGlobalOverview";
 import { LEMTEL_DICT } from "../lemtelI18n";
 
-const noObservation = {
-  schemaVersion: "lemtel-platform-overview/v1" as const,
-  observation: "no_observation" as const,
-  aggregates: { activeOrganizations: 0, activeMemberships: 0, platformAdministrators: 1 },
-  operational: { telemetry: "not_configured" as const, overall: "unknown" as const, topology: { writer: "unknown" as const, standby: "unknown" as const, route: "unknown" as const, automaticFailover: true }, services: { runtime: "unknown" as const, database: "unknown" as const, auth: "unknown" as const, rest: "unknown" as const, storage: "unknown" as const, accountRecovery: "unknown" as const }, replication: { database: "unknown" as const, storage: "unknown" as const } },
-  standby: { schemaVersion: "lemtel-node-status/v1" as const, observation: "no_observation" as const, roles: [] },
-  traffic: { observation: "no_observation" as const, trend: { windowStart: "2026-10-14T12:00:00Z", windowEnd: "2026-10-15T12:00:00Z", bucketSeconds: 300, roles: [{ nodeRole: "do_writer" as const, collectorState: "pending" as const, samples: [] }, { nodeRole: "hostinger_standby" as const, collectorState: "pending" as const, samples: [] }] } },
-  clientAccess: [{ client: "desktop" as const, state: "pending" as const }, { client: "ios" as const, state: "pending" as const }, { client: "android" as const, state: "pending" as const }],
+const overview = {
+  schemaVersion: "lemtel-platform-overview/v2" as const,
+  observation: "observed" as const,
+  aggregates: { activeOrganizations: 0, activeDomains: 0, activeUsers: 0, platformAdministrators: 1 },
+  telephony: {
+    provisioning: "not_provisioned" as const,
+    metrics: {
+      totalCalls: "unavailable" as const, incomingCalls: "unavailable" as const, outgoingCalls: "unavailable" as const,
+      missedCalls: "unavailable" as const, activeCalls: "unavailable" as const, voicemail: "unavailable" as const,
+    },
+  },
 };
 
-beforeEach(() => api.getPlatformOverview.mockReset().mockResolvedValue(noObservation));
+beforeEach(() => api.getPlatformOverview.mockReset().mockResolvedValue(overview));
 afterEach(() => cleanup());
 
-describe("Lemtel global administrator overview", () => {
-  it("renders missing observations as unknown/pending and never trusts automatic failover", async () => {
+describe("Lemtel business overview", () => {
+  it("renders organization aggregates and unprovisioned telephony without server or traffic data", async () => {
     render(<LemtelGlobalOverview t={LEMTEL_DICT.fr} lang="fr" readonly={false} />);
-    expect(await screen.findByText("Observations en attente")).toBeInTheDocument();
-    expect(screen.getAllByText("Désactivée — gates non attestés")).toHaveLength(2);
-    expect(screen.getAllByText("Canal en attente")).toHaveLength(3);
-    expect(screen.getAllByText("0")).toHaveLength(2);
+    expect(await screen.findByRole("heading", { name: "Aperçu global" })).toBeInTheDocument();
+    expect(screen.getByText("Domaines actifs")).toBeInTheDocument();
+    expect(screen.getByText("Utilisateurs actifs")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Système téléphonique" })).toBeInTheDocument();
+    expect(screen.getByText("Non provisionné")).toBeInTheDocument();
+    expect(screen.getByText("Appels entrants")).toBeInTheDocument();
+    expect(screen.getAllByText("Aucune donnée")).toHaveLength(6);
+    expect(screen.queryByText("Santé des services")).toBeNull();
+    expect(screen.queryByText("Trafic serveur")).toBeNull();
     expect(screen.queryByText(/0 octet/)).toBeNull();
     expect(api.getPlatformOverview).toHaveBeenCalledTimes(1);
   });
 
-  it("renders only server-configured HTTPS distribution channels and English copy", async () => {
-    api.getPlatformOverview.mockResolvedValueOnce({ ...noObservation, clientAccess: [{ client: "desktop", state: "configured", url: "https://downloads.example.test/lemtel" }, { client: "ios", state: "pending" }, { client: "android", state: "pending" }] });
+  it("renders the English business labels", async () => {
     render(<LemtelGlobalOverview t={LEMTEL_DICT.en} lang="en" readonly={false} />);
     expect(await screen.findByRole("heading", { name: "Global overview" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Configured channel/ })).toHaveAttribute("href", "https://downloads.example.test/lemtel");
-    expect(screen.getAllByText("Channel pending")).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "Telephone system" })).toBeInTheDocument();
+    expect(screen.getByText("Incoming calls")).toBeInTheDocument();
+    expect(screen.getByText("Not provisioned")).toBeInTheDocument();
+    expect(screen.queryByText("Server traffic")).toBeNull();
   });
 
-  it("normalizes malformed responses to unknown states and absent counters instead of invented values", () => {
-    const normalized = normalizePlatformOverview({ aggregates: { activeOrganizations: "3" }, operational: { topology: { automaticFailover: true } }, standby: { observation: "observed", roles: [{ nodeRole: "do_writer", runtimeState: "ready" }] } });
+  it("normalizes malformed counters and discards untrusted telephony metrics", () => {
+    const normalized = normalizePlatformOverview({
+      aggregates: { activeOrganizations: "3", activeDomains: -1, activeUsers: 4.5, platformAdministrators: 2 },
+      telephony: { provisioning: "provisioned", metrics: { totalCalls: 9000 } },
+      operational: { topology: { automaticFailover: true } },
+      traffic: { observation: "observed" },
+    });
     expect(normalized.aggregates.activeOrganizations).toBeUndefined();
-    expect(normalized.aggregates.activeMemberships).toBeUndefined();
-    expect(normalized.operational.topology.automaticFailover).toBe(false);
-    expect(normalized.standby.roles[0]).toMatchObject({ nodeRole: "do_writer", runtimeState: "ready", agentState: "unknown" });
+    expect(normalized.aggregates.activeDomains).toBeUndefined();
+    expect(normalized.aggregates.activeUsers).toBeUndefined();
+    expect(normalized.aggregates.platformAdministrators).toBe(2);
+    expect(normalized.telephony.provisioning).toBe("not_provisioned");
+    expect(normalized.telephony.metrics.totalCalls).toBe("unavailable");
+    expect("operational" in normalized).toBe(false);
+    expect("traffic" in normalized).toBe(false);
   });
 });

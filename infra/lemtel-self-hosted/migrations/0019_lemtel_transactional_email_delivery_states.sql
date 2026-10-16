@@ -5,6 +5,13 @@
 
 BEGIN;
 
+-- Lift both legacy three-state constraints inside this transaction before mapping `sent`.
+-- The old constraints reject `provider_accepted`; transactional DDL makes this atomic.
+ALTER TABLE public.lemtel_onboarding_delivery_attempts
+  DROP CONSTRAINT IF EXISTS lemtel_onboarding_delivery_state_check;
+ALTER TABLE public.lemtel_password_reset_delivery_attempts
+  DROP CONSTRAINT IF EXISTS lemtel_password_reset_delivery_state_check;
+
 -- Preserve existing historical records while eliminating the misleading legacy `sent` state.
 UPDATE public.lemtel_onboarding_delivery_attempts
    SET state = 'provider_accepted'
@@ -14,8 +21,6 @@ UPDATE public.lemtel_password_reset_delivery_attempts
  WHERE state = 'sent';
 
 ALTER TABLE public.lemtel_onboarding_delivery_attempts
-  DROP CONSTRAINT IF EXISTS lemtel_onboarding_delivery_state_check;
-ALTER TABLE public.lemtel_onboarding_delivery_attempts
   ADD CONSTRAINT lemtel_onboarding_delivery_state_check
   CHECK (state IN ('pending', 'provider_accepted', 'delivered', 'failed', 'needs_attention'));
 ALTER TABLE public.lemtel_onboarding_delivery_attempts
@@ -23,8 +28,6 @@ ALTER TABLE public.lemtel_onboarding_delivery_attempts
   ADD COLUMN IF NOT EXISTS delivered_at timestamptz,
   ADD COLUMN IF NOT EXISTS needs_attention_at timestamptz;
 
-ALTER TABLE public.lemtel_password_reset_delivery_attempts
-  DROP CONSTRAINT IF EXISTS lemtel_password_reset_delivery_state_check;
 ALTER TABLE public.lemtel_password_reset_delivery_attempts
   ADD CONSTRAINT lemtel_password_reset_delivery_state_check
   CHECK (state IN ('pending', 'provider_accepted', 'delivered', 'failed', 'needs_attention'));

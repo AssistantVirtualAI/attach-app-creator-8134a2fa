@@ -1,0 +1,55 @@
+{
+  "package_version": "lemtel_node_secure_enrollment_v1",
+  "scope": "offline_publication_only_source",
+  "deployment_authorized": false,
+  "activation_authorized": false,
+  "schema_apply_authorized": false,
+  "runtime_key_generation_authorized": false,
+  "remote_commands_authorized": false,
+  "slug": "lemtel-node-enrollment",
+  "verify_jwt": false,
+  "authentication": "pinned_p256_possession_plus_explicit_platform_admin_approval_no_cloud_identity_claim",
+  "enabled_only_if": "LEMTEL_NODE_ENROLLMENT_ENABLED=approved_publication_only",
+  "default_status": 503,
+  "browser_response": "none_origin_and_sec_fetch_mode_denied",
+  "sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.ts",
+      "sha256": "4bb824e2fbbf9fc0ebd7c8774fb72d4ea9586dc94a9cca267cdf645137cc09c6"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts",
+      "sha256": "bf613cf5c0d752089e062fc74e98e7fcc3f415fce4dd51d3d0d2bee14c956fc7"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollmentBackend.ts",
+      "sha256": "1ea84571dcc4bb8c3bcb864e7feb8e4accfd268826eb2e898d99ca20010bb56d"
+    }
+  ],
+  "runtime_requirements": [
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "LEMTEL_NODE_ENROLLMENT_ENABLED",
+    "LEMTEL_NODE_PUBLICATION_ENDPOINT",
+    "LEMTEL_NODE_PUBLICATION_SIGNING_PRIVATE_JWK"
+  ],
+  "secret_values_in_bundle": false,
+  "logs": "none_no_body_key_ciphertext_proof_or_token_logging",
+  "dependency_review": "supabase_js_2.117.2_top_level_pinned_transitive_lock_required_before_deployment",
+  "request_body_deadline_seconds": 2,
+  "body_limit_bytes": 2048,
+  "routes_registered": false,
+  "explicitly_excluded": [
+    "planipret",
+    "avastatistic",
+    "pbx",
+    "provider_calls",
+    "remote_commands",
+    "promotion",
+    "dns",
+    "runtime_start",
+    "routing",
+    "failover",
+    "timer_enablement"
+  ]
+}

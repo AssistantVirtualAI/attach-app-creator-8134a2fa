@@ -78,3 +78,13 @@ Deno.test("traffic database failure is unavailable, never disguised as zero data
   const client = createClient("https://local.invalid", "synthetic", { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: async () => new Response('{"message":"hidden","code":"synthetic"}', { status: 503, headers: { "Content-Type": "application/json" } }) } });
   assert.deepEqual(await trafficTrend(client, now), { error: "traffic_trend_unavailable", status: 503 });
 });
+
+Deno.test("traffic database timeout is unavailable and never leaves the request pending", async () => {
+  const client = createClient("https://local.invalid", "synthetic", {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: async (_input, init) => await new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }) },
+  });
+  assert.deepEqual(await trafficTrend(client, now, 1), { error: "traffic_trend_unavailable", status: 503 });
+});

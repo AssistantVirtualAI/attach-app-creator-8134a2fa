@@ -822,6 +822,7 @@ type NodeRole = "do_writer" | "hostinger_standby";
 type TrafficSample = { observedAt: string; periodSeconds: number; rxBytes: number; txBytes: number; tcpEstablished: number };
 const NODE_ROLES: NodeRole[] = ["do_writer", "hostinger_standby"];
 const BUCKET_MS = 300_000;
+const TRAFFIC_READ_TIMEOUT_MS = 4_000;
 const boundedInteger = (value: unknown, max: number): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= max;
 
@@ -864,16 +865,18 @@ export function redactedTrafficTrend(rows: unknown[], now = Date.now()) {
   return { windowStart: new Date(windowStart).toISOString(), windowEnd: new Date(windowEnd).toISOString(), bucketSeconds: 300, roles };
 }
 
-export async function trafficTrend(admin: Pick<SupabaseClient, "from">, now = Date.now()) {
+export async function trafficTrend(admin: Pick<SupabaseClient, "from">, now = Date.now(), timeoutMs = TRAFFIC_READ_TIMEOUT_MS) {
   const empty = redactedTrafficTrend([], now);
   const rows: unknown[] = [];
+  // A stalled PostgREST query is unavailable, never an indefinitely pending portal state.
+  const deadline = AbortSignal.timeout(timeoutMs);
   // Two roles × 1,440 minute keys. Explicit pages avoid the usual 1,000-row cap.
   for (let offset = 0; offset < 3000; offset += 1000) {
     const { data, error } = await admin.from("lemtel_traffic_samples")
       .select("node_role,observed_at,period_seconds,rx_bytes,tx_bytes,tcp_established,collector_state")
       .gte("observed_at", empty.windowStart).lt("observed_at", empty.windowEnd)
       .order("observed_at", { ascending: true }).order("node_role", { ascending: true })
-      .range(offset, offset + 999);
+      .range(offset, offset + 999).abortSignal(deadline);
     if (error) return { error: "traffic_trend_unavailable", status: 503 };
     rows.push(...(data ?? []));
     if ((data ?? []).length < 1000) break;

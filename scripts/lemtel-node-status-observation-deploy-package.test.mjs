@@ -5,10 +5,10 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { PACKAGE_FILES, assemblePackage, deterministicTar, normalizedPath, parseArgs } from './lemtel-node-status-observation-deploy-package.mjs';
+import { PACKAGE_FILES, assemblePackage, checkedOutRevision, deterministicTar, normalizedPath, parseArgs, sourceAtRevision } from './lemtel-node-status-observation-deploy-package.mjs';
 
 const root = resolve(import.meta.dirname, '..');
-const revision = '7daec6cde62326846805f99071cd90ce5e6b5efa';
+const revision = execFileSync('git', ['-C', root, 'rev-parse', '--verify', 'HEAD'], { encoding: 'utf8' }).trim();
 const generator = readFileSync(resolve(root, 'scripts/lemtel-node-status-observation-deploy-package.mjs'), 'utf8');
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const listTar = (archive) => execFileSync('tar', ['-tf', archive], { encoding: 'utf8' }).trim().split('\n').filter(Boolean).sort();
@@ -58,6 +58,11 @@ test('sealed node-status package is reproducible, fully digested and restricted 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('generator seals only the exact detached revision under review', () => {
+  assert.equal(checkedOutRevision(root), revision);
+  assert.throws(() => sourceAtRevision('a'.repeat(40), 'infra/lemtel-self-hosted/migrations/0020_lemtel_node_status_observations.sql'), /source_revision_not_checked_out/);
 });
 
 test('generator rejects unsafe paths, malformed arguments, preexisting outputs and source-manifest drift', () => {

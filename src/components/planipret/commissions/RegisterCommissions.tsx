@@ -830,17 +830,43 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
               </Section>
 
               <Section title={isFr ? "Commission par type" : "Commission by type"} chart={240} accent={CHART_COLORS[2]} info={isFr ? "Répartition du montant de commission entre les catégories du registre (commission de base, bonis, ajustements)." : "Split of commission amount across the register categories (base commission, bonuses, adjustments)."}>
-                <div style={{ height: 240 }}>
+                <div style={{ height: 200, position: "relative" }}>
                   <ResponsiveContainer>
                     <PieChart>
-                      <Pie data={data.commissionTypes} dataKey="amount" nameKey="type" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                      <Pie data={data.commissionTypes} dataKey="amount" nameKey="type" innerRadius="62%" outerRadius="92%" paddingAngle={2} cornerRadius={6} stroke="none">
                         {data.commissionTypes.map((_: any, i: number) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
                       </Pie>
                       <Tooltip {...tipProps} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
-                      <Legend {...legendProps} />
                     </PieChart>
                   </ResponsiveContainer>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                    <span style={{ fontSize: 10, opacity: 0.65, textTransform: "uppercase", letterSpacing: 1 }}>Total</span>
+                    <span style={{ fontSize: 15, fontWeight: 700 }}>{fmtMoney((data.commissionTypes as any[]).reduce((s, t) => s + Number(t.amount || 0), 0))}</span>
+                  </div>
                 </div>
+                {(() => {
+                  const rows = data.commissionTypes as any[];
+                  const total = rows.reduce((s, t) => s + Number(t.amount || 0), 0) || 1;
+                  return (
+                    <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+                      {rows.map((t, i) => {
+                        const pct = (Number(t.amount || 0) / total) * 100;
+                        const c = PALETTE[i % PALETTE.length];
+                        return (
+                          <div key={t.type ?? i} style={{ display: "grid", gridTemplateColumns: "10px 1fr auto auto", alignItems: "center", gap: 8, fontSize: 12 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 3, background: c }} />
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.type}</span>
+                            <span style={{ fontWeight: 600 }}>{fmtMoney(Number(t.amount || 0))}</span>
+                            <span style={{ opacity: 0.65, minWidth: 38, textAlign: "right" }}>{pct.toFixed(1)}%</span>
+                            <div style={{ gridColumn: "2 / 5", height: 4, borderRadius: 2, background: "rgba(127,127,127,0.18)" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", borderRadius: 2, background: c }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </Section>
 
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))" }}>

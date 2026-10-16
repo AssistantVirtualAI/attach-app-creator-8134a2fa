@@ -56,6 +56,16 @@ async function startApprovedPipeline(callId: string): Promise<{ started: boolean
   }
 }
 
+/** Fire the pipeline after the response; decisions return in < 1 s. */
+function startInBackground(callId: string): string {
+  const task = startApprovedPipeline(callId).then(async (r) => {
+    if (!r.started) { await new Promise((ok) => setTimeout(ok, 3000)); await startApprovedPipeline(callId); }
+  }).catch(() => {});
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt?.waitUntil) rt.waitUntil(task);
+  return "queued";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -95,14 +105,7 @@ Deno.serve(async (req) => {
 
   if (action === "approve") {
     if (String(call.save_consent ?? "") === "approved") {
-      const pipeline = await startApprovedPipeline(callId);
-      return json({
-        ok: pipeline.started,
-        save_consent: "approved",
-        already_approved: true,
-        processing: pipeline.started ? pipeline.stage : "retryable",
-        processing_error: pipeline.error ?? null,
-      }, pipeline.started ? 200 : 202);
+      return json({ ok: true, save_consent: "approved", already_approved: true, processing: startInBackground(callId) });
     }
     const { data: approved, error: approveError } = await admin.from("planipret_phone_calls").update({
       save_consent: "approved",
@@ -118,13 +121,7 @@ Deno.serve(async (req) => {
     if (!approved) return json({ ok: true, save_consent: "approved", already_approved: true });
 
     // Lance la chaîne AVA. L'envoi Maestro exige ensuite un clic CRM explicite.
-    const pipeline = await startApprovedPipeline(callId);
-    return json({
-      ok: pipeline.started,
-      save_consent: "approved",
-      processing: pipeline.started ? pipeline.stage : "retryable",
-      processing_error: pipeline.error ?? null,
-    }, pipeline.started ? 200 : 202);
+    return json({ ok: true, save_consent: "approved", processing: startInBackground(callId) });
   }
 
   if (action === "keep") {
@@ -137,8 +134,7 @@ Deno.serve(async (req) => {
       save_consent_channel: channel,
     }).eq("id", callId);
     if (keepError) return json({ error: "consent_update_failed" }, 500);
-    const pipeline = await startApprovedPipeline(callId);
-    return json({ ok: true, kept_in_ava: true, save_consent: "declined", processing: pipeline.started ? pipeline.stage : "retryable" }, pipeline.started ? 200 : 202);
+    return json({ ok: true, kept_in_ava: true, save_consent: "declined", processing: startInBackground(callId) });
   }
 
   return json({ error: "unknown_action" }, 400);

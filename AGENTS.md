@@ -22,3 +22,5 @@
 - Every Planipret number assignment (new broker, portal assign, single DID) goes through assignNumberToExtension in _shared/pp-did-routing.ts: calls, texts and caller ID verified by read-back, old numbers released; partial writes broke texting.
 - Admin commission dashboards read per-broker/per-year packed buckets (planipret_commission_broker_aggregates), rebuilt only for buckets whose source rows changed, and engine windows use a day index; full rescans of register + live cache exceed the function CPU budget. Stats snapshots (`stats:` keys) are never re-warmed by planipret-commission-reports (different payload). Claude reviews only new rows, advisory.
 - Broker telecom changes (portal, app, NetSapiens `subscriber` model) push to Maestro's widget webhook only through `_shared/maestro-widget-sync.ts` (non-blocking, debounced, redacted); omitting external_user_id means release, so never send a partial payload.
+
+- Call handoff is JWT-owned and extension-scoped, targets only the broker’s server-resolved device AOR; Maestro call events remain allowlisted, non-blocking and disabled unless PP_WIDGET_CALL_EVENTS=1.

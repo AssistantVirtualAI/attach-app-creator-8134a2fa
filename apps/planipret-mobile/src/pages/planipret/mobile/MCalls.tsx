@@ -116,6 +116,16 @@ const otherName = (c: Call) => callParty(c).name || "";
 // number → localized "Numéro non résolu" fallback.
 const UNRESOLVED_FR = "Numéro non résolu";
 const UNRESOLVED_EN = "Unresolved number";
+function callDeviceLabel(call: Call): string | null {
+  const m = call.metadata ?? {};
+  if (m.device === "mobile") return "cellulaire";
+  if (m.device === "widget") return "widget";
+  const aor = String(m.device_name ?? m.call_orig_user ?? "").replace(/^sip:/i, "").split("@")[0];
+  if (/^\d+(M|_mobile)$/i.test(aor)) return "cellulaire";
+  if (/^\d+(x|W|_web)$/i.test(aor)) return "widget";
+  return null;
+}
+
 function displayLabelWith(c: Call, resolved?: string | null, lang: "fr" | "en" = "fr"): string {
   const party = callParty(c, resolved);
   if (party.name) return party.name;
@@ -431,17 +441,17 @@ export default function MCalls() {
     return () => { cancelled = true; };
   }, [calls, params, userId]);
 
-  // Recordings inventory + heavy sync load only once the broker opens the
-  // Recordings tab (explicit intent); cached results still paint instantly.
+  // Preload recordings on mount so the Recordings tab is already populated
+  // when the user taps it — no visible loader unless the cache is truly empty.
   useEffect(() => {
-    if (!userId || tab !== "recordings") return;
+    if (!userId) return;
     void loadRecordings(true);
-  }, [userId, tab, loadRecordings]);
+  }, [userId, loadRecordings]);
 
   // Recording/transcript updates arrive through Realtime. Avoid periodic API
   // polling, which previously added traffic while SIP was trying to register.
   useEffect(() => {
-    if (!userId || tab !== "recordings") return;
+    if (!userId) return;
     const ids = [...new Set([userId, profileAuthId].filter(Boolean))];
     const channels = ids.map((id) => supabase
       .channel(`mcalls-recordings:${id}`)
@@ -450,7 +460,9 @@ export default function MCalls() {
         schema: "public",
         table: "planipret_phone_calls",
         filter: `user_id=eq.${id}`,
-      }, () => { void loadRecordingsFromCache(true, true); })
+      }, () => {
+        if (tab === "recordings") void loadRecordingsFromCache(true, true);
+      })
       .subscribe());
     return () => { channels.forEach((channel) => { void supabase.removeChannel(channel); }); };
   }, [tab, userId, profileAuthId, loadRecordingsFromCache]);
@@ -793,7 +805,7 @@ function CallRow({ call, onTap, onCall, showCallBtn, onCreateClient }: { call: C
               </div>
             )}
             <div className="text-xs truncate" style={{ color: "var(--pp-text-muted)" }}>
-              {localizedDateTime(call.started_at, lang, t("common.today"), t("common.yesterday"))} · {localizedDuration(call.duration_seconds, lang)}
+              {localizedDateTime(call.started_at, lang, t("common.today"), t("common.yesterday"))} · {localizedDuration(call.duration_seconds, lang)}{callDeviceLabel(call) ? ` · ${callDeviceLabel(call)}` : ""}
             </div>
           </div>
         </button>

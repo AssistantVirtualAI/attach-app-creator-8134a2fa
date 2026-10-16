@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { normalizeNsEvents, nsCallKey, nsCdrExtensionCandidates, shouldProcessCall } from "../_shared/ns-call-events.ts";
 import { parseServiceAccount, sendFcmDataMessage } from "../_shared/fcm.ts";
-import { queueWidgetSync } from "../_shared/maestro-widget-sync.ts";
+import { queueWidgetSync, queueWidgetCallEvent } from "../_shared/maestro-widget-sync.ts";
 
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
@@ -96,6 +96,41 @@ Deno.serve(async (req) => {
       queueWidgetSync(admin, { extension: ext, released: removed });
     }
     return ok();
+  }
+
+  // Observe raw call-model teardown too: the existing push normalizer drops it.
+  // Independent background path; never changes push/CDR handling.
+  if (url.searchParams.get("model") === "call" && Deno.env.get("PP_WIDGET_CALL_EVENTS") === "1") {
+    runBackground("widget call event", (async () => {
+      const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      for (const raw of (Array.isArray(body) ? body : [body])) {
+        const data = raw?.data ?? raw?.payload ?? raw;
+        const { nsCdrExtensionCandidates } = await import("../_shared/ns-call-events.ts");
+        const domain = String(data?.domain ?? data?.["domain-name"] ?? "");
+        if (!domain) continue;
+        for (const extension of nsCdrExtensionCandidates(data)) {
+          if (!/^[0-9]{2,10}$/.test(extension)) continue;
+          const { data: profiles } = await admin.from("planipret_profiles")
+            .select("maestro_broker_id, ns_mobile_device_id, ns_widget_device_id")
+            .eq("ns_domain", domain).or(`extension.eq.${extension},ns_extension.eq.${extension}`).limit(2);
+          if (profiles?.length !== 1 || !profiles[0].maestro_broker_id) continue;
+          const profile = profiles[0];
+          const aors = [data?.["call-orig-user"], data?.["call-term-user"], data?.orig_user, data?.term_user, data?.device]
+            .map((v) => String(v ?? "").replace(/^sip:/i, "").split("@")[0]);
+          const mobile = aors.includes(profile.ns_mobile_device_id || `${extension}M`);
+          const widget = aors.includes(profile.ns_widget_device_id || `${extension}x`);
+          if (mobile === widget) continue; // Never guess the device.
+          const state = String(data?.state ?? data?.["call-state"] ?? data?.status ?? "").toLowerCase();
+          const ended = String(data?.remove ?? "").toLowerCase() === "yes" || ["ended", "terminated", "disconnected"].includes(state);
+          if (!ended && !["active", "connected", "answered", "talking"].includes(state)) continue;
+          const direction = normalizeCallDirection(data?.direction ?? data?.["call-direction"]);
+          const started = data?.started_at ?? data?.["time-start"] ?? data?.time_start;
+          if (!direction || !started) continue;
+          queueWidgetCallEvent(admin, { event: ended ? "call_ended" : "call_active", user_id: String(profile.maestro_broker_id),
+            external_user_id: extension, call_id: nsCallKey(data), direction, started_at: String(started), device: mobile ? "mobile" : "widget" });
+        }
+      }
+    })());
   }
 
   // NS-API v2 posts an ARRAY of resource objects (docs/netsapiens/webhooks.md).

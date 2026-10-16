@@ -90,6 +90,34 @@ export default function PpActiveCallScreen({
   const active = snap.callState === "ringing-out" || snap.callState === "ringing-in"
     || snap.callState === "active" || snap.callState === "held";
 
+  const [widgetRegistered, setWidgetRegistered] = useState(false);
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setWidgetRegistered(false);
+    if (snap.callState !== "active" && snap.callState !== "held") return;
+    const refresh = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("pp-call-handoff", { body: { action: "status", target: "widget" } });
+        if (!cancelled) setWidgetRegistered(!error && data?.registered === true);
+      } catch { if (!cancelled) setWidgetRegistered(false); }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 15000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [snap.callState, snap.callId]);
+  const handoffToWidget = async () => {
+    setHandoffBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-call-handoff", {
+        body: { target: "widget", ...(snap.callId ? { call_id: snap.callId } : {}) },
+      });
+      if (error || !data?.ok) toast.error("Impossible de reprendre l’appel sur le widget.");
+      else toast.success("Reprise demandée sur le widget.");
+    } catch { toast.error("Impossible de reprendre l’appel sur le widget."); }
+    finally { setHandoffBusy(false); }
+  };
+
   // Reset transient state each new call
   useEffect(() => {
     if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); setLineError(null); callUi.reset(); }
@@ -392,6 +420,13 @@ export default function PpActiveCallScreen({
           </div>
         )}
 
+
+        {view === "main" && widgetRegistered && (snap.callState === "active" || snap.callState === "held") && (
+          <button disabled={handoffBusy} onClick={() => void handoffToWidget()}
+            className="mx-5 mb-3 rounded-xl border border-white/30 px-4 py-3 text-sm text-white disabled:opacity-50">
+            {handoffBusy ? "Reprise en cours…" : "Continuer sur le widget"}
+          </button>
+        )}
 
         {/* Deuxième ligne / conférence */}
         {view === "main" && !isIncoming && (snap.second || snap.conference || multiLineSupported) && (

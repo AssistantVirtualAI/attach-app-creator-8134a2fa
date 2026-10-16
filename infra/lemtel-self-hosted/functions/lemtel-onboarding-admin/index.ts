@@ -36,6 +36,7 @@ type RequestBody =
   | { action: "get_operational_trend" }
   | { action: "get_traffic_trend" }
   | { action: "get_node_status" }
+  | { action: "get_platform_overview" }
   | { action: "list_people"; organizationId: string }
   | { action: "list_invitations"; organizationId: string }
   | { action: "list_activity"; organizationId: string }
@@ -99,7 +100,7 @@ function userList(value: unknown, allowOwner: boolean): UserInput[] | Failure {
 
 export function validateBody(raw: unknown): RequestBody | Failure {
   if (!plainObject(raw) || typeof raw.action !== "string") return fail("invalid_body", 400);
-  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend" || raw.action === "get_traffic_trend" || raw.action === "get_node_status") {
+  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend" || raw.action === "get_traffic_trend" || raw.action === "get_node_status" || raw.action === "get_platform_overview") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
   if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections" || raw.action === "get_telephony_readiness" || raw.action === "list_telephony_preparation_states") {
@@ -770,7 +771,8 @@ export function redactedOperationalStatusFromRow(row: unknown) {
           ? "hostinger_fenced_rebuild_required" as const
           : "unknown" as const,
       route: topology.route === "canonical_digitalocean_live" ? "canonical_digitalocean_live" as const : "unknown" as const,
-      automaticFailover: topology.automatic_failover === true,
+      // No endpoint attests the full promotion gates; this read must never enable it.
+      automaticFailover: false,
     },
     services: { runtime: redactedHealth(services.runtime), database: redactedHealth(services.database), auth: redactedHealth(services.auth), rest: redactedHealth(services.rest), storage: redactedHealth(services.storage), accountRecovery: redactedHealth(services.account_recovery) },
     replication: {
@@ -932,6 +934,116 @@ export async function nodeStatus(admin: Pick<SupabaseClient, "from">, now = Date
   return error ? { error: "node_status_unavailable", status: 503 } : redactedNodeStatus(data ?? [], now);
 }
 
+type PlatformOverviewNodeRole = {
+  nodeRole: NodeRole;
+  observedAt?: string;
+  agentState: NodeStatusState;
+  runtimeState: RuntimeNodeStatusState;
+  replicationState: ReplicationNodeStatusState;
+  storageState: StorageNodeStatusState;
+};
+
+/**
+ * Node-status migration 0020 is deliberately optional during rollout. Its absence
+ * is a no-observation state, never a raw PostgREST error exposed to a browser.
+ */
+export function noObservationNodeStatus() {
+  return {
+    schemaVersion: "lemtel-node-status/v1" as const,
+    observation: "no_observation" as const,
+    roles: NODE_ROLES.map((nodeRole): PlatformOverviewNodeRole => ({
+      nodeRole, agentState: "unknown", runtimeState: "unknown", replicationState: "unknown", storageState: "unknown",
+    })),
+  };
+}
+
+function platformNodeStatus(value: ReturnType<typeof redactedNodeStatus>) {
+  return {
+    schemaVersion: "lemtel-node-status/v1" as const,
+    observation: value.telemetry === "live" ? "observed" as const : "no_observation" as const,
+    roles: value.roles,
+  };
+}
+
+async function nodeStatusForPlatformOverview(admin: Pick<SupabaseClient, "from">) {
+  const status = await nodeStatus(admin);
+  // This handles an unavailable or not-yet-deployed 0020 table identically. No
+  // relation name, driver error, network detail or other raw diagnostic leaves Edge.
+  return isFailure(status) ? noObservationNodeStatus() : platformNodeStatus(status);
+}
+
+function configuredPlatformClientAccess() {
+  const configuredValue = (environmentKey: string) => {
+    try { return Deno.env.get(environmentKey)?.trim() ?? ""; } catch { return ""; }
+  };
+  const configured = (client: "desktop" | "ios" | "android", environmentKey: string) => {
+    const url = safeHttpsUrl(configuredValue(environmentKey));
+    return url ? { client, state: "configured" as const, url } : { client, state: "pending" as const };
+  };
+  // No release URL is inferred from a fallback: availability requires a server-set,
+  // HTTPS distribution source for each client family.
+  return [
+    configured("desktop", "LEMTEL_DOWNLOAD_DESKTOP_URL"),
+    configured("ios", "LEMTEL_DOWNLOAD_IOS_URL"),
+    configured("android", "LEMTEL_DOWNLOAD_ANDROID_URL"),
+  ];
+}
+
+async function platformOverviewAggregates(admin: any) {
+  const [organizations, memberships, administrators] = await Promise.all([
+    admin.from("lemtel_organizations").select("id", { count: "exact", head: true }).eq("status", "active"),
+    admin.from("lemtel_organization_memberships").select("user_id", { count: "exact", head: true }).eq("status", "active"),
+    admin.from("lemtel_platform_administrators").select("user_id", { count: "exact", head: true }).eq("status", "active"),
+  ]);
+  if (organizations.error || memberships.error || administrators.error) return fail("platform_overview_aggregate_unavailable", 503);
+  // A count that is not explicitly returned remains absent. It is never rendered as
+  // a fictional zero by the client contract.
+  const count = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined;
+  return {
+    activeOrganizations: count(organizations.count),
+    activeMemberships: count(memberships.count),
+    platformAdministrators: count(administrators.count),
+  };
+}
+
+/**
+ * Authoritative platform-only dashboard contract. It contains only Lemtel table
+ * counts and fixed redacted observability enums; it never returns tenant records,
+ * identifiers, addresses, secrets, raw errors, provider state or telephony data.
+ */
+export async function platformOverview(admin: any, now = Date.now()) {
+  const [aggregates, operational, traffic, standby] = await Promise.all([
+    platformOverviewAggregates(admin),
+    operationalStatus(admin),
+    trafficTrend(admin, now),
+    nodeStatusForPlatformOverview(admin),
+  ]);
+  if (isFailure(aggregates)) return aggregates;
+  const status = isFailure(operational) ? emptyOperationalStatus() : operational;
+  const safeStatus = {
+    ...status,
+    // Gates are not attested by this read. Automatic promotion therefore remains
+    // explicitly false even if a stale or malformed upstream payload says otherwise.
+    topology: { ...status.topology, automaticFailover: false },
+  };
+  const safeTraffic = isFailure(traffic) ? redactedTrafficTrend([], now) : traffic;
+  const trafficObservation = isFailure(traffic)
+    ? "unavailable" as const
+    : safeTraffic.roles.some((role) => role.samples.length > 0)
+      ? "observed" as const
+      : "no_observation" as const;
+  const hasObservation = safeStatus.telemetry === "live" || standby.observation === "observed" || trafficObservation === "observed";
+  return {
+    schemaVersion: "lemtel-platform-overview/v1" as const,
+    observation: hasObservation ? "observed" as const : "no_observation" as const,
+    aggregates,
+    operational: safeStatus,
+    standby,
+    traffic: { observation: trafficObservation, trend: safeTraffic },
+    clientAccess: configuredPlatformClientAccess(),
+  };
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   if (req.method !== "POST") return respond({ error: "method_not_allowed" }, 405);
@@ -983,6 +1095,11 @@ export async function handler(req: Request): Promise<Response> {
   if (request.action === "get_node_status") {
     if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
     const result = await nodeStatus(admin);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+  if (request.action === "get_platform_overview") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await platformOverview(admin);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
   if (request.action === "get_telephony_readiness" || request.action === "list_telephony_preparation_states") {

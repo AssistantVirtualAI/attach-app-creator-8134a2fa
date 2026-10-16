@@ -209,7 +209,7 @@ describe("Lemtel portal contract", () => {
     expect(source).toContain('path={`${BASE}/operations/*`} element={<Navigate to={`${BASE}/operations`} replace />}');
     expect(source).toContain('Route path={BASE} element={<Navigate to={`${BASE}/operations`} replace />}');
     expect(source).toContain('Route path={`${BASE}/*`} element={<Navigate to={`${BASE}/operations`} replace />}');
-    expect(source).toContain('Route path={`${BASE}/overview`} element={<Overview {...context} />}');
+    expect(source).toContain('Route path={`${BASE}/overview`} element={<LemtelGlobalOverview t={t} lang={lang} readonly={readonly} />}');
     expect(source).not.toContain('Route path="*" element={<Navigate to="overview" replace />}');
   });
 

@@ -8,7 +8,9 @@ import test from 'node:test';
 import { PACKAGE_FILES, assemblePackage, checkedOutRevision, deterministicTar, normalizedPath, parseArgs, sourceAtRevision } from './lemtel-node-secure-enrollment-deploy-package.mjs';
 
 const root = resolve(import.meta.dirname, '..');
-const revision = 'cb9c175568530ccaee8be9ea6cf44c3cc355feaa';
+// Seal only the detached revision under test: a historical SHA cannot represent
+// a later reviewed manifest chain.
+const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const generatorPath = resolve(root, 'scripts/lemtel-node-secure-enrollment-deploy-package.mjs');
 const generator = readFileSync(generatorPath, 'utf8');
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');

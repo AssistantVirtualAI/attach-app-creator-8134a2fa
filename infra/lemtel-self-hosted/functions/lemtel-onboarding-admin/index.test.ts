@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1.0.14";
-import { provisionMany, redactedOperationalStatusFromRow, validateBody } from "./index.ts";
+import { noObservationNodeStatus, platformOverview, provisionMany, redactedOperationalStatusFromRow, validateBody } from "./index.ts";
 import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
 
 Deno.test("portal list action accepts only its exact body", () => {
@@ -95,6 +95,36 @@ Deno.test("telephony preparation transitions require exact catalog-scoped, bound
 Deno.test("operational status accepts only the exact platform read action", () => {
   assertEquals(validateBody({ action: "get_operational_status" }), { action: "get_operational_status" });
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });
+});
+
+Deno.test("global platform overview is an exact platform read with an honest node fallback", async () => {
+  assertEquals(validateBody({ action: "get_platform_overview" }), { action: "get_platform_overview" });
+  assertEquals(validateBody({ action: "get_platform_overview", ignored: true }), { error: "invalid_body", status: 400 });
+  assertEquals(noObservationNodeStatus(), {
+    schemaVersion: "lemtel-node-status/v1", observation: "no_observation",
+    roles: [
+      { nodeRole: "do_writer", agentState: "unknown", runtimeState: "unknown", replicationState: "unknown", storageState: "unknown" },
+      { nodeRole: "hostinger_standby", agentState: "unknown", runtimeState: "unknown", replicationState: "unknown", storageState: "unknown" },
+    ],
+  });
+  const result = await platformOverview({ from(table: string) {
+    if (table === "lemtel_organizations" || table === "lemtel_organization_memberships" || table === "lemtel_platform_administrators") {
+      const count = table === "lemtel_organizations" ? 2 : table === "lemtel_organization_memberships" ? 5 : 1;
+      return { select: () => ({ eq: () => Promise.resolve({ data: null, count, error: null }) }) };
+    }
+    if (table === "lemtel_operational_status") return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { observed_at: "2026-10-15T12:00:00Z", overall_status: "healthy", payload: { topology: { automatic_failover: true }, services: { runtime: "healthy" }, replication: {} } }, error: null }) }) }) };
+    if (table === "lemtel_traffic_samples") return { select: () => ({ gte: () => ({ lt: () => ({ order: () => ({ order: () => ({ range: () => ({ abortSignal: () => Promise.resolve({ data: [], error: null }) }) }) }) }) }) }) };
+    if (table === "lemtel_node_status_current") return { select: () => ({ order: () => ({ limit: () => ({ abortSignal: () => Promise.resolve({ data: null, error: { code: "42P01" } }) }) }) }) };
+    throw new Error(`unexpected table ${table}`);
+  } } as any, Date.parse("2026-10-15T12:01:00Z"));
+  if ("error" in result) throw new Error(`unexpected overview failure: ${result.error}`);
+  assertEquals(result.schemaVersion, "lemtel-platform-overview/v1");
+  assertEquals(result.observation, "observed");
+  assertEquals(result.aggregates, { activeOrganizations: 2, activeMemberships: 5, platformAdministrators: 1 });
+  assertEquals(result.operational.topology.automaticFailover, false);
+  assertEquals(result.standby.observation, "no_observation");
+  assertEquals(result.traffic.observation, "no_observation");
+  assert(!JSON.stringify(result).match(/42P01|hostname|secret|address|telephony/i));
 });
 
 Deno.test("telephony readiness is an organization-scoped, exact and fail-closed read", () => {

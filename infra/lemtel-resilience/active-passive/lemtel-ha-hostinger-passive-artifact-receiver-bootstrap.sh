@@ -40,7 +40,9 @@ if [[ -z "$receiver_home" || ! -d "$receiver_home" ]]; then
 fi
 
 receiver_program='/usr/local/libexec/lemtel-ha-hostinger-artifact-receive'
-artifact_directory='/var/lib/lemtel-ha/artifacts/hostinger-received'
+# GitHub may submit only checksum-verified source bundles. Keep these files
+# outside the root-only runtime-envelope receipt directory.
+artifact_directory="$receiver_home/github-artifacts"
 authorized_keys="$receiver_home/.ssh/authorized_keys"
 forced_key="restrict,command=\"$receiver_program\" $public_key lemtel-github-hostinger-artifact"
 
@@ -68,7 +70,7 @@ if ! printf '%s\n' "$expected_sha" | grep -Eq '^[a-f0-9]{64}$'; then
   exit 64
 fi
 
-artifact_directory='/var/lib/lemtel-ha/artifacts/hostinger-received'
+artifact_directory='/home/lemtelstorage/github-artifacts'
 temporary_file=$(mktemp "$artifact_directory/.incoming.XXXXXXXX")
 trap 'rm -f "$temporary_file"' EXIT HUP INT TERM
 umask 077

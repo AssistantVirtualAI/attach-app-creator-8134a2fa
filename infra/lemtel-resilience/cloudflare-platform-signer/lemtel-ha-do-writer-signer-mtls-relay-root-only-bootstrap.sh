@@ -20,12 +20,13 @@ readonly CREDENTIALS_PARENT='/etc/lemtel-platform-signer'
 readonly CREDENTIALS_DIRECTORY='/etc/lemtel-platform-signer/credentials'
 readonly CLIENT_CERTIFICATE_SOURCE='/etc/lemtel-platform-signer/credentials/client-cert.pem.cred'
 readonly CLIENT_KEY_SOURCE='/etc/lemtel-platform-signer/credentials/client-key.pem.cred'
+readonly ROOT_CA_CERTIFICATE_FILE='/etc/lemtel-platform-signer/cloudflare-access-root-ca.pem'
 readonly ATTESTATION_PARENT='/var/lib/lemtel-platform-signer'
 readonly ATTESTATION_FILE='/var/lib/lemtel-platform-signer/mtls-root-only-bootstrap.attestation'
 readonly ROOT_CA_COMMON_NAME='Lemtel DO ephemeral mTLS root CA'
 readonly CLIENT_COMMON_NAME='lemtel-do-signer-mtls-relay'
 readonly CERTIFICATE_VALIDITY_DAYS='1'
-readonly ATTESTATION_FORMAT='lemtel_do_signer_mtls_root_only_bootstrap_attestation_v1'
+readonly ATTESTATION_FORMAT='lemtel_do_signer_mtls_root_only_bootstrap_attestation_v2'
 
 [ "${LEMTEL_HA_ROLE:-}" = "$WRITER_ROLE" ] || fail writer_role_required
 
@@ -90,6 +91,7 @@ certificate_fingerprint() {
 
 TEMPORARY_DIRECTORY=''
 ATTESTATION_TEMPORARY_FILE=''
+ROOT_CA_CERTIFICATE_LINKED='false'
 CERTIFICATE_SOURCE_LINKED='false'
 KEY_SOURCE_LINKED='false'
 ATTESTATION_LINKED='false'
@@ -107,6 +109,7 @@ cleanup() {
     [ "$ATTESTATION_LINKED" = 'true' ] && rm -f -- "$ATTESTATION_FILE" >/dev/null 2>&1 || true
     [ "$KEY_SOURCE_LINKED" = 'true' ] && rm -f -- "$CLIENT_KEY_SOURCE" >/dev/null 2>&1 || true
     [ "$CERTIFICATE_SOURCE_LINKED" = 'true' ] && rm -f -- "$CLIENT_CERTIFICATE_SOURCE" >/dev/null 2>&1 || true
+    [ "$ROOT_CA_CERTIFICATE_LINKED" = 'true' ] && rm -f -- "$ROOT_CA_CERTIFICATE_FILE" >/dev/null 2>&1 || true
   fi
   remove_temporary_files
 }
@@ -120,6 +123,7 @@ bootstrap() {
   ensure_new_or_secure_directory "$CREDENTIALS_PARENT" "$CREDENTIALS_DIRECTORY" '750' '700' credential_directory_security_invalid
   ensure_new_or_secure_directory '/var/lib' "$ATTESTATION_PARENT" '755' '755' attestation_parent_security_invalid
   assert_empty_credentials_directory
+  [ ! -e "$ROOT_CA_CERTIFICATE_FILE" ] && [ ! -L "$ROOT_CA_CERTIFICATE_FILE" ] || fail root_ca_certificate_target_exists
   [ ! -e "$ATTESTATION_FILE" ] && [ ! -L "$ATTESTATION_FILE" ] || fail attestation_target_exists
 
   TEMPORARY_DIRECTORY="$(mktemp -d "$CREDENTIALS_PARENT/.mtls-bootstrap.XXXXXX")" || fail temporary_directory_create_failed
@@ -135,7 +139,7 @@ bootstrap() {
 
   root_fingerprint="$(certificate_fingerprint "$TEMPORARY_DIRECTORY/ca-cert.pem")"
   leaf_fingerprint="$(certificate_fingerprint "$TEMPORARY_DIRECTORY/leaf-cert.pem")"
-  rm -f -- "$TEMPORARY_DIRECTORY/ca-key.pem" "$TEMPORARY_DIRECTORY/ca-cert.pem" "$TEMPORARY_DIRECTORY/ca-cert.srl" "$TEMPORARY_DIRECTORY/leaf.csr" "$TEMPORARY_DIRECTORY/leaf-extensions.cnf" >/dev/null 2>&1 || fail root_ca_cleanup_failed
+  rm -f -- "$TEMPORARY_DIRECTORY/ca-key.pem" "$TEMPORARY_DIRECTORY/ca-cert.srl" "$TEMPORARY_DIRECTORY/leaf.csr" "$TEMPORARY_DIRECTORY/leaf-extensions.cnf" >/dev/null 2>&1 || fail root_ca_cleanup_failed
   [ ! -e "$TEMPORARY_DIRECTORY/ca-key.pem" ] && [ ! -L "$TEMPORARY_DIRECTORY/ca-key.pem" ] || fail root_ca_cleanup_failed
 
   systemd-creds encrypt --name=client-cert.pem "$TEMPORARY_DIRECTORY/leaf-cert.pem" "$TEMPORARY_DIRECTORY/client-cert.pem.cred" >/dev/null 2>&1 || fail client_certificate_encryption_failed
@@ -144,11 +148,19 @@ bootstrap() {
   chown root:root -- "$TEMPORARY_DIRECTORY/client-cert.pem.cred" "$TEMPORARY_DIRECTORY/client-key.pem.cred" >/dev/null 2>&1 || fail credential_owner_set_failed
   secure_regular_root "$TEMPORARY_DIRECTORY/client-cert.pem.cred" '600' || fail client_certificate_credential_security_invalid
   secure_regular_root "$TEMPORARY_DIRECTORY/client-key.pem.cred" '600' || fail client_key_credential_security_invalid
+  chmod 0644 -- "$TEMPORARY_DIRECTORY/ca-cert.pem" >/dev/null 2>&1 || fail root_ca_certificate_mode_set_failed
+  chown root:root -- "$TEMPORARY_DIRECTORY/ca-cert.pem" >/dev/null 2>&1 || fail root_ca_certificate_owner_set_failed
+  secure_regular_root "$TEMPORARY_DIRECTORY/ca-cert.pem" '644' || fail root_ca_certificate_security_invalid
 
   printf '%s\n' \
     "format=$ATTESTATION_FORMAT" \
     "root_ca_certificate_sha256=$root_fingerprint" \
+    "root_ca_certificate_file=$ROOT_CA_CERTIFICATE_FILE" \
+    'root_ca_certificate_persisted=true' \
+    'root_ca_certificate_mode=0644' \
+    'root_ca_certificate_root_owned=true' \
     'root_ca_private_key_included=false' \
+    'root_ca_private_key_persisted=false' \
     "leaf_certificate_sha256=$leaf_fingerprint" \
     "leaf_common_name=$CLIENT_COMMON_NAME" \
     'leaf_private_key_included=false' \
@@ -159,6 +171,8 @@ bootstrap() {
   chown root:root -- "$ATTESTATION_TEMPORARY_FILE" >/dev/null 2>&1 || fail attestation_owner_set_failed
   secure_regular_root "$ATTESTATION_TEMPORARY_FILE" '644' || fail attestation_security_invalid
 
+  ln -- "$TEMPORARY_DIRECTORY/ca-cert.pem" "$ROOT_CA_CERTIFICATE_FILE" >/dev/null 2>&1 || fail root_ca_certificate_write_failed
+  ROOT_CA_CERTIFICATE_LINKED='true'
   ln -- "$TEMPORARY_DIRECTORY/client-cert.pem.cred" "$CLIENT_CERTIFICATE_SOURCE" >/dev/null 2>&1 || fail client_certificate_source_write_failed
   CERTIFICATE_SOURCE_LINKED='true'
   ln -- "$TEMPORARY_DIRECTORY/client-key.pem.cred" "$CLIENT_KEY_SOURCE" >/dev/null 2>&1 || fail client_key_source_write_failed
@@ -172,13 +186,17 @@ bootstrap() {
   TEMPORARY_DIRECTORY=''
   ATTESTATION_TEMPORARY_FILE=''
   assert_leaf_credential_sources
+  secure_regular_root "$ROOT_CA_CERTIFICATE_FILE" '644' || fail root_ca_certificate_security_invalid
   secure_regular_root "$ATTESTATION_FILE" '644' || fail attestation_security_invalid
   BOOTSTRAP_COMPLETE='true'
 
   printf 'do_signer_mtls_relay_root_only_bootstrap_format=lemtel_do_signer_mtls_root_only_bootstrap_v1\n'
   printf 'credential_sources_written=true\n'
+  printf 'root_ca_public_certificate_written=true\n'
+  printf 'root_ca_public_certificate_root_owned_0644=true\n'
   printf 'public_attestation_written=true\n'
   printf 'root_ca_private_key_destroyed=true\n'
+  printf 'root_ca_private_key_persisted=false\n'
   printf 'temporary_files_destroyed=true\n'
   printf 'network_contacted=false\n'
   printf 'provider_contacted=false\n'
@@ -202,29 +220,35 @@ read_public_attestation() {
   local root_fingerprint leaf_fingerprint
   secure_regular_root "$ATTESTATION_FILE" '644' || return 1
   mapfile -t lines < "$ATTESTATION_FILE" || return 1
-  [ "${#lines[@]}" -eq 9 ] || return 1
+  [ "${#lines[@]}" -eq 14 ] || return 1
   [ "${lines[0]}" = "format=$ATTESTATION_FORMAT" ] || return 1
   root_fingerprint="${lines[1]#root_ca_certificate_sha256=}"
-  leaf_fingerprint="${lines[3]#leaf_certificate_sha256=}"
+  leaf_fingerprint="${lines[8]#leaf_certificate_sha256=}"
   [ "${lines[1]}" = "root_ca_certificate_sha256=$root_fingerprint" ] || return 1
-  [ "${lines[2]}" = 'root_ca_private_key_included=false' ] || return 1
-  [ "${lines[3]}" = "leaf_certificate_sha256=$leaf_fingerprint" ] || return 1
-  [ "${lines[4]}" = "leaf_common_name=$CLIENT_COMMON_NAME" ] || return 1
-  [ "${lines[5]}" = 'leaf_private_key_included=false' ] || return 1
-  [ "${lines[6]}" = 'credential_directory_root_only=true' ] || return 1
-  [ "${lines[7]}" = 'client_certificate_source_root_only=true' ] || return 1
-  [ "${lines[8]}" = 'client_key_source_root_only=true' ] || return 1
+  [ "${lines[2]}" = "root_ca_certificate_file=$ROOT_CA_CERTIFICATE_FILE" ] || return 1
+  [ "${lines[3]}" = 'root_ca_certificate_persisted=true' ] || return 1
+  [ "${lines[4]}" = 'root_ca_certificate_mode=0644' ] || return 1
+  [ "${lines[5]}" = 'root_ca_certificate_root_owned=true' ] || return 1
+  [ "${lines[6]}" = 'root_ca_private_key_included=false' ] || return 1
+  [ "${lines[7]}" = 'root_ca_private_key_persisted=false' ] || return 1
+  [ "${lines[8]}" = "leaf_certificate_sha256=$leaf_fingerprint" ] || return 1
+  [ "${lines[9]}" = "leaf_common_name=$CLIENT_COMMON_NAME" ] || return 1
+  [ "${lines[10]}" = 'leaf_private_key_included=false' ] || return 1
+  [ "${lines[11]}" = 'credential_directory_root_only=true' ] || return 1
+  [ "${lines[12]}" = 'client_certificate_source_root_only=true' ] || return 1
+  [ "${lines[13]}" = 'client_key_source_root_only=true' ] || return 1
   [[ "$root_fingerprint" =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
   [[ "$leaf_fingerprint" =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
   printf '%s\n%s\n' "$root_fingerprint" "$leaf_fingerprint"
 }
 
 diagnose() {
-  local credential_directory_state='false' client_certificate_state='false' client_key_state='false' attestation_state='false'
+  local credential_directory_state='false' client_certificate_state='false' client_key_state='false' root_ca_certificate_state='false' attestation_state='false'
   local -a fingerprints=()
   secure_directory "$CREDENTIALS_DIRECTORY" '700' && credential_directory_state='true'
   secure_regular_root "$CLIENT_CERTIFICATE_SOURCE" '600' && client_certificate_state='true'
   secure_regular_root "$CLIENT_KEY_SOURCE" '600' && client_key_state='true'
+  secure_regular_root "$ROOT_CA_CERTIFICATE_FILE" '644' && root_ca_certificate_state='true'
   mapfile -t fingerprints < <(read_public_attestation) || true
   if [ "${#fingerprints[@]}" -eq 2 ]; then
     attestation_state='true'
@@ -234,12 +258,15 @@ diagnose() {
   printf 'credential_directory_root_only=%s\n' "$credential_directory_state"
   printf 'client_certificate_source_root_only=%s\n' "$client_certificate_state"
   printf 'client_key_source_root_only=%s\n' "$client_key_state"
+  printf 'root_ca_public_certificate_root_owned_0644=%s\n' "$root_ca_certificate_state"
   printf 'public_attestation_valid=%s\n' "$attestation_state"
   if [ "$attestation_state" = 'true' ]; then
     printf 'root_ca_certificate_fingerprint=%s\n' "${fingerprints[0]}"
     printf 'leaf_certificate_fingerprint=%s\n' "${fingerprints[1]}"
   fi
   printf 'credential_contents_read=false\n'
+  printf 'root_ca_certificate_pem_read=false\n'
+  printf 'root_ca_certificate_pem_returned=false\n'
   printf 'private_key_content_returned=false\n'
   printf 'network_contacted=false\n'
   printf 'provider_contacted=false\n'

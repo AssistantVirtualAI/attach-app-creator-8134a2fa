@@ -12,39 +12,17 @@ const root = resolve(import.meta.dirname, '..');
 const scriptPath = resolve(root, 'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh');
 const agentPath = resolve(root, 'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts');
 const nodePath = resolve(root, 'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs');
+const pythonPath = resolve(root, 'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.py');
 const manifestPath = resolve(root, 'infra/lemtel-resilience/node-secure-enrollment/deployment-manifest.json');
 const script = readFileSync(scriptPath, 'utf8');
 const agent = readFileSync(agentPath, 'utf8');
 const node = readFileSync(nodePath, 'utf8');
+const python = readFileSync(pythonPath, 'utf8');
 const digest = (path) => createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex');
 
-test('key-init package admits exactly the local agents, shared crypto and local gate script', () => {
-  assert.deepEqual(PACKAGE_FILES, [
-    'deployment-metadata.json',
-    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts',
-    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs',
-    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh',
-    'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts',
-  ]);
-  for (const excluded of ['.env', 'docker-compose.yml', 'Caddyfile', 'lemtel-node-status-publish.sh', 'lemtel-ha-hostinger-failover-agent.sh']) assert.ok(!PACKAGE_FILES.includes(excluded), excluded);
-});
-
-test('key-init deployer gates root, explicit local execution and a secure local runtime', () => {
-  assert.equal(execFileSync('bash', ['-n', scriptPath], { encoding: 'utf8' }), '');
-  for (const expected of ['root_required', 'execution_token_required', 'node_role_required', 'generate_publication_keys_only', 'do_writer|hostinger_standby', 'local_state_exists_requires_review', 'secure_runtime_missing', 'deno_version_unsupported', 'node_version_unsupported']) assert.match(script, new RegExp(expected));
-  assert.match(script, /--deny-net/);
-  assert.match(script, /--allow-env=LEMTEL_NODE_LOCAL_APPROVAL/);
-  assert.match(script, /--allow-sys=uid/);
-  assert.match(agent, /createNew: true/);
-  assert.match(agent, /LEMTEL_NODE_LOCAL_APPROVAL/);
-  assert.match(node, /LEMTEL_NODE_LOCAL_APPROVAL/);
-});
-
-test('Node WebCrypto fallback produces compatible independent P-256 key pairs', async () => {
-  const keys = await generateNodeKeys();
+async function assertMaterialWorks(keys) {
   assert.deepEqual(Object.keys(keys.descriptor).sort(), ['encryptionKey', 'signingKey']);
-  assert.match(fingerprint(keys.descriptor), /^sha256:[a-f0-9]{64}$/);
-  assert.match(canonical(keys), /^\{"descriptor":/);
+  assert.match(keys.fingerprint ?? fingerprint(keys.descriptor), /^sha256:[a-f0-9]{64}$/);
   for (const key of [keys.signingPrivate, keys.encryptionPrivate]) assert.equal(typeof key.d, 'string');
   const signingPublic = await webcrypto.subtle.importKey('raw', Buffer.from(keys.descriptor.signingKey, 'base64url'), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
   const signingPrivate = await webcrypto.subtle.importKey('jwk', keys.signingPrivate, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
@@ -54,6 +32,42 @@ test('Node WebCrypto fallback produces compatible independent P-256 key pairs', 
   const encryptionPublic = await webcrypto.subtle.importKey('raw', Buffer.from(keys.descriptor.encryptionKey, 'base64url'), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
   const encryptionPrivate = await webcrypto.subtle.importKey('jwk', keys.encryptionPrivate, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
   assert.equal((await webcrypto.subtle.deriveBits({ name: 'ECDH', public: encryptionPublic }, encryptionPrivate, 256)).byteLength, 32);
+}
+
+test('key-init package admits exactly the local agents, shared crypto and local gate script', () => {
+  assert.deepEqual(PACKAGE_FILES, [
+    'deployment-metadata.json',
+    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts',
+    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs',
+    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.py',
+    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh',
+    'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts',
+  ]);
+  for (const excluded of ['.env', 'docker-compose.yml', 'Caddyfile', 'lemtel-node-status-publish.sh', 'lemtel-ha-hostinger-failover-agent.sh']) assert.ok(!PACKAGE_FILES.includes(excluded), excluded);
+});
+
+test('key-init deployer gates root, explicit local execution and secure local runtimes', () => {
+  assert.equal(execFileSync('bash', ['-n', scriptPath], { encoding: 'utf8' }), '');
+  for (const expected of ['root_required', 'execution_token_required', 'node_role_required', 'generate_publication_keys_only', 'do_writer|hostinger_standby', 'local_state_exists_requires_review', 'secure_runtime_missing', 'deno_version_unsupported', 'node_version_unsupported', 'python_version_unsupported', 'python_openssl_invalid']) assert.match(script, new RegExp(expected));
+  assert.match(script, /--deny-net/);
+  assert.match(script, /--allow-env=LEMTEL_NODE_LOCAL_APPROVAL/);
+  assert.match(script, /--allow-sys=uid/);
+  assert.match(agent, /createNew: true/);
+  assert.match(agent, /LEMTEL_NODE_LOCAL_APPROVAL/);
+  assert.match(node, /LEMTEL_NODE_LOCAL_APPROVAL/);
+  assert.match(python, /LEMTEL_NODE_LOCAL_APPROVAL/);
+});
+
+test('Node WebCrypto fallback produces compatible independent P-256 key pairs', async () => {
+  const keys = await generateNodeKeys();
+  assert.match(canonical(keys), /^\{"descriptor":/);
+  await assertMaterialWorks(keys);
+});
+
+test('Python OpenSSL fallback produces compatible independent P-256 key pairs', async () => {
+  const code = "import importlib.util,json,sys; sys.dont_write_bytecode=True; s=importlib.util.spec_from_file_location('k',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); a=m.key_from_material(); b=m.key_from_material(); d={'signingKey':a['raw'],'encryptionKey':b['raw']}; print(json.dumps({'descriptor':d,'signingPrivate':a['jwk'],'encryptionPrivate':b['jwk'],'fingerprint':'sha256:'+__import__('hashlib').sha256((m.VERSION+':descriptor\\n'+m.canonical(d)).encode()).hexdigest()}))";
+  const keys = JSON.parse(execFileSync('python3', ['-I', '-c', code, pythonPath], { encoding: 'utf8' }));
+  await assertMaterialWorks(keys);
 });
 
 test('key-init deployer only emits a public fingerprint and explicit non-activation outcomes', () => {
@@ -61,6 +75,8 @@ test('key-init deployer only emits a public fingerprint and explicit non-activat
   assert.doesNotMatch(script, /(?:^|[;&|\s])(?:curl|wget|ssh|scp|rsync|systemctl|docker|pg_promote)\b/imu);
   assert.doesNotMatch(script, /(?:PRIVATE_KEY|SECRET|TOKEN|PASSWORD)/u);
   assert.doesNotMatch(node, /(?:fetch\(|XMLHttpRequest|WebSocket|child_process|Deno\.Command|docker|ssh\b|systemctl|pg_promote)/u);
+  assert.doesNotMatch(python, /(?:urllib|requests|socket|http\.client|os\.system|shell=True|docker|ssh\b|systemctl|pg_promote)/u);
+  assert.match(python, /\['openssl', 'ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-outform', 'DER'\]/);
 });
 
 test('key-init deployer refuses unsafe archive structure and root state reuse', () => {
@@ -69,6 +85,7 @@ test('key-init deployer refuses unsafe archive structure and root state reuse', 
   assert.match(script, /chmod 0700/);
   assert.match(agent, /mode: 0o600/);
   assert.match(node, /openSync\(path, 'wx', 0o600\)/);
+  assert.match(python, /os\.O_EXCL \| os\.O_NOFOLLOW/);
 });
 
 test('deterministic archive uses stable regular files only', () => {
@@ -97,6 +114,6 @@ test('enrollment manifest binds the local package sources and preserves source-o
   assert.equal(manifest.runtime_key_generation_authorized, false);
   const sources = new Map(manifest.sources.map((entry) => [entry.path, entry.sha256]));
   const validation = new Map(manifest.validation_sources.map((entry) => [entry.path, entry.sha256]));
-  for (const path of ['infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs', 'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh']) assert.equal(sources.get(path), digest(path));
+  for (const path of ['infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs', 'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.py', 'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh']) assert.equal(sources.get(path), digest(path));
   for (const path of ['scripts/lemtel-node-publication-key-init-package.mjs', 'scripts/lemtel-node-publication-key-init-package.test.mjs']) assert.equal(validation.get(path), digest(path));
 });

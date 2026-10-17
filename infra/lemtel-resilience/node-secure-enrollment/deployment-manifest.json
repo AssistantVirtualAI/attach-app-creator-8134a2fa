@@ -33,8 +33,12 @@
       "sha256": "592423b84f120f2d8f097f1cf19097e560b60a2b0b61f7325e42630106cd6444"
     },
     {
+      "path": "infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.py",
+      "sha256": "79b119dbd9f472c2e35cb02dc981fca6369c9494fe6a8150a1e1dbc526afb9be"
+    },
+    {
       "path": "infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh",
-      "sha256": "900ae72808c071dcc3d67982969f5219b487030fe7975864cfe3e6bff5027caf"
+      "sha256": "2ee3ef49add8745c66085b065068bfe3bf785907a1add7124b1e49d1de8ff680"
     },
     {
       "path": "infra/lemtel-resilience/node-secure-enrollment/systemd/lemtel-node-publication-preflight.service",
@@ -108,15 +112,15 @@
     },
     {
       "path": "scripts/lemtel-node-secure-enrollment-manifests.mjs",
-      "sha256": "0ad283b7b700cc45a2df0c64afa8df190949c702e00515ae6b0c611563e121f4"
+      "sha256": "18c6d598fda18055f37379bdc1a6faf3360c1484993cc1e384a5db8afd9ac5ee"
     },
     {
       "path": "scripts/lemtel-node-publication-key-init-package.mjs",
-      "sha256": "c5a04cae6f827b8b50b3b6cfa6dfae68baba2c7e526690afe6013db825aaca5c"
+      "sha256": "2cf87acd0df64be4da60b505e1f4bf74fc0ee9a7c58285cd74d99018654de684"
     },
     {
       "path": "scripts/lemtel-node-publication-key-init-package.test.mjs",
-      "sha256": "a9255abe014af0b15d1e025b206affb7c9c2e3585aedfb30823c15871abd1639"
+      "sha256": "12b5d80a9c8b9af681a248ec279ac4e2f80f866e42dfb39592b5cf0fb3802b00"
     }
   ],
   "dependencies": [

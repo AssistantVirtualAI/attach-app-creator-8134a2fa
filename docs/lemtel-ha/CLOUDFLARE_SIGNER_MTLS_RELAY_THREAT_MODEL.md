@@ -10,13 +10,15 @@ Cloudflare Access peut protéger une application avec un certificat client et un
 
 ## Frontières prévues
 
-Le runtime Edge ne doit jamais accéder directement au certificat client ou à sa clé. Une éventuelle passerelle locale doit être root-only, accepter uniquement un socket Unix monté explicitement et n’écouter aucun port réseau. Elle ne pourrait joindre que le hostname fixe du signer, par mTLS, pour une seule finalité : `node_enrollment_publication_delivery`.
+Le runtime Edge ne doit jamais accéder directement au certificat client ou à sa clé. Une éventuelle passerelle locale doit être root-only, accepter uniquement un socket Unix monté explicitement et n’écouter aucun port réseau. Le socket doit vérifier l’identité locale du pair avant toute sortie réseau ; son propriétaire, son mode et son montage doivent exclure les conteneurs non autorisés. Elle ne pourrait joindre que le hostname fixe du signer, par mTLS, pour une seule finalité : `node_enrollment_publication_delivery`.
 
 Le Worker signer reste limité à la remise de publication chiffrée. Il ne peut signer aucune commande de fencing, promotion, runtime, DNS, Load Balancer, téléphonie, clé, secret, arbitre ou action fournisseur.
 
+Le relais devra imposer un schéma fermé avant toute requête sortante : taille maximale de 4096 octets, une requête concurrente, trois requêtes au plus par fenêtre de 60 secondes, délai local maximal de 3 secondes et délai sortant maximal de 5 secondes. Un pair local non autorisé, une taille/forme invalide, un timeout ou un résultat incertain doit être refusé sans retry implicite.
+
 ## Gates obligatoires
 
-Cette alternative reste bloquée tant qu’une revue de sécurité indépendante n’a pas validé le modèle, le stockage chiffré-at-rest de la clé cliente root-only, la révocation et rotation du certificat, l’isolation socket/conteneur et les tests négatifs mTLS. Elle exige aussi un ledger durable de nonce, un TTL court, une canonicalisation stricte et l’attestation Edge existante.
+Cette alternative reste bloquée tant qu’une revue de sécurité indépendante n’a pas validé le modèle, le stockage chiffré-at-rest de la clé cliente root-only, la révocation et rotation du certificat, l’isolation socket/conteneur, l’autorisation du pair local et les tests négatifs mTLS. Elle exige aussi un ledger durable de nonce, un TTL court, une canonicalisation stricte, les limites de taille/concurrence/débit et l’attestation Edge existante.
 
 > L’existence d’un certificat mTLS ne valide ni un nœud Hostinger, ni un publisher, ni une promotion ou une bascule. Elle ne remplace jamais le drill de fencing, les vérifications L7, le routage Cloudflare, le failback et les preuves de retry client.
 

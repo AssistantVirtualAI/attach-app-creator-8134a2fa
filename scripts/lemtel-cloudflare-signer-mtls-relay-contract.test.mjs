@@ -11,6 +11,13 @@ const model = readFileSync(modelPath, 'utf8');
 
 test('mTLS relay remains a source-only, non-deployable identity alternative', () => {
   assert.equal(contract.status, 'design_review_required_not_deployable');
+  assert.equal(contract.implementation.source_available, true);
+  assert.equal(contract.implementation.source_only, true);
+  assert.equal(contract.implementation.production_deployment_authorized, false);
+  assert.equal(contract.implementation.network_listener_type, 'unix_socket_only');
+  assert.equal(contract.implementation.fixed_signer_hostname, 'signer.lemtel.assistantvirtualai.com');
+  assert.equal(contract.implementation.fixed_signer_path, '/v1/node-enrollment-delivery');
+  assert.equal(contract.implementation.root_only_systemd_template_without_install_section, true);
   assert.equal(contract.identity.mechanism, 'cloudflare_access_mutual_tls_service_auth');
   assert.equal(contract.identity.dedicated_client_identity_required, true);
   assert.equal(contract.identity.reuse_node_or_platform_key_forbidden, true);

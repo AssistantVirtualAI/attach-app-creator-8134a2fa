@@ -13,6 +13,15 @@
     "access_application_default_deny": true,
     "access_user_policy_allowed": false
   },
+  "implementation": {
+    "source_available": true,
+    "source_only": true,
+    "production_deployment_authorized": false,
+    "network_listener_type": "unix_socket_only",
+    "fixed_signer_hostname": "signer.lemtel.assistantvirtualai.com",
+    "fixed_signer_path": "/v1/node-enrollment-delivery",
+    "root_only_systemd_template_without_install_section": true
+  },
   "local_relay": {
     "root_only_service_required": true,
     "edge_container_direct_certificate_access_forbidden": true,

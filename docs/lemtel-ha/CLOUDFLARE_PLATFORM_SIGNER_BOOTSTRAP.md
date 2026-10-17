@@ -1,44 +1,57 @@
-# Lemtel — bootstrap du signer Cloudflare externe
+# Lemtel — bootstrap du signer de plateforme Cloudflare
 
-> **Statut : coffre créé, hostname Access-protégé, signer inerte.** Cloudflare conserve une clé P-256 privée write-only pour le futur signer de plateforme. Le Worker est accessible uniquement sous un hostname dédié protégé par Cloudflare Access **default-deny**. Il ne lit pas encore la clé, ne signe aucune donnée et n’active aucun composant HA.
+> **Statut : source-only, non déployable.** Le signer Cloudflare déployé reste sans binding, sans policy utilisable, sans ledger et sans route active. Les sources de ce répertoire ne créent ni secret, ni certificat, ni service, ni route de failover, ni promotion.
 
-## Préconditions satisfaites
+## État réellement attesté
 
-Le compte Cloudflare possède un Secrets Store avec une capacité disponible. Le magasin Lemtel contient une clé privée de signer générée directement pour Cloudflare. La valeur privée n’est ni demandée, ni lue, ni affichée, ni écrite dans le dépôt, un fichier, un gist, une commande, une variable durable, le portail ou les logs.
+Un hostname dédié `signer.lemtel.assistantvirtualai.com` existe et est protégé par Cloudflare Access en **default-deny**. Le Worker reste non exposé par `workers.dev` et ne peut pas être invoqué sans la configuration explicite attendue. Aucun service token n’existe encore, aucune policy Access `service_auth` n’est attachée, aucun binding Secrets Store, Durable Object ou variable de production n’est présent.
 
-Un hostname dédié, `signer.lemtel.assistantvirtualai.com`, est attaché exclusivement au Worker `lemtel-platform-signer` :
+La clé de plateforme reste un secret write-only attendu uniquement dans un binding Cloudflare Secrets Store. Elle n’est jamais affichée, stockée dans le dépôt, ajoutée à un gist, une commande ou un journal. L’implémentation ne lit ce binding qu’après contrôle de l’hôte, de l’assertion Access, du certificat mTLS, de l’autorisation d’enrôlement et du ledger anti-rejeu.
 
-- `workers.dev` et les URL de preview sont désactivés ;
-- Cloudflare Access protège le hostname avec une application non visible dans le launcher ;
-- l’application ne possède encore aucune politique, donc tout appel est refusé par défaut avant le Worker ;
-- aucun service token n’existe encore ;
-- le hostname ne participe pas au portail, aux pools, au Load Balancer, au DNS/routage de failover ou au trafic téléphonique.
+## Interface source-only vérifiable
 
-## Worker inerte
+L’unique endpoint prévu est un `POST` HTTPS sur `/v1/node-enrollment-delivery` du hostname exact. Le body canonique contient seulement une remise chiffrée d’enrôlement, son `requestId`, le rôle de nœud admis, l’empreinte du destinataire et une autorisation d’enrôlement signée à durée courte.
 
-Le Worker de bootstrap respecte les propriétés suivantes :
+Le Worker refuse toute variante d’hôte, de chemin, de méthode, d’origine navigateur, de forme JSON, d’encodage Base64URL, de rôle ou de taille. Il ne fait aucun appel HTTP sortant : le jeu de clés public Access doit être fourni par un binding de configuration redacted et mis à jour de manière contrôlée pendant une rotation Cloudflare Access. Toute absence ou incohérence répond par un résultat redacted et ne signe rien.
 
-- aucune route de failover, aucun timer, aucun Durable Object et aucune KV ;
-- observabilité désactivée ;
-- réponse 404 pour toute requête qui aurait déjà passé Access ;
-- aucune lecture du secret ni opération cryptographique ;
-- aucune API fournisseur, DNS de failover, Load Balancer, promotion, runtime, téléphonie ou failover.
+L’autorisation d’enrôlement lie précisément le `requestId`, le rôle, l’empreinte du nœud, le challenge, le digest de la remise et son expiration. Elle est vérifiée avec une clé publique distincte. Le transcript signé renvoie ces mêmes éléments. Ce signer n’est donc pas un oracle de signature générique.
 
-Le fait qu’une clé existe dans le coffre et qu’un hostname soit protégé ne signifie pas que le Worker peut signer. La clé reste non liée jusqu’à une phase d’activation distincte.
+## Identité mTLS et Access
 
-## Phase suivante, non réalisée ici
+Le futur relais DO root-only doit posséder une identité mTLS dédiée, distincte de toute clé de nœud, de plateforme, d’arbitre et de fournisseur. Cloudflare Access doit appliquer une policy `service_auth` au **Common Name exact** attendu. Le Worker doit simultanément vérifier :
 
-Avant de lier le secret et d’ajouter une route de signature, il faut concevoir et faire valider :
+- le JWT Access signé avec l’émetteur et l’audience de l’application ;
+- `request.cf.tlsClientAuth.certVerified === "SUCCESS"` et `certRevoked === "0"` ;
+- l’empreinte SHA-256 et le sujet RFC2253 attendus du certificat client ;
+- l’autorisation d’enrôlement à finalité unique et son ledger anti-rejeu.
 
-1. Un service token Access dédié, à durée limitée et de privilège minimal. Son secret doit être placé seulement dans le runtime DO Edge, jamais dans un fichier, une commande, le dépôt, un gist ou le portail.
-2. Une politique Access `service_auth` liée uniquement à ce token. Aucun accès utilisateur, réseau ou navigateur ne doit être accepté.
-3. Un format canonique de requête signé, une durée courte, un nonce et un ledger anti-rejeu durable. Un simple header statique ou l’adresse IP ne suffit pas.
-4. Une allowlist de finalité limitée à la livraison chiffrée d’enrôlement. Le signer ne doit jamais être une oracle générique de signature, une API de contrôle ou une passerelle vers des fournisseurs.
-5. Une vérification des pins de clé publique des nœuds via le canal hors bande déjà requis par l’enrôlement Lemtel.
-6. Les tests positifs et négatifs, une revue de code indépendante et une attestation du déploiement Edge avant tout changement runtime.
+Les claims non documentés comme `sub`, `type` ou une identité implicite ne constituent pas une autorisation. Une durée de ledger est au moins égale à l’expiration la plus courte du JWT Access et de l’autorisation d’enrôlement. Le Durable Object programme son nettoyage à l’expiration et ne rouvre jamais une requête encore valide.
+
+## Relais root-only, non installé
+
+Le modèle systemd garde un relais Python root-only non installable. Il accepte un seul pair UID via socket Unix, canonicalise le message, utilise uniquement les credentials systemd chiffrés montés au runtime, et joint seulement le hostname et le chemin fixes. Après une tentative sortante, une réponse ne peut être renvoyée que si son `requestId`, rôle, empreinte et remise correspondent exactement à la requête. Tout timeout ou état incertain renvoie seulement `{"result":"unavailable"}` et ne doit jamais être relancé automatiquement.
+
+Le relais ne fournit aucune installation, aucun socket permanent et aucune configuration active. Un socket orphelin ne peut être supprimé qu’après vérification stricte de son type, propriétaire, groupe et mode ; toute autre entrée bloque le démarrage.
+
+## Préconditions obligatoires avant tout déploiement
+
+1. Revue de sécurité indépendante et correction de chaque finding `NO_GO`.
+2. Credential mTLS chiffré root-only attesté, isolation du socket depuis le conteneur Edge autorisé et test de redémarrage sécurisé.
+3. Création séparée d’un certificat mTLS dédié, avec drill de rotation et révocation. Aucun certificat existant ne peut être réutilisé.
+4. Policy Access `service_auth` au Common Name exact, testée avec certificat valable, certificat révoqué, mauvaise empreinte, mauvais sujet et sans certificat.
+5. Clé publique de l’autorité d’enrôlement et jeu de clés Access versionnés/configurés sans secrets, avec tests de rotation, expiration et indisponibilité. L’absence doit rester fail-closed.
+6. Service d’autorisation d’enrôlement à usage unique, autoritaire et audité ; un nœud ne peut pas choisir sa propre empreinte, rôle, challenge ni expiration.
+7. Binding Secrets Store write-only, Durable Object anti-rejeu, `compatibility_date` Worker explicite et testés dans un environnement isolé. Aucune route Worker, aucun `workers.dev` et aucun preview public ne doit être activé.
+8. Déploiement Edge/enrôlement attesté puis publication redacted d’un seul nœud à la fois, avec timers encore désactivés.
 
 Même après ces étapes, le signer autoriserait au plus l’enrôlement de publication redacted. Il ne remplacerait jamais les gates L7, Node Status, trafic, fencing, promotion, runtime Hostinger, routage Cloudflare de failover, failback ni retry client requis pour un failover automatique.
 
-## Rollback
+## Références
 
-Le rollback du bootstrap est volontairement simple : supprimer l’application Access et détacher le hostname du Worker, ou conserver la protection `default-deny`. Une suppression de clé implique une nouvelle chaîne de pins et d’enrôlement ; elle doit donc faire l’objet d’une procédure de révocation distincte, jamais d’un nettoyage automatique.
+[1]: https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/ "Cloudflare Access JWT validation"
+
+[2]: https://developers.cloudflare.com/ssl/client-certificates/client-certificate-variables/ "Cloudflare client certificate variables"
+
+[3]: https://developers.cloudflare.com/workers/runtime-apis/request/ "Cloudflare Workers Request cf metadata"
+
+[4]: https://developers.cloudflare.com/workers/configuration/compatibility-dates/ "Cloudflare Workers compatibility dates"

@@ -41,6 +41,14 @@
       "sha256": "2ee3ef49add8745c66085b065068bfe3bf785907a1add7124b1e49d1de8ff680"
     },
     {
+      "path": "infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-state-diagnostic.sh",
+      "sha256": "0b60e1b4d6c38dffa787d66c50e3ccac48a8c1fc7ae3926cc2cb9e3e7ecbc476"
+    },
+    {
+      "path": "infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-public-attestation.py",
+      "sha256": "eb8c455c27dca038ab24f6504c8513f61ce4b35592f2972cdb6fe9b0bc81ca88"
+    },
+    {
       "path": "infra/lemtel-resilience/node-secure-enrollment/lemtel-platform-signer-credential-init.py",
       "sha256": "c735f604175aa4ca484beb6defe6ad6cd1941977c5eb830a3d7fed6a162d9321"
     },
@@ -124,7 +132,7 @@
     },
     {
       "path": "scripts/lemtel-node-secure-enrollment-manifests.mjs",
-      "sha256": "ef22711890387a8ae06d76a4065723f3829893847fc0611f52f5e74d98d48b6a"
+      "sha256": "99a909724b43d42c79c7511622eb3ca9e5af0c6b43cf3f3a5ad13aa5cfca55e8"
     },
     {
       "path": "scripts/lemtel-node-publication-key-init-package.mjs",
@@ -133,6 +141,14 @@
     {
       "path": "scripts/lemtel-node-publication-key-init-package.test.mjs",
       "sha256": "12b5d80a9c8b9af681a248ec279ac4e2f80f866e42dfb39592b5cf0fb3802b00"
+    },
+    {
+      "path": "scripts/lemtel-node-publication-key-state-diagnostic.test.mjs",
+      "sha256": "7e90b3baa80d3d7e0ce24530e5b0565541fa55813361d23bd52daa4285622e57"
+    },
+    {
+      "path": "scripts/lemtel-node-publication-public-attestation.test.mjs",
+      "sha256": "ae28b665db041c05d84140fa8509ee195258f53268e4f9732bb0ef70c770bcff"
     },
     {
       "path": "scripts/lemtel-platform-signer-credential-package.mjs",

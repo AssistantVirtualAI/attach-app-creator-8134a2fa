@@ -54,6 +54,7 @@ required=(
   'deployment-metadata.json'
   'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts'
   'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs'
+  'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.py'
   'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh'
   'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts'
   'manifest.sha256'
@@ -76,6 +77,7 @@ root = sys.argv[1]
 required = [
     'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts',
     'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs',
+    'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.py',
     'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh',
     'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts',
 ]
@@ -100,7 +102,7 @@ try:
         'allowed_roles': ['do_writer', 'hostinger_standby'],
         'runtime_key_generation_requires_explicit_local_gate': True,
         'runtime_key_generation_authorized_by_package': False,
-        'local_crypto_runtimes': ['deno_2', 'node_webcrypto_18_or_newer'],
+        'local_crypto_runtimes': ['deno_2', 'node_webcrypto_18_or_newer', 'python3_openssl_p256'],
         'network_access': False,
         'package_install_persistent': False,
         'secrets_configured': False,
@@ -140,6 +142,14 @@ elif command -v node >/dev/null 2>&1; then
   version="$($NODE_BIN --version 2>/dev/null)" || fail node_version_unavailable
   [[ "$version" =~ ^v(1[89]|[2-9][0-9])\.[0-9]+\.[0-9]+$ ]] || fail node_version_unsupported
   runtime='node'
+elif command -v python3 >/dev/null 2>&1 && command -v openssl >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python3)"
+  OPENSSL_BIN="$(command -v openssl)"
+  [ -x "$PYTHON_BIN" ] && [ -x "$OPENSSL_BIN" ] || fail python_openssl_invalid
+  version="$($PYTHON_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)" || fail python_version_unavailable
+  [[ "$version" =~ ^3\.(8|9|1[0-9]|[2-9][0-9])$ ]] || fail python_version_unsupported
+  "$OPENSSL_BIN" version >/dev/null 2>&1 || fail openssl_unavailable
+  runtime='python_openssl'
 else
   fail secure_runtime_missing
 fi
@@ -148,8 +158,10 @@ secure_directory_parent "$config" || fail config_directory_security_invalid
 secure_directory_parent "$state" || fail state_directory_security_invalid
 if [ "$runtime" = deno ]; then
   result="$(env LEMTEL_NODE_LOCAL_APPROVAL=generate_publication_keys_only "$DENO_BIN" run --quiet --no-prompt --no-config --no-lock --deny-net --allow-env=LEMTEL_NODE_LOCAL_APPROVAL --allow-read="$config","$state" --allow-write="$config","$state" --allow-sys=uid "$stage/infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts" init 2>&1)" || fail local_key_generation_failed
-else
+elif [ "$runtime" = node ]; then
   result="$(env LEMTEL_NODE_LOCAL_APPROVAL=generate_publication_keys_only "$NODE_BIN" "$stage/infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs" init 2>&1)" || fail local_key_generation_failed
+else
+  result="$(env -i PATH="$(dirname "$PYTHON_BIN"):$(dirname "$OPENSSL_BIN"):/usr/bin:/bin" LEMTEL_NODE_LOCAL_APPROVAL=generate_publication_keys_only "$PYTHON_BIN" -I "$stage/infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.py" init 2>&1)" || fail local_key_generation_failed
 fi
 fingerprint="$(printf '%s\n' "$result" | sed -n 's/^status=initialized fingerprint=\(sha256:[a-f0-9]\{64\}\)$/\1/p')"
 [ "$(printf '%s\n' "$result" | wc -l | tr -d ' ')" = 1 ] && [[ "$fingerprint" =~ ^sha256:[a-f0-9]{64}$ ]] || fail local_key_generation_output_invalid

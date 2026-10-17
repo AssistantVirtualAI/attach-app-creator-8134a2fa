@@ -19,6 +19,7 @@ export const PACKAGE_FILES = [
   'deployment-metadata.json',
   'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-agent.ts',
   'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.mjs',
+  'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.py',
   'infra/lemtel-resilience/node-secure-enrollment/lemtel-node-publication-key-init.sh',
   'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts',
 ];
@@ -99,7 +100,7 @@ function metadata(sourceRevision) {
     allowed_roles: ['do_writer', 'hostinger_standby'],
     runtime_key_generation_requires_explicit_local_gate: true,
     runtime_key_generation_authorized_by_package: false,
-    local_crypto_runtimes: ['deno_2', 'node_webcrypto_18_or_newer'],
+    local_crypto_runtimes: ['deno_2', 'node_webcrypto_18_or_newer', 'python3_openssl_p256'],
     network_access: false,
     package_install_persistent: false,
     secrets_configured: false,

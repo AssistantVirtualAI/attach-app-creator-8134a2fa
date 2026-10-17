@@ -56,7 +56,14 @@ if [[ "$args" == *' -outform DER '* ]]; then
   exit 0
 fi
 [ -n "$out" ] || exit 1
-printf 'mock-local-crypto-artifact\\n' > "$out"
+case "$(basename "$out")" in
+  ca-key.pem) artifact='mock-ca-private-key' ;;
+  ca-cert.pem) artifact='mock-ca-public-certificate' ;;
+  leaf-key.pem) artifact='mock-leaf-private-key' ;;
+  leaf-cert.pem) artifact='mock-leaf-certificate' ;;
+  *) artifact='mock-local-crypto-artifact' ;;
+esac
+printf '%s\\n' "$artifact" > "$out"
 chmod 0600 "$out"
 `);
   writeExecutable(join(bin, 'systemd-creds'), `#!/usr/bin/env bash
@@ -69,6 +76,14 @@ for output; do :; done
 printf 'mock-encrypted-credential:%s\\n' "$name" > "$output"
 chmod 0600 "$output"
 `);
+  writeExecutable(join(bin, 'ln'), `#!/usr/bin/env bash
+for last; do :; done
+if [ "\${MOCK_LN_FAIL_TARGET:-}" = "$last" ]; then
+  printf 'ln-failed:%s\\n' "$last" >> "$MOCK_LOG"
+  exit 1
+fi
+exec /usr/bin/ln "$@"
+`);
 }
 
 function fixture() {
@@ -80,6 +95,7 @@ function fixture() {
   const credentials = join(credentialsParent, 'credentials');
   const attestationParent = join(varLib, 'lemtel-platform-signer');
   const attestation = join(attestationParent, 'mtls-root-only-bootstrap.attestation');
+  const rootCaCertificate = join(credentialsParent, 'cloudflare-access-root-ca.pem');
   const log = join(base, 'calls.log');
   const script = join(base, 'bootstrap.sh');
   try {
@@ -97,13 +113,14 @@ function fixture() {
       .replace("readonly CREDENTIALS_DIRECTORY='/etc/lemtel-platform-signer/credentials'", `readonly CREDENTIALS_DIRECTORY='${credentials}'`)
       .replace("readonly CLIENT_CERTIFICATE_SOURCE='/etc/lemtel-platform-signer/credentials/client-cert.pem.cred'", `readonly CLIENT_CERTIFICATE_SOURCE='${join(credentials, 'client-cert.pem.cred')}'`)
       .replace("readonly CLIENT_KEY_SOURCE='/etc/lemtel-platform-signer/credentials/client-key.pem.cred'", `readonly CLIENT_KEY_SOURCE='${join(credentials, 'client-key.pem.cred')}'`)
+      .replace("readonly ROOT_CA_CERTIFICATE_FILE='/etc/lemtel-platform-signer/cloudflare-access-root-ca.pem'", `readonly ROOT_CA_CERTIFICATE_FILE='${rootCaCertificate}'`)
       .replace("readonly ATTESTATION_PARENT='/var/lib/lemtel-platform-signer'", `readonly ATTESTATION_PARENT='${attestationParent}'`)
       .replace("readonly ATTESTATION_FILE='/var/lib/lemtel-platform-signer/mtls-root-only-bootstrap.attestation'", `readonly ATTESTATION_FILE='${attestation}'`)
       .replace("ensure_new_or_secure_directory '/etc' \"$CREDENTIALS_PARENT\"", `ensure_new_or_secure_directory '${etc}' \"$CREDENTIALS_PARENT\"`)
       .replace("ensure_new_or_secure_directory '/var/lib' \"$ATTESTATION_PARENT\"", `ensure_new_or_secure_directory '${varLib}' \"$ATTESTATION_PARENT\"`);
     writeFileSync(script, rewritten, { mode: 0o700 });
     chmodSync(script, 0o700);
-    return { base, bin, script, log, credentialsParent, credentials, attestationParent, attestation };
+    return { base, bin, script, log, credentialsParent, credentials, rootCaCertificate, attestationParent, attestation };
   } catch (error) {
     rmSync(base, { recursive: true, force: true });
     throw error;
@@ -128,20 +145,31 @@ function clean(fix) {
   rmSync(fix.base, { recursive: true, force: true });
 }
 
-test('root-only mTLS bootstrap creates only encrypted leaf sources and a public attestation with mocked local crypto', () => {
+test('root-only mTLS bootstrap persists only the public root certificate beside encrypted leaf sources and a public attestation', () => {
   const fix = fixture();
   try {
     const result = run(fix, 'bootstrap_do_signer_mtls_relay_root_only');
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /credential_sources_written=true/);
+    assert.match(result.stdout, /root_ca_public_certificate_written=true/);
+    assert.match(result.stdout, /root_ca_public_certificate_root_owned_0644=true/);
     assert.match(result.stdout, /root_ca_private_key_destroyed=true/);
+    assert.match(result.stdout, /root_ca_private_key_persisted=false/);
     assert.match(result.stdout, /temporary_files_destroyed=true/);
+    for (const state of ['network_contacted', 'provider_contacted', 'cloudflare_contacted', 'ca_uploaded', 'systemd_daemon_reloaded', 'service_enabled', 'service_started', 'timer_enabled', 'routes_changed', 'runtime_started', 'promotion_executed', 'fencing_executed', 'failover_executed', 'telephony_contacted']) {
+      assert.match(result.stdout, new RegExp(`^${state}=false$`, 'mu'), `${state} must stay false`);
+    }
     assert.doesNotMatch(result.stdout + result.stderr, /(?:BEGIN|PRIVATE KEY|bootstrap_do_signer_mtls_relay_root_only|[0-9a-f]{64})/u);
 
     assert.equal(mode(fix.credentialsParent), 0o750);
     assert.equal(mode(fix.credentials), 0o700);
-    assert.deepEqual(readdirSync(fix.credentialsParent), ['credentials']);
+    assert.deepEqual(readdirSync(fix.credentialsParent).sort(), ['cloudflare-access-root-ca.pem', 'credentials']);
     assert.deepEqual(readdirSync(fix.credentials).sort(), privateCredentialNames);
+    assert.ok(lstatSync(fix.rootCaCertificate).isFile());
+    assert.ok(!lstatSync(fix.rootCaCertificate).isSymbolicLink());
+    assert.equal(mode(fix.rootCaCertificate), 0o644);
+    assert.equal(readFileSync(fix.rootCaCertificate, 'utf8'), 'mock-ca-public-certificate\n');
+    assert.doesNotMatch(readFileSync(fix.rootCaCertificate, 'utf8'), /(?:BEGIN|PRIVATE KEY|mock-ca-private-key|mock-leaf-private-key|mock-encrypted-credential)/u);
     for (const name of privateCredentialNames) {
       const path = join(fix.credentials, name);
       assert.ok(lstatSync(path).isFile());
@@ -153,12 +181,19 @@ test('root-only mTLS bootstrap creates only encrypted leaf sources and a public 
     assert.ok(!lstatSync(fix.attestation).isSymbolicLink());
     assert.equal(mode(fix.attestation), 0o644);
     const attestation = readFileSync(fix.attestation, 'utf8');
+    assert.match(attestation, /^format=lemtel_do_signer_mtls_root_only_bootstrap_attestation_v2$/mu);
     assert.match(attestation, /^root_ca_certificate_sha256=sha256:[a-f0-9]{64}$/mu);
+    assert.ok(attestation.includes(`root_ca_certificate_file=${fix.rootCaCertificate}`));
+    assert.match(attestation, /^root_ca_certificate_persisted=true$/mu);
+    assert.match(attestation, /^root_ca_certificate_mode=0644$/mu);
+    assert.match(attestation, /^root_ca_certificate_root_owned=true$/mu);
+    assert.match(attestation, /^root_ca_private_key_persisted=false$/mu);
     assert.match(attestation, /^leaf_certificate_sha256=sha256:[a-f0-9]{64}$/mu);
     assert.match(attestation, /^leaf_common_name=lemtel-do-signer-mtls-relay$/mu);
-    assert.doesNotMatch(attestation, /(?:BEGIN|PRIVATE KEY|mock-local-crypto-artifact)/u);
+    assert.doesNotMatch(attestation, /(?:BEGIN|PRIVATE KEY|mock-ca-private-key|mock-ca-public-certificate|mock-leaf-private-key|mock-leaf-certificate)/u);
     assert.deepEqual(readdirSync(fix.attestationParent).sort(), [basename(fix.attestation)]);
     assert.ok(!readdirSync(fix.credentials, { withFileTypes: true }).some((entry) => entry.name.startsWith('.mtls-bootstrap.')));
+    assert.ok(!readdirSync(fix.credentialsParent, { withFileTypes: true }).some((entry) => entry.name.startsWith('.mtls-bootstrap.')));
 
     const calls = readFileSync(fix.log, 'utf8');
     assert.match(calls, /openssl:ecparam,-name,prime256v1,-genkey,/u);
@@ -171,7 +206,7 @@ test('root-only mTLS bootstrap creates only encrypted leaf sources and a public 
   }
 });
 
-test('public-only diagnostic returns attested fingerprints and metadata states without reading credential contents', () => {
+test('public-only diagnostic returns metadata and fingerprints without reading credentials or the root CA PEM', () => {
   const fix = fixture();
   try {
     assert.equal(run(fix, 'bootstrap_do_signer_mtls_relay_root_only').status, 0);
@@ -181,13 +216,18 @@ test('public-only diagnostic returns attested fingerprints and metadata states w
     assert.match(result.stdout, /^credential_directory_root_only=true$/mu);
     assert.match(result.stdout, /^client_certificate_source_root_only=true$/mu);
     assert.match(result.stdout, /^client_key_source_root_only=true$/mu);
+    assert.match(result.stdout, /^root_ca_public_certificate_root_owned_0644=true$/mu);
     assert.match(result.stdout, /^public_attestation_valid=true$/mu);
     assert.match(result.stdout, /^root_ca_certificate_fingerprint=sha256:[a-f0-9]{64}$/mu);
     assert.match(result.stdout, /^leaf_certificate_fingerprint=sha256:[a-f0-9]{64}$/mu);
     assert.match(result.stdout, /^credential_contents_read=false$/mu);
+    assert.match(result.stdout, /^root_ca_certificate_pem_read=false$/mu);
+    assert.match(result.stdout, /^root_ca_certificate_pem_returned=false$/mu);
     assert.match(result.stdout, /^private_key_content_returned=false$/mu);
-    assert.doesNotMatch(result.stdout, /(?:BEGIN|mock-encrypted-credential|lemtel-do-signer-mtls-relay)/u);
+    assert.doesNotMatch(result.stdout, /(?:BEGIN|mock-ca-private-key|mock-ca-public-certificate|mock-leaf-private-key|mock-leaf-certificate|mock-encrypted-credential|lemtel-do-signer-mtls-relay)/u);
     assert.equal(readFileSync(fix.log, 'utf8'), '');
+    const diagnosticSource = source.slice(source.indexOf('diagnose() {'), source.indexOf('\ntrap cleanup EXIT'));
+    assert.doesNotMatch(diagnosticSource, /(?:\bopenssl\b|\bcat\b|<\s*"\$ROOT_CA_CERTIFICATE_FILE")/u);
 
     chmodSync(join(fix.credentials, 'client-key.pem.cred'), 0o644);
     const unsafe = run(fix, 'diagnose_do_signer_mtls_relay_root_only');
@@ -243,6 +283,24 @@ test('token gate, symlink rejection, and crypto failure leave no usable credenti
   }
 });
 
+test('bootstrap rolls back a newly linked public root certificate after a later output failure', () => {
+  const failed = fixture();
+  try {
+    const result = run(failed, 'bootstrap_do_signer_mtls_relay_root_only', { MOCK_LN_FAIL_TARGET: failed.attestation });
+    assert.notEqual(result.status, 0);
+    assert.ok(!existsSync(failed.rootCaCertificate));
+    assert.ok(!existsSync(failed.attestation));
+    assert.deepEqual(readdirSync(failed.credentialsParent), ['credentials']);
+    assert.deepEqual(readdirSync(failed.credentials), []);
+    assert.deepEqual(readdirSync(failed.attestationParent), []);
+    assert.ok(!readdirSync(failed.credentialsParent, { withFileTypes: true }).some((entry) => entry.name.startsWith('.mtls-bootstrap.')));
+    assert.match(readFileSync(failed.log, 'utf8'), /ln-failed:.*mtls-root-only-bootstrap\.attestation/u);
+    assert.doesNotMatch(result.stdout + result.stderr, /(?:BEGIN|PRIVATE KEY|mock-ca-private-key|mock-ca-public-certificate|mock-leaf-private-key|mock-leaf-certificate)/u);
+  } finally {
+    clean(failed);
+  }
+});
+
 test('bootstrap source has a fixed P-256 client identity and contains no network, upload, service activation, failover, or telephony command surface', () => {
   const syntax = spawnSync('bash', ['-n', sourcePath], { encoding: 'utf8' });
   assert.equal(syntax.status, 0, syntax.stderr);
@@ -251,6 +309,7 @@ test('bootstrap source has a fixed P-256 client identity and contains no network
     "readonly CREDENTIALS_DIRECTORY='/etc/lemtel-platform-signer/credentials'",
     "readonly CLIENT_CERTIFICATE_SOURCE='/etc/lemtel-platform-signer/credentials/client-cert.pem.cred'",
     "readonly CLIENT_KEY_SOURCE='/etc/lemtel-platform-signer/credentials/client-key.pem.cred'",
+    "readonly ROOT_CA_CERTIFICATE_FILE='/etc/lemtel-platform-signer/cloudflare-access-root-ca.pem'",
     "readonly CLIENT_COMMON_NAME='lemtel-do-signer-mtls-relay'",
     "readonly ROOT_CA_COMMON_NAME='Lemtel DO ephemeral mTLS root CA'",
     "readonly BOOTSTRAP_TOKEN='bootstrap_do_signer_mtls_relay_root_only'",
@@ -258,11 +317,22 @@ test('bootstrap source has a fixed P-256 client identity and contains no network
     'systemd-creds encrypt --name=client-cert.pem',
     'systemd-creds encrypt --name=client-key.pem',
     'trap cleanup EXIT',
+    'root_ca_public_certificate_written=true',
     'root_ca_private_key_destroyed=true',
+    'root_ca_private_key_persisted=false',
+    'root_ca_certificate_pem_read=false',
     'do_signer_mtls_relay_root_only_diagnostic_format=',
   ]) assert.ok(source.includes(expected), `missing ${expected}`);
   assert.equal(contract.root_only_credential_bootstrap.root_required, true);
-  assert.equal(contract.root_only_credential_bootstrap.root_ca_ephemeral, true);
+  assert.equal(contract.root_only_credential_bootstrap.root_ca_private_key_ephemeral, true);
+  assert.equal(contract.root_only_credential_bootstrap.root_ca_private_key_persisted, false);
+  assert.equal(contract.root_only_credential_bootstrap.root_ca_public_certificate_persisted, true);
+  assert.equal(contract.root_only_credential_bootstrap.root_ca_public_certificate_file, '/etc/lemtel-platform-signer/cloudflare-access-root-ca.pem');
+  assert.equal(contract.root_only_credential_bootstrap.root_ca_public_certificate_mode, '0644');
+  assert.equal(contract.root_only_credential_bootstrap.root_ca_public_certificate_root_owned, true);
+  assert.equal(contract.root_only_credential_bootstrap.root_ca_public_certificate_rolls_back_on_failure, true);
+  assert.equal(contract.root_only_credential_bootstrap.diagnostic_root_ca_pem_read, false);
+  assert.equal(contract.root_only_credential_bootstrap.diagnostic_root_ca_pem_returned, false);
   assert.equal(contract.root_only_credential_bootstrap.client_key_algorithm, 'P-256');
   assert.equal(contract.root_only_credential_bootstrap.client_common_name_exact, 'lemtel-do-signer-mtls-relay');
   assert.deepEqual(contract.root_only_credential_bootstrap.credential_source_files, privateCredentialNames);

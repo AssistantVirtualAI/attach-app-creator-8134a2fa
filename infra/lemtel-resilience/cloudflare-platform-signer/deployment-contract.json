@@ -1,6 +1,6 @@
 {
-  "contract_version": "lemtel_cloudflare_platform_signer_v2",
-  "scope": "access_protected_external_signer_bootstrap",
+  "contract_version": "lemtel_cloudflare_platform_signer_v4",
+  "scope": "access_protected_external_signer_source_only",
   "worker": {
     "logical_name": "lemtel-platform-signer",
     "workers_dev_enabled": false,
@@ -12,7 +12,12 @@
     "durable_object_configured": false,
     "kv_configured": false,
     "observability_enabled": false,
-    "default_response_status": 404
+    "compatibility_date_configured": false,
+    "default_response_status": 404,
+    "source_delivery_endpoint_implemented": true,
+    "source_requires_explicit_active_mode": true,
+    "source_replay_ledger_implemented": true,
+    "source_semantic_enrollment_authorization_implemented": true
   },
   "access": {
     "provider": "cloudflare_zero_trust_access",
@@ -23,21 +28,31 @@
     "app_launcher_visible": false,
     "session_duration": "10m",
     "service_token_created": false,
-    "service_auth_policy_configured": false
+    "service_auth_policy_configured": false,
+    "source_access_jwt_issuer_audience_signature_verification_implemented": true,
+    "source_mtls_cert_verified_fingerprint_subject_verification_implemented": true,
+    "source_access_jwks_network_fetch_forbidden": true,
+    "access_jwks_binding_created": false
   },
   "secret_store": {
     "provider": "cloudflare_secrets_store",
     "private_signing_key_generated_externally": true,
     "private_signing_key_write_only": true,
     "worker_binding_created": false,
-    "worker_source_reads_key": false,
+    "worker_source_can_read_key_only_after_access_authorization_and_replay_gate": true,
     "private_key_output": false
   },
   "signing": {
     "request_authentication_configured": false,
     "replay_ledger_configured": false,
+    "semantic_authorization_key_configured": false,
     "signing_endpoint_configured": false,
     "node_enrollment_integration_configured": false,
+    "source_only_endpoint_implemented": true,
+    "source_only_canonical_request_validation_implemented": true,
+    "source_only_replay_ledger_implemented": true,
+    "source_only_authorization_claim_implemented": true,
+    "source_only_key_binding_after_all_gates_implemented": true,
     "active": false
   },
   "activation": {
@@ -66,13 +81,18 @@
   },
   "required_before_signing": [
     "independent_threat_model_review",
-    "service_token_secret_distributed_only_to_edge_runtime",
+    "external_code_review",
+    "encrypted_root_only_mtls_relay_credential_backend_attestation",
+    "dedicated_mtls_client_certificate_rotation_and_revocation_drill",
+    "cloudflare_access_service_auth_common_name_policy_test",
+    "access_jwks_rotation_update_and_negative_test",
     "authenticated_edge_to_worker_channel",
-    "nonce_replay_ledger_and_retention_review",
+    "enrollment_authority_issue_consume_and_expiry_test",
+    "nonce_replay_ledger_retained_until_minimum_token_expiry_test",
+    "durable_object_alarm_cleanup_test",
     "signed_request_canonicalization_tests",
     "private_key_binding_and_negative_test",
-    "external_code_review",
-    "node_public_key_pin_out_of_band_verified",
+    "worker_hostname_and_runtime_compatibility_attestation",
     "edge_enrollment_deployment_and_attestation"
   ]
 }

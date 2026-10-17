@@ -7,7 +7,6 @@ purpose, or action from the caller. It has no listener on a network interface.
 No deployment unit or active configuration is provided by this source file.
 """
 
-import base64
 import http.client
 import json
 import os
@@ -27,7 +26,7 @@ SOCKET_PATH = "/run/lemtel-platform-signer/relay.sock"
 CONFIG_PATH = "/etc/lemtel-platform-signer/relay.conf"
 SIGNER_HOST = "signer.lemtel.assistantvirtualai.com"
 SIGNER_PATH = "/v1/node-enrollment-delivery"
-MAX_REQUEST_BYTES = 4096
+MAX_REQUEST_BYTES = 6144
 MAX_RESPONSE_BYTES = 4096
 LOCAL_TIMEOUT_SECONDS = 3
 OUTBOUND_TIMEOUT_SECONDS = 5
@@ -36,6 +35,9 @@ RATE_LIMIT_MAX_REQUESTS = 3
 PURPOSE = "node_enrollment_publication_delivery"
 CREDENTIAL_NAMES = ("client-cert.pem", "client-key.pem")
 B64URL = re.compile(r"^[A-Za-z0-9_-]+$")
+HEX64 = re.compile(r"^[a-f0-9]{64}$")
+ROLES = {"digitalocean_writer", "hostinger_standby"}
+UNAVAILABLE = b'{"result":"unavailable"}'
 
 
 class Deny(Exception):
@@ -119,11 +121,14 @@ def load_config(path: str = CONFIG_PATH) -> dict[str, Any]:
     return {"mode": value["RELAY_MODE"], "peer_uid": peer_uid}
 
 
+def _b64(value: Any, lower: int, upper: int) -> bool:
+    return isinstance(value, str) and lower <= len(value) <= upper and B64URL.fullmatch(value) is not None
+
+
 def _validate_sealed(value: Any) -> bool:
     if not isinstance(value, dict) or set(value) != {"challenge", "ephemeralKey", "iv", "ciphertext"}:
         return False
-    limits = {"challenge": 1024, "ephemeralKey": 128, "iv": 32, "ciphertext": 2800}
-    return all(isinstance(value[key], str) and 0 < len(value[key]) <= limits[key] and B64URL.fullmatch(value[key]) for key in limits)
+    return _b64(value["challenge"], 43, 43) and _b64(value["ephemeralKey"], 87, 87) and _b64(value["iv"], 16, 16) and _b64(value["ciphertext"], 22, 2800)
 
 
 def parse_request(raw: bytes) -> dict[str, Any]:
@@ -133,9 +138,14 @@ def parse_request(raw: bytes) -> dict[str, Any]:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict_object)
     except (UnicodeError, json.JSONDecodeError, Deny):
         raise Deny() from None
-    if not isinstance(value, dict) or set(value) != {"purpose", "requestId", "sealed"}:
+    if not isinstance(value, dict) or set(value) != {"purpose", "requestId", "role", "recipientFingerprint", "sealed", "authorization"}:
         raise Deny()
-    if value["purpose"] != PURPOSE or not isinstance(value["requestId"], str) or not _validate_sealed(value["sealed"]):
+    if (
+        value["purpose"] != PURPOSE or not isinstance(value["requestId"], str) or
+        not isinstance(value["role"], str) or value["role"] not in ROLES or
+        not isinstance(value["recipientFingerprint"], str) or HEX64.fullmatch(value["recipientFingerprint"]) is None or
+        not _validate_sealed(value["sealed"]) or not isinstance(value["authorization"], str) or not _b64(value["authorization"], 32, 2048)
+    ):
         raise Deny()
     try:
         parsed = uuid.UUID(value["requestId"])
@@ -144,6 +154,13 @@ def parse_request(raw: bytes) -> dict[str, Any]:
     if str(parsed) != value["requestId"] or parsed.version != 4:
         raise Deny()
     return value
+
+
+def canonical_request(value: dict[str, Any]) -> bytes:
+    try:
+        return json.dumps(value, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("ascii")
+    except (TypeError, UnicodeError):
+        raise Deny() from None
 
 
 class RateLimiter:
@@ -193,26 +210,56 @@ def forward_to_signer(raw: bytes, credentials_directory: str | None) -> bytes:
             connection.close()
 
 
-def parse_delivery(raw: bytes) -> None:
-    """Only a normal sealed delivery can return to the local caller."""
+def parse_delivery(raw: bytes) -> dict[str, Any]:
+    """Only a complete, request-bound sealed delivery can return to the local caller."""
     try:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict_object)
     except (UnicodeError, json.JSONDecodeError, Deny):
         raise Deny() from None
-    if not isinstance(value, dict) or set(value) != {"sealed", "signature"} or not _validate_sealed(value["sealed"]):
+    if not isinstance(value, dict) or set(value) != {"delivery", "signature"} or not isinstance(value["delivery"], dict):
         raise Deny()
+    delivery = value["delivery"]
+    if set(delivery) != {"authorizationId", "expiresAt", "nodeRole", "recipientFingerprint", "requestId", "sealed", "sealedDigest"}:
+        raise Deny()
+    if (
+        not isinstance(delivery["authorizationId"], str) or not isinstance(delivery["requestId"], str) or
+        not isinstance(delivery["nodeRole"], str) or delivery["nodeRole"] not in ROLES or
+        not isinstance(delivery["recipientFingerprint"], str) or HEX64.fullmatch(delivery["recipientFingerprint"]) is None or
+        not isinstance(delivery["sealedDigest"], str) or HEX64.fullmatch(delivery["sealedDigest"]) is None or
+        not isinstance(delivery["expiresAt"], int) or delivery["expiresAt"] <= int(time.time()) or not _validate_sealed(delivery["sealed"])
+    ):
+        raise Deny()
+    for key in ("authorizationId", "requestId"):
+        try:
+            parsed = uuid.UUID(delivery[key])
+        except (ValueError, AttributeError):
+            raise Deny() from None
+        if str(parsed) != delivery[key] or parsed.version != 4:
+            raise Deny()
     signature = value["signature"]
-    if not isinstance(signature, str) or len(signature) != 86 or not B64URL.fullmatch(signature):
+    if not isinstance(signature, str) or len(signature) != 86 or B64URL.fullmatch(signature) is None:
         raise Deny()
+    return value
+
+
+def _same_delivery(request: dict[str, Any], response: dict[str, Any]) -> bool:
+    delivery = response["delivery"]
+    return (
+        delivery["requestId"] == request["requestId"] and delivery["nodeRole"] == request["role"] and
+        delivery["recipientFingerprint"] == request["recipientFingerprint"] and delivery["sealed"] == request["sealed"]
+    )
 
 
 def dispatch(raw: bytes, peer_uid: int, config: dict[str, Any], limiter: RateLimiter, forwarder: Callable[[bytes, str | None], bytes], credentials_directory: str | None) -> bytes:
     """Authorize locally before any credential access or outbound network call."""
     if config.get("mode") != "active" or not isinstance(peer_uid, int) or peer_uid != config.get("peer_uid"):
         raise Deny()
-    parse_request(raw)
+    request = parse_request(raw)
     limiter.consume()
-    return forwarder(raw, credentials_directory)
+    reply = forwarder(canonical_request(request), credentials_directory)
+    if not _same_delivery(request, parse_delivery(reply)):
+        raise Deny()
+    return reply
 
 
 def _peer_uid(connection: socket.socket) -> int:
@@ -224,7 +271,7 @@ def _peer_uid(connection: socket.socket) -> int:
     return uid
 
 
-def _safe_socket_parent(path: Path) -> None:
+def _safe_socket_parent(path: Path, peer_uid: int) -> None:
     parent = path.parent
     if parent.exists():
         if not _safe_directory(parent, 0o711):
@@ -234,23 +281,36 @@ def _safe_socket_parent(path: Path) -> None:
         os.chown(parent, 0, 0)
         if not _safe_directory(parent, 0o711):
             raise Deny()
-    if path.exists() or path.is_symlink():
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return
+    except OSError:
+        raise Deny() from None
+    if not stat.S_ISSOCK(metadata.st_mode) or metadata.st_uid != peer_uid or metadata.st_gid != 0 or stat.S_IMODE(metadata.st_mode) != 0o600:
         raise Deny()
+    try:
+        path.unlink()
+    except OSError:
+        raise Deny() from None
 
 
 def run() -> int:
+    server: socket.socket | None = None
+    socket_path = Path(SOCKET_PATH)
+    bound = False
     try:
         if os.geteuid() != 0:
             raise Deny()
         config = load_config()
         if config["mode"] != "active":
             raise Deny()
-        socket_path = Path(SOCKET_PATH)
-        _safe_socket_parent(socket_path)
+        _safe_socket_parent(socket_path, config["peer_uid"])
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         server.settimeout(LOCAL_TIMEOUT_SECONDS)
         server.bind(SOCKET_PATH)
-        os.chown(SOCKET_PATH, config["peer_uid"], -1)
+        bound = True
+        os.chown(SOCKET_PATH, config["peer_uid"], 0)
         os.chmod(SOCKET_PATH, 0o600)
         limiter = RateLimiter()
         while True:
@@ -265,16 +325,25 @@ def run() -> int:
             except (Deny, OSError):
                 if connection is not None:
                     try:
-                        connection.sendall(b"{}")
+                        connection.sendall(UNAVAILABLE)
                     except OSError:
                         pass
             finally:
                 if connection is not None:
                     connection.close()
-    except Deny:
+    except (Deny, OSError):
         return 78
-    except OSError:
-        return 78
+    finally:
+        if server is not None:
+            server.close()
+        if bound:
+            try:
+                socket_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return 78
+    return 78
 
 
 if __name__ == "__main__":

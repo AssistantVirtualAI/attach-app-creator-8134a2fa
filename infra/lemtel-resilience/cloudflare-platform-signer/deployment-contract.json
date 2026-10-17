@@ -1,16 +1,29 @@
 {
-  "contract_version": "lemtel_cloudflare_platform_signer_v1",
-  "scope": "inert_external_signer_bootstrap",
+  "contract_version": "lemtel_cloudflare_platform_signer_v2",
+  "scope": "access_protected_external_signer_bootstrap",
   "worker": {
     "logical_name": "lemtel-platform-signer",
     "workers_dev_enabled": false,
     "public_route_configured": false,
-    "custom_domain_configured": false,
+    "custom_domain_configured": true,
+    "custom_domain": "signer.lemtel.assistantvirtualai.com",
+    "preview_urls_enabled": false,
     "scheduled_trigger_configured": false,
     "durable_object_configured": false,
     "kv_configured": false,
     "observability_enabled": false,
     "default_response_status": 404
+  },
+  "access": {
+    "provider": "cloudflare_zero_trust_access",
+    "application_configured": true,
+    "hostname_protected": true,
+    "default_deny": true,
+    "policy_count": 0,
+    "app_launcher_visible": false,
+    "session_duration": "10m",
+    "service_token_created": false,
+    "service_auth_policy_configured": false
   },
   "secret_store": {
     "provider": "cloudflare_secrets_store",
@@ -40,7 +53,7 @@
   "boundaries": {
     "do_writer_remains_unique": true,
     "hostinger_runtime_remains_private_and_stopped": true,
-    "cloudflare_or_dns_changed": false,
+    "failover_cloudflare_or_dns_changed": false,
     "worker_controls_provider_api": false,
     "worker_controls_load_balancer": false,
     "worker_controls_dns": false,
@@ -53,6 +66,7 @@
   },
   "required_before_signing": [
     "independent_threat_model_review",
+    "service_token_secret_distributed_only_to_edge_runtime",
     "authenticated_edge_to_worker_channel",
     "nonce_replay_ledger_and_retention_review",
     "signed_request_canonicalization_tests",

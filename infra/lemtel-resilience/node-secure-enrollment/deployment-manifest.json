@@ -41,6 +41,14 @@
       "sha256": "2ee3ef49add8745c66085b065068bfe3bf785907a1add7124b1e49d1de8ff680"
     },
     {
+      "path": "infra/lemtel-resilience/node-secure-enrollment/lemtel-platform-signer-credential-init.py",
+      "sha256": "c735f604175aa4ca484beb6defe6ad6cd1941977c5eb830a3d7fed6a162d9321"
+    },
+    {
+      "path": "infra/lemtel-resilience/node-secure-enrollment/lemtel-platform-signer-credential-init.sh",
+      "sha256": "657f2efdd5974fbbd947b81764e4df2ddeef289dd14d58d055beae11330c5710"
+    },
+    {
       "path": "infra/lemtel-resilience/node-secure-enrollment/systemd/lemtel-node-publication-preflight.service",
       "sha256": "b7874e68de930b161907fee5752f1608cde133b01c2fe837fd95e0a3dd468514"
     },
@@ -51,6 +59,10 @@
     {
       "path": "docs/lemtel-ha/NODE_SECURE_ENROLLMENT_PROTOCOL.md",
       "sha256": "f6bf9683ae21590355459a7cafd797f208491613b7a02634e9b2eaa5b9b0cda2"
+    },
+    {
+      "path": "docs/lemtel-ha/PLATFORM_SIGNER_CREDENTIAL.md",
+      "sha256": "fe0d1a7b405f4fb8cae005341dcf304634d210cee75252d3a8c00c1cdfce999e"
     }
   ],
   "migration_sources": [
@@ -112,7 +124,7 @@
     },
     {
       "path": "scripts/lemtel-node-secure-enrollment-manifests.mjs",
-      "sha256": "18c6d598fda18055f37379bdc1a6faf3360c1484993cc1e384a5db8afd9ac5ee"
+      "sha256": "ef22711890387a8ae06d76a4065723f3829893847fc0611f52f5e74d98d48b6a"
     },
     {
       "path": "scripts/lemtel-node-publication-key-init-package.mjs",
@@ -121,6 +133,14 @@
     {
       "path": "scripts/lemtel-node-publication-key-init-package.test.mjs",
       "sha256": "12b5d80a9c8b9af681a248ec279ac4e2f80f866e42dfb39592b5cf0fb3802b00"
+    },
+    {
+      "path": "scripts/lemtel-platform-signer-credential-package.mjs",
+      "sha256": "10bd601c21a54858c7675f645173f739b8dc2ec49921cd971ef67fdb658f87a8"
+    },
+    {
+      "path": "scripts/lemtel-platform-signer-credential-package.test.mjs",
+      "sha256": "c06224ecc18caf66d6ade44fb72699b0bd1fba630db4e9e1e6fedc15cf5546f5"
     }
   ],
   "dependencies": [

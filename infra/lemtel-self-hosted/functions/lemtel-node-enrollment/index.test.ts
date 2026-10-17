@@ -2,6 +2,7 @@
 // Async dependency mocks deliberately implement the production Promise-based RPC contract.
 import { strict as assert } from "node:assert";
 import { canonical, fingerprint, generateNodeKeys, observationText, openConfig, openDelivery, publicationEndpoint, sealConfig, signDelivery, signProof, unb64, validateChallenge, validateDescriptor, verifyProof, type Challenge } from "../_shared/lemtelNodeEnrollment.ts";
+import { authorizationToken, exchangeExternalSigner } from "../_shared/lemtelExternalPlatformSigner.ts";
 import { createEnrollmentHandler } from "./index.ts";
 import { createEnrollmentAdminHandler } from "../lemtel-node-enrollment-admin/index.ts";
 import { createSignedStatusHandler } from "../lemtel-node-status-signed-ingest/index.ts";
@@ -11,6 +12,8 @@ const now = 1790000040;
 const id = "11111111-1111-4111-8111-111111111111", actor = "22222222-2222-4222-8222-222222222222";
 const endpoint = "https://publication.invalid/functions/v1/lemtel-node-status-signed-ingest";
 const keys = await generateNodeKeys(), platform = await generateNodeKeys(), fp = await fingerprint(keys.descriptor);
+const authority = { key: platform.signingPrivate, keyId: "f".repeat(64) };
+const directExternalDelivery = async (request: { sealed: Awaited<ReturnType<typeof sealConfig>> }) => signDelivery(request.sealed, platform.signingPrivate);
 const challenge: Challenge = { requestId: id, role: "do_writer", fingerprint: fp, purpose: "attest", nonce: "a".repeat(64), expiresAt: now + 120 };
 const config = { format: "lemtel-node-publication-v1" as const, requestId: id, role: "do_writer" as const, fingerprint: fp, endpoint, grantedUntil: now + 1800 };
 const request = (body: unknown, headers: Record<string, string> = {}) => new Request("https://test.invalid/functions/v1/lemtel-node-enrollment", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: typeof body === "string" ? body : canonical(body) });
@@ -44,7 +47,7 @@ Deno.test("ECDH/HKDF/AES-GCM roundtrip, authenticated metadata, tampering and ex
 });
 Deno.test("enrollment only consumes verified exact bound attestation, rejecting malformed/browser/replays", async () => {
   let state = "invited", writes = 0;
-  const handler = createEnrollmentHandler({ enabled: () => true, now: () => now, endpoint: () => endpoint, signer: () => platform.signingPrivate, rpc: async (name) => {
+  const handler = createEnrollmentHandler({ enabled: () => true, externalSignerEnabled: () => true, now: () => now, endpoint: () => endpoint, authority: () => authority, deliver: directExternalDelivery, rpc: async (name) => {
     if (name.endsWith("challenge")) return state === "invited" ? { challenge, descriptor: null, grantedUntil: null } : null;
     if (name.endsWith("attest")) { assert.equal(state, "invited"); state = "pending"; writes++; return true; }
     throw new Error("unexpected");
@@ -70,19 +73,19 @@ Deno.test("claim requires explicit approval, returns ciphertext only to node, bu
     if (name.endsWith("claim")) { state = "delivered"; claims++; return true; }
     throw new Error("unexpected");
   };
-  const handler = createEnrollmentHandler({ enabled: () => true, now: () => now, endpoint: () => endpoint, signer: () => platform.signingPrivate, rpc });
+  const handler = createEnrollmentHandler({ enabled: () => true, externalSignerEnabled: () => true, now: () => now, endpoint: () => endpoint, authority: () => authority, deliver: directExternalDelivery, rpc });
   const body = { action: "claim", challenge: c, signature: await signProof(keys.signingPrivate, "claim", c) };
   const reply = await handler(request(body)); assert.equal(reply.status, 200);
   const text = await reply.text(); assert.equal(text.includes(endpoint), false); assert.equal(text.includes('"descriptor"'), false);
   assert.deepEqual(await openDelivery(keys.encryptionPrivate, JSON.parse(text), c, platform.descriptor.signingKey, endpoint, now), config);
   assert.equal((await handler(request(body))).status, 409); assert.equal(claims, 1);
   state = "approved";
-  const fail = createEnrollmentHandler({ enabled: () => true, now: () => now, endpoint: () => endpoint, signer: () => platform.signingPrivate, rpc: async (name) => {
+  const fail = createEnrollmentHandler({ enabled: () => true, externalSignerEnabled: () => true, now: () => now, endpoint: () => endpoint, authority: () => authority, deliver: directExternalDelivery, rpc: async (name) => {
     const value = await rpc(name); if (name.endsWith("claim")) throw new Error("unknown_response_synthetic"); return value;
   } });
   assert.equal((await fail(request(body))).status, 409); assert.equal(state, "delivered");
   assert.equal((await fail(request(body))).status, 409);
-  const disabled = createEnrollmentHandler({ enabled: () => false, now: () => now, endpoint: () => { throw new Error("not_called"); }, signer: () => { throw new Error("not_called"); }, rpc: async () => { throw new Error("not_called"); } });
+  const disabled = createEnrollmentHandler({ enabled: () => false, externalSignerEnabled: () => false, now: () => now, endpoint: () => { throw new Error("not_called"); }, authority: () => { throw new Error("not_called"); }, deliver: async () => { throw new Error("not_called"); }, rpc: async () => { throw new Error("not_called"); } });
   assert.equal((await disabled(request(body))).status, 503);
 });
 Deno.test("platform-admin only, verified actor is not body-controlled, exact approval and redacted response", async () => {
@@ -102,6 +105,21 @@ Deno.test("platform-admin only, verified actor is not body-controlled, exact app
   assert.equal((await h(request({ ...body, evidence: "TRUST_SELF_CLAIM" }, auth))).status, 400);
   const reply = await h(request(body, auth)); assert.equal(reply.status, 200);
   const result = await reply.json(); assert.deepEqual(Object.keys(result).sort(), ["expiresAt", "fingerprint", "requestId", "role", "state"].sort()); assert.equal(calls, 1);
+});
+Deno.test("external signer receives one canonical, request-bound delivery and no local signing fallback", async () => {
+  const c: Challenge = { ...challenge, purpose: "claim" };
+  const sealed = await sealConfig(keys.descriptor, c, { ...config, requestId: c.requestId, role: c.role, fingerprint: c.fingerprint }, now);
+  const authorization = await authorizationToken(authority, sealed, c, now);
+  const outbound = { purpose: "node_enrollment_publication_delivery" as const, requestId: c.requestId, role: c.role, recipientFingerprint: c.fingerprint, sealed, authorization };
+  const received = await exchangeExternalSigner(outbound, async (raw) => {
+    assert.equal(raw, canonical(outbound));
+    assert.equal(JSON.parse(raw).sealed.challenge.nonce, c.nonce);
+    return canonical(await directExternalDelivery(outbound));
+  });
+  assert.deepEqual(await openDelivery(keys.encryptionPrivate, received, c, platform.descriptor.signingKey, endpoint, now), config);
+  await assert.rejects(() => exchangeExternalSigner(outbound, async () => canonical({ sealed: { ...sealed, iv: sealed.iv.slice(1) }, signature: "A".repeat(86) })));
+  const h = createEnrollmentHandler({ enabled: () => true, externalSignerEnabled: () => false, now: () => now, endpoint: () => endpoint, authority: () => authority, deliver: directExternalDelivery, rpc: async () => { throw new Error("not_called"); } });
+  assert.equal((await h(request({ action: "challenge", requestId: c.requestId, role: c.role, fingerprint: c.fingerprint }))).status, 503);
 });
 Deno.test("signed observations require delivered live binding and monotonic atomic write", async () => {
   let seq = 0, available = true;
@@ -133,7 +151,7 @@ Deno.test("root-only metadata refuses symlink, hardlink, missing ownership and w
 Deno.test("slow request body is cancelled at the fixed two-second deadline", async () => {
   let cancelled = false, calls = 0;
   const stream = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new TextEncoder().encode("{")); }, cancel() { cancelled = true; } });
-  const h = createEnrollmentHandler({ enabled: () => true, now: () => now, endpoint: () => endpoint, signer: () => platform.signingPrivate, rpc: async () => { calls++; throw new Error("not_called"); } });
+  const h = createEnrollmentHandler({ enabled: () => true, externalSignerEnabled: () => true, now: () => now, endpoint: () => endpoint, authority: () => authority, deliver: directExternalDelivery, rpc: async () => { calls++; throw new Error("not_called"); } });
   const reply = await h(new Request("https://test.invalid", { method: "POST", headers: { "Content-Type": "application/json" }, body: stream }));
   assert.equal(reply.status, 400); assert.equal(cancelled, true); assert.equal(calls, 0);
 });

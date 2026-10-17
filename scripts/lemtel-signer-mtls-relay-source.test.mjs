@@ -14,15 +14,14 @@ const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 const python = (script) => execFileSync('python3', ['-I', '-c', script], { cwd: root, encoding: 'utf8' });
 
 const bytes = (size, fill) => Buffer.alloc(size, fill).toString('base64url');
-const sealed = { challenge: bytes(32, 1), ephemeralKey: bytes(65, 2), iv: bytes(12, 3), ciphertext: bytes(32, 4) };
-const request = JSON.stringify({
-  purpose: 'node_enrollment_publication_delivery', requestId: '11111111-1111-4111-8111-111111111111', role: 'digitalocean_writer',
-  recipientFingerprint: 'a'.repeat(64), sealed, authorization: 'b'.repeat(64),
+const canonical = (value) => Array.isArray(value) ? `[${value.map(canonical).join(',')}]` : value && typeof value === 'object' ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}` : JSON.stringify(value);
+const requestId = '11111111-1111-4111-8111-111111111111';
+const recipientFingerprint = `sha256:${'a'.repeat(64)}`;
+const sealed = { challenge: { requestId, role: 'do_writer', fingerprint: recipientFingerprint, purpose: 'claim', nonce: 'b'.repeat(64), expiresAt: 1_800_000_000 }, ephemeralKey: bytes(65, 2), iv: bytes(12, 3), ciphertext: bytes(32, 4) };
+const request = canonical({
+  purpose: 'node_enrollment_publication_delivery', requestId, role: 'do_writer', recipientFingerprint, sealed, authorization: 'b'.repeat(64),
 });
-const delivery = JSON.stringify({
-  delivery: { authorizationId: '22222222-2222-4222-8222-222222222222', expiresAt: Math.floor(Date.now() / 1000) + 90, nodeRole: 'digitalocean_writer', recipientFingerprint: 'a'.repeat(64), requestId: '11111111-1111-4111-8111-111111111111', sealed, sealedDigest: 'c'.repeat(64) },
-  signature: bytes(64, 5),
-});
+const delivery = JSON.stringify({ sealed, signature: bytes(64, 5) });
 
 test('source-only mTLS relay remains constrained to a single local protocol and fixed signer origin', () => {
   assert.match(relay, /SIGNER_HOST = "signer\.lemtel\.assistantvirtualai\.com"/);
@@ -30,7 +29,7 @@ test('source-only mTLS relay remains constrained to a single local protocol and 
   assert.match(relay, /PURPOSE = "node_enrollment_publication_delivery"/);
   assert.match(relay, /socket\.AF_UNIX/); assert.match(relay, /socket\.SO_PEERCRED/);
   assert.match(relay, /connection\.request\("POST", SIGNER_PATH/); assert.match(relay, /UNAVAILABLE = b'\{"result":"unavailable"\}'/);
-  assert.match(relay, /def _same_delivery\(/); assert.match(relay, /def _safe_socket_parent\(path: Path, peer_uid: int\)/);
+  assert.match(relay, /def _same_delivery\(/); assert.match(relay, /def _receive_framed\(/); assert.match(relay, /struct\.unpack\("!I"/); assert.match(relay, /def _safe_socket_parent\(path: Path, peer_uid: int\)/);
   assert.doesNotMatch(relay, /requests\.|urllib|subprocess|os\.system|shell=True|curl|cloudflare|fencing|promotion|load_balancer|dns/i);
   assert.equal(contract.local_relay.local_peer_authorization_required, true);
   assert.equal(contract.local_relay.unauthorized_peer_denied_before_network, true);
@@ -41,7 +40,7 @@ test('source-only mTLS relay remains constrained to a single local protocol and 
   for (const value of Object.values(contract.activation)) assert.equal(value, false);
 });
 
-test('relay canonicalizes, rejects wrong peer/unsafe/mismatched delivery, and does not retry uncertain outcomes', () => {
+test('relay requires canonical input, rejects wrong peer/unsafe/mismatched delivery, and does not retry uncertain outcomes', () => {
   const script = String.raw`
 import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location("relay", ${JSON.stringify(relayPath)})
@@ -55,14 +54,15 @@ def forwarder(*args):
     return delivery
 assert relay.dispatch(request, 1234, config, relay.RateLimiter(now=lambda: 10), forwarder, None) == delivery
 assert calls[-1][0] == relay.canonical_request(relay.parse_request(request))
-reordered = json.dumps(json.loads(request), separators=(",", ":"), sort_keys=True).encode()
-relay.dispatch(reordered, 1234, config, relay.RateLimiter(now=lambda: 10), forwarder, None)
-assert calls[-1][0] == relay.canonical_request(relay.parse_request(reordered))
+reordered = request + b" "
+try: relay.dispatch(reordered, 1234, config, relay.RateLimiter(now=lambda: 10), forwarder, None)
+except relay.Deny: pass
+else: raise AssertionError("noncanonical request accepted")
 for raw, uid in [(request, 1235), (b'{"purpose":"node_enrollment_publication_delivery","purpose":"node_enrollment_publication_delivery"}', 1234), (b'x' * 6145, 1234)]:
     try: relay.dispatch(raw, uid, config, relay.RateLimiter(now=lambda: 10), forwarder, None)
     except relay.Deny: pass
     else: raise AssertionError("unsafe input accepted")
-bad = json.loads(delivery); bad["delivery"]["requestId"] = "33333333-3333-4333-8333-333333333333"
+bad = json.loads(delivery); bad["sealed"]["challenge"]["requestId"] = "33333333-3333-4333-8333-333333333333"
 try: relay.dispatch(request, 1234, config, relay.RateLimiter(now=lambda: 10), lambda *_: json.dumps(bad).encode(), None)
 except relay.Deny: pass
 else: raise AssertionError("mismatched response accepted")
@@ -71,7 +71,7 @@ for _ in range(3): relay.dispatch(request, 1234, config, limiter, forwarder, Non
 try: relay.dispatch(request, 1234, config, limiter, forwarder, None)
 except relay.Deny: pass
 else: raise AssertionError("rate excess accepted")
-assert len(calls) == 5
+assert len(calls) == 4
 print("relay_dispatch_test=ok")
 `;
   assert.equal(python(script).trim(), 'relay_dispatch_test=ok');

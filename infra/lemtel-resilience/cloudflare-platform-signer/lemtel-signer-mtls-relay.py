@@ -36,7 +36,7 @@ PURPOSE = "node_enrollment_publication_delivery"
 CREDENTIAL_NAMES = ("client-cert.pem", "client-key.pem")
 B64URL = re.compile(r"^[A-Za-z0-9_-]+$")
 HEX64 = re.compile(r"^[a-f0-9]{64}$")
-ROLES = {"digitalocean_writer", "hostinger_standby"}
+ROLES = {"do_writer", "hostinger_standby"}
 UNAVAILABLE = b'{"result":"unavailable"}'
 
 
@@ -128,7 +128,14 @@ def _b64(value: Any, lower: int, upper: int) -> bool:
 def _validate_sealed(value: Any) -> bool:
     if not isinstance(value, dict) or set(value) != {"challenge", "ephemeralKey", "iv", "ciphertext"}:
         return False
-    return _b64(value["challenge"], 43, 43) and _b64(value["ephemeralKey"], 87, 87) and _b64(value["iv"], 16, 16) and _b64(value["ciphertext"], 22, 2800)
+    challenge = value["challenge"]
+    return (
+        isinstance(challenge, dict) and set(challenge) == {"requestId", "role", "fingerprint", "purpose", "nonce", "expiresAt"} and
+        isinstance(challenge["requestId"], str) and isinstance(challenge["role"], str) and challenge["role"] in ROLES and
+        isinstance(challenge["fingerprint"], str) and re.fullmatch(r"sha256:[a-f0-9]{64}", challenge["fingerprint"]) is not None and
+        challenge["purpose"] == "claim" and isinstance(challenge["nonce"], str) and HEX64.fullmatch(challenge["nonce"]) is not None and
+        isinstance(challenge["expiresAt"], int) and _b64(value["ephemeralKey"], 87, 87) and _b64(value["iv"], 16, 16) and _b64(value["ciphertext"], 22, 2800)
+    )
 
 
 def parse_request(raw: bytes) -> dict[str, Any]:
@@ -143,7 +150,7 @@ def parse_request(raw: bytes) -> dict[str, Any]:
     if (
         value["purpose"] != PURPOSE or not isinstance(value["requestId"], str) or
         not isinstance(value["role"], str) or value["role"] not in ROLES or
-        not isinstance(value["recipientFingerprint"], str) or HEX64.fullmatch(value["recipientFingerprint"]) is None or
+        not isinstance(value["recipientFingerprint"], str) or re.fullmatch(r"sha256:[a-f0-9]{64}", value["recipientFingerprint"]) is None or
         not _validate_sealed(value["sealed"]) or not isinstance(value["authorization"], str) or not _b64(value["authorization"], 32, 2048)
     ):
         raise Deny()
@@ -152,6 +159,10 @@ def parse_request(raw: bytes) -> dict[str, Any]:
     except (ValueError, AttributeError):
         raise Deny() from None
     if str(parsed) != value["requestId"] or parsed.version != 4:
+        raise Deny()
+    if value["sealed"]["challenge"]["requestId"] != value["requestId"] or value["sealed"]["challenge"]["role"] != value["role"] or value["sealed"]["challenge"]["fingerprint"] != value["recipientFingerprint"]:
+        raise Deny()
+    if raw != canonical_request(value):
         raise Deny()
     return value
 
@@ -216,26 +227,10 @@ def parse_delivery(raw: bytes) -> dict[str, Any]:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict_object)
     except (UnicodeError, json.JSONDecodeError, Deny):
         raise Deny() from None
-    if not isinstance(value, dict) or set(value) != {"delivery", "signature"} or not isinstance(value["delivery"], dict):
+    if not isinstance(value, dict) or set(value) != {"sealed", "signature"}:
         raise Deny()
-    delivery = value["delivery"]
-    if set(delivery) != {"authorizationId", "expiresAt", "nodeRole", "recipientFingerprint", "requestId", "sealed", "sealedDigest"}:
+    if not _validate_sealed(value["sealed"]):
         raise Deny()
-    if (
-        not isinstance(delivery["authorizationId"], str) or not isinstance(delivery["requestId"], str) or
-        not isinstance(delivery["nodeRole"], str) or delivery["nodeRole"] not in ROLES or
-        not isinstance(delivery["recipientFingerprint"], str) or HEX64.fullmatch(delivery["recipientFingerprint"]) is None or
-        not isinstance(delivery["sealedDigest"], str) or HEX64.fullmatch(delivery["sealedDigest"]) is None or
-        not isinstance(delivery["expiresAt"], int) or delivery["expiresAt"] <= int(time.time()) or not _validate_sealed(delivery["sealed"])
-    ):
-        raise Deny()
-    for key in ("authorizationId", "requestId"):
-        try:
-            parsed = uuid.UUID(delivery[key])
-        except (ValueError, AttributeError):
-            raise Deny() from None
-        if str(parsed) != delivery[key] or parsed.version != 4:
-            raise Deny()
     signature = value["signature"]
     if not isinstance(signature, str) or len(signature) != 86 or B64URL.fullmatch(signature) is None:
         raise Deny()
@@ -243,11 +238,7 @@ def parse_delivery(raw: bytes) -> dict[str, Any]:
 
 
 def _same_delivery(request: dict[str, Any], response: dict[str, Any]) -> bool:
-    delivery = response["delivery"]
-    return (
-        delivery["requestId"] == request["requestId"] and delivery["nodeRole"] == request["role"] and
-        delivery["recipientFingerprint"] == request["recipientFingerprint"] and delivery["sealed"] == request["sealed"]
-    )
+    return response["sealed"] == request["sealed"]
 
 
 def dispatch(raw: bytes, peer_uid: int, config: dict[str, Any], limiter: RateLimiter, forwarder: Callable[[bytes, str | None], bytes], credentials_directory: str | None) -> bytes:
@@ -269,6 +260,25 @@ def _peer_uid(connection: socket.socket) -> int:
     except (OSError, struct.error):
         raise Deny() from None
     return uid
+
+
+def _receive_exact(connection: socket.socket, size: int) -> bytes:
+    if size < 1 or size > MAX_REQUEST_BYTES:
+        raise Deny()
+    chunks: list[bytes] = []
+    remaining = size
+    while remaining:
+        chunk = connection.recv(remaining)
+        if not chunk:
+            raise Deny()
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def _receive_framed(connection: socket.socket) -> bytes:
+    size = struct.unpack("!I", _receive_exact(connection, 4))[0]
+    return _receive_exact(connection, size)
 
 
 def _safe_socket_parent(path: Path, peer_uid: int) -> None:
@@ -319,7 +329,7 @@ def run() -> int:
                 connection, _ = server.accept()
                 connection.settimeout(LOCAL_TIMEOUT_SECONDS)
                 peer = _peer_uid(connection)
-                raw = connection.recv(MAX_REQUEST_BYTES + 1)
+                raw = _receive_framed(connection)
                 result = dispatch(raw, peer, config, limiter, forward_to_signer, os.environ.get("CREDENTIALS_DIRECTORY"))
                 connection.sendall(result)
             except (Deny, OSError):

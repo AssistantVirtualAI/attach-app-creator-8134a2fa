@@ -22,12 +22,16 @@
       "sha256": "1ea84571dcc4bb8c3bcb864e7feb8e4accfd268826eb2e898d99ca20010bb56d"
     },
     {
+      "path": "infra/lemtel-self-hosted/functions/_shared/lemtelExternalPlatformSigner.ts",
+      "sha256": "5a6158a0348dc5f9905ba52d1383e4cbf54b6aed0b9393cb862311e8fad49fbe"
+    },
+    {
       "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.ts",
-      "sha256": "4bb824e2fbbf9fc0ebd7c8774fb72d4ea9586dc94a9cca267cdf645137cc09c6"
+      "sha256": "7e9f7698958bafa59a4321e90c6e47de3df267b69d9ef00488610a4f8ee20445"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment/manifest.json",
-      "sha256": "1c355343236af06478277ba2337e0f6441046281c1d1fc7d668597b7cb4bb8be"
+      "sha256": "a06d0b2cf7ff6d7aab0539e1023575a4a676732e072dfbb3a3e787a8f640f2f2"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment-admin/index.ts",

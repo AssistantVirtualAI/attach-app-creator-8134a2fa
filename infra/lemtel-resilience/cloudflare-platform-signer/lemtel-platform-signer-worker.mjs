@@ -27,7 +27,7 @@ const text = new TextEncoder();
 const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const hex64 = /^[a-f0-9]{64}$/u;
 const b64url = /^[A-Za-z0-9_-]+$/u;
-const roles = new Set(['digitalocean_writer', 'hostinger_standby']);
+const roles = new Set(['do_writer', 'hostinger_standby']);
 
 class Deny extends Error {}
 
@@ -71,12 +71,20 @@ function boundedCanonicalB64(value, minimum, maximum) {
 function sealed(value) {
   if (!exact(value, ['challenge', 'ephemeralKey', 'iv', 'ciphertext'])) return false;
   try {
-    boundedCanonicalB64(value.challenge, 43, 43); // 32-byte challenge
+    if (value.challenge === null || typeof value.challenge !== 'object' || Array.isArray(value.challenge)) return false;
     boundedCanonicalB64(value.ephemeralKey, 87, 87); // uncompressed P-256 point
     boundedCanonicalB64(value.iv, 16, 16); // 96-bit AES-GCM IV
     boundedCanonicalB64(value.ciphertext, 22, 2800); // authenticated ciphertext
     return true;
   } catch { return false; }
+}
+
+function sealedForRequest(value, request, now) {
+  const challenge = value.challenge;
+  return sealed(value) && exact(challenge, ['requestId', 'role', 'fingerprint', 'purpose', 'nonce', 'expiresAt']) &&
+    challenge.requestId === request.requestId && challenge.role === request.role && challenge.fingerprint === request.recipientFingerprint &&
+    challenge.purpose === 'claim' && typeof challenge.nonce === 'string' && /^[a-f0-9]{64}$/u.test(challenge.nonce) &&
+    Number.isSafeInteger(challenge.expiresAt) && challenge.expiresAt > now && challenge.expiresAt <= now + 300;
 }
 
 async function boundedText(request, maximum) {
@@ -109,7 +117,7 @@ function parseCanonicalRequest(raw) {
   if (canonical(value) !== raw || !exact(value, ['purpose', 'requestId', 'role', 'recipientFingerprint', 'sealed', 'authorization'])) throw new Deny();
   if (
     value.purpose !== PURPOSE || typeof value.requestId !== 'string' || !uuidV4.test(value.requestId) ||
-    typeof value.role !== 'string' || !roles.has(value.role) || typeof value.recipientFingerprint !== 'string' || !hex64.test(value.recipientFingerprint) ||
+    typeof value.role !== 'string' || !roles.has(value.role) || typeof value.recipientFingerprint !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(value.recipientFingerprint) ||
     !sealed(value.sealed)
   ) throw new Deny();
   boundedString(value.authorization, MAX_AUTHORIZATION_BYTES);
@@ -205,11 +213,12 @@ async function digest(value) {
 async function verifyAuthorization(value, config, now) {
   const token = jwtPayload(value.authorization, 'ES256');
   const payload = token.payload;
+  if (!sealedForRequest(value.sealed, value, now)) throw new Deny();
   const sealedDigest = await digest(canonical(value.sealed));
   if (
     token.header.kid !== config.authorizationKeyId || payload.iss !== AUTHORIZATION_ISSUER || payload.aud !== AUTHORIZATION_AUDIENCE || payload.purpose !== PURPOSE ||
     typeof payload.jti !== 'string' || !uuidV4.test(payload.jti) || payload.rid !== value.requestId ||
-    payload.fp !== value.recipientFingerprint || payload.role !== value.role || payload.challenge !== value.sealed.challenge ||
+    payload.fp !== value.recipientFingerprint || payload.role !== value.role || canonical(payload.challenge) !== canonical(value.sealed.challenge) ||
     payload.sealedDigest !== sealedDigest || !validLifetime(payload, now, MAX_AUTHORIZATION_LIFETIME_SECONDS)
   ) throw new Deny();
   try {
@@ -237,16 +246,12 @@ async function signerKey(env) {
 }
 
 async function signDelivery(value, authorization, env) {
-  const delivery = Object.freeze({
-    authorizationId: authorization.authorizationId, expiresAt: authorization.expiresAt, nodeRole: value.role,
-    recipientFingerprint: value.recipientFingerprint, requestId: value.requestId, sealed: value.sealed, sealedDigest: authorization.sealedDigest,
-  });
   const key = await signerKey(env);
   try {
-    const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, text.encode(`${DELIVERY_CONTEXT}\n${canonical(delivery)}`));
+    const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, text.encode(`${DELIVERY_CONTEXT}\n${canonical(value.sealed)}`));
     const encoded = encodeB64(signature);
     if (encoded.length !== 86 || !b64url.test(encoded)) throw new Deny();
-    return { delivery, signature: encoded };
+    return { sealed: value.sealed, signature: encoded };
   } catch (error) { if (error instanceof Deny) throw error; throw new Deny(); }
 }
 

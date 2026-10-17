@@ -66,7 +66,7 @@
     },
     {
       "path": "docs/lemtel-ha/NODE_SECURE_ENROLLMENT_PROTOCOL.md",
-      "sha256": "f6bf9683ae21590355459a7cafd797f208491613b7a02634e9b2eaa5b9b0cda2"
+      "sha256": "423ab8bbd14935c6636ea16d3d1d093a407238c4f1c6b4429c5c594779120800"
     },
     {
       "path": "docs/lemtel-ha/PLATFORM_SIGNER_CREDENTIAL.md",
@@ -80,7 +80,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/lemtel-node-secure-enrollment-manifest.json",
-      "sha256": "5f019b6e1006ecd03bfe1b9a8f31a54e4de9399dd584741a63198e34c70180fb"
+      "sha256": "3ff44dee80d2a75ab10a9051e76724d6beb2717dd9e236f8b606ebf3e5f1c80c"
     }
   ],
   "edge_sources": [
@@ -93,12 +93,16 @@
       "sha256": "1ea84571dcc4bb8c3bcb864e7feb8e4accfd268826eb2e898d99ca20010bb56d"
     },
     {
+      "path": "infra/lemtel-self-hosted/functions/_shared/lemtelExternalPlatformSigner.ts",
+      "sha256": "5a6158a0348dc5f9905ba52d1383e4cbf54b6aed0b9393cb862311e8fad49fbe"
+    },
+    {
       "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.ts",
-      "sha256": "4bb824e2fbbf9fc0ebd7c8774fb72d4ea9586dc94a9cca267cdf645137cc09c6"
+      "sha256": "7e9f7698958bafa59a4321e90c6e47de3df267b69d9ef00488610a4f8ee20445"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment/manifest.json",
-      "sha256": "1c355343236af06478277ba2337e0f6441046281c1d1fc7d668597b7cb4bb8be"
+      "sha256": "a06d0b2cf7ff6d7aab0539e1023575a4a676732e072dfbb3a3e787a8f640f2f2"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment-admin/index.ts",
@@ -120,7 +124,7 @@
   "validation_sources": [
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.test.ts",
-      "sha256": "b32a8473b3fc683790e573a08657a1705a211e2b66b7351769c01ce33f5eda19"
+      "sha256": "18698999ee8513c04ee006392bc408859e17d809f0f55ba189a4f273238d400b"
     },
     {
       "path": "scripts/lemtel-node-secure-enrollment-postgres.test.mjs",
@@ -128,11 +132,11 @@
     },
     {
       "path": "scripts/lemtel-node-secure-enrollment-contract.test.mjs",
-      "sha256": "6d18c159dd1a65182428590a52bbf81846d9db6801ecac8c5b3128ec415176cb"
+      "sha256": "bbed6252d2149f3f7a1a7776d9dc16c7885582d1adbc2e16e70a2f9571e32526"
     },
     {
       "path": "scripts/lemtel-node-secure-enrollment-manifests.mjs",
-      "sha256": "99a909724b43d42c79c7511622eb3ca9e5af0c6b43cf3f3a5ad13aa5cfca55e8"
+      "sha256": "06363f522e54915e3348b51d42ea40a9561e80c5736c7b17376b63deb1dd5ec0"
     },
     {
       "path": "scripts/lemtel-node-publication-key-init-package.mjs",

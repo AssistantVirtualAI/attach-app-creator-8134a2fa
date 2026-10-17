@@ -1,0 +1,72 @@
+{
+  "contract_version": "lemtel_cloudflare_platform_signer_mtls_relay_v1",
+  "scope": "source_only_machine_identity_alternative",
+  "status": "design_review_required_not_deployable",
+  "purpose": "authenticate a dedicated root-only relay to the existing Access-protected platform signer for node_enrollment_publication_delivery only",
+  "identity": {
+    "mechanism": "cloudflare_access_mutual_tls_service_auth",
+    "dedicated_client_identity_required": true,
+    "reuse_node_or_platform_key_forbidden": true,
+    "source_ip_authentication_forbidden": true,
+    "access_policy_action": "service_auth",
+    "access_policy_selector": "common_name_exact",
+    "access_application_default_deny": true,
+    "access_user_policy_allowed": false
+  },
+  "local_relay": {
+    "root_only_service_required": true,
+    "edge_container_direct_certificate_access_forbidden": true,
+    "unix_socket_only_required": true,
+    "container_network_listener_forbidden": true,
+    "fixed_signer_origin_required": true,
+    "fixed_purpose_required": "node_enrollment_publication_delivery",
+    "arbitrary_url_or_method_forbidden": true,
+    "arbitrary_signing_oracle_forbidden": true,
+    "outbound_network_before_local_authorization_forbidden": true,
+    "service_installed": false,
+    "service_enabled": false,
+    "socket_created": false,
+    "client_certificate_generated": false,
+    "client_private_key_stored": false
+  },
+  "signer": {
+    "private_platform_key_remains_cloudflare_write_only": true,
+    "worker_secret_binding_created": false,
+    "signing_endpoint_configured": false,
+    "replay_ledger_configured": false,
+    "node_enrollment_integration_configured": false
+  },
+  "required_before_any_deployment": [
+    "independent_security_review",
+    "root_only_credential_backend_with_encrypted_at_rest_attestation",
+    "dedicated_client_certificate_rotation_and_revocation_test",
+    "cloudflare_access_mtls_common_name_policy_test",
+    "unix_socket_container_isolation_test",
+    "canonical_request_nonce_ttl_and_durable_replay_ledger_test",
+    "negative_test_without_certificate_or_with_wrong_common_name",
+    "edge_enrollment_redaction_and_timeout_attestation"
+  ],
+  "activation": {
+    "node_enrollment": false,
+    "node_publisher": false,
+    "provider_fencing": false,
+    "automatic_promotion": false,
+    "automatic_runtime_start": false,
+    "automatic_traffic_routing": false,
+    "automatic_failover": false,
+    "automatic_failback": false
+  },
+  "explicitly_excluded": [
+    "planipret",
+    "avastatistic",
+    "pbx",
+    "telephony",
+    "cloudflare_load_balancer",
+    "cloudflare_dns",
+    "provider_api_calls",
+    "fencing",
+    "promotion",
+    "hostinger_runtime_start",
+    "automatic_failover"
+  ]
+}

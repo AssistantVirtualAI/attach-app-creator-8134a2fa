@@ -16,6 +16,11 @@ const isFailClosed = (value) =>
   value.workload_identity.proxy_app_platform_provisioned === false &&
   value.workload_identity.oauth_application_provisioned === false &&
   value.workload_identity.writer_oidc_subject_present === false &&
+  value.workload_identity.production_approved === false &&
+  value.workload_identity.existing_writer_compatible === false &&
+  value.workload_identity.requires_new_droplet_creation === true &&
+  value.workload_identity.requires_oauth_app_and_app_platform_database === true &&
+  value.workload_identity.secrets_manager_route_supported_by_upstream_poc === false &&
   value.signer.private_key_provisioned === false &&
   value.signer.public_pin_distributed_out_of_band === false &&
   value.signer.enrollment_binding_enabled === false &&
@@ -41,6 +46,11 @@ test('DigitalOcean Secrets Manager WIF is source-only and cannot activate HA', (
   assert.equal(value.workload_identity.model, 'digitalocean_oauth_workload_identity_proxy_poc');
   assert.equal(value.workload_identity.short_lived_token_only, true);
   assert.equal(value.workload_identity.least_privilege_single_signer_read, true);
+  assert.equal(value.workload_identity.production_approved, false);
+  assert.equal(value.workload_identity.existing_writer_compatible, false);
+  assert.equal(value.workload_identity.requires_new_droplet_creation, true);
+  assert.equal(value.workload_identity.requires_oauth_app_and_app_platform_database, true);
+  assert.equal(value.workload_identity.secrets_manager_route_supported_by_upstream_poc, false);
   assert.ok(isFailClosed(value));
 });
 
@@ -49,6 +59,9 @@ test('WIF contract rejects activation, secret exposure, and topology relaxation'
     (value) => { value.secret_manager.secret_value_created = true; },
     (value) => { value.secret_manager.writer_long_lived_api_token_forbidden = false; },
     (value) => { value.workload_identity.proxy_app_platform_provisioned = true; },
+    (value) => { value.workload_identity.production_approved = true; },
+    (value) => { value.workload_identity.existing_writer_compatible = true; },
+    (value) => { value.workload_identity.secrets_manager_route_supported_by_upstream_poc = true; },
     (value) => { value.signer.private_key_provisioned = true; },
     (value) => { value.signer.signing_oracle_public = true; },
     (value) => { value.activation.automatic_failover = true; },
@@ -73,6 +86,8 @@ test('WIF runbook preserves secret and failover boundaries', () => {
     'aucun secret, coffre, proxy App Platform, OAuth App',
     'Aucun `FAILOVER_MODE=active`',
     'Aucun token API long-lived sur le writer ou le standby',
+    'ne doit pas être déployé tel quel',
+    'production_approved` reste `false`',
   ]) assert.ok(normalized.includes(required.toLowerCase()), required);
   assert.doesNotMatch(runbook, /(?:dop_v1_|github_pat_|ghp_|AKIA|-----BEGIN [A-Z ]*PRIVATE KEY)/u);
 });

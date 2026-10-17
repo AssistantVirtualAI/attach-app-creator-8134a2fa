@@ -70,3 +70,9 @@ La configuration de la publication exige en plus : la clé publique épinglée h
 - [Lecture de conteneur Secrets Manager](https://docs.digitalocean.com/reference/doctl/reference/secrets/get/)
 - [Déploiement du PoC WIF DigitalOcean](https://www.digitalocean.com/community/tutorials/oauth-workload-identity-federation-digitalocean-droplets-part2)
 - [Usage du PoC WIF DigitalOcean](https://www.digitalocean.com/community/tutorials/oauth-workload-identity-federation-digitalocean-droplets-part3)
+
+## Verdict après revue du PoC officiel
+
+Le PoC officiel DigitalOcean **ne doit pas être déployé tel quel** pour Lemtel. Son propre README le qualifie de PoC ; il installe un proxy Caddy, une base App Platform, stocke un token OAuth de l’équipe et crée un nouveau Droplet avec cloud-init afin de lui délivrer une identité. Ses routes documentées couvrent Droplets, bases managées et Spaces, pas Secrets Manager.
+
+Le writer Lemtel existant ne porte pas le tag d’identité créé par ce flux. Le raccorder au PoC ou adapter le PoC pour un signer de failover changerait la frontière de confiance, la chaîne de tokens et le modèle de coûts : cela exige une conception dédiée, une threat model, une revue de code indépendante, des tests de refus et une migration contrôlée. Tant que ces preuves ne sont pas réalisées, `production_approved` reste `false` et aucune ressource App Platform/OAuth/Secrets Manager ne doit être créée pour le failover.

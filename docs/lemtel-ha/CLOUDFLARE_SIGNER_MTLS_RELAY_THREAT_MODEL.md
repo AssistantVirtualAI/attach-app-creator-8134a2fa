@@ -1,6 +1,6 @@
 # Lemtel — alternative mTLS pour l’identité du signer
 
-> **Statut : source-only, non déployable.** Cette alternative ne crée aucun certificat, clé, secret, binding Worker, politique Access, socket, service ou route. Elle ne modifie pas le failover.
+> **Statut : source-only, non déployable.** Le source du relais ne crée aucun certificat, clé, secret, binding Worker, politique Access, socket, service ou route, et ne modifie pas le failover. Un bootstrap root-only séparé peut créer localement et de façon éphémère le seul couple de credentials chiffrés nécessaire au relais, mais n’autorise ni son installation ni son activation.
 
 ## Problème résolu
 
@@ -28,7 +28,7 @@ Tous les états d’activation demeurent `false`. Le source du relais local et u
 
 L’installateur DO source-only `lemtel-ha-do-writer-signer-mtls-relay-source-only-deploy.sh` est une copie locale strictement allowlistée du relais, de son contrat et de l’unité. Il exige le rôle DO exact et une approbation explicite, puis vérifie **uniquement les métadonnées** de deux sources de credentials mTLS chiffrées, préexistantes et root-only (répertoire `0700`, fichiers `0600`), sans lire leur contenu. Il ne crée ni configuration du relais ni credential, et n’invoque pas de rechargement systemd, activation, démarrage, timer, routage, failover, fournisseur ou runtime. Si les sources root-only sont absentes, liées symboliquement, ou ont un propriétaire/mode inattendu, il échoue avant toute écriture.
 
-L’unité exige aussi ces deux chemins avant tout lancement, les charge comme credentials systemd chiffrés, et le processus vérifie de nouveau les métadonnées des sources puis des credentials chargés (`/run/credentials`, répertoire `0700`, fichiers root-only `0400`) **avant** de lire la configuration ou de créer le socket. Ce paquet ne fournit aucune procédure de configuration active, de certificat, de clé, de binding, de politique Access, de déploiement persistant ou d’activation. Planipret, PBX et les surfaces legacy sont explicitement hors périmètre. Les tests utilisent seulement des clés synthétiques en mémoire et un transport simulé.
+L’unité exige aussi ces deux chemins avant tout lancement, les charge comme credentials systemd chiffrés, et le processus vérifie de nouveau les métadonnées des sources puis des credentials chargés (`/run/credentials`, répertoire `0700`, fichiers root-only `0400`) **avant** de lire la configuration ou de créer le socket. Le bootstrap local `lemtel-ha-do-writer-signer-mtls-relay-root-only-bootstrap.sh` est documenté dans `DO_SIGNER_MTLS_ROOT_ONLY_BOOTSTRAP.md` : il est root-only, impose le rôle DO exact et un token explicite, génère une CA éphémère et un leaf P-256 à CN fixe dans un temporaire, puis n’écrit que les deux credentials leaf chiffrés (`0700`/`0600`) et une attestation publique sans clé privée. Il supprime ensuite clé CA et temporaires; son diagnostic retourne seulement empreintes et états. Il n’appelle ni réseau, fournisseur, Cloudflare ou DNS, ni `systemctl`; il ne crée ni configuration active, socket, route, runtime, promotion, fencing, failover ou téléphonie. Planipret, PBX et les surfaces legacy sont explicitement hors périmètre. Les tests de bootstrap simulent les binaires crypto dans un tempdir; ceux du relais utilisent seulement des clés synthétiques en mémoire et un transport simulé.
 
 ## Références
 

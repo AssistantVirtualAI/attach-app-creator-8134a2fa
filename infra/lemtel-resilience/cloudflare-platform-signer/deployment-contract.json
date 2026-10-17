@@ -1,0 +1,64 @@
+{
+  "contract_version": "lemtel_cloudflare_platform_signer_v1",
+  "scope": "inert_external_signer_bootstrap",
+  "worker": {
+    "logical_name": "lemtel-platform-signer",
+    "workers_dev_enabled": false,
+    "public_route_configured": false,
+    "custom_domain_configured": false,
+    "scheduled_trigger_configured": false,
+    "durable_object_configured": false,
+    "kv_configured": false,
+    "observability_enabled": false,
+    "default_response_status": 404
+  },
+  "secret_store": {
+    "provider": "cloudflare_secrets_store",
+    "private_signing_key_generated_externally": true,
+    "private_signing_key_write_only": true,
+    "worker_binding_created": false,
+    "worker_source_reads_key": false,
+    "private_key_output": false
+  },
+  "signing": {
+    "request_authentication_configured": false,
+    "replay_ledger_configured": false,
+    "signing_endpoint_configured": false,
+    "node_enrollment_integration_configured": false,
+    "active": false
+  },
+  "activation": {
+    "node_enrollment": false,
+    "node_publisher": false,
+    "provider_fencing": false,
+    "automatic_promotion": false,
+    "automatic_runtime_start": false,
+    "automatic_traffic_routing": false,
+    "automatic_failover": false,
+    "automatic_failback": false
+  },
+  "boundaries": {
+    "do_writer_remains_unique": true,
+    "hostinger_runtime_remains_private_and_stopped": true,
+    "cloudflare_or_dns_changed": false,
+    "worker_controls_provider_api": false,
+    "worker_controls_load_balancer": false,
+    "worker_controls_dns": false,
+    "worker_controls_promotion": false,
+    "worker_controls_runtime": false,
+    "worker_controls_telephony": false,
+    "planipret_change": false,
+    "avastatistic_change": false,
+    "pbx_or_telephony_change": false
+  },
+  "required_before_signing": [
+    "independent_threat_model_review",
+    "authenticated_edge_to_worker_channel",
+    "nonce_replay_ledger_and_retention_review",
+    "signed_request_canonicalization_tests",
+    "private_key_binding_and_negative_test",
+    "external_code_review",
+    "node_public_key_pin_out_of_band_verified",
+    "edge_enrollment_deployment_and_attestation"
+  ]
+}

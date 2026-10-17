@@ -7,6 +7,9 @@ Description=Lemtel Cloudflare platform signer mTLS relay (gated)
 After=network-online.target
 Wants=network-online.target
 ConditionPathExists=/etc/lemtel-platform-signer/relay.conf
+ConditionPathIsDirectory=/etc/lemtel-platform-signer/credentials
+ConditionPathExists=/etc/lemtel-platform-signer/credentials/client-cert.pem.cred
+ConditionPathExists=/etc/lemtel-platform-signer/credentials/client-key.pem.cred
 
 [Service]
 Type=simple

@@ -22,6 +22,17 @@
     "fixed_signer_path": "/v1/node-enrollment-delivery",
     "root_only_systemd_template_without_install_section": true
   },
+  "source_only_deployment": {
+    "do_writer_installer_available": true,
+    "installation_authorized": false,
+    "preexisting_root_only_encrypted_mtls_credentials_required": true,
+    "credential_values_read": false,
+    "credential_values_created": false,
+    "relay_configuration_created": false,
+    "systemd_daemon_reload": false,
+    "service_enablement": false,
+    "service_start": false
+  },
   "local_relay": {
     "root_only_service_required": true,
     "edge_container_direct_certificate_access_forbidden": true,
@@ -45,6 +56,8 @@
     "unambiguous_local_unavailable_result": true,
     "response_request_binding_required": true,
     "stale_socket_verified_cleanup_required": true,
+    "startup_preexisting_encrypted_credentials_required": true,
+    "startup_loaded_credentials_root_only_required": true,
     "service_installed": false,
     "service_enabled": false,
     "socket_created": false,
@@ -85,6 +98,7 @@
     "planipret",
     "avastatistic",
     "pbx",
+    "legacy",
     "telephony",
     "cloudflare_load_balancer",
     "cloudflare_dns",
@@ -92,6 +106,9 @@
     "fencing",
     "promotion",
     "hostinger_runtime_start",
-    "automatic_failover"
+    "automatic_failover",
+    "systemd_daemon_reload",
+    "service_enablement",
+    "service_start"
   ]
 }

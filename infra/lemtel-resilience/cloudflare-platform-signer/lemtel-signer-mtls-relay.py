@@ -34,6 +34,8 @@ RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_MAX_REQUESTS = 3
 PURPOSE = "node_enrollment_publication_delivery"
 CREDENTIAL_NAMES = ("client-cert.pem", "client-key.pem")
+ENCRYPTED_CREDENTIALS_DIRECTORY = "/etc/lemtel-platform-signer/credentials"
+ENCRYPTED_CREDENTIAL_NAMES = tuple(f"{name}.cred" for name in CREDENTIAL_NAMES)
 B64URL = re.compile(r"^[A-Za-z0-9_-]+$")
 HEX64 = re.compile(r"^[a-f0-9]{64}$")
 ROLES = {"do_writer", "hostinger_standby"}
@@ -80,6 +82,17 @@ def _safe_directory(path: Path, mode: int) -> bool:
         and metadata.st_gid == 0
         and stat.S_IMODE(metadata.st_mode) == mode
     )
+
+
+def _encrypted_credential_sources() -> tuple[Path, Path]:
+    """Require pre-existing encrypted sources by metadata only, never by content."""
+    root = Path(ENCRYPTED_CREDENTIALS_DIRECTORY)
+    if not _safe_directory(root, 0o700):
+        raise Deny()
+    cert, key = (root / name for name in ENCRYPTED_CREDENTIAL_NAMES)
+    if not all(_regular_root(path, 0o600) for path in (cert, key)):
+        raise Deny()
+    return cert, key
 
 
 def _credential_paths(credentials_directory: str | None) -> tuple[Path, Path]:
@@ -312,6 +325,8 @@ def run() -> int:
     try:
         if os.geteuid() != 0:
             raise Deny()
+        _encrypted_credential_sources()
+        _credential_paths(os.environ.get("CREDENTIALS_DIRECTORY"))
         config = load_config()
         if config["mode"] != "active":
             raise Deny()

@@ -1,0 +1,49 @@
+{
+  "contract_version": "lemtel_platform_signer_edge_auth_v1",
+  "scope": "source_only_blocked",
+  "purpose": "node_enrollment_publication_delivery_only",
+  "caller": {
+    "logical_identity": "do_edge_runtime",
+    "authenticated_channel_configured": false,
+    "credential_source": "unconfigured",
+    "credential_persisted_in_repo": false,
+    "credential_passed_on_cli": false,
+    "credential_logged": false,
+    "source_ip_is_not_authentication": true
+  },
+  "cloudflare_access": {
+    "hostname_protected_default_deny": true,
+    "service_token_created": false,
+    "service_auth_policy_configured": false,
+    "user_identity_policy_configured": false,
+    "browser_access_configured": false
+  },
+  "request_protocol": {
+    "canonical_request_configured": false,
+    "short_expiry_configured": false,
+    "nonce_replay_ledger_configured": false,
+    "purpose_allowlist_configured": false,
+    "private_signing_key_worker_binding_configured": false
+  },
+  "invariants": {
+    "existing_platform_and_node_keys_reused_for_edge_auth": false,
+    "signer_is_not_generic_oracle": true,
+    "signer_controls_provider_api": false,
+    "signer_controls_load_balancer": false,
+    "signer_controls_dns": false,
+    "signer_controls_promotion": false,
+    "signer_controls_runtime": false,
+    "signer_controls_telephony": false,
+    "automatic_failover": false
+  },
+  "required_before_activation": [
+    "managed_edge_credential_source_with_workload_identity",
+    "independent_threat_model_review",
+    "external_code_review",
+    "canonical_request_and_negative_tests",
+    "durable_nonce_replay_ledger",
+    "signer_key_binding_negative_test",
+    "credential_rotation_and_revocation_drill",
+    "edge_deployment_attestation"
+  ]
+}

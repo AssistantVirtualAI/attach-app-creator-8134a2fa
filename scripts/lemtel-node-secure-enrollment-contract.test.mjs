@@ -12,14 +12,16 @@ const admin = read(functions + 'lemtel-node-enrollment-admin/index.ts');
 const signed = read(functions + 'lemtel-node-status-signed-ingest/index.ts');
 const crypto = read(functions + '_shared/lemtelNodeEnrollment.ts');
 const backend = read(functions + '_shared/lemtelNodeEnrollmentBackend.ts');
+const signerClient = read(functions + '_shared/lemtelExternalPlatformSigner.ts');
 const agent = read(root + 'lemtel-node-publication-agent.ts');
 const sql = read('infra/lemtel-self-hosted/migrations/0021_lemtel_node_secure_enrollment.sql');
-for (const source of [enrollment, admin, signed, crypto, backend, agent, sql]) {
+for (const source of [enrollment, admin, signed, crypto, backend, signerClient, agent, sql]) {
   assert.doesNotMatch(source, /pg_promote|systemctl|Deno\.Command|child_process|docker|ssh\b|\/agent\/command|BOOTSTRAP_AUTH_SECRET|AGENT_SHARED_SECRET|LEMTEL_NODE_STATUS_.*SECRET/);
 }
 for (const source of [enrollment, admin, signed, crypto, backend]) assert.doesNotMatch(source, /console\.|Deno\.env\.toObject/);
 assert.match(backend, /approved_publication_only/);
-assert.match(enrollment, /signDelivery\(sealed, signer\)/);
+assert.match(enrollment, /authorizationToken\(authority, sealed, challenge/); assert.match(enrollment, /d\.deliver\(/);
+assert.doesNotMatch(enrollment, /signDelivery\(/); assert.match(signerClient, /transport: "unix"/); assert.doesNotMatch(signerClient, /fetch\(|https?:\/\//);
 assert.match(agent, /openDelivery/); assert.match(agent, /identity\.platformSigningKey/); assert.match(agent, /binding\.endpoint !== config\.endpoint/);
 assert.doesNotMatch(agent, /fetch\(|XMLHttpRequest|WebSocket|npm:|--allow-net|source\s+\/etc|eval\(/);
 assert.match(agent, /createNew: true, mode: 0o600/); assert.match(agent, /await file\.sync\(\)/); assert.match(agent, /Deno\.uid\(\) !== 0/);

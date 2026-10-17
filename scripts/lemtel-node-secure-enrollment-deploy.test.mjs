@@ -49,6 +49,7 @@ test('deployer verifies 0020 as a complete prerequisite but never applies it, an
 test('deployer admits only manifest.sha256 plus exact enrollment sources and replaces only their Edge targets', () => {
   for (const required of [
     "'0021_lemtel_node_secure_enrollment.sql'",
+    "'lemtelExternalPlatformSigner.ts'",
     "'lemtelNodeEnrollment.ts'",
     "'lemtelNodeEnrollmentBackend.ts'",
     "'lemtel-node-enrollment.index.ts'",
@@ -56,6 +57,7 @@ test('deployer admits only manifest.sha256 plus exact enrollment sources and rep
     "'lemtel-node-status-signed-ingest.index.ts'",
     "'lemtel-onboarding-admin.manifest.json'",
     "'manifest.sha256'",
+    "'_shared/lemtelExternalPlatformSigner.ts'",
     "'_shared/lemtelNodeEnrollment.ts'",
     "'lemtel-node-enrollment/index.ts'",
     "'lemtel-node-enrollment-admin/index.ts'",
@@ -122,7 +124,7 @@ test('fake local docker fixture proves non-root refusal occurs before any runtim
 
 test('operator documentation records source provenance, manifest exception, gates and exclusions', () => {
   for (const required of [
-    'cb9c175568530ccaee8be9ea6cf44c3cc355feaa',
+    'SHA_DÉTACHÉ_DE_40_HEX',
     'manifest.sha256',
     'ne se signe pas lui-même',
     'LEMTEL_NODE_ENROLLMENT_DEPLOY_EXECUTE=deploy_verified_node_enrollment',
@@ -131,5 +133,7 @@ test('operator documentation records source provenance, manifest exception, gate
     'jamais appliqué',
     'Cloudflare, DigitalOcean API, Hostinger, DNS ou téléphonie',
     'aucun appel HTTP',
+    'signer Cloudflare externe',
+    'relais local mTLS',
   ]) assert.ok(docs.includes(required), `docs missing ${required}`);
 });

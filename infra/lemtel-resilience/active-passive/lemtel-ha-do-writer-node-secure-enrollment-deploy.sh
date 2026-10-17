@@ -36,6 +36,7 @@ required_files=(
   'lemtel-node-status-signed-ingest.manifest.json'
   'lemtel-onboarding-admin.index.ts'
   'lemtel-onboarding-admin.manifest.json'
+  'lemtelExternalPlatformSigner.ts'
   'lemtelNodeEnrollment.ts'
   'lemtelNodeEnrollmentBackend.ts'
 )
@@ -152,6 +153,7 @@ try:
             digests[path] = digest
     required = {
         'infra/lemtel-self-hosted/migrations/0021_lemtel_node_secure_enrollment.sql': '0021_lemtel_node_secure_enrollment.sql',
+        'infra/lemtel-self-hosted/functions/_shared/lemtelExternalPlatformSigner.ts': 'lemtelExternalPlatformSigner.ts',
         'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts': 'lemtelNodeEnrollment.ts',
         'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollmentBackend.ts': 'lemtelNodeEnrollmentBackend.ts',
         'infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.ts': 'lemtel-node-enrollment.index.ts',
@@ -206,6 +208,7 @@ stage=''
 backup_dir=''
 functions_source=''
 declare -a package_files=(
+  'lemtelExternalPlatformSigner.ts'
   'lemtelNodeEnrollment.ts'
   'lemtelNodeEnrollmentBackend.ts'
   'lemtel-node-enrollment.index.ts'
@@ -218,6 +221,7 @@ declare -a package_files=(
   'lemtel-onboarding-admin.manifest.json'
 )
 declare -a target_relatives=(
+  '_shared/lemtelExternalPlatformSigner.ts'
   '_shared/lemtelNodeEnrollment.ts'
   '_shared/lemtelNodeEnrollmentBackend.ts'
   'lemtel-node-enrollment/index.ts'

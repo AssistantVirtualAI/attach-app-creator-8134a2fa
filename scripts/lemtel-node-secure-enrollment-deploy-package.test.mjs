@@ -59,6 +59,7 @@ test('signed enrollment package is reproducible, exactly allowlisted and manifes
     const expected = new Map([...sourceManifest.migration_sources, ...sourceManifest.edge_sources, ...sourceManifest.dependencies].map((entry) => [entry.path, entry.sha256]));
     const sourceToBundle = new Map([
       ['infra/lemtel-self-hosted/migrations/0021_lemtel_node_secure_enrollment.sql', '0021_lemtel_node_secure_enrollment.sql'],
+      ['infra/lemtel-self-hosted/functions/_shared/lemtelExternalPlatformSigner.ts', 'lemtelExternalPlatformSigner.ts'],
       ['infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts', 'lemtelNodeEnrollment.ts'],
       ['infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollmentBackend.ts', 'lemtelNodeEnrollmentBackend.ts'],
       ['infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.ts', 'lemtel-node-enrollment.index.ts'],
@@ -122,7 +123,7 @@ test('offline generator includes no secret, activation, route or remote/deployme
     'lemtel-node-secure-enrollment-manifest.json',
     'lemtel-node-status-signed-ingest.index.ts', 'lemtel-node-status-signed-ingest.manifest.json',
     'lemtel-onboarding-admin.index.ts', 'lemtel-onboarding-admin.manifest.json',
-    'lemtelNodeEnrollment.ts', 'lemtelNodeEnrollmentBackend.ts',
+    'lemtelExternalPlatformSigner.ts', 'lemtelNodeEnrollment.ts', 'lemtelNodeEnrollmentBackend.ts',
   ].sort());
   for (const excluded of ['.env', 'Caddyfile', 'docker-compose.yml', 'lemtel-node-publication-agent.ts', 'lemtel-node-publication-preflight.service', 'lemtel-node-publication-preflight.timer', 'route-config.json']) assert.ok(!PACKAGE_FILES.includes(excluded), excluded);
   assert.doesNotMatch(generator, /node:child_process|execFileSync|spawnSync|\bfetch\s*\(|\b(?:curl|wget|ssh|scp|rsync|docker|systemctl|doctl|hcloud|nsupdate)\b/iu);

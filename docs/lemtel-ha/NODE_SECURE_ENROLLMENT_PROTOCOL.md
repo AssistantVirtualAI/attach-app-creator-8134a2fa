@@ -14,7 +14,8 @@ Le flux préparé est :
 clé locale root-only -> empreinte hors bande -> invitation admin plateforme
 -> challenge public -> attestation de possession (toujours unverified)
 -> vérification hors bande + seconde approbation explicite admin plateforme
--> claim signé unique -> config chiffrée ET signée par la plateforme
+-> claim signé unique -> config chiffrée -> autorisation Edge courte et liée
+-> relais local mTLS -> signature de plateforme Cloudflare sur le scellé
 -> observation signée -> snapshot redacted PR275 -> lecture admin existante
 ```
 
@@ -33,7 +34,7 @@ clé locale root-only -> empreinte hors bande -> invitation admin plateforme
 | absent → invited | Auth + admin plateforme actif; empreinte complète pin hors bande; confirmation `PIN_OUT_OF_BAND_PUBLIC_KEY`. UUID v4 opaque, nonce public unique, TTL 300 s; au plus 16 invitations vivantes par rôle. |
 | invited → pending | ECDSA valide sur le challenge exact et fingerprint du **descripteur complet**; rôle/id/nonce/TTL concordants; mutation compare-and-set atomique. La possession n'authentifie pas le serveur. |
 | pending → approved | Admin plateforme revalidé et verrouillé transactionnellement; confirmation + preuve humaine explicites; rôle/empreinte exacts; demande encore vivante; un seul grant approuvé/délivré par rôle. Nouveau nonce, claim TTL 300 s, grant publication 3600 s maximum. |
-| approved → delivered | Claim signé, clé approuvée et nonce exacts; consommation durable **avant** chiffrement/signature/réponse. Remise chiffrée signée une seule fois. |
+| approved → delivered | Claim signé, clé approuvée et nonce exacts; consommation durable **avant** chiffrement, autorisation du signer et réponse. Le signer Cloudflare ne signe que le scellé exact après mTLS, Access, autorisation canonique expirant vite et ledger anti-rejeu. Remise chiffrée signée une seule fois. |
 | delivered → observation | Clé approuvée, grant vivant, rôle/empreinte exacts, ECDSA, minute UTC et six enums PR275; séquence positive croissante consommée dans la transaction d'observation. |
 | any nonrevoked → revoked | Admin plateforme actif, identité de grant exacte, confirmation `REVOKE_PUBLICATION_ONLY`; aucun effet sur un runtime. |
 
@@ -50,7 +51,7 @@ Bibliothèque pure : `infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrol
 - Transcript : `lemtel-node-enrollment-v1:<purpose>\n<canonical JSON>`, purpose dans `attest`, `claim`, `observe`, `seal`, `delivery`. Clés d'objets triées lexicographiquement, JSON compact, nombres entiers sûrs. Signatures ECDSA WebCrypto P1363 de 64 octets, pas DER. Les finalités ne sont pas interchangeables.
 - Nonces : deux UUID v4 concaténés sans tirets, 64 hex contenant 244 bits aléatoires; ils sont **publics**, pas des secrets bearer. Le secret d'autorisation est la clé privée, plus l'approbation d'état. Index SQL unique, challenge d'attestation consommé par changement d'état, nonce remplacé à l'approbation et consommé au claim.
 - Scellage : ECDH éphémère P-256, HKDF/SHA-256, salt = UTF-8 du nonce, info = transcript `seal` du challenge. AES-256-GCM, IV aléatoire 96 bits, tag 128 bits, AAD = même transcript. Challenge bind id/rôle/empreinte/finalité/nonce/expiry.
-- La clé publique destinataire **n'authentifie pas l'expéditeur d'un AEAD** : toute personne connaissant cette clé pourrait produire un autre scellé. Une signature ECDSA séparée de plateforme sur le scellé complet (`delivery`) est donc **obligatoire**, avec clé publique épinglée localement root-only. Aucun fallback TLS-only ou TOFU n'est permis. Le endpoint de publication doit également correspondre exactement au pin local.
+- La clé publique destinataire **n'authentifie pas l'expéditeur d'un AEAD** : toute personne connaissant cette clé pourrait produire un autre scellé. Une signature ECDSA séparée de plateforme sur le scellé complet (`delivery`) est donc **obligatoire**, avec clé publique épinglée localement root-only. La clé de remise vit uniquement dans le coffre Cloudflare lié au Worker signer; l'Edge ne peut émettre qu'une autorisation courte, déterministe et liée au scellé après le claim. Aucun fallback TLS-only, signer local ou TOFU n'est permis. Le endpoint de publication doit également correspondre exactement au pin local.
 - Remise `{sealed:{challenge,ephemeralKey,iv,ciphertext},signature}` uniquement au nœud ayant signé son claim. Rien n'est retourné au portail, sauf métadonnées allowlist. Aucune clé privée ou valeur HMAC n'est dans le payload.
 - Config claire après déchiffrement : `{format,requestId,role,fingerprint,endpoint,grantedUntil}` seulement. Aucun shell, instruction, config runtime, provider credential, secret d'arbitre ou URL d'action. Endpoint DNS HTTPS canonique, chemin exact `/functions/v1/lemtel-node-status-signed-ingest`, aucun port explicite, userinfo, IP littérale, query ou fragment.
 
@@ -60,7 +61,7 @@ Les primitives sont standard WebCrypto disponibles dans Deno/Cloudflare. Les tes
 
 | Source | Actions / sortie |
 |---|---|
-| `lemtel-node-enrollment` | POST `challenge`, `attest`, `claim`; challenge public, attest 204 vide, claim scellé signé uniquement après approbation. `Origin`/`Sec-Fetch-Mode` refusés, pas de CORS. Aucun endpoint de commande. |
+| `lemtel-node-enrollment` | POST `challenge`, `attest`, `claim`; challenge public, attest 204 vide, claim scellé signé uniquement après approbation par le signer externe. Sans flag explicite, autorisation Edge valide et relais local borné, la réponse est 503. `Origin`/`Sec-Fetch-Mode` refusés, pas de CORS. Aucun endpoint de commande. |
 | `lemtel-node-enrollment-admin` | POST `invite`, `read`, `approve`, `revoke`; token Bearer vérifié par Auth, admin plateforme actif, SQL reverrouille sa membership; pas de droits tenant-admin. Réponse uniquement `requestId,role,fingerprint,state,expiresAt`. Aucune clé, nonce, signature, ciphertext ou config. |
 | `lemtel-node-status-signed-ingest` | POST envelope signée publication-only; réponse 204 vide; grant livré/vivant et séquence croissante vérifiés dans SQL. Payload de statut PR275 inchangé dans un champ string. Origin/Sec-Fetch-Mode refusés. |
 
@@ -85,8 +86,8 @@ Une phase future autorisée doit préparer les répertoires root:root 0700 `/etc
 1. Approbation séparée du schéma/paquet Edge, revue RLS/RBAC en PostgreSQL cible et vérification des digests. Aucun apply dans ce travail.
 2. Revue des nouveaux chemins privés avec auth adaptée (pas de JWT gateway sur machine signée, Auth obligatoire sur admin), limites de débit/body/deadline; aucun endpoint ajouté au routage existant ici.
 3. Désactiver/rendre injoignable **l'ancien chemin HMAC de PR275 avant activation** des publications par clé si l'on veut une autorité unique. Il est inchangé et aucune migration de runtime n'est faite. Une coexistence non examinée serait ambiguë et est un blocker, pas une permission de fallback.
-4. Provisionnement contrôlé de la clé privée de signature plateforme en secret runtime `LEMTEL_NODE_PUBLICATION_SIGNING_PRIVATE_JWK`, clé publique épinglée root-only hors bande; cette valeur n'est ni créée, lue ni transmise par ce travail. Aucun private key dans navigateur/CLI/env file Git/log.
-5. Config endpoint serveur non secret `LEMTEL_NODE_PUBLICATION_ENDPOINT`, flag explicitement approuvé `LEMTEL_NODE_ENROLLMENT_ENABLED=approved_publication_only`; défaut **503**, aucun appel DB ou secret env avant gate dans les tests.
+4. Provisionnement séparé du signer externe Cloudflare : clé de remise write-only dans le coffre, pin public root-only sur les nœuds, Access service-auth et mTLS relay avec certificat dédié chiffré. L'autorité Edge émet une clé d'autorisation distincte, jamais réutilisée pour remettre une config, conservée uniquement dans un backend runtime approuvé. Aucune de ces valeurs n'est créée, lue ni transmise par ce travail. Aucun private key dans navigateur/CLI/env file Git/log.
+5. Config endpoint serveur non secret `LEMTEL_NODE_PUBLICATION_ENDPOINT`, flag explicitement approuvé `LEMTEL_NODE_ENROLLMENT_ENABLED=approved_publication_only` **et** `LEMTEL_EXTERNAL_PLATFORM_SIGNER_ENABLED=approved_delivery_only`; l'autorité requiert aussi son identifiant de clé public et son matériau privé runtime. Défaut **503**, aucun appel DB, signer ou secret env avant gate dans les tests.
 6. Revue logs Edge/gateway/proxy/Postgres : pas de body, clé, signature, ciphertext, token, paramètres SQL sensibles ni métriques identifiantes; rétention/cleanup audit et invitations tombstones à définir. Le code ne peut garantir la config de logs d'un service externe.
 7. Transport node→API root-only non fourni : HTTPS vérifié, endpoint local épinglé, aucun proxy/redirect/retry, taille/deadline bornées et sorties silencieuses. Le transport ne doit jamais envoyer un ciphertext/secret au portail, exposer le hostname/IP du nœud en payload ou réutiliser une clé d'arbitre. Cette revue est nécessaire avant réduction effective des gestes console.
 8. Installation/activation locale, validation permissions et clock sync, rollback par révocation du grant et arrêt publisher; décisions humaines séparées. Aucun grant n'autorise runtime, promotion, DNS, routage ou failover.

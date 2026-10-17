@@ -14,7 +14,7 @@ const SOURCE_REVISION_RE = /^[a-f0-9]{40}$/u;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
 // These two manifests are bundled but cannot hash themselves in their own
 // source manifests. Their reviewed SHA-256 values are pinned explicitly here.
-const DEPLOYMENT_MANIFEST_SHA256 = '6f0c58f13f68bce0d5becb856828f6fd13bd68682658babf9195f0cb2263aea1';
+const DEPLOYMENT_MANIFEST_SHA256 = '19f9cbe17f82d20448ccef260c3df901584609815bdf804ba8e32925fa4d2229';
 const ONBOARDING_MANIFEST_SHA256 = '8c53a72ee6007e1f28462c80c3f7b06b5dac06d596c4b70f58768babf7848bff';
 
 /** Payload names are the exact archive allowlist; manifest.sha256 is added separately. */
@@ -30,12 +30,14 @@ export const PACKAGE_FILES = [
   'lemtel-node-status-signed-ingest.manifest.json',
   'lemtel-onboarding-admin.index.ts',
   'lemtel-onboarding-admin.manifest.json',
+  'lemtelExternalPlatformSigner.ts',
   'lemtelNodeEnrollment.ts',
   'lemtelNodeEnrollmentBackend.ts',
 ];
 
 const SOURCE_FILES = new Map([
   ['0021_lemtel_node_secure_enrollment.sql', 'infra/lemtel-self-hosted/migrations/0021_lemtel_node_secure_enrollment.sql'],
+  ['lemtelExternalPlatformSigner.ts', 'infra/lemtel-self-hosted/functions/_shared/lemtelExternalPlatformSigner.ts'],
   ['lemtelNodeEnrollment.ts', 'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts'],
   ['lemtelNodeEnrollmentBackend.ts', 'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollmentBackend.ts'],
   ['lemtel-node-enrollment.index.ts', 'infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.ts'],
@@ -51,6 +53,7 @@ const SOURCE_FILES = new Map([
 
 const REQUIRED_MANIFEST_SOURCES = new Map([
   ['0021_lemtel_node_secure_enrollment.sql', 'infra/lemtel-self-hosted/migrations/0021_lemtel_node_secure_enrollment.sql'],
+  ['lemtelExternalPlatformSigner.ts', 'infra/lemtel-self-hosted/functions/_shared/lemtelExternalPlatformSigner.ts'],
   ['lemtelNodeEnrollment.ts', 'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollment.ts'],
   ['lemtelNodeEnrollmentBackend.ts', 'infra/lemtel-self-hosted/functions/_shared/lemtelNodeEnrollmentBackend.ts'],
   ['lemtel-node-enrollment.index.ts', 'infra/lemtel-self-hosted/functions/lemtel-node-enrollment/index.ts'],

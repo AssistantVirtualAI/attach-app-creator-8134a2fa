@@ -112,14 +112,15 @@ test('active source requires verified Access JWT, mTLS identity, semantic author
   const platformPair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const platformPrivate = await crypto.subtle.exportKey('jwk', platformPair.privateKey);
   const platformPublic = await crypto.subtle.exportKey('jwk', platformPair.publicKey);
-  const sealed = { challenge: bytes(32, 1), ephemeralKey: bytes(65, 2), iv: bytes(12, 3), ciphertext: bytes(32, 4) };
-  const requestId = '11111111-1111-4111-8111-111111111111', authorizationId = '22222222-2222-4222-8222-222222222222', recipientFingerprint = 'e'.repeat(64);
+  const requestId = '11111111-1111-4111-8111-111111111111', authorizationId = '22222222-2222-4222-8222-222222222222', recipientFingerprint = `sha256:${'e'.repeat(64)}`;
+  const challenge = { requestId, role: 'do_writer', fingerprint: recipientFingerprint, purpose: 'claim', nonce: '1'.repeat(64), expiresAt: now + 120 };
+  const sealed = { challenge, ephemeralKey: bytes(65, 2), iv: bytes(12, 3), ciphertext: bytes(32, 4) };
   const sealedDigest = await sha256(module.canonical(sealed));
   const authorization = await signedJwt({ pair: enrollmentPair, publicKey: enrollmentPublic, algorithm: 'ES256', kid: authorizationKid, claims: {
     iss: 'lemtel-node-enrollment-authority-v1', aud: 'lemtel-platform-signer-v1', purpose: 'node_enrollment_publication_delivery', jti: authorizationId,
-    rid: requestId, fp: recipientFingerprint, role: 'digitalocean_writer', challenge: sealed.challenge, sealedDigest, exp: now + 90, iat: now, nbf: now,
+    rid: requestId, fp: recipientFingerprint, role: 'do_writer', challenge: sealed.challenge, sealedDigest, exp: now + 90, iat: now, nbf: now,
   } });
-  const payload = module.canonical({ purpose: 'node_enrollment_publication_delivery', requestId, role: 'digitalocean_writer', recipientFingerprint, sealed, authorization: authorization.token });
+  const payload = module.canonical({ purpose: 'node_enrollment_publication_delivery', requestId, role: 'do_writer', recipientFingerprint, sealed, authorization: authorization.token });
   let ledgerCalls = 0, keyReads = 0, claimed = false;
   const env = {
     SIGNER_MODE: 'active', ACCESS_TEAM_DOMAIN: team, ACCESS_POLICY_AUD: audience, MTLS_RELAY_COMMON_NAME: 'lemtel-do-signer-relay', MTLS_RELAY_CERT_SHA256: fingerprint,
@@ -131,10 +132,9 @@ test('active source requires verified Access JWT, mTLS identity, semantic author
   const response = await signer(requestWithMtls(payload, access.token, fingerprint), env);
   assert.equal(response.status, 200);
   const result = JSON.parse(await response.text());
-  assert.deepEqual(result.delivery.sealed, sealed); assert.equal(result.delivery.requestId, requestId); assert.equal(result.delivery.authorizationId, authorizationId);
-  assert.equal(result.delivery.recipientFingerprint, recipientFingerprint); assert.equal(result.delivery.nodeRole, 'digitalocean_writer'); assert.equal(result.delivery.sealedDigest, sealedDigest);
+  assert.deepEqual(result.sealed, sealed);
   const verifyKey = await crypto.subtle.importKey('jwk', platformPublic, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
-  assert.equal(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, verifyKey, Buffer.from(result.signature, 'base64url'), new TextEncoder().encode(`lemtel-node-enrollment-v1:delivery\n${module.canonical(result.delivery)}`)), true);
+  assert.equal(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, verifyKey, Buffer.from(result.signature, 'base64url'), new TextEncoder().encode(`lemtel-node-enrollment-v1:delivery\n${module.canonical(result.sealed)}`)), true);
   assert.equal(ledgerCalls, 1); assert.equal(keyReads, 1);
   assert.equal((await signer(requestWithMtls(payload, access.token, fingerprint), env)).status, 409); assert.equal(keyReads, 1);
   const alternative = await signer(requestWithMtls(payload, access.token, fingerprint, 'other.invalid'), env);

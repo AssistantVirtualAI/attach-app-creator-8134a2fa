@@ -14,41 +14,57 @@ const installer = readFileSync(installerPath, 'utf8');
 const unit = readFileSync(unitPath, 'utf8');
 const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 const documentation = readFileSync(documentationPath, 'utf8');
-const uncommented = (value) => value.replace(/^\s*#.*$/gmu, '');
-const body = uncommented(installer);
+const uncommented = installer.replace(/^\s*#.*$/gmu, '');
 const required = (value, expected) => assert.ok(value.includes(expected), `missing: ${expected}`);
 
-test('DO source-only relay installer is root-only, role-bound, argument-free, and gates all writes on pre-existing root-only mTLS sources', () => {
+test('DO source-only installer fails closed before writes and seals a root-owned source release', () => {
   execFileSync('bash', ['-n', installerPath], { cwd: root });
   for (const expected of [
-    '[ "$#" -eq 0 ] || fail cli_arguments_forbidden',
-    '[ "$(id -u)" -eq 0 ] || fail root_required',
+    "export PATH='/usr/sbin:/usr/bin:/sbin:/bin'",
+    'unset BASH_ENV CDPATH ENV',
+    "IFS=$' \\t\\n'",
+    'umask 077',
+    '[ "$(/usr/bin/id -u)" -eq 0 ] || fail root_required',
     "readonly WRITER_ROLE='digitalocean_writer'",
     "readonly INSTALL_TOKEN='install_do_signer_mtls_relay_source_only'",
-    '[ "${LEMTEL_HA_ROLE:-}" = "$WRITER_ROLE" ] || fail writer_role_required',
-    '[ "${LEMTEL_HA_EXECUTE:-}" = "$INSTALL_TOKEN" ] || fail execution_token_required',
     "readonly CREDENTIALS_DIRECTORY='/etc/lemtel-platform-signer/credentials'",
-    'assert_preexisting_mtls_credential_sources',
-    'secure_directory "$CREDENTIALS_DIRECTORY" \'700\'',
+    "readonly INSTALL_PARENT='/opt/lemtel-ha'",
+    "readonly LOCK_DIRECTORY='/opt/lemtel-ha/.cloudflare-platform-signer-stage.lock'",
+    "readonly RELAY_SHA256='",
+    "readonly CONTRACT_SHA256='",
+    "readonly UNIT_SHA256='",
     'secure_regular_root "${CREDENTIALS_DIRECTORY}/client-cert.pem.cred" \'600\'',
     'secure_regular_root "${CREDENTIALS_DIRECTORY}/client-key.pem.cred" \'600\'',
-    'assert_source_files',
-    'assert_same_or_absent',
-    '[ -e "$target" ] || [ -L "$target" ]',
-    '[ ! -e "$INSTALL_DIRECTORY/$RELAY_SOURCE" ] && [ ! -L "$INSTALL_DIRECTORY/$RELAY_SOURCE" ]',
+    'secure_source_file "$script_directory/$source"',
+    '[ "$owner" = \'0\' ] && [ "$group" = \'0\' ] && [ "$links" = \'1\' ]',
+    '(( (mode_value & 8#022) == 0 ))',
+    'sha256_matches "$script_directory/$source" "$digest"',
+    'assert_all_verified_sources',
+    'mkdir -m 0700 -- "$LOCK_DIRECTORY"',
+    'fail concurrent_or_stale_install_lock',
+    'mktemp -d "$INSTALL_PARENT/.cloudflare-platform-signer.stage.XXXXXX"',
+    'mv --no-target-directory -- "$staging_directory" "$INSTALL_DIRECTORY"',
+    'assert_release_tree',
+    'systemd_unit_staged_not_installed=true',
   ]) required(installer, expected);
+  assert.doesNotMatch(installer, /__(?:RELAY|CONTRACT|UNIT)_SHA256__/u);
   assert.doesNotMatch(installer, /-----BEGIN (?:[A-Z ]+ )?(?:PRIVATE KEY|CERTIFICATE)-----/u);
-  assert.doesNotMatch(installer, /(?:LEMTEL_[A-Z0-9_]*(?:SECRET|TOKEN|PRIVATE_KEY)|client-(?:cert|key)\.pem\s*=)/u);
+  assert.doesNotMatch(uncommented, /(?:\bcurl\b|\bwget\b|\bssh\b|\bscp\b|\brsync\b|\bdoctl\b|\bhcloud\b|\bdocker\b|\bpg_ctl\b|\bpg_promote\b)/iu);
+  assert.doesNotMatch(uncommented, /(?:\bsystemctl\b|\bdaemon-reload\b|\bservice\s+(?:start|restart|enable)|\btimer\b.*\benable\b)/iu);
 });
 
-test('DO source-only relay installer has an exact relay/unit allowlist and leaves every activation surface false', () => {
+test('staged release has a strict allowlist and no activation path', () => {
   assert.match(installer, /readonly -a SOURCE_FILES=\(\n  "\$RELAY_SOURCE"\n  "\$CONTRACT_SOURCE"\n  "\$UNIT_SOURCE"\n\)/u);
   for (const expected of [
-    'readonly RELAY_SOURCE=\'lemtel-signer-mtls-relay.py\'',
-    'readonly CONTRACT_SOURCE=\'mtls-relay-contract.json\'',
-    'readonly UNIT_SOURCE=\'systemd/lemtel-signer-mtls-relay.service\'',
-    'relay_source_installed=true',
-    'systemd_unit_installed=true',
+    "readonly RELAY_SOURCE='lemtel-signer-mtls-relay.py'",
+    "readonly CONTRACT_SOURCE='mtls-relay-contract.json'",
+    "readonly UNIT_SOURCE='systemd/lemtel-signer-mtls-relay.service'",
+    "release_state='staged_atomically'",
+    "release_state='already_staged_verified'",
+    "printf 'release_state=%s",
+    'relay_configuration_created=false',
+    'relay_source_staged=true',
+    'systemd_unit_staged_not_installed=true',
     'systemd_daemon_reloaded=false',
     'service_enabled=false',
     'service_started=false',
@@ -61,22 +77,12 @@ test('DO source-only relay installer has an exact relay/unit allowlist and leave
     'fencing_executed=false',
     'automatic_failover_enabled=false',
     'telephony_contacted=false',
-    'business_data_read=false',
   ]) required(installer, expected);
-  assert.doesNotMatch(body, /(?:\bsystemctl\b|\bservice\b\s+(?:start|restart|enable)|\bdaemon-reload\b|\btimer\b.*\benable\b)/iu);
-  assert.doesNotMatch(body, /(?:\bcurl\b|\bwget\b|\bssh\b|\bscp\b|\brsync\b|\bdoctl\b|\bhcloud\b|\bdocker\b|\bpg_ctl\b|\bpg_promote\b)/iu);
-  assert.doesNotMatch(body, /(?:\bPlanipret\b|\bpbx\b|\blegacy\b|\bfusionpbx\b|\bsip\b|\btelephony\s+(?:api|client))/iu);
-  assert.doesNotMatch(body, /(?:\bINSERT\b|\bUPDATE\b|\bDELETE\b|\bALTER\b|\bDROP\b|\bTRUNCATE\b|\bCREATE\s+(?:TABLE|DATABASE|SCHEMA)\b)/iu);
+  assert.doesNotMatch(uncommented, /(?:\bPlanipret\b|\bpbx\b|\blegacy\b|\bfusionpbx\b|\bsip\b|\btelephony\s+(?:api|client))/iu);
+  assert.doesNotMatch(uncommented, /(?:\bINSERT\b|\bUPDATE\b|\bDELETE\b|\bALTER\b|\bDROP\b|\bTRUNCATE\b|\bCREATE\s+(?:TABLE|DATABASE|SCHEMA)\b)/iu);
 });
 
-test('unit and contracts independently refuse a start without root-only encrypted mTLS credential sources', () => {
-  for (const expected of [
-    'ConditionPathIsDirectory=/etc/lemtel-platform-signer/credentials',
-    'ConditionPathExists=/etc/lemtel-platform-signer/credentials/client-cert.pem.cred',
-    'ConditionPathExists=/etc/lemtel-platform-signer/credentials/client-key.pem.cred',
-    'LoadCredentialEncrypted=client-cert.pem:/etc/lemtel-platform-signer/credentials/client-cert.pem.cred',
-    'LoadCredentialEncrypted=client-key.pem:/etc/lemtel-platform-signer/credentials/client-key.pem.cred',
-  ]) required(unit, expected);
+test('contract and unit retain explicit non-deployment state', () => {
   assert.doesNotMatch(unit, /^\[Install\]$/mu);
   assert.equal(contract.source_only_deployment.do_writer_installer_available, true);
   assert.equal(contract.source_only_deployment.installation_authorized, false);

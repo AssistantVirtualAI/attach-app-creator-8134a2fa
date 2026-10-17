@@ -30,6 +30,7 @@ test('source-only mTLS relay remains constrained to a single local protocol and 
   assert.match(relay, /socket\.AF_UNIX/); assert.match(relay, /socket\.SO_PEERCRED/);
   assert.match(relay, /connection\.request\("POST", SIGNER_PATH/); assert.match(relay, /UNAVAILABLE = b'\{"result":"unavailable"\}'/);
   assert.match(relay, /def _same_delivery\(/); assert.match(relay, /def _receive_framed\(/); assert.match(relay, /struct\.unpack\("!I"/); assert.match(relay, /def _safe_socket_parent\(path: Path, peer_uid: int\)/);
+  assert.match(relay, /def _encrypted_credential_sources\(\)/); assert.match(relay, /_credential_paths\(os\.environ\.get\("CREDENTIALS_DIRECTORY"\)\)/);
   assert.doesNotMatch(relay, /requests\.|urllib|subprocess|os\.system|shell=True|curl|cloudflare|fencing|promotion|load_balancer|dns/i);
   assert.equal(contract.local_relay.local_peer_authorization_required, true);
   assert.equal(contract.local_relay.unauthorized_peer_denied_before_network, true);
@@ -77,8 +78,65 @@ print("relay_dispatch_test=ok")
   assert.equal(python(script).trim(), 'relay_dispatch_test=ok');
 });
 
+test('relay refuses startup before configuration or socket creation when root-only mTLS credential metadata is absent', () => {
+  const script = String.raw`
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("relay", ${JSON.stringify(relayPath)})
+relay = importlib.util.module_from_spec(spec); sys.modules["relay"] = relay; spec.loader.exec_module(relay)
+calls = []
+relay.os.geteuid = lambda: 0
+def missing_sources():
+    calls.append("credential_sources")
+    raise relay.Deny()
+def unexpected_loaded_credentials(_):
+    calls.append("loaded_credentials")
+    raise AssertionError("loaded credentials checked after absent source")
+def unexpected_config():
+    calls.append("config")
+    raise AssertionError("config read after absent source")
+relay._encrypted_credential_sources = missing_sources
+relay._credential_paths = unexpected_loaded_credentials
+relay.load_config = unexpected_config
+relay.socket.socket = lambda *_: (_ for _ in ()).throw(AssertionError("socket created after absent source"))
+assert relay.run() == 78
+assert calls == ["credential_sources"]
+print("relay_startup_credential_gate=ok")
+`;
+  assert.equal(python(script).trim(), 'relay_startup_credential_gate=ok');
+});
+
+test('relay refuses startup before configuration or socket creation when loaded mTLS credentials are not root-only', () => {
+  const script = String.raw`
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("relay", ${JSON.stringify(relayPath)})
+relay = importlib.util.module_from_spec(spec); sys.modules["relay"] = relay; spec.loader.exec_module(relay)
+calls = []
+relay.os.geteuid = lambda: 0
+def valid_sources():
+    calls.append("credential_sources")
+    return ()
+def invalid_loaded_credentials(_):
+    calls.append("loaded_credentials")
+    raise relay.Deny()
+def unexpected_config():
+    calls.append("config")
+    raise AssertionError("config read after invalid loaded credentials")
+relay._encrypted_credential_sources = valid_sources
+relay._credential_paths = invalid_loaded_credentials
+relay.load_config = unexpected_config
+relay.socket.socket = lambda *_: (_ for _ in ()).throw(AssertionError("socket created after invalid loaded credentials"))
+assert relay.run() == 78
+assert calls == ["credential_sources", "loaded_credentials"]
+print("relay_loaded_credential_gate=ok")
+`;
+  assert.equal(python(script).trim(), 'relay_loaded_credential_gate=ok');
+});
+
 test('relay template is root-only, credential-gated, restart-safe and incapable of automatic installation', () => {
   assert.match(unit, /^User=root$/m); assert.match(unit, /^UMask=0077$/m);
+  assert.match(unit, /^ConditionPathIsDirectory=\/etc\/lemtel-platform-signer\/credentials$/m);
+  assert.match(unit, /^ConditionPathExists=\/etc\/lemtel-platform-signer\/credentials\/client-cert\.pem\.cred$/m);
+  assert.match(unit, /^ConditionPathExists=\/etc\/lemtel-platform-signer\/credentials\/client-key\.pem\.cred$/m);
   assert.match(unit, /^LoadCredentialEncrypted=client-cert\.pem:/m); assert.match(unit, /^LoadCredentialEncrypted=client-key\.pem:/m);
   assert.match(unit, /^ProtectSystem=strict$/m); assert.match(unit, /^PrivateDevices=yes$/m); assert.match(unit, /^RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6$/m);
   assert.match(unit, /^StandardOutput=null$/m); assert.doesNotMatch(unit, /^\[Install\]$/m);

@@ -24,7 +24,9 @@ Cette alternative reste bloquée tant qu’une revue de sécurité indépendante
 
 ## État de l’activation
 
-Tous les états d’activation demeurent `false`. Ce document ne fournit ni commande, ni génération de matériel cryptographique, ni déploiement persistant.
+Tous les états d’activation demeurent `false`. Le source du relais local et un modèle systemd sans section d’installation sont fournis pour revue et tests locaux : le protocole n’accepte qu’un JSON de remise d’enrôlement depuis un UID local explicitement configuré, via socket Unix, vers le hostname et le chemin signer fixes. Il reste impossible à démarrer sans une configuration root-only explicite et des credentials systemd chiffrés valides.
+
+Ce source ne fournit ni commande d’installation, ni génération de matériel cryptographique, ni configuration active, ni certificat, ni clé, ni binding, ni politique Access, ni déploiement persistant. Les tests utilisent seulement des clés synthétiques en mémoire et un transport simulé.
 
 ## Références
 

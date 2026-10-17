@@ -1,0 +1,52 @@
+# Lemtel platform signer mTLS relay — source-only unit template.
+# This file has no [Install] section and must not be installed or enabled until
+# every gate in mtls-relay-contract.json is independently attested.
+
+[Unit]
+Description=Lemtel Cloudflare platform signer mTLS relay (gated)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/lemtel-platform-signer/relay.conf
+
+[Service]
+Type=simple
+User=root
+Group=root
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+# Credentials must be supplied by an independently attested encrypted backend.
+# No plaintext certificate or key is referenced by source control.
+LoadCredentialEncrypted=client-cert.pem:/etc/lemtel-platform-signer/credentials/client-cert.pem.cred
+LoadCredentialEncrypted=client-key.pem:/etc/lemtel-platform-signer/credentials/client-key.pem.cred
+ExecStart=/usr/bin/python3 -I /opt/lemtel-ha/cloudflare-platform-signer/lemtel-signer-mtls-relay.py
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=10s
+TimeoutStopSec=5s
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service @network-io
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE
+ReadWritePaths=/run/lemtel-platform-signer
+ReadOnlyPaths=/etc/lemtel-platform-signer
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+StandardOutput=null
+StandardError=journal
+
+# No [Install]: this source-only template cannot create a boot target.

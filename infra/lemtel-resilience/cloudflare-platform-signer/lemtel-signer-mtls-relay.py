@@ -1,0 +1,281 @@
+#!/usr/bin/python3
+"""Lemtel signer relay — source-only, disabled unless explicitly configured.
+
+The process accepts a single framed JSON request from one configured local UID
+through a Unix socket. It cannot take a URL, HTTP method, credential path,
+purpose, or action from the caller. It has no listener on a network interface.
+No deployment unit or active configuration is provided by this source file.
+"""
+
+import base64
+import http.client
+import json
+import os
+import re
+import socket
+import stat
+import ssl
+import struct
+import sys
+import time
+import uuid
+from collections import deque
+from pathlib import Path
+from typing import Any, Callable
+
+SOCKET_PATH = "/run/lemtel-platform-signer/relay.sock"
+CONFIG_PATH = "/etc/lemtel-platform-signer/relay.conf"
+SIGNER_HOST = "signer.lemtel.assistantvirtualai.com"
+SIGNER_PATH = "/v1/node-enrollment-delivery"
+MAX_REQUEST_BYTES = 4096
+MAX_RESPONSE_BYTES = 4096
+LOCAL_TIMEOUT_SECONDS = 3
+OUTBOUND_TIMEOUT_SECONDS = 5
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 3
+PURPOSE = "node_enrollment_publication_delivery"
+CREDENTIAL_NAMES = ("client-cert.pem", "client-key.pem")
+B64URL = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+class Deny(Exception):
+    """Raised for any invalid or uncertain condition without detail."""
+
+
+def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise Deny()
+        value[key] = item
+    return value
+
+
+def _regular_root(path: Path, mode: int) -> bool:
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return False
+    return (
+        stat.S_ISREG(metadata.st_mode)
+        and not path.is_symlink()
+        and metadata.st_uid == 0
+        and metadata.st_gid == 0
+        and stat.S_IMODE(metadata.st_mode) == mode
+        and metadata.st_nlink == 1
+    )
+
+
+def _safe_directory(path: Path, mode: int) -> bool:
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return False
+    return (
+        stat.S_ISDIR(metadata.st_mode)
+        and not path.is_symlink()
+        and metadata.st_uid == 0
+        and metadata.st_gid == 0
+        and stat.S_IMODE(metadata.st_mode) == mode
+    )
+
+
+def _credential_paths(credentials_directory: str | None) -> tuple[Path, Path]:
+    if not isinstance(credentials_directory, str) or not credentials_directory:
+        raise Deny()
+    root = Path(credentials_directory)
+    if not root.is_absolute() or root.parent != Path("/run/credentials") or not _safe_directory(root, 0o700):
+        raise Deny()
+    cert, key = (root / name for name in CREDENTIAL_NAMES)
+    if not all(_regular_root(path, 0o400) for path in (cert, key)):
+        raise Deny()
+    return cert, key
+
+
+def load_config(path: str = CONFIG_PATH) -> dict[str, Any]:
+    file_path = Path(path)
+    if not _regular_root(file_path, 0o600):
+        raise Deny()
+    try:
+        text = file_path.read_text(encoding="ascii")
+    except (OSError, UnicodeError):
+        raise Deny() from None
+    allowed = {"RELAY_MODE", "EDGE_PEER_UID"}
+    value: dict[str, str] = {}
+    for line in text.splitlines():
+        if not line or line.startswith("#") or "=" not in line:
+            raise Deny()
+        key, item = line.split("=", 1)
+        if key not in allowed or key in value or not item or item.strip() != item:
+            raise Deny()
+        value[key] = item
+    if set(value) != allowed or value["RELAY_MODE"] not in {"disabled", "active"}:
+        raise Deny()
+    if not value["EDGE_PEER_UID"].isdigit():
+        raise Deny()
+    peer_uid = int(value["EDGE_PEER_UID"])
+    if peer_uid <= 0 or peer_uid > 2**31 - 1:
+        raise Deny()
+    return {"mode": value["RELAY_MODE"], "peer_uid": peer_uid}
+
+
+def _validate_sealed(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != {"challenge", "ephemeralKey", "iv", "ciphertext"}:
+        return False
+    limits = {"challenge": 1024, "ephemeralKey": 128, "iv": 32, "ciphertext": 2800}
+    return all(isinstance(value[key], str) and 0 < len(value[key]) <= limits[key] and B64URL.fullmatch(value[key]) for key in limits)
+
+
+def parse_request(raw: bytes) -> dict[str, Any]:
+    if not isinstance(raw, bytes) or not raw or len(raw) > MAX_REQUEST_BYTES:
+        raise Deny()
+    try:
+        value = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict_object)
+    except (UnicodeError, json.JSONDecodeError, Deny):
+        raise Deny() from None
+    if not isinstance(value, dict) or set(value) != {"purpose", "requestId", "sealed"}:
+        raise Deny()
+    if value["purpose"] != PURPOSE or not isinstance(value["requestId"], str) or not _validate_sealed(value["sealed"]):
+        raise Deny()
+    try:
+        parsed = uuid.UUID(value["requestId"])
+    except (ValueError, AttributeError):
+        raise Deny() from None
+    if str(parsed) != value["requestId"] or parsed.version != 4:
+        raise Deny()
+    return value
+
+
+class RateLimiter:
+    def __init__(self, now: Callable[[], float] = time.monotonic):
+        self.now = now
+        self.samples: deque[float] = deque()
+
+    def consume(self) -> None:
+        current = self.now()
+        while self.samples and current - self.samples[0] >= RATE_LIMIT_WINDOW_SECONDS:
+            self.samples.popleft()
+        if len(self.samples) >= RATE_LIMIT_MAX_REQUESTS:
+            raise Deny()
+        self.samples.append(current)
+
+
+def _tls_context(credentials_directory: str | None) -> ssl.SSLContext:
+    cert, key = _credential_paths(credentials_directory)
+    context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.check_hostname = True
+    context.verify_mode = ssl.CERT_REQUIRED
+    try:
+        context.load_cert_chain(certfile=str(cert), keyfile=str(key))
+    except (OSError, ssl.SSLError):
+        raise Deny() from None
+    return context
+
+
+def forward_to_signer(raw: bytes, credentials_directory: str | None) -> bytes:
+    """Single POST to the only allowed signer endpoint; never follows redirects or retries."""
+    connection: http.client.HTTPSConnection | None = None
+    try:
+        connection = http.client.HTTPSConnection(SIGNER_HOST, 443, context=_tls_context(credentials_directory), timeout=OUTBOUND_TIMEOUT_SECONDS)
+        connection.request("POST", SIGNER_PATH, body=raw, headers={"Content-Type": "application/json", "Content-Length": str(len(raw))})
+        reply = connection.getresponse()
+        content_type = (reply.getheader("Content-Type") or "").split(";", 1)[0].strip().lower()
+        body = reply.read(MAX_RESPONSE_BYTES + 1)
+        if reply.status != 200 or content_type != "application/json" or not body or len(body) > MAX_RESPONSE_BYTES:
+            raise Deny()
+        parse_delivery(body)
+        return body
+    except (OSError, ValueError, http.client.HTTPException, ssl.SSLError, Deny):
+        raise Deny() from None
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def parse_delivery(raw: bytes) -> None:
+    """Only a normal sealed delivery can return to the local caller."""
+    try:
+        value = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict_object)
+    except (UnicodeError, json.JSONDecodeError, Deny):
+        raise Deny() from None
+    if not isinstance(value, dict) or set(value) != {"sealed", "signature"} or not _validate_sealed(value["sealed"]):
+        raise Deny()
+    signature = value["signature"]
+    if not isinstance(signature, str) or len(signature) != 86 or not B64URL.fullmatch(signature):
+        raise Deny()
+
+
+def dispatch(raw: bytes, peer_uid: int, config: dict[str, Any], limiter: RateLimiter, forwarder: Callable[[bytes, str | None], bytes], credentials_directory: str | None) -> bytes:
+    """Authorize locally before any credential access or outbound network call."""
+    if config.get("mode") != "active" or not isinstance(peer_uid, int) or peer_uid != config.get("peer_uid"):
+        raise Deny()
+    parse_request(raw)
+    limiter.consume()
+    return forwarder(raw, credentials_directory)
+
+
+def _peer_uid(connection: socket.socket) -> int:
+    try:
+        raw = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+        _pid, uid, _gid = struct.unpack("3i", raw)
+    except (OSError, struct.error):
+        raise Deny() from None
+    return uid
+
+
+def _safe_socket_parent(path: Path) -> None:
+    parent = path.parent
+    if parent.exists():
+        if not _safe_directory(parent, 0o711):
+            raise Deny()
+    else:
+        parent.mkdir(mode=0o711, parents=True)
+        os.chown(parent, 0, 0)
+        if not _safe_directory(parent, 0o711):
+            raise Deny()
+    if path.exists() or path.is_symlink():
+        raise Deny()
+
+
+def run() -> int:
+    try:
+        if os.geteuid() != 0:
+            raise Deny()
+        config = load_config()
+        if config["mode"] != "active":
+            raise Deny()
+        socket_path = Path(SOCKET_PATH)
+        _safe_socket_parent(socket_path)
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.settimeout(LOCAL_TIMEOUT_SECONDS)
+        server.bind(SOCKET_PATH)
+        os.chown(SOCKET_PATH, config["peer_uid"], -1)
+        os.chmod(SOCKET_PATH, 0o600)
+        limiter = RateLimiter()
+        while True:
+            connection: socket.socket | None = None
+            try:
+                connection, _ = server.accept()
+                connection.settimeout(LOCAL_TIMEOUT_SECONDS)
+                peer = _peer_uid(connection)
+                raw = connection.recv(MAX_REQUEST_BYTES + 1)
+                result = dispatch(raw, peer, config, limiter, forward_to_signer, os.environ.get("CREDENTIALS_DIRECTORY"))
+                connection.sendall(result)
+            except (Deny, OSError):
+                if connection is not None:
+                    try:
+                        connection.sendall(b"{}")
+                    except OSError:
+                        pass
+            finally:
+                if connection is not None:
+                    connection.close()
+    except Deny:
+        return 78
+    except OSError:
+        return 78
+
+
+if __name__ == "__main__":
+    sys.exit(run())

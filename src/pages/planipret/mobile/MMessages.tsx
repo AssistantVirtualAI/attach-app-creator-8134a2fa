@@ -529,7 +529,7 @@ function SmsList({ profile, openDialer, registerRefresh, active = true, initialT
                 onOpen={() => { smsAct([k], "read", lastMap); openSmsThread({ id, number: peer }); }}
                 onToggleRead={() => smsAct([k], unread > 0 ? "read" : "unread", lastMap)}
                 onDelete={async () => {
-                  if (await confirmDialog({ title: tr("Supprimer cette conversation ?", "Delete this conversation?"), description: tr("Elle sera retirée de cette liste sur cet appareil. Un nouveau texto la fera réapparaître.", "It will be removed from this list on this device. A new text will bring it back."), confirmLabel: tr("Supprimer", "Delete"), destructive: true })) smsAct([k], "hide", lastMap);
+                  if (await confirmDialog({ title: tr("Supprimer cette conversation ?", "Delete this conversation?"), message: tr("Elle sera retirée de cette liste sur cet appareil. Un nouveau texto la fera réapparaître.", "It will be removed from this list on this device. A new text will bring it back."), confirmLabel: tr("Supprimer", "Delete"), destructive: true })) smsAct([k], "hide", lastMap);
                 }}
                 emptyLabel={t("messages.noContent")}
               />

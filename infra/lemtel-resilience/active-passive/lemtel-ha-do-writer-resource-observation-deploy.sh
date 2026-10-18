@@ -101,7 +101,7 @@ resolve_database_container() {
 }
 
 schema_state() {
-  docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "WITH objects(present) AS (VALUES (to_regclass('"'"'public.lemtel_do_writer_resource_current'"'"') IS NOT NULL), (to_regprocedure('"'"'public.lemtel_record_do_writer_resource_status(timestamp with time zone,integer,integer,integer,integer,integer,integer)'"'"') IS NOT NULL)) SELECT CASE WHEN count(*) FILTER (WHERE present) = 0 THEN '"'"'absent'"'"' WHEN count(*) FILTER (WHERE present) = 2 THEN '"'"'present'"'"' ELSE '"'"'partial'"'"' END FROM objects"' 2>/dev/null | tr -d '\r\n'
+  docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "WITH objects(present) AS (VALUES (to_regclass('"'"'public.lemtel_do_writer_resource_current'"'"') IS NOT NULL), (to_regprocedure('"'"'public.lemtel_record_do_writer_resource_status(timestamp with time zone,smallint,smallint,smallint,integer,integer,integer)'"'"') IS NOT NULL)) SELECT CASE WHEN count(*) FILTER (WHERE present) = 0 THEN '"'"'absent'"'"' WHEN count(*) FILTER (WHERE present) = 2 THEN '"'"'present'"'"' ELSE '"'"'partial'"'"' END FROM objects"' 2>/dev/null | tr -d '\r\n'
 }
 
 apply_migration_idempotently() {

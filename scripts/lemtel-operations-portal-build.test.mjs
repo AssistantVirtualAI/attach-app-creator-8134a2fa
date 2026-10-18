@@ -35,7 +35,17 @@ test("private Operations portal build uses only the canonical Lemtel configurati
     "vite.config.lemtel-portal.ts",
     "lemtel-operations-portal",
     "retention-days: 3",
+    "id-token: write",
+    "attestations: write",
+    "id: portal_artifact",
+    "actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4",
+    "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4",
+    "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4",
+    "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4",
+    "subject-name: lemtel-operations-portal-${{ github.run_id }}",
+    "subject-digest: sha256:${{ steps.portal_artifact.outputs.artifact-digest }}",
   ]) assert.match(workflow, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(workflow, /uses:\s*actions\/(?:checkout|setup-node|upload-artifact|attest)@v4\b/i);
   assert.doesNotMatch(workflow, /\b(?:ssh|scp|rsync|curl)\b/i);
   assert.doesNotMatch(workflow, /(?:cloudflare|digitalocean).*?(?:request|action)/i);
 });

@@ -36,6 +36,9 @@ test('Python refusal reports only a bounded phase and guard category',()=>{
   assert.ok(source.indexOf("self.guard='source_manifest_read'")<source.indexOf("self.guard='source_manifest_shape'"));
   assert.ok(source.indexOf("self.guard='source_manifest_shape'")<source.indexOf("self.guard='source_component_hashes'"));
   assert.ok(source.indexOf("self.guard='source_component_hashes'")<source.indexOf("self.guard='source_ingest_hash'"));
+  assert.match(source,/relative_path=Path\(name\) if key=='publisher' else Path\('systemd'\)\/name/u);
+  assert.match(source,/hash_file\(SOURCE\/relative_path\)/u);
+  assert.doesNotMatch(source,/SOURCE\/\(name if key=='publisher' else 'systemd'\/name\)/u);
 });
 test('embedded Python parses and manifest pins every installed source',()=>{
   const start=source.indexOf("<<'PY'\n"), end=source.lastIndexOf('\nPY\n'); assert.ok(start>=0&&end>start);

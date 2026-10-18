@@ -211,13 +211,18 @@ function streamToOpenAi(upstream: ReadableStream<Uint8Array>, model: string): Re
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 
 /** Best-effort telemetry: which provider actually served each AI request. */
-function logAiUsage(row: {
+export function logAiUsage(row: {
   provider: "claude" | "openai";
   model?: string;
   status_code?: number;
   failover?: boolean;
   duration_ms?: number;
   error?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
+  label?: string;
 }) {
   try {
     const url = Deno.env.get("SUPABASE_URL");
@@ -240,6 +245,11 @@ function logAiUsage(row: {
         failover: row.failover ?? false,
         duration_ms: row.duration_ms ?? null,
         error: row.error ? String(row.error).slice(0, 500) : null,
+        input_tokens: row.input_tokens ?? null,
+        output_tokens: row.output_tokens ?? null,
+        cache_read_tokens: row.cache_read_tokens ?? null,
+        cache_write_tokens: row.cache_write_tokens ?? null,
+        label: row.label ?? null,
       }),
     }).catch(() => {});
   } catch { /* telemetry must never break the call */ }
@@ -331,11 +341,18 @@ async function chatCompletions(init: RequestInit): Promise<Response> {
     return openAiFailover(body);
   }
 
-  logAiUsage({ provider: "claude", model: anthropicBody.model, status_code: 200, duration_ms: Date.now() - t0 });
-
-  if (stream && res.body) return streamToOpenAi(res.body, anthropicBody.model);
+  if (stream && res.body) {
+    logAiUsage({ provider: "claude", model: anthropicBody.model, status_code: 200, duration_ms: Date.now() - t0 });
+    return streamToOpenAi(res.body, anthropicBody.model);
+  }
 
   const data = await res.json();
+  const u = data?.usage ?? {};
+  logAiUsage({
+    provider: "claude", model: anthropicBody.model, status_code: 200, duration_ms: Date.now() - t0,
+    input_tokens: u.input_tokens, output_tokens: u.output_tokens,
+    cache_read_tokens: u.cache_read_input_tokens, cache_write_tokens: u.cache_creation_input_tokens,
+  });
   return json(toOpenAiResponse(data));
 }
 

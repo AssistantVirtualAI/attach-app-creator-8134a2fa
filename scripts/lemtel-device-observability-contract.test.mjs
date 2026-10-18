@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, '..');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
 const connectionsMigration = read('infra/lemtel-self-hosted/migrations/0010_lemtel_client_connections.sql');
+const sessionControlsMigration = read('infra/lemtel-self-hosted/migrations/0014_lemtel_client_session_controls.sql');
 const historyMigration = read('infra/lemtel-self-hosted/migrations/0011_lemtel_operational_status_history.sql');
 const bootstrap = read('infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts');
 const admin = read('infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts');
@@ -28,8 +29,11 @@ test('client presence is minimal, server-written and unavailable to browser role
 
 test('session bootstrap records a bounded presence marker but never uses it for authorization', () => {
   assert.match(bootstrap, /X-Lemtel-Client/);
-  assert.match(bootstrap, /lemtel_record_client_connection/);
-  assert.match(bootstrap, /try \{\s+await admin\.rpc\("lemtel_record_client_connection"/);
+  assert.match(sessionControlsMigration, /lemtel_record_authorized_client_connection/);
+  assert.match(sessionControlsMigration, /FROM public\.lemtel_session_bootstrap_context_for_client\(p_user_id, v_client_kind\)/);
+  assert.match(sessionControlsMigration, /GRANT EXECUTE ON FUNCTION public\.lemtel_record_authorized_client_connection\(uuid, text\)\s+TO service_role/);
+  assert.match(bootstrap, /lemtel_record_authorized_client_connection/);
+  assert.match(bootstrap, /try \{\s+await admin\.rpc\("lemtel_record_authorized_client_connection"/);
   assert.match(bootstrap, /Presence remains best-effort and can never deny an otherwise valid session/);
   assert.match(bootstrap, /lemtel_session_bootstrap_context/);
   assert.doesNotMatch(bootstrap, forbidden);

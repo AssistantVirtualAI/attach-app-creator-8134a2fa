@@ -249,6 +249,18 @@ export type LemtelTrafficTrend = {
   bucketSeconds: number;
   roles: LemtelTrafficRoleTrend[];
 };
+/** Redacted node-state projection. It carries no host, address, process or credential detail. */
+export type LemtelNodeStatus = {
+  telemetry: "live" | "not_configured";
+  roles: Array<{
+    nodeRole: LemtelTrafficNodeRole;
+    observedAt?: string;
+    agentState: OperationalHealth;
+    runtimeState: "ready" | "degraded" | "unknown";
+    replicationState: "streaming" | "degraded" | "unknown";
+    storageState: "synced" | "degraded" | "unknown";
+  }>;
+};
 export type LemtelPlatformNodeStatus = {
   schemaVersion: "lemtel-node-status/v1";
   observation: "observed" | "no_observation";
@@ -355,6 +367,7 @@ export const portalApi = {
   getOperationalStatus: () => invoke<LemtelOperationalStatus>("lemtel-onboarding-admin", { action: "get_operational_status" }),
   getOperationalTrend: () => invoke<{ samples: LemtelOperationalTrendSample[] }>("lemtel-onboarding-admin", { action: "get_operational_trend" }),
   getTrafficTrend: () => invoke<LemtelTrafficTrend>("lemtel-onboarding-admin", { action: "get_traffic_trend" }),
+  getNodeStatus: () => invoke<LemtelNodeStatus>("lemtel-onboarding-admin", { action: "get_node_status" }),
   getPlatformOverview: () => invoke<LemtelPlatformOverview>("lemtel-onboarding-admin", { action: "get_platform_overview" }),
   listPeople: (organizationId: string) => invoke<{ people: PortalPerson[] }>("lemtel-onboarding-admin", { action: "list_people", organizationId }),
   listInvitations: (organizationId: string) => invoke<{ invitations: PortalInvitation[] }>("lemtel-onboarding-admin", { action: "list_invitations", organizationId }),

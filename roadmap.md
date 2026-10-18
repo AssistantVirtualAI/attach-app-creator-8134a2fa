@@ -47,4 +47,4 @@
 - [x] Admin pending commissions: filtres courtier / équipe / mois / trimestre / année (portail Gilles & Marc), commissions par broker poussées au portail + app
 - [x] SMS threads: read/unread, mark-all-read, device-local delete (hide)
 
-- [ ] Claude tokens: step 1 tracking ready (not deployed); steps 2-4 wait on deploy + 3-7 days of measurements
+- [x] Claude tokens step 1: tracking deployed (41 AI functions, 2026-10-18); steps 2-4 (cache answers, trim prompts, Haiku test) wait on 3-7 days of measurements

@@ -101,19 +101,19 @@ describe("normalizeNsEvents", () => {
   });
 });
 
-Deno.test("v2 SMS to on-net broker becomes message.inbound", () => {
-  const ev = normalizeNsEvents([{ id: "m1", type: "sms", domain: "planipret.ca", direction: "orig",
-    "from-number": "14388427217", "from-user-id": "113", "terminating-user-id": "1064",
-    "terminating-number": "15143743320", text: "Bonjour", "messagesession-id": "s1" }]);
-  if (ev.length !== 1 || ev[0].type !== "message.inbound") throw new Error("not inbound");
-  const d = ev[0].data;
-  if (d.extension !== "1064" || d.body !== "Bonjour" || d.from_number !== "14388427217" || d.to_number !== "15143743320") throw new Error("bad map");
-});
-
-Deno.test("v2 SMS without on-net receiver or self echo is ignored", () => {
-  const ev = normalizeNsEvents([
-    { type: "sms", "from-user-id": "113", "terminating-user-id": null, text: "x", "messagesession-id": "s" },
-    { type: "sms", "from-user-id": "113", "terminating-user-id": "113", text: "x", "messagesession-id": "s" },
-  ]);
-  if (ev.length !== 0) throw new Error("should ignore");
+describe("NS v2 message webhook", () => {
+  it("SMS to on-net broker becomes message.inbound", () => {
+    const ev = normalizeNsEvents([{ id: "m1", type: "sms", domain: "planipret.ca", direction: "orig",
+      "from-number": "14388427217", "from-user-id": "113", "terminating-user-id": "1064",
+      "terminating-number": "15143743320", text: "Bonjour", "messagesession-id": "s1" }]);
+    expect(ev).toHaveLength(1);
+    expect(ev[0].type).toBe("message.inbound");
+    expect(ev[0].data).toMatchObject({ extension: "1064", body: "Bonjour", from_number: "14388427217", to_number: "15143743320" });
+  });
+  it("ignores messages without on-net receiver or self echo", () => {
+    expect(normalizeNsEvents([
+      { type: "sms", "from-user-id": "113", "terminating-user-id": null, text: "x", "messagesession-id": "s" },
+      { type: "sms", "from-user-id": "113", "terminating-user-id": "113", text: "x", "messagesession-id": "s" },
+    ])).toHaveLength(0);
+  });
 });

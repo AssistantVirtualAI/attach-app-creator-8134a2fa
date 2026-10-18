@@ -21,6 +21,8 @@ for (const forbidden of ["X-Forwarded-For", "PRIVATE_KEY", "print(jwk", "print(p
 assert.match(launcher, /systemd-creds decrypt --name=platform-signing-jwk/);
 assert.match(launcher, /https:\/\/\*\.manus\.computer\/ca/);
 assert.doesNotMatch(launcher, /curl .*--data|X-Forwarded-For|set -x/);
+assert.match(launcher, /\[ "\$\(stat -c '%a' "\$ca"\)" = 644 \] \|\| fail ca_permissions_invalid/);
+assert.doesNotMatch(launcher, /\[ "\$\(stat -c '%a' "\$ca"\)" = 600 \] \|\| fail ca_permissions_invalid/);
 
 const output = execFileSync("python3", ["-I", testPath], { encoding: "utf8", timeout: 20_000 });
 assert.match(output, /lemtel_signed_public_ca_transfer_integration=passed/);

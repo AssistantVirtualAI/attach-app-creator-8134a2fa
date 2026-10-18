@@ -1,5 +1,5 @@
 {
-  "contract_version": "lemtel_mtls_client_certificate_lifecycle_v1",
+  "contract_version": "lemtel_mtls_client_certificate_lifecycle_v2",
   "scope": "source_only_evidence_state_machine",
   "status": "not_ready_for_relay_activation",
   "purpose": "describe only the evidence and irreversible lifecycle rules for the dedicated Cloudflare Access mTLS relay identity",
@@ -34,6 +34,9 @@
     "canonical_at_rest_gate_id": "root_only_credential_backend_with_encrypted_at_rest_attestation",
     "cloudflare_access_imported": false,
     "intermediate_per_leaf_required": true,
+    "candidate_issuer_source_available": true,
+    "candidate_issuer_compiled_authorization": false,
+    "candidate_credentials_relay_consumable": false,
     "leaf_issuance_or_relay_activation_authorized": false
   },
   "local_storage_observation": {
@@ -59,13 +62,14 @@
     "import_does_not_authorize_relay": true
   },
   "metadata_shape": {
-    "format": "lemtel_mtls_client_lifecycle_record_v1",
+    "format": "lemtel_mtls_client_lifecycle_record_v2",
     "record_fields": [
       "format",
       "state",
       "generation",
       "commonName",
-      "issuerFingerprint",
+      "trustAnchorFingerprint",
+      "intermediateFingerprint",
       "leafFingerprint",
       "serial",
       "notBefore",
@@ -83,7 +87,8 @@
     ],
     "maximum_leaf_lifetime_seconds": 86400,
     "maximum_rotation_overlap_seconds": 300,
-    "issuer_fingerprint_format": "sha256:<64 lowercase hex>",
+    "trust_anchor_fingerprint_format": "sha256:<64 lowercase hex>",
+    "intermediate_fingerprint_format": "sha256:<64 lowercase hex>",
     "leaf_fingerprint_format": "sha256:<64 lowercase hex>",
     "serial_format": "32 to 64 lowercase hexadecimal characters",
     "human_approval_evidence_outside_record_required": true
@@ -128,7 +133,7 @@
       "to": "superseded",
       "requires": [
         "successor_active_with_next_generation",
-        "different_leaf_fingerprint",
+        "same_trust_anchor_and_different_intermediate_leaf_and_serial",
         "overlap_started_and_ended_within_bounded_window",
         "old_leaf_access_denial_evidence"
       ]

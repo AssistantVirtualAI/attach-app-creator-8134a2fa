@@ -1,6 +1,6 @@
 # Project Architecture Rules
 
-- Planipret missed-call and SMS-thread read/hidden state use mirrored frontend-only, per-user device storage (SMS hidden threads reappear on newer messages); acknowledging never deletes history or changes call/notification records, keeping presentation separate from telephony.
+- Planipret missed-call and SMS-thread read/hidden state use mirrored frontend-only, per-user device storage; acknowledging never deletes history or call/notification records.
 
 - Planipret transcript diagnostics use one mirrored frontend evidence mapper and notice; native/CDR absence never proves missing audio, and provider hints never replace the actual fallback outcome.
 

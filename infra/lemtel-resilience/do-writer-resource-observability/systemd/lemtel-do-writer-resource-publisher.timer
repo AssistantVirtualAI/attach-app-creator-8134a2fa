@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule Lemtel DO writer redacted resource publication
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+RandomizedDelaySec=20s
+Persistent=true
+Unit=lemtel-do-writer-resource-publisher.service
+
+[Install]
+WantedBy=timers.target

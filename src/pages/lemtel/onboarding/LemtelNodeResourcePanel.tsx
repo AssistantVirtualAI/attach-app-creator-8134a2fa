@@ -1,11 +1,12 @@
 import { Activity, Cloud, Cpu, Database, HardDrive, MemoryStick, Server, ShieldCheck } from "lucide-react";
 import type { Lang, LemtelDict } from "./lemtelI18n";
-import type { LemtelNodeStatus, LemtelTrafficNodeRole } from "./lemtelHostedApi";
+import type { LemtelDoWriterResources, LemtelNodeStatus, LemtelTrafficNodeRole } from "./lemtelHostedApi";
 
 type Props = {
   t: LemtelDict;
   lang: Lang;
   status: LemtelNodeStatus | null;
+  writerResources: LemtelDoWriterResources | null;
   loading: boolean;
   unavailable: boolean;
 };
@@ -32,6 +33,12 @@ function resourceTone(value: NodeSignal) {
   return value === "healthy" ? "lt-chip-ok" : value === "degraded" ? "lt-chip-bad" : "lt-chip-warn";
 }
 
+function completeResources(value: LemtelDoWriterResources["resources"] | undefined) {
+  const percent = (candidate: unknown) => Number.isInteger(candidate) && Number(candidate) >= 0 && Number(candidate) <= 100;
+  const load = (candidate: unknown) => Number.isInteger(candidate) && Number(candidate) >= 0 && Number(candidate) <= 1_000_000;
+  return value && percent(value.cpuPercent) && percent(value.memoryPercent) && percent(value.diskPercent) && load(value.load1Milli) && load(value.load5Milli) && load(value.load15Milli) ? value : undefined;
+}
+
 function normalizeNodeStatus(value: LemtelNodeStatus | null) {
   if (value?.telemetry !== "live" || !Array.isArray(value.roles)) return null;
   const now = Date.now();
@@ -47,7 +54,7 @@ function normalizeNodeStatus(value: LemtelNodeStatus | null) {
  * held at unknown until a future signed-enrollment contract identifies the source.
  * Existing replication and traffic projections cannot substitute for that proof.
  */
-export default function LemtelNodeResourcePanel({ t, lang, status, loading, unavailable }: Props) {
+export default function LemtelNodeResourcePanel({ t, lang, status, writerResources, loading, unavailable }: Props) {
   const text = t.operations.resources;
   const trustedRoles = normalizeNodeStatus(status);
   return <section aria-label={text.title} className="mb-5">
@@ -64,6 +71,7 @@ export default function LemtelNodeResourcePanel({ t, lang, status, loading, unav
         // No Hostinger data is displayable under the current projection: it does not certify secure enrollment.
         const entry = hostinger ? undefined : trustedRoles?.find((candidate) => candidate.nodeRole === nodeRole);
         const observed = Boolean(entry?.observedAt && !unavailable);
+        const resource = !hostinger && writerResources?.observation === "observed" ? completeResources(writerResources.resources) : undefined;
         const label = hostinger ? text.hostingerUnknown : text.doWriter;
         const Icon = hostinger ? Cloud : Server;
         const signals = observed ? [
@@ -79,10 +87,10 @@ export default function LemtelNodeResourcePanel({ t, lang, status, loading, unav
           </div>
           {observed ? <div className="grid sm:grid-cols-2 gap-3 mb-4">{signals.map(({ label: signalLabel, value, icon: SignalIcon }) => <div key={signalLabel} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5" style={{ borderColor: "hsl(var(--lt-border))" }}><span className="text-xs flex items-center gap-2 min-w-0"><SignalIcon className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(var(--lt-cyan))" }} />{signalLabel}</span><span className={`lt-chip ${resourceTone(value)}`}>{text.states[value]}</span></div>)}</div> : <p className="lt-resource-notice text-xs mb-4">{hostinger ? text.hostingerDetail : unavailable ? text.unavailableDetail : text.noObservationDetail}</p>}
           <div className="grid grid-cols-2 gap-3" aria-label={text.resourceMetrics}>
-            <ResourceSlot icon={Cpu} label={text.metrics.cpu} detail={text.metrics.unavailable} />
-            <ResourceSlot icon={MemoryStick} label={text.metrics.memory} detail={text.metrics.unavailable} />
-            <ResourceSlot icon={HardDrive} label={text.metrics.disk} detail={text.metrics.unavailable} />
-            <ResourceSlot icon={Activity} label={text.metrics.load} detail={text.metrics.unavailable} />
+            <ResourceSlot icon={Cpu} label={text.metrics.cpu} value={resource ? `${resource.cpuPercent} %` : "—"} detail={resource ? text.observed : text.metrics.unavailable} />
+            <ResourceSlot icon={MemoryStick} label={text.metrics.memory} value={resource ? `${resource.memoryPercent} %` : "—"} detail={resource ? text.observed : text.metrics.unavailable} />
+            <ResourceSlot icon={HardDrive} label={text.metrics.disk} value={resource ? `${resource.diskPercent} %` : "—"} detail={resource ? text.observed : text.metrics.unavailable} />
+            <ResourceSlot icon={Activity} label={text.metrics.load} value={resource ? [resource.load1Milli, resource.load5Milli, resource.load15Milli].map((value) => new Intl.NumberFormat(lang === "fr" ? "fr-CA" : "en-CA", { maximumFractionDigits: 3 }).format(value / 1000)).join(" / ") : "—"} detail={resource ? text.observed : text.metrics.unavailable} />
           </div>
           <p className="text-[11px] lt-ink-2 mt-4">{text.resourceNote}</p>
         </article>;
@@ -91,6 +99,6 @@ export default function LemtelNodeResourcePanel({ t, lang, status, loading, unav
   </section>;
 }
 
-function ResourceSlot({ icon: Icon, label, detail }: { icon: typeof Cpu; label: string; detail: string }) {
-  return <div className="lt-resource-slot"><div className="flex items-center gap-2 text-xs lt-ink-2"><Icon className="w-3.5 h-3.5" style={{ color: "hsl(var(--lt-cyan))" }} aria-hidden="true" />{label}</div><div className="text-xl font-semibold mt-2">—</div><p className="text-[10px] lt-ink-2 mt-1">{detail}</p></div>;
+function ResourceSlot({ icon: Icon, label, value, detail }: { icon: typeof Cpu; label: string; value: string; detail: string }) {
+  return <div className="lt-resource-slot"><div className="flex items-center gap-2 text-xs lt-ink-2"><Icon className="w-3.5 h-3.5" style={{ color: "hsl(var(--lt-cyan))" }} aria-hidden="true" />{label}</div><div className="text-xl font-semibold mt-2">{value}</div><p className="text-[10px] lt-ink-2 mt-1">{detail}</p></div>;
 }

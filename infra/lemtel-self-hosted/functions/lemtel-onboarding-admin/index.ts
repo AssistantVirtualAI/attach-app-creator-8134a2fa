@@ -36,6 +36,7 @@ type RequestBody =
   | { action: "get_operational_trend" }
   | { action: "get_traffic_trend" }
   | { action: "get_node_status" }
+  | { action: "get_do_writer_resources" }
   | { action: "get_platform_overview" }
   | { action: "list_people"; organizationId: string }
   | { action: "list_invitations"; organizationId: string }
@@ -100,7 +101,7 @@ function userList(value: unknown, allowOwner: boolean): UserInput[] | Failure {
 
 export function validateBody(raw: unknown): RequestBody | Failure {
   if (!plainObject(raw) || typeof raw.action !== "string") return fail("invalid_body", 400);
-  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend" || raw.action === "get_traffic_trend" || raw.action === "get_node_status" || raw.action === "get_platform_overview") {
+  if (raw.action === "list_organizations" || raw.action === "list_platform_administrators" || raw.action === "get_config" || raw.action === "get_operational_status" || raw.action === "get_operational_trend" || raw.action === "get_traffic_trend" || raw.action === "get_node_status" || raw.action === "get_do_writer_resources" || raw.action === "get_platform_overview") {
     return exactKeys(raw, ["action"]) ? raw as RequestBody : fail("invalid_body", 400);
   }
   if (raw.action === "list_people" || raw.action === "list_invitations" || raw.action === "list_activity" || raw.action === "list_domains" || raw.action === "list_client_connections" || raw.action === "get_telephony_readiness" || raw.action === "list_telephony_preparation_states") {
@@ -934,6 +935,20 @@ export async function nodeStatus(admin: Pick<SupabaseClient, "from">, now = Date
   return error ? { error: "node_status_unavailable", status: 503 } : redactedNodeStatus(data ?? [], now);
 }
 
+export function redactedDoWriterResources(raw: unknown, now = Date.now()) {
+  if (!plainObject(raw) || typeof raw.observed_at !== "string") return { schemaVersion: "lemtel-do-writer-resources/v1" as const, observation: "no_observation" as const };
+  const observed = Date.parse(raw.observed_at);
+  const validPercent = (value: unknown) => Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 100;
+  const validLoad = (value: unknown) => Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 1_000_000;
+  if (!Number.isFinite(observed) || observed % 60_000 !== 0 || now - observed > 180_000 || observed > now + 120_000 || !validPercent(raw.cpu_percent) || !validPercent(raw.memory_percent) || !validPercent(raw.disk_percent) || !validLoad(raw.load1_milli) || !validLoad(raw.load5_milli) || !validLoad(raw.load15_milli)) return { schemaVersion: "lemtel-do-writer-resources/v1" as const, observation: "no_observation" as const };
+  return { schemaVersion: "lemtel-do-writer-resources/v1" as const, observation: "observed" as const, observedAt: new Date(observed).toISOString(), resources: { cpuPercent: raw.cpu_percent as number, memoryPercent: raw.memory_percent as number, diskPercent: raw.disk_percent as number, load1Milli: raw.load1_milli as number, load5Milli: raw.load5_milli as number, load15Milli: raw.load15_milli as number } };
+}
+
+export async function doWriterResources(admin: Pick<SupabaseClient, "from">, now = Date.now(), timeoutMs = NODE_STATUS_READ_TIMEOUT_MS) {
+  const { data, error } = await admin.from("lemtel_do_writer_resource_current").select("observed_at,cpu_percent,memory_percent,disk_percent,load1_milli,load5_milli,load15_milli").eq("singleton", true).limit(1).abortSignal(AbortSignal.timeout(timeoutMs));
+  return error ? { error: "do_writer_resources_unavailable", status: 503 } : redactedDoWriterResources(data?.[0], now);
+}
+
 type PlatformOverviewNodeRole = {
   nodeRole: NodeRole;
   observedAt?: string;
@@ -1118,6 +1133,11 @@ export async function handler(req: Request): Promise<Response> {
   if (request.action === "get_node_status") {
     if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
     const result = await nodeStatus(admin);
+    return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
+  }
+  if (request.action === "get_do_writer_resources") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const result = await doWriterResources(admin);
     return isFailure(result) ? respond({ error: result.error }, result.status) : respond(result);
   }
   if (request.action === "get_platform_overview") {

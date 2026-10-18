@@ -261,6 +261,7 @@ export type LemtelNodeStatus = {
     storageState: "synced" | "degraded" | "unknown";
   }>;
 };
+export type LemtelDoWriterResources = { schemaVersion: "lemtel-do-writer-resources/v1"; observation: "observed" | "no_observation"; observedAt?: string; resources?: { cpuPercent: number; memoryPercent: number; diskPercent: number; load1Milli: number; load5Milli: number; load15Milli: number } };
 export type LemtelPlatformNodeStatus = {
   schemaVersion: "lemtel-node-status/v1";
   observation: "observed" | "no_observation";
@@ -372,6 +373,7 @@ export const portalApi = {
   getOperationalTrend: () => invoke<{ samples: LemtelOperationalTrendSample[] }>("lemtel-onboarding-admin", { action: "get_operational_trend" }),
   getTrafficTrend: () => invoke<LemtelTrafficTrend>("lemtel-onboarding-admin", { action: "get_traffic_trend" }),
   getNodeStatus: () => invoke<LemtelNodeStatus>("lemtel-onboarding-admin", { action: "get_node_status" }),
+  getDoWriterResources: () => invoke<LemtelDoWriterResources>("lemtel-onboarding-admin", { action: "get_do_writer_resources" }),
   getPlatformOverview: () => invoke<LemtelPlatformOverview>("lemtel-onboarding-admin", { action: "get_platform_overview" }),
   listPeople: (organizationId: string) => invoke<{ people: PortalPerson[] }>("lemtel-onboarding-admin", { action: "list_people", organizationId }),
   listInvitations: (organizationId: string) => invoke<{ invitations: PortalInvitation[] }>("lemtel-onboarding-admin", { action: "list_invitations", organizationId }),

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LemtelTrafficTrend } from "../lemtelHostedApi";
-const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn(), getNodeStatus: vi.fn() }));
+const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn(), getNodeStatus: vi.fn(), getDoWriterResources: vi.fn() }));
 vi.mock("../lemtelHostedApi", () => ({ portalApi: api, LemtelError: class extends Error { key = "unavailable"; } }));
 import LemtelOperationalStatus, { TRAFFIC_READ_DEADLINE_MS } from "../LemtelOperationalStatus";
 import LemtelTrafficPanel from "../LemtelTrafficPanel";
@@ -18,6 +18,7 @@ beforeEach(() => {
   api.getOperationalStatus.mockReset().mockResolvedValue({ telemetry: "not_configured" });
   api.getOperationalTrend.mockReset().mockResolvedValue({ samples: [] });
   api.getNodeStatus.mockReset().mockResolvedValue({ telemetry: "not_configured", roles: [] });
+  api.getDoWriterResources.mockReset().mockResolvedValue({ schemaVersion: "lemtel-do-writer-resources/v1", observation: "no_observation" });
 });
 afterEach(() => cleanup());
 
@@ -77,11 +78,12 @@ describe("Lemtel private traffic observability", () => {
     expect(api.getTrafficTrend).not.toHaveBeenCalled();
   });
   it("shows DO node signals only when fresh and refuses to infer Hostinger resources or traffic", async () => {
+    api.getDoWriterResources.mockResolvedValue({ schemaVersion: "lemtel-do-writer-resources/v1", observation: "observed", observedAt: new Date().toISOString(), resources: { cpuPercent: 41, memoryPercent: 62, diskPercent: 37, load1Milli: 125, load5Milli: 118, load15Milli: 104 } });
     api.getNodeStatus.mockResolvedValue({ telemetry: "live", roles: [{ nodeRole: "do_writer", observedAt: new Date().toISOString(), agentState: "healthy", runtimeState: "ready", replicationState: "streaming", storageState: "synced" }, { nodeRole: "hostinger_standby", observedAt: new Date().toISOString(), agentState: "healthy", runtimeState: "ready", replicationState: "streaming", storageState: "synced" }] });
     api.getTrafficTrend.mockResolvedValue({ ...measured, roles: [measured.roles[0], { nodeRole: "hostinger_standby", collectorState: "collecting", latest: sample, samples: [sample, { ...sample, observedAt: "2026-10-15T11:05:00Z" }] }] });
     operations();
     const resources = await screen.findByRole("region", { name: "Ressources des nœuds" });
-    expect(within(resources).getByText("Observation attestée")).toBeInTheDocument();
+    expect(within(resources).getAllByText("Observation attestée").length).toBeGreaterThan(0);
     expect(within(resources).getByText("Hostinger — statut inconnu")).toBeInTheDocument();
     expect(within(resources).getAllByText(/resteront inconnus jusqu’à l’enrôlement sécurisé/i)).toHaveLength(2);
     const traffic = screen.getByRole("region", { name: "Trafic serveur" });

@@ -51,9 +51,18 @@ test('mTLS lifecycle contract is source-only, imported-CA aware, and remains non
   assert.equal(contract.durable_local_issuer_fallback.writer_rebuild_requires_new_ca_and_access_migration, true);
   assert.equal(contract.durable_local_issuer_fallback.rollback_cleanup_must_be_observable, true);
   assert.equal(contract.durable_local_issuer_fallback.host_credential_at_rest_protection_attested, false);
+  assert.equal(contract.durable_local_issuer_fallback.canonical_at_rest_gate_id, 'root_only_credential_backend_with_encrypted_at_rest_attestation');
   assert.equal(contract.durable_local_issuer_fallback.cloudflare_access_imported, false);
   assert.equal(contract.durable_local_issuer_fallback.intermediate_per_leaf_required, true);
   assert.equal(contract.durable_local_issuer_fallback.leaf_issuance_or_relay_activation_authorized, false);
+  assert.equal(contract.local_storage_observation.scope, 'root_only_read_only_redacted_observation');
+  assert.equal(contract.local_storage_observation.credential_or_certificate_contents_read, false);
+  assert.equal(contract.local_storage_observation.host_key_storage_protection, 'not_verified');
+  assert.equal(contract.local_storage_observation.provider_storage_encryption, 'not_assessable_from_guest');
+  assert.equal(contract.local_storage_observation.local_dm_crypt_observation_can_satisfy_at_rest_gate, false);
+  assert.deepEqual(contract.local_storage_observation.cannot_satisfy_gate_ids, ['root_only_credential_backend_with_encrypted_at_rest_attestation']);
+  assert.equal(contract.local_storage_observation.observation_can_authorize_relay, false);
+  assert.equal(contract.local_storage_observation.observation_can_authorize_failover, false);
   assert.equal(contract.access_root_ca_attestation.imported_out_of_band, true);
   assert.equal(contract.access_root_ca_attestation.service_auth_policy_count, 0);
   assert.equal(contract.access_root_ca_attestation.der_fingerprint_reconciliation_complete, false);
@@ -70,7 +79,7 @@ test('mTLS lifecycle contract is source-only, imported-CA aware, and remains non
     assert.ok(relayContract.required_before_any_deployment.includes(requirement), requirement);
   }
   for (const expected of ['source-only', 'importée hors bande', 'ne permet pas d’activer', 'sans certificat', 'mauvais Common Name', 'révocation']) assert.ok(runbook.includes(expected), expected);
-  assert.ok(contract.required_before_any_relay_activation.includes('host_credential_at_rest_protection_attested'));
+  assert.ok(contract.required_before_any_relay_activation.includes('root_only_credential_backend_with_encrypted_at_rest_attestation'));
 });
 
 test('lifecycle metadata rejects ambiguity, non-dedicated identity, excessive lifetime, and invalid terminal records', () => {

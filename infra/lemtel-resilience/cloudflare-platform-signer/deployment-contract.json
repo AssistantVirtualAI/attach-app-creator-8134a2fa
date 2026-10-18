@@ -90,7 +90,7 @@
     "independent_threat_model_review",
     "external_code_review",
     "der_fingerprint_reconciliation_between_do_attestation_and_imported_ca",
-    "encrypted_root_only_mtls_relay_credential_backend_attestation",
+    "root_only_credential_backend_with_encrypted_at_rest_attestation",
     "sustainable_mtls_issuer_rotation_and_revocation_drill",
     "cloudflare_access_service_auth_common_name_policy_positive_and_negative_tests",
     "access_jwks_rotation_update_and_negative_test",

@@ -31,9 +31,23 @@
     "writer_rebuild_requires_new_ca_and_access_migration": true,
     "rollback_cleanup_must_be_observable": true,
     "host_credential_at_rest_protection_attested": false,
+    "canonical_at_rest_gate_id": "root_only_credential_backend_with_encrypted_at_rest_attestation",
     "cloudflare_access_imported": false,
     "intermediate_per_leaf_required": true,
     "leaf_issuance_or_relay_activation_authorized": false
+  },
+  "local_storage_observation": {
+    "script": "lemtel-ha-do-writer-managed-mtls-storage-observation.sh",
+    "scope": "root_only_read_only_redacted_observation",
+    "credential_or_certificate_contents_read": false,
+    "host_key_storage_protection": "not_verified",
+    "provider_storage_encryption": "not_assessable_from_guest",
+    "local_dm_crypt_observation_can_satisfy_at_rest_gate": false,
+    "cannot_satisfy_gate_ids": [
+      "root_only_credential_backend_with_encrypted_at_rest_attestation"
+    ],
+    "observation_can_authorize_relay": false,
+    "observation_can_authorize_failover": false
   },
   "access_root_ca_attestation": {
     "imported_out_of_band": true,
@@ -83,6 +97,7 @@
   },
   "canonical_gate_ids": [
     "der_fingerprint_reconciliation_between_do_attestation_and_imported_ca",
+    "root_only_credential_backend_with_encrypted_at_rest_attestation",
     "sustainable_mtls_issuer_rotation_and_revocation_drill",
     "cloudflare_access_service_auth_common_name_policy_positive_and_negative_tests"
   ],
@@ -141,7 +156,7 @@
     "der_fingerprint_reconciliation_between_do_attestation_and_imported_ca",
     "sustainable_mtls_issuer_rotation_and_revocation_drill",
     "cloudflare_access_service_auth_common_name_policy_positive_and_negative_tests",
-    "host_credential_at_rest_protection_attested",
+    "root_only_credential_backend_with_encrypted_at_rest_attestation",
     "access_revocation_denial_test",
     "edge_jwks_rollover_and_stale_configuration_test",
     "durable_replay_ledger_corruption_and_concurrency_test",

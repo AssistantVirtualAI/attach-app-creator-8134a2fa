@@ -19,7 +19,7 @@ test('activation remains an explicit, root-only DO writer transaction',()=>{
   assert.doesNotMatch(source.replaceAll('hostinger_contacted=false',''),/planipret|hostinger|fusionpbx|\bsip\b|api\.cloudflare|pg_promote|nsupdate|fence-execute/iu);
 });
 test('secret stays bounded and root-only while Edge is recreated before the smoke test',()=>{
-  assert.match(source,/os\.chown\(path,0,0\); os\.chmod\(path,mode\); meta=secure_file\(path,mode\)/u);
+  assert.match(source,/os\.chown\(path,0,0\); self\.guard='destination_permissions'; os\.chmod\(path,mode\); self\.guard='destination_attestation'; meta=secure_file\(path,mode\)/u);
   for(const token of ['os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW','LEMTEL_DO_WRITER_RESOURCE_SECRET','read_protected','--no-deps','--force-recreate','--no-build','--pull','never','status=published','systemctl','enable','--now']) assert.ok(source.includes(token),token);
   assert.ok(source.indexOf("self.phase='edge_recreate'")<source.indexOf("self.phase='smoke_test'")&&source.indexOf("self.phase='smoke_test'")<source.indexOf("self.phase='timer'"));
   assert.doesNotMatch(source,/console\.|printenv|Deno\.env\.toObject|EnvironmentFile=|Environment=.*(?:SECRET|TOKEN|KEY)/iu);
@@ -32,7 +32,7 @@ test('Python refusal reports only a bounded phase and guard category',()=>{
   assert.match(source,/print\('reason='\+reason\)/u);
   assert.doesNotMatch(source,/str\((?:error|exception)\)|repr\(|traceback|exc_info/iu);
   const guards=[...source.matchAll(/self\.guard='([a-z_]+)'/gu)].map((match)=>match[1]);
-  assert.deepEqual([...new Set(guards)].sort(),['configuration_compose_contract','configuration_credentials','configuration_directories','configuration_override','configuration_publisher_check','configuration_publisher_files','edge_recreate','entry','initial_absence','publisher_smoke_test','runtime_directories','runtime_identity','secret_generation','source_component_hashes','source_directory','source_ingest_hash','source_manifest_read','source_manifest_shape','timer_daemon_reload','timer_enable','timer_state']);
+  assert.deepEqual([...new Set(guards)].sort(),['configuration_compose_contract','configuration_credentials','configuration_directories','configuration_override','configuration_publisher_check','configuration_publisher_destination_copy','configuration_publisher_source_read','configuration_service_copy','configuration_timer_copy','destination_absence','destination_attestation','destination_open','destination_ownership','destination_parent_security','destination_permissions','edge_recreate','entry','initial_absence','publisher_smoke_test','runtime_directories','runtime_identity','secret_generation','source_component_hashes','source_directory','source_ingest_hash','source_manifest_read','source_manifest_shape','timer_daemon_reload','timer_enable','timer_state']);
   assert.ok(source.indexOf("self.guard='source_directory'")<source.indexOf("self.guard='source_manifest_read'"));
   assert.ok(source.indexOf("self.guard='source_manifest_read'")<source.indexOf("self.guard='source_manifest_shape'"));
   assert.ok(source.indexOf("self.guard='source_manifest_shape'")<source.indexOf("self.guard='source_component_hashes'"));
@@ -40,6 +40,8 @@ test('Python refusal reports only a bounded phase and guard category',()=>{
   assert.match(source,/relative_path=Path\(name\) if key=='publisher' else Path\('systemd'\)\/name/u);
   assert.match(source,/hash_file\(SOURCE\/relative_path\)/u);
   assert.doesNotMatch(source,/SOURCE\/\(name if key=='publisher' else 'systemd'\/name\)/u);
+  assert.match(source,/self\.mkdir\(LIB\.parent\) if not exists\(LIB\.parent\) else None; self\.mkdir\(LIB\); self\.mkdir\(EDGE_CONFIG\)/u);
+  assert.ok(source.indexOf("self.mkdir(LIB);")<source.indexOf("self.create(PUBLISHER"));
   assert.ok(source.indexOf("self.guard='runtime_directories'")<source.indexOf("self.guard='configuration_credentials'"));
   assert.ok(source.indexOf("self.guard='configuration_credentials'")<source.indexOf("self.guard='configuration_compose_contract'"));
   assert.ok(source.indexOf("self.guard='configuration_compose_contract'")<source.indexOf("self.guard='edge_recreate'"));

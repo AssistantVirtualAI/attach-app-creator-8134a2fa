@@ -1,0 +1,148 @@
+{
+  "contract_version": "lemtel_mtls_client_certificate_lifecycle_v1",
+  "scope": "source_only_evidence_state_machine",
+  "status": "not_ready_for_relay_activation",
+  "purpose": "describe only the evidence and irreversible lifecycle rules for the dedicated Cloudflare Access mTLS relay identity",
+  "identity": {
+    "common_name_exact": "lemtel-do-signer-mtls-relay",
+    "client_extended_key_usage_required": "clientAuth",
+    "dedicated_identity_required": true,
+    "reuse_node_platform_arbiter_or_provider_key_forbidden": true,
+    "public_metadata_only": true,
+    "certificate_content_in_repository": false,
+    "certificate_identifier_in_repository": false,
+    "private_key_in_repository": false,
+    "private_key_source": "root_only_encrypted_systemd_credential"
+  },
+  "bootstrap_ca_boundary": {
+    "bootstrap_ca_private_key_ephemeral": true,
+    "bootstrap_ca_private_key_destroyed": true,
+    "bootstrap_leaf_rotation_or_revocation_not_proven": true,
+    "bootstrap_leaf_for_active_relay_forbidden": true,
+    "sustainable_issuer_and_approved_lifecycle_evidence_required": true
+  },
+  "access_root_ca_attestation": {
+    "imported_out_of_band": true,
+    "associated_hostname_exact": "signer.lemtel.assistantvirtualai.com",
+    "certificate_content_in_contract": false,
+    "certificate_id_in_contract": false,
+    "der_fingerprint_reconciliation_complete": false,
+    "service_auth_policy_count": 0,
+    "import_does_not_authorize_relay": true
+  },
+  "metadata_shape": {
+    "format": "lemtel_mtls_client_lifecycle_record_v1",
+    "record_fields": [
+      "format",
+      "state",
+      "generation",
+      "commonName",
+      "issuerFingerprint",
+      "leafFingerprint",
+      "serial",
+      "notBefore",
+      "notAfter",
+      "overlapStartedAt",
+      "overlapUntil",
+      "reason"
+    ],
+    "states": [
+      "issued",
+      "active",
+      "superseded",
+      "revoked",
+      "expired"
+    ],
+    "maximum_leaf_lifetime_seconds": 86400,
+    "maximum_rotation_overlap_seconds": 300,
+    "issuer_fingerprint_format": "sha256:<64 lowercase hex>",
+    "leaf_fingerprint_format": "sha256:<64 lowercase hex>",
+    "serial_format": "32 to 64 lowercase hexadecimal characters",
+    "human_approval_evidence_outside_record_required": true
+  },
+  "state_machine": {
+    "pure_structural_evaluator": true,
+    "persists_or_authenticates_history": false,
+    "authoritative_history_required_outside_evaluator": true,
+    "missing_history_is_not_evidence_of_absence": true,
+    "structural_validation_is_not_authorization": true
+  },
+  "canonical_gate_ids": [
+    "der_fingerprint_reconciliation_between_do_attestation_and_imported_ca",
+    "sustainable_mtls_issuer_rotation_and_revocation_drill",
+    "cloudflare_access_service_auth_common_name_policy_positive_and_negative_tests"
+  ],
+  "transitions": {
+    "issue": {
+      "from": "absent",
+      "to": "issued",
+      "requires": [
+        "manual_approval_outside_record",
+        "dedicated_common_name",
+        "approved_issuer",
+        "valid_client_auth_usage",
+        "bounded_lifetime"
+      ]
+    },
+    "activate": {
+      "from": "issued",
+      "to": "active",
+      "requires": [
+        "independent_issuer_and_leaf_attestation",
+        "access_common_name_positive_test",
+        "access_negative_tests_without_certificate_wrong_common_name_wrong_fingerprint_and_revoked_certificate",
+        "edge_jwks_and_replay_ledger_attestation"
+      ]
+    },
+    "rotate": {
+      "from": "active",
+      "to": "superseded",
+      "requires": [
+        "successor_active_with_next_generation",
+        "different_leaf_fingerprint",
+        "overlap_started_and_ended_within_bounded_window",
+        "old_leaf_access_denial_evidence"
+      ]
+    },
+    "revoke": {
+      "from": "issued_or_active",
+      "to": "revoked",
+      "requires": [
+        "manual_revoke_decision",
+        "access_denial_evidence",
+        "no_automatic_reactivation"
+      ]
+    },
+    "expire": {
+      "from": "issued_or_active",
+      "to": "expired",
+      "requires": [
+        "not_after_reached",
+        "no_automatic_renewal_or_reactivation"
+      ]
+    }
+  },
+  "required_before_any_relay_activation": [
+    "independent_security_review",
+    "der_fingerprint_reconciliation_between_do_attestation_and_imported_ca",
+    "sustainable_mtls_issuer_rotation_and_revocation_drill",
+    "cloudflare_access_service_auth_common_name_policy_positive_and_negative_tests",
+    "access_revocation_denial_test",
+    "edge_jwks_rollover_and_stale_configuration_test",
+    "durable_replay_ledger_corruption_and_concurrency_test",
+    "rollback_and_manual_review_proof"
+  ],
+  "activation": {
+    "access_service_auth_policy": false,
+    "signer_worker_binding": false,
+    "local_relay": false,
+    "node_enrollment": false,
+    "node_publisher": false,
+    "provider_fencing": false,
+    "automatic_promotion": false,
+    "automatic_runtime_start": false,
+    "automatic_traffic_routing": false,
+    "automatic_failover": false,
+    "automatic_failback": false
+  }
+}

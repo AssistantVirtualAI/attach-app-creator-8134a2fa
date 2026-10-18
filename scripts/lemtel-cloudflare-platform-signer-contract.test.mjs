@@ -54,25 +54,31 @@ async function signedJwt({ pair, publicKey, claims, algorithm, kid }) {
   return { token: `${header}.${payload}.${base64url(signature)}`, publicKey };
 }
 
-function requestWithMtls(body, token, fingerprint, host = 'signer.lemtel.assistantvirtualai.com') {
+function requestWithMtls(body, token, fingerprint, host = 'signer.lemtel.assistantvirtualai.com', client = {}) {
   const request = new Request(`https://${host}/v1/node-enrollment-delivery`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'cf-access-jwt-assertion': token }, body,
   });
   Object.defineProperty(request, 'cf', { value: { tlsClientAuth: {
     certVerified: 'SUCCESS', certPresented: '1', certRevoked: '0', certFingerprintSHA256: fingerprint,
-    certSubjectDNRFC2253: 'CN=lemtel-do-signer-relay',
+    certSubjectDNRFC2253: 'CN=lemtel-do-signer-mtls-relay', ...client,
   } } });
   return request;
 }
 
 test('Cloudflare platform signer remains Access-protected and operationally unconfigured', () => {
   const value = contract();
-  assert.equal(value.contract_version, 'lemtel_cloudflare_platform_signer_v4');
+  assert.equal(value.contract_version, 'lemtel_cloudflare_platform_signer_v5');
   assert.equal(value.scope, 'access_protected_external_signer_source_only');
   assert.equal(value.worker.logical_name, 'lemtel-platform-signer');
   assert.equal(value.secret_store.provider, 'cloudflare_secrets_store');
   assert.equal(value.secret_store.private_signing_key_generated_externally, true);
   assert.ok(unconfigured(value));
+  assert.equal(value.access.mtls_root_ca_imported_out_of_band, true);
+  assert.equal(value.access.mtls_root_ca_associated_hostname, 'signer.lemtel.assistantvirtualai.com');
+  assert.equal(value.access.mtls_root_ca_certificate_content_in_repository, false);
+  assert.equal(value.access.mtls_root_ca_certificate_identifier_in_repository, false);
+  assert.equal(value.access.mtls_root_ca_der_fingerprint_reconciled, false);
+  assert.equal(value.access.mtls_root_ca_import_does_not_authorize_service_auth, true);
 });
 
 test('signer contract rejects provisioning, runtime signing and HA activation', () => {
@@ -123,7 +129,7 @@ test('active source requires verified Access JWT, mTLS identity, semantic author
   const payload = module.canonical({ purpose: 'node_enrollment_publication_delivery', requestId, role: 'do_writer', recipientFingerprint, sealed, authorization: authorization.token });
   let ledgerCalls = 0, keyReads = 0, claimed = false;
   const env = {
-    SIGNER_MODE: 'active', ACCESS_TEAM_DOMAIN: team, ACCESS_POLICY_AUD: audience, MTLS_RELAY_COMMON_NAME: 'lemtel-do-signer-relay', MTLS_RELAY_CERT_SHA256: fingerprint,
+    SIGNER_MODE: 'active', ACCESS_TEAM_DOMAIN: team, ACCESS_POLICY_AUD: audience, MTLS_RELAY_COMMON_NAME: 'lemtel-do-signer-mtls-relay', MTLS_RELAY_CERT_SHA256: fingerprint,
     ACCESS_JWKS_JSON: JSON.stringify({ keys: [access.publicKey] }), ENROLLMENT_AUTHORIZATION_KEY_ID: authorizationKid, ENROLLMENT_AUTHORIZATION_PUBLIC_JWK: JSON.stringify(authorization.publicKey),
     PLATFORM_SIGNING_PRIVATE_JWK: { get: async () => { keyReads++; return JSON.stringify(platformPrivate); } },
     REPLAY_LEDGER: { getByName: (name) => ({ fetch: async (url, init) => { ledgerCalls++; assert.equal(name, requestId); assert.equal(url, 'https://lemtel-replay-ledger/claim'); const claim = JSON.parse(init.body); assert.equal(claim.expiresAt, now + 90); if (claimed) return new Response('', { status: 409 }); claimed = true; return new Response(null, { status: 204 }); } }) },
@@ -141,7 +147,44 @@ test('active source requires verified Access JWT, mTLS identity, semantic author
   assert.equal(alternative.status, 404); assert.equal(ledgerCalls, 2); assert.equal(keyReads, 1);
 });
 
-test('Worker denies wrong mTLS fingerprint, semantic authorization mismatch and access token expiry before signer-key access', async () => {
+test('Worker denies missing, invalid, revoked, wrong-subject, and wrong-fingerprint mTLS before ledger or signer-key access', async () => {
+  const module = await import(workerPath + `?mtls-negative=${crypto.randomUUID()}`);
+  const now = 1_792_200_000, team = 'https://lemtel.cloudflareaccess.com', audience = 'b'.repeat(64), fingerprint = 'c'.repeat(64), authorizationKid = 'd'.repeat(64);
+  const requestId = '11111111-1111-4111-8111-111111111111', recipientFingerprint = `sha256:${'e'.repeat(64)}`;
+  const sealed = { challenge: { requestId, role: 'do_writer', fingerprint: recipientFingerprint, purpose: 'claim', nonce: '1'.repeat(64), expiresAt: now + 120 }, ephemeralKey: bytes(65, 2), iv: bytes(12, 3), ciphertext: bytes(32, 4) };
+  const payload = module.canonical({ purpose: 'node_enrollment_publication_delivery', requestId, role: 'do_writer', recipientFingerprint, sealed, authorization: 'A'.repeat(32) });
+  let ledgerCalls = 0, keyReads = 0;
+  const env = {
+    SIGNER_MODE: 'active', ACCESS_TEAM_DOMAIN: team, ACCESS_POLICY_AUD: audience, MTLS_RELAY_COMMON_NAME: 'lemtel-do-signer-mtls-relay', MTLS_RELAY_CERT_SHA256: fingerprint,
+    ACCESS_JWKS_JSON: JSON.stringify({ keys: [{ kty: 'RSA', alg: 'RS256', use: 'sig', kid: 'a'.repeat(64), n: 'AA', e: 'AQAB' }] }),
+    ENROLLMENT_AUTHORIZATION_KEY_ID: authorizationKid, ENROLLMENT_AUTHORIZATION_PUBLIC_JWK: JSON.stringify({ kty: 'EC', crv: 'P-256', alg: 'ES256', use: 'sig', kid: authorizationKid, x: 'AA', y: 'AA' }),
+    REPLAY_LEDGER: { getByName: () => { ledgerCalls++; throw new Error('ledger must not be accessed'); } },
+    PLATFORM_SIGNING_PRIVATE_JWK: { get: async () => { keyReads++; throw new Error('signer key must not be read'); } },
+  };
+  const signer = module.createPlatformSigner({ now: () => now });
+  const alternativeCommonName = await signer(requestWithMtls(payload, 'invalid', fingerprint), { ...env, MTLS_RELAY_COMMON_NAME: 'another-valid-relay' });
+  assert.equal(alternativeCommonName.status, 503);
+  const cases = [
+    {},
+    { certVerified: 'FAILED' },
+    { certPresented: '0' },
+    { certRevoked: '1' },
+    { certSubjectDNRFC2253: 'CN=other-relay' },
+    { certSubjectDNRFC2253: 'CN=lemtel-do-signer-mtls-relay,O=unexpected' },
+    { certFingerprintSHA256: 'f'.repeat(64) },
+  ];
+  for (const client of cases) {
+    const response = await signer(requestWithMtls(payload, 'invalid', fingerprint, 'signer.lemtel.assistantvirtualai.com', client), env);
+    assert.equal(response.status, 409);
+  }
+  const noCertificate = new Request('https://signer.lemtel.assistantvirtualai.com/v1/node-enrollment-delivery', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-access-jwt-assertion': 'invalid' }, body: payload });
+  Object.defineProperty(noCertificate, 'cf', { value: {} });
+  assert.equal((await signer(noCertificate, env)).status, 409);
+  assert.equal(ledgerCalls, 0);
+  assert.equal(keyReads, 0);
+});
+
+test('Worker source retains guards for semantic authorization and access token expiry before signer-key access', async () => {
   const source = readFileSync(workerPath, 'utf8');
   for (const required of ['certVerified', 'certFingerprintSHA256', 'certSubjectDNRFC2253', 'ACCESS_JWKS_JSON', 'ENROLLMENT_AUTHORIZATION_PUBLIC_JWK', 'expectedRequest(request)', 'setAlarm']) assert.ok(source.includes(required), required);
   assert.doesNotMatch(source, /(?:payload\.sub|payload\.type|networkFetch|cdn-cgi\/access\/certs)/u);

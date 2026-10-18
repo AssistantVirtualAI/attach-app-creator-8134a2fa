@@ -11,6 +11,7 @@ const CLOCK_SKEW_SECONDS = 15;
 const PURPOSE = 'node_enrollment_publication_delivery';
 const SIGNER_HOST = 'signer.lemtel.assistantvirtualai.com';
 const SIGNER_PATH = '/v1/node-enrollment-delivery';
+const MTLS_RELAY_COMMON_NAME = 'lemtel-do-signer-mtls-relay';
 const AUTHORIZATION_ISSUER = 'lemtel-node-enrollment-authority-v1';
 const AUTHORIZATION_AUDIENCE = 'lemtel-platform-signer-v1';
 const DELIVERY_CONTEXT = 'lemtel-node-enrollment-v1:delivery';
@@ -154,7 +155,7 @@ function configuration(env) {
   if (
     typeof team !== 'string' || !/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/u.test(team) ||
     typeof audience !== 'string' || !hex64.test(audience) ||
-    typeof commonName !== 'string' || !/^[a-z0-9][a-z0-9.-]{2,62}$/u.test(commonName) ||
+    commonName !== MTLS_RELAY_COMMON_NAME ||
     typeof fingerprint !== 'string' || !hex64.test(fingerprint) ||
     typeof authorizationKeyId !== 'string' || !hex64.test(authorizationKeyId)
   ) throw new Deny();

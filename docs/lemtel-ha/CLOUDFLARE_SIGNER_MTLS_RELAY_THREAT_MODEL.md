@@ -18,7 +18,7 @@ Le relais devra imposer un schéma fermé avant toute requête sortante : taille
 
 ## Gates obligatoires
 
-Cette alternative reste bloquée tant qu’une revue de sécurité indépendante n’a pas validé le modèle, le stockage chiffré-at-rest de la clé cliente root-only, la révocation et rotation du certificat, l’isolation socket/conteneur, l’autorisation du pair local et les tests négatifs mTLS. Elle exige aussi un ledger durable, sans secret, de `requestId` et nonce retenus jusqu’à l’expiration du token, purgé au démarrage et à chaque claim, une canonicalisation stricte, une autorisation d’enrôlement sémantique à usage unique, les limites de taille/concurrence/débit et l’attestation Edge existante.
+Cette alternative reste bloquée tant qu’une revue de sécurité indépendante n’a pas validé le modèle, le stockage chiffré-at-rest de la clé cliente root-only, la révocation et rotation du certificat, l’isolation socket/conteneur, l’autorisation du pair local et les tests négatifs mTLS. La CA publique importée hors bande est seulement une précondition de confiance : sans rapprochement DER, émetteur durable et drills de rotation/révocation, le leaf éphémère de bootstrap ne permet pas d’activer le relais. Elle exige aussi un ledger durable, sans secret, de `requestId` et nonce retenus jusqu’à l’expiration du token, purgé au démarrage et à chaque claim, une canonicalisation stricte, une autorisation d’enrôlement sémantique à usage unique, les limites de taille/concurrence/débit et l’attestation Edge existante.
 
 > L’existence d’un certificat mTLS ne valide ni un nœud Hostinger, ni un publisher, ni une promotion ou une bascule. Elle ne remplace jamais le drill de fencing, les vérifications L7, le routage Cloudflare, le failback et les preuves de retry client.
 

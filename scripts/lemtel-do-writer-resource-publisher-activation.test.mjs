@@ -19,6 +19,7 @@ test('activation remains an explicit, root-only DO writer transaction',()=>{
   assert.doesNotMatch(source.replaceAll('hostinger_contacted=false',''),/planipret|hostinger|fusionpbx|\bsip\b|api\.cloudflare|pg_promote|nsupdate|fence-execute/iu);
 });
 test('secret stays bounded and root-only while Edge is recreated before the smoke test',()=>{
+  assert.match(source,/os\.chown\(path,0,0\); os\.chmod\(path,mode\); meta=secure_file\(path,mode\)/u);
   for(const token of ['os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW','LEMTEL_DO_WRITER_RESOURCE_SECRET','read_protected','--no-deps','--force-recreate','--no-build','--pull','never','status=published','systemctl','enable','--now']) assert.ok(source.includes(token),token);
   assert.ok(source.indexOf("self.phase='edge_recreate'")<source.indexOf("self.phase='smoke_test'")&&source.indexOf("self.phase='smoke_test'")<source.indexOf("self.phase='timer'"));
   assert.doesNotMatch(source,/console\.|printenv|Deno\.env\.toObject|EnvironmentFile=|Environment=.*(?:SECRET|TOKEN|KEY)/iu);

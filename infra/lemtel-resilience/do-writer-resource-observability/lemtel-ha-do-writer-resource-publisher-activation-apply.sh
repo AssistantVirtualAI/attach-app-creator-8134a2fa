@@ -134,7 +134,7 @@ class Transaction:
     def apply(self,secret):
         self.phase='configuration'; self.guard='runtime_directories'; self.mkdir(ROOT); self.create(LOCK,b'',0o600); fd=os.open(LOCK,os.O_RDWR|os.O_NOFOLLOW); fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
         self.guard='configuration_directories'; self.mkdir(CONFIG.parent) if not exists(CONFIG.parent) else None
-        self.mkdir(LIB.parent) if not exists(LIB.parent) else None; self.mkdir(EDGE_CONFIG)
+        self.mkdir(LIB.parent) if not exists(LIB.parent) else None; self.mkdir(LIB); self.mkdir(EDGE_CONFIG)
         self.guard='configuration_credentials'; self.create(CONFIG,(f'LEMTEL_DO_WRITER_RESOURCE_ENDPOINT={ENDPOINT}\n{KEY}={secret}\n').encode(),0o600)
         self.create(EDGE_ENV,(KEY+'='+secret+'\n').encode(),0o600); secret=None
         self.guard='configuration_override'; self.create(OVERRIDE,('services:\n  '+self.service+':\n    environment:\n      '+KEY+': ${'+KEY+':?required}\n').encode(),0o600)

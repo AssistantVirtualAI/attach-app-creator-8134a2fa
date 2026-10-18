@@ -243,6 +243,23 @@ describe("Lemtel portal contract", () => {
     expect(app).toContain("lt-sidebar");
     expect(css).toContain("Brand refresh");
   });
+  it("renders a bilingual, responsive Lemtel login home while preserving browser-scoped authentication", () => {
+    const auth = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelAuthScreens.tsx"), "utf8");
+    const css = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtel-portal.css"), "utf8");
+    const i18n = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtelI18n.ts"), "utf8");
+    expect(auth).toContain("lt-auth-hero");
+    expect(auth).toContain("lt-auth-highlights");
+    expect(auth).toContain("lt-auth-language");
+    expect(auth).toContain("t.auth.powered");
+    expect(auth).toContain('autoComplete="username"');
+    expect(auth).toContain('autoComplete="current-password"');
+    expect(auth).toContain("needsPersonalPassword(data.user)");
+    expect(i18n).toContain("workspace: \"Portail d’administration\"");
+    expect(i18n).toContain("workspace: \"Administration portal\"");
+    expect(css).toContain("Lemtel sign-in");
+    expect(css).toContain(".lt-auth-hero");
+    expect(css).toContain("@media (max-width: 1023px)");
+  });
   it("renders requested locale and truthful provider delivery states while keeping resend server-authorized", () => {
     const client = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/lemtelHostedApi.ts"), "utf8");
     const app = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");

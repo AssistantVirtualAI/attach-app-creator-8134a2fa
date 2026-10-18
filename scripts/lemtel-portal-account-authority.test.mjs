@@ -28,12 +28,15 @@ test('account-authority schema contains only Lemtel-safe revision mechanics', ()
 test('portal and applications use server authority rather than client signup or a copied password', () => {
   const portal = read('infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts');
   const bootstrap = read('infra/lemtel-self-hosted/functions/lemtel-session-bootstrap/index.ts');
+  const sessionControls = read('infra/lemtel-self-hosted/migrations/0014_lemtel_client_session_controls.sql');
   const mobile = read('apps/ava-softphone-mobile/src/lib/lemtelAuthorityReconciliation.ts');
   const auth = read('apps/ava-softphone-mobile/src/screens/AuthScreen.tsx');
   const desktop = read('apps/ava-softphone-desktop/src/components/SetupWizard.tsx');
   assert.match(portal, /createUser\(/);
   assert.match(bootstrap, /lemtel_email_only_signin/);
-  assert.match(bootstrap, /lemtel_organization_memberships/);
+  assert.match(bootstrap, /lemtel_session_bootstrap_context_for_client/);
+  assert.match(sessionControls, /lemtel_organization_memberships/);
+  assert.match(sessionControls, /COALESCE\(control\.access_state, 'active'\) = 'active'/);
   assert.match(mobile, /bootstrapLemtelMobileSession/);
   assert.doesNotMatch(auth, /auth\/v1\/signup|signUp\(/i);
   assert.doesNotMatch(desktop, /auth\/v1\/signup|signUp\(/i);

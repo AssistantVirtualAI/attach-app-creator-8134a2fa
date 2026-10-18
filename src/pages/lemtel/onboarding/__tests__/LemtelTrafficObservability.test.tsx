@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LemtelTrafficTrend } from "../lemtelHostedApi";
-const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn() }));
+const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn(), getNodeStatus: vi.fn() }));
 vi.mock("../lemtelHostedApi", () => ({ portalApi: api, LemtelError: class extends Error { key = "unavailable"; } }));
 import LemtelOperationalStatus, { TRAFFIC_READ_DEADLINE_MS } from "../LemtelOperationalStatus";
 import LemtelTrafficPanel from "../LemtelTrafficPanel";
@@ -17,6 +17,7 @@ beforeEach(() => {
   api.getTrafficTrend.mockReset().mockResolvedValue(empty);
   api.getOperationalStatus.mockReset().mockResolvedValue({ telemetry: "not_configured" });
   api.getOperationalTrend.mockReset().mockResolvedValue({ samples: [] });
+  api.getNodeStatus.mockReset().mockResolvedValue({ telemetry: "not_configured", roles: [] });
 });
 afterEach(() => cleanup());
 
@@ -27,7 +28,8 @@ describe("Lemtel private traffic observability", () => {
     expect(api.getTrafficTrend).toHaveBeenCalledTimes(1);
     const section = screen.getByRole("region", { name: "Trafic serveur" });
     expect(within(section).getAllByRole("article")).toHaveLength(2);
-    expect(within(section).getAllByText("Collecte en attente")).toHaveLength(2);
+    expect(within(section).getAllByText("Collecte en attente")).toHaveLength(1);
+    expect(within(section).getByText("Enrôlement sécurisé requis")).toBeInTheDocument();
     expect(section.querySelector("svg[role='img']")).toBeNull();
     expect(within(section).queryByText(/0 octet/)).toBeNull();
     expect(within(section).getAllByText("—")).toHaveLength(6);
@@ -73,5 +75,17 @@ describe("Lemtel private traffic observability", () => {
     const view = operations(); await screen.findByText("2 KiB"); view.unmount(); api.getTrafficTrend.mockClear();
     operations(true); await screen.findByText(LEMTEL_DICT.fr.operations.traffic.unavailable);
     expect(api.getTrafficTrend).not.toHaveBeenCalled();
+  });
+  it("shows DO node signals only when fresh and refuses to infer Hostinger resources or traffic", async () => {
+    api.getNodeStatus.mockResolvedValue({ telemetry: "live", roles: [{ nodeRole: "do_writer", observedAt: new Date().toISOString(), agentState: "healthy", runtimeState: "ready", replicationState: "streaming", storageState: "synced" }, { nodeRole: "hostinger_standby", observedAt: new Date().toISOString(), agentState: "healthy", runtimeState: "ready", replicationState: "streaming", storageState: "synced" }] });
+    api.getTrafficTrend.mockResolvedValue({ ...measured, roles: [measured.roles[0], { nodeRole: "hostinger_standby", collectorState: "collecting", latest: sample, samples: [sample, { ...sample, observedAt: "2026-10-15T11:05:00Z" }] }] });
+    operations();
+    const resources = await screen.findByRole("region", { name: "Ressources des nœuds" });
+    expect(within(resources).getByText("Observation attestée")).toBeInTheDocument();
+    expect(within(resources).getByText("Hostinger — statut inconnu")).toBeInTheDocument();
+    expect(within(resources).getAllByText(/resteront inconnus jusqu’à l’enrôlement sécurisé/i)).toHaveLength(2);
+    const traffic = screen.getByRole("region", { name: "Trafic serveur" });
+    expect(within(traffic).getByText("Le trafic Hostinger restera masqué jusqu’à une publication redacted provenant d’un publisher Hostinger enrôlé et attesté.")).toBeInTheDocument();
+    expect(api.getNodeStatus).toHaveBeenCalledTimes(1);
   });
 });

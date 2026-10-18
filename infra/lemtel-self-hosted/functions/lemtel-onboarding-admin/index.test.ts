@@ -97,7 +97,7 @@ Deno.test("operational status accepts only the exact platform read action", () =
   assertEquals(validateBody({ action: "get_operational_status", ignored: true }), { error: "invalid_body", status: 400 });
 });
 
-Deno.test("global platform overview is an exact business read with unprovisioned telephony", async () => {
+Deno.test("global platform overview is an exact business read with redacted presence and unprovisioned telephony", async () => {
   assertEquals(validateBody({ action: "get_platform_overview" }), { action: "get_platform_overview" });
   assertEquals(validateBody({ action: "get_platform_overview", ignored: true }), { error: "invalid_body", status: 400 });
   const result = await platformOverview({ from(table: string) {
@@ -106,18 +106,36 @@ Deno.test("global platform overview is an exact business read with unprovisioned
       return { select: () => ({ eq: () => Promise.resolve({ data: null, count, error: null }) }) };
     }
     if (table === "lemtel_organization_memberships") return { select: () => ({ eq: () => Promise.resolve({ data: [{ user_id: "user-a" }, { user_id: "user-b" }, { user_id: "user-a" }], error: null }) }) };
+    if (table === "lemtel_client_connection_presence") {
+      const counts: Record<string, number> = { desktop: 2, mobile: 1, portal: 1, client: 0 };
+      return { select: () => ({ eq: (_field: string, kind: string) => Promise.resolve({ data: null, count: counts[kind], error: null }) }) };
+    }
+    if (table === "lemtel_client_session_controls") return { select: () => ({ eq: () => Promise.resolve({ data: null, count: 2, error: null }) }) };
     throw new Error(`unexpected table ${table}`);
   } } as any);
   if ("error" in result) throw new Error(`unexpected overview failure: ${result.error}`);
-  assertEquals(result.schemaVersion, "lemtel-platform-overview/v2");
+  assertEquals(result.schemaVersion, "lemtel-platform-overview/v3");
   assertEquals(result.observation, "observed");
   assertEquals(result.aggregates, { activeOrganizations: 2, activeDomains: 4, activeUsers: 2, platformAdministrators: 1 });
+  assertEquals(result.clientPresence, { observation: "observed", observedConnections: { total: 4, desktop: 2, mobile: 1, portal: 1, client: 0 }, accessControls: { explicitlyRevoked: 2 } });
   assertEquals(result.telephony, {
     provisioning: "not_provisioned",
-    metrics: { totalCalls: "unavailable", incomingCalls: "unavailable", outgoingCalls: "unavailable", missedCalls: "unavailable", activeCalls: "unavailable", voicemail: "unavailable" },
+    metrics: { cdr: "unavailable", activeCalls: "unavailable", extensions: "unavailable", trunks: "unavailable", voicemail: "unavailable" },
   });
   assert(!("operational" in result) && !("traffic" in result) && !("standby" in result));
-  assert(!JSON.stringify(result).match(/hostname|secret|address|provider/i));
+  assert(!JSON.stringify(result).match(/user_id|hostname|secret|address|provider|pbx|cdr.*[0-9]/i));
+});
+
+Deno.test("global platform overview returns no presence observation when a count cannot be attested", async () => {
+  const result = await platformOverview({ from(table: string) {
+    if (table === "lemtel_organizations" || table === "lemtel_organization_domains" || table === "lemtel_platform_administrators") return { select: () => ({ eq: () => Promise.resolve({ data: null, count: 0, error: null }) }) };
+    if (table === "lemtel_organization_memberships") return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+    if (table === "lemtel_client_connection_presence") return { select: () => ({ eq: () => Promise.resolve({ data: null, count: null, error: { code: "absent" } }) }) };
+    if (table === "lemtel_client_session_controls") return { select: () => ({ eq: () => Promise.resolve({ data: null, count: 0, error: null }) }) };
+    throw new Error(`unexpected table ${table}`);
+  } } as any);
+  if ("error" in result) throw new Error(`unexpected overview failure: ${result.error}`);
+  assertEquals(result.clientPresence, { observation: "no_observation" });
 });
 
 Deno.test("telephony readiness is an organization-scoped, exact and fail-closed read", () => {

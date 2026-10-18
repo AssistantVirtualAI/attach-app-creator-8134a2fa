@@ -14,8 +14,8 @@ const SOURCE_REVISION_RE = /^[a-f0-9]{40}$/u;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
 // These two manifests are bundled but cannot hash themselves in their own
 // source manifests. Their reviewed SHA-256 values are pinned explicitly here.
-const DEPLOYMENT_MANIFEST_SHA256 = '19f9cbe17f82d20448ccef260c3df901584609815bdf804ba8e32925fa4d2229';
-const ONBOARDING_MANIFEST_SHA256 = '8c53a72ee6007e1f28462c80c3f7b06b5dac06d596c4b70f58768babf7848bff';
+const DEPLOYMENT_MANIFEST_SHA256 = '3f1d09a6f9540fff3fd09ae6d9267182620ea8a6702104bcfa5d5c62ae39f557';
+const ONBOARDING_MANIFEST_SHA256 = '1c578f1021fb61728873fabe49c8af9bbeaacb95289f529d93ece9484d62b575';
 
 /** Payload names are the exact archive allowlist; manifest.sha256 is added separately. */
 export const PACKAGE_FILES = [

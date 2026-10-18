@@ -141,6 +141,16 @@ describe("LemtelPortalApp organization context", () => {
     await waitFor(() => expect(hosted.listDomains).toHaveBeenLastCalledWith(STAGING.id));
   });
 
+  it("persists only the Lemtel visual preference in session storage without changing the tenant", async () => {
+    renderDomains();
+    await organizationSelector();
+    const toggle = screen.getByRole("button", { name: "Switch to dark theme" });
+    fireEvent.click(toggle);
+    expect(document.querySelector(".lemtel-portal-scope")).toHaveAttribute("data-lt-theme", "dark");
+    expect(window.sessionStorage.getItem("lemtel-portal-theme")).toBe("dark");
+    expect(document.getElementById("lemtel-organization")).toHaveValue("");
+  });
+
   it("shows an explicit recoverable Domains error instead of treating a failed tenant request as an empty list", async () => {
     hosted.listDomains.mockRejectedValueOnce(new hosted.MockLemtelError("unavailable"));
     renderDomains();

@@ -1009,27 +1009,58 @@ async function platformOverviewAggregates(admin: any) {
   };
 }
 
+const PLATFORM_CONNECTION_KINDS = ["desktop", "mobile", "portal", "client"] as const;
+function redactedPlatformConnectionCount(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined;
+}
+
+/**
+ * Presence is a server-written, non-authorizing observation. This global projection
+ * returns only bounded totals and rejects the entire presence section on any missing
+ * table/count; it never substitutes a fictional zero or returns an individual row.
+ */
+async function platformOverviewClientPresence(admin: any) {
+  const counts = await Promise.all(PLATFORM_CONNECTION_KINDS.map(async (clientKind) => {
+    const { count, error } = await admin.from("lemtel_client_connection_presence")
+      .select("user_id", { count: "exact", head: true })
+      .eq("client_kind", clientKind);
+    return error ? undefined : redactedPlatformConnectionCount(count);
+  }));
+  const { count: revokedCount, error: controlsError } = await admin.from("lemtel_client_session_controls")
+    .select("user_id", { count: "exact", head: true })
+    .eq("access_state", "revoked");
+  const explicitlyRevoked = controlsError ? undefined : redactedPlatformConnectionCount(revokedCount);
+  if (counts.some((value) => value === undefined) || explicitlyRevoked === undefined) return { observation: "no_observation" as const };
+  const [desktop, mobile, portal, client] = counts as number[];
+  return {
+    observation: "observed" as const,
+    observedConnections: { total: desktop + mobile + portal + client, desktop, mobile, portal, client },
+    accessControls: { explicitlyRevoked },
+  };
+}
+
 /**
  * Authoritative business dashboard contract. It contains only aggregate Lemtel
- * organization data and fixed telephony provisioning enums; Operations owns every
- * server/traffic/HA view. No tenant record, identifier, address, secret, raw error,
- * provider state or telephony event crosses this boundary.
+ * organization data, redacted non-authorizing connection totals and fixed telephony
+ * provisioning enums; Operations owns every server/traffic/HA view. No tenant record,
+ * identifier, address, secret, raw error, provider state or telephony event crosses
+ * this boundary.
  */
 export async function platformOverview(admin: any) {
-  const aggregates = await platformOverviewAggregates(admin);
+  const [aggregates, clientPresence] = await Promise.all([platformOverviewAggregates(admin), platformOverviewClientPresence(admin)]);
   if (isFailure(aggregates)) return aggregates;
   return {
-    schemaVersion: "lemtel-platform-overview/v2" as const,
+    schemaVersion: "lemtel-platform-overview/v3" as const,
     observation: "observed" as const,
     aggregates,
+    clientPresence,
     telephony: {
       provisioning: "not_provisioned" as const,
       metrics: {
-        totalCalls: "unavailable" as const,
-        incomingCalls: "unavailable" as const,
-        outgoingCalls: "unavailable" as const,
-        missedCalls: "unavailable" as const,
+        cdr: "unavailable" as const,
         activeCalls: "unavailable" as const,
+        extensions: "unavailable" as const,
+        trunks: "unavailable" as const,
         voicemail: "unavailable" as const,
       },
     },

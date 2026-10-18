@@ -207,9 +207,11 @@ describe("Lemtel portal contract", () => {
   it("uses absolute fallback routes so malformed operations URLs cannot recurse", () => {
     const source = readFileSync(resolve(process.cwd(), "src/pages/lemtel/onboarding/LemtelPortalApp.tsx"), "utf8");
     expect(source).toContain('path={`${BASE}/operations/*`} element={<Navigate to={`${BASE}/operations`} replace />}');
-    expect(source).toContain('Route path={BASE} element={<Navigate to={`${BASE}/operations`} replace />}');
-    expect(source).toContain('Route path={`${BASE}/*`} element={<Navigate to={`${BASE}/operations`} replace />}');
+    expect(source).toContain('Route path={BASE} element={<Navigate to={`${BASE}/overview`} replace />}');
+    expect(source).toContain('Route path={`${BASE}/*`} element={<Navigate to={`${BASE}/overview`} replace />}');
     expect(source).toContain('Route path={`${BASE}/overview`} element={<LemtelGlobalOverview t={t} lang={lang} readonly={readonly} />}');
+    expect(source).toContain('PORTAL_THEME_STORAGE_KEY = "lemtel-portal-theme"');
+    expect(source).toContain('window.sessionStorage.setItem(PORTAL_THEME_STORAGE_KEY, theme)');
     expect(source).not.toContain('Route path="*" element={<Navigate to="overview" replace />}');
   });
 

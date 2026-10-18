@@ -274,17 +274,21 @@ export type LemtelPlatformNodeStatus = {
   }>;
 };
 export type LemtelPlatformOverview = {
-  schemaVersion: "lemtel-platform-overview/v2";
-  observation: "observed";
+  schemaVersion: "lemtel-platform-overview/v3";
+  observation: "observed" | "no_observation";
   aggregates: { activeOrganizations?: number; activeDomains?: number; activeUsers?: number; platformAdministrators?: number };
+  clientPresence: { observation: "no_observation" } | {
+    observation: "observed";
+    observedConnections: { total: number; desktop: number; mobile: number; portal: number; client: number };
+    accessControls: { explicitlyRevoked: number };
+  };
   telephony: {
     provisioning: "not_provisioned";
     metrics: {
-      totalCalls: "unavailable";
-      incomingCalls: "unavailable";
-      outgoingCalls: "unavailable";
-      missedCalls: "unavailable";
+      cdr: "unavailable";
       activeCalls: "unavailable";
+      extensions: "unavailable";
+      trunks: "unavailable";
       voicemail: "unavailable";
     };
   };

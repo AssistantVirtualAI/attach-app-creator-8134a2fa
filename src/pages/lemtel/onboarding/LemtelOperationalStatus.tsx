@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Cloud, Database, HardDrive, RefreshCw, Route, Server, ShieldCheck, Smartphone, WifiOff } from "lucide-react";
-import { LemtelError, portalApi, type LemtelNodeStatus, type LemtelOperationalStatus, type LemtelOperationalTrendSample, type LemtelTrafficTrend, type PortalConfig } from "./lemtelHostedApi";
+import { LemtelError, portalApi, type LemtelDoWriterResources, type LemtelNodeStatus, type LemtelOperationalStatus, type LemtelOperationalTrendSample, type LemtelTrafficTrend, type PortalConfig } from "./lemtelHostedApi";
 import type { LemtelDict, Lang } from "./lemtelI18n";
 import LemtelNodeResourcePanel from "./LemtelNodeResourcePanel";
 import LemtelTrafficPanel from "./LemtelTrafficPanel";
@@ -94,12 +94,13 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
   const [trafficLoading, setTrafficLoading] = useState(!readonly);
   const [trafficUnavailable, setTrafficUnavailable] = useState(readonly);
   const [nodeStatus, setNodeStatus] = useState<LemtelNodeStatus | null>(null);
+  const [writerResources, setWriterResources] = useState<LemtelDoWriterResources | null>(null);
   const [nodeStatusLoading, setNodeStatusLoading] = useState(!readonly);
   const [nodeStatusUnavailable, setNodeStatusUnavailable] = useState(readonly);
   const [error, setError] = useState<"not_allowed" | "unavailable" | null>(null);
 
   const refresh = useCallback(async () => {
-    if (readonly) { setData(null); setTraffic(null); setTrafficUnavailable(true); setTrafficLoading(false); setNodeStatus(null); setNodeStatusUnavailable(true); setNodeStatusLoading(false); setError("unavailable"); setLoading(false); return; }
+    if (readonly) { setData(null); setTraffic(null); setTrafficUnavailable(true); setTrafficLoading(false); setNodeStatus(null); setWriterResources(null); setNodeStatusUnavailable(true); setNodeStatusLoading(false); setError("unavailable"); setLoading(false); return; }
     setLoading(true); setError(null);
     setTraffic(null); setTrafficLoading(true); setTrafficUnavailable(false);
     setNodeStatus(null); setNodeStatusLoading(true); setNodeStatusUnavailable(false);
@@ -114,13 +115,14 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
       catch { setNodeStatus(null); setNodeStatusUnavailable(true); }
       finally { setNodeStatusLoading(false); }
     })();
+    const writerResourcesRequest = portalApi.getDoWriterResources().then(setWriterResources).catch(() => setWriterResources(null));
     try {
       setData(await portalApi.getOperationalStatus());
       const history = await portalApi.getOperationalTrend().catch(() => ({ samples: [] }));
       setTrend(history.samples);
     } catch (cause) {
       setError(cause instanceof LemtelError && cause.key === "not_allowed" ? "not_allowed" : "unavailable");
-    } finally { await Promise.all([trafficRequest, nodeStatusRequest]); setLoading(false); }
+    } finally { await Promise.all([trafficRequest, nodeStatusRequest, writerResourcesRequest]); setLoading(false); }
   }, [readonly]);
 
   useEffect(() => {
@@ -165,7 +167,7 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
       <div className="lt-card p-5 space-y-4"><div><div className="text-sm lt-ink-2">{lang === "fr" ? "Santé observée" : "Observed health"}</div><div className="text-3xl font-semibold mt-1">{sampleCount ? `${healthySamples}/${sampleCount}` : "—"}</div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "échantillons sains" : "healthy samples"}</p></div></div>
     </section>
 
-    <LemtelNodeResourcePanel t={t} lang={lang} status={nodeStatus} loading={nodeStatusLoading} unavailable={nodeStatusUnavailable} />
+    <LemtelNodeResourcePanel t={t} lang={lang} status={nodeStatus} writerResources={writerResources} loading={nodeStatusLoading} unavailable={nodeStatusUnavailable} />
     <LemtelTrafficPanel t={t} lang={lang} trend={traffic} loading={trafficLoading} unavailable={trafficUnavailable} />
 
     <section className="grid xl:grid-cols-[1.25fr_.75fr] gap-5">

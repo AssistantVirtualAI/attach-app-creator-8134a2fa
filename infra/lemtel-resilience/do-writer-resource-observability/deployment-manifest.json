@@ -1,0 +1,68 @@
+{
+  "package_version": "lemtel_do_writer_resource_observability_source_v1",
+  "scope": "offline_do_writer_redacted_resources_only",
+  "deployment_authorized": false,
+  "schema_apply_authorized": false,
+  "publisher_install_authorized": false,
+  "publisher_timer_enable_authorized": false,
+  "hostinger_enrollment_or_publication_authorized": false,
+  "runtime_started": false,
+  "cloudflare_or_dns_changed": false,
+  "promotion_executed": false,
+  "fencing_executed": false,
+  "automatic_failover_enabled": false,
+  "sources": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0022_lemtel_do_writer_resource_current.sql",
+      "sha256": "c6bfd2b41d0509aeb650d6163f985ec237df8c2008b990958aa2ec8ec3de6f3e"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-do-writer-resource-ingest/index.ts",
+      "sha256": "96c8d0d31a38279d5d2d1383a49b28b0f29bb216e81d6095a49a7b71c990138a"
+    },
+    {
+      "path": "infra/lemtel-resilience/do-writer-resource-observability/lemtel-do-writer-resource-publish.sh",
+      "sha256": "aeb0522fc3fc429eeb0babcc0f7347b02b61e783a51c98d7c909f3dc19c74025"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
+      "sha256": "b1488d3a44b936f89faac3dce9552af4ef239928101d58e16d61a4195e9e3765"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/lemtelHostedApi.ts",
+      "sha256": "685d16bda1a7a183a2dd4a43da9e76b6edcd82b0639c3217800bfbb371ac70cc"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/LemtelNodeResourcePanel.tsx",
+      "sha256": "b883d1abafe5b48df121c6d6e19c1a076e0c87a77068ecdb2b0d6f66d82553c3"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/LemtelOperationalStatus.tsx",
+      "sha256": "fe122615fb3cfb753011cd0f4a2e3f603e84ee8c4be518a98832166254539394"
+    }
+  ],
+  "explicitly_excluded": [
+    "planipret",
+    "hostinger",
+    "telephony",
+    "fusionpbx",
+    "capacity",
+    "hostname",
+    "ip_address",
+    "network",
+    "traffic",
+    "customer_data",
+    "remote_commands",
+    "timer_enablement",
+    "promotion",
+    "routing",
+    "dns",
+    "automatic_failover"
+  ],
+  "validation_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-do-writer-resource-ingest/index.test.ts",
+      "sha256": "635c2f2534364d06a62b8854ee78dd2b9593affd80f8f45a7bc330efb7e5192b"
+    }
+  ]
+}

@@ -24,7 +24,7 @@ for path in "$credential" "$pin" "$ca" "$script"; do
 done
 [ "$(stat -c '%a' "$credential")" = 600 ] || fail credential_permissions_invalid
 [ "$(stat -c '%a' "$pin")" = 600 ] || fail pin_permissions_invalid
-[ "$(stat -c '%a' "$ca")" = 600 ] || fail ca_permissions_invalid
+[ "$(stat -c '%a' "$ca")" = 644 ] || fail ca_permissions_invalid
 command -v systemd-creds >/dev/null 2>&1 || fail systemd_creds_missing
 command -v python3 >/dev/null 2>&1 || fail python_missing
 

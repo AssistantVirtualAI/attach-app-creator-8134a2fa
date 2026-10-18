@@ -88,7 +88,7 @@ test('Cloudflare platform signer remains Access-protected and operationally unco
   assert.equal(value.access.mtls_root_ca_associated_hostname, 'signer.lemtel.assistantvirtualai.com');
   assert.equal(value.access.mtls_root_ca_certificate_content_in_repository, false);
   assert.equal(value.access.mtls_root_ca_certificate_identifier_in_repository, false);
-  assert.equal(value.access.mtls_root_ca_der_fingerprint_reconciled, false);
+  assert.equal(value.access.mtls_root_ca_der_fingerprint_reconciled, true);
   assert.equal(value.access.mtls_root_ca_import_does_not_authorize_service_auth, true);
 });
 

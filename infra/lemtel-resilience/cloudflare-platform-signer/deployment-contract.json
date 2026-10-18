@@ -33,7 +33,7 @@
     "mtls_root_ca_associated_hostname": "signer.lemtel.assistantvirtualai.com",
     "mtls_root_ca_certificate_content_in_repository": false,
     "mtls_root_ca_certificate_identifier_in_repository": false,
-    "mtls_root_ca_der_fingerprint_reconciled": false,
+    "mtls_root_ca_der_fingerprint_reconciled": true,
     "mtls_root_ca_import_does_not_authorize_service_auth": true,
     "source_access_jwt_issuer_audience_signature_verification_implemented": true,
     "source_mtls_cert_verified_fingerprint_subject_verification_implemented": true,

@@ -57,7 +57,7 @@
     "associated_hostname_exact": "signer.lemtel.assistantvirtualai.com",
     "certificate_content_in_contract": false,
     "certificate_id_in_contract": false,
-    "der_fingerprint_reconciliation_complete": false,
+    "der_fingerprint_reconciliation_complete": true,
     "service_auth_policy_count": 0,
     "import_does_not_authorize_relay": true
   },

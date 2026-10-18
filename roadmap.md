@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Add missed-call mark-one/mark-all read controls in both web-mobile trees, retaining history and verifying badge persistence; no native or server changes.
+- [x] Add missed-call mark-one/mark-all read controls in both web-mobile trees; 5 tests pass in each tree, authenticated 13-call history retained after clearing, reload persistence and mark-unread verified at 390px without overflow; build OK, no native/server changes or deployment. Read status is per user/device, not synchronized with the main bell.
 
 - [x] Replace generic Planiprêt transcript errors with evidence-based diagnostics in both web source trees; 20 focused tests pass, browser notice/retry verified, build OK; no native edits or publication.
 - [ ] Verify transcript diagnostics on a real call: requesting user's authenticated call screen returned no calls; requires an accessible recorded call. No installed-device verification performed.

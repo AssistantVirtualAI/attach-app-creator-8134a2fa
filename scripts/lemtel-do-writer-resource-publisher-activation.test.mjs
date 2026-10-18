@@ -25,6 +25,8 @@ test('secret stays bounded and root-only while Edge is recreated before the smok
   assert.doesNotMatch(source,/console\.|printenv|Deno\.env\.toObject|EnvironmentFile=|Environment=.*(?:SECRET|TOKEN|KEY)/iu);
   assert.match(source,/if self\.timer_attempted: subprocess\.run\(\['systemctl','disable','--now'/u);
   assert.match(source,/self\.compose\(False\).*force-recreate/u);
+  assert.match(source,/publisher_smoke_http_503/u);
+  assert.match(source,/publisher_smoke_transport/u);
 });
 test('Python refusal reports only a bounded phase and guard category',()=>{
   assert.match(source,/reason=f'\{transaction\.phase\}_\{transaction\.guard\}'/u);

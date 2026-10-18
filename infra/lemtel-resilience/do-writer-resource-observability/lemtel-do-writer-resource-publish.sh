@@ -58,9 +58,19 @@ def publish(values):
     quote=lambda value: '"'+value.replace('\\','\\\\').replace('"','\\"')+'"'
     config='\n'.join(('url = '+quote(values['LEMTEL_DO_WRITER_RESOURCE_ENDPOINT']),'header = "Content-Type: application/json"','header = '+quote('X-Lemtel-Do-Writer-Resource-Signature: sha256='+proof),'data = '+quote(payload)))+'\n'
     result=subprocess.run(['curl','--config','-','--silent','--request','POST','--proto','=https','--proto-redir','=https','--max-redirs','0','--noproxy','*','--connect-timeout','5','--max-time','15','--output','/dev/null','--write-out','%{http_code}'],input=config,text=True,capture_output=True,timeout=20,env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin'})
-    return result.returncode == 0 and result.stdout == '204'
+    if result.returncode != 0: return 'transport'
+    if result.stdout == '204': return 'published'
+    return 'http_'+result.stdout if re.fullmatch(r'[1-5][0-9]{2}',result.stdout) else 'http_unexpected'
+def smoke(values):
+    # Edge may require a short process-start interval after an intentional recreation.
+    deadline=time.monotonic()+30; last='transport'
+    while True:
+        last=publish(values)
+        if last=='published': return last
+        if last not in ('transport','http_502','http_503','http_504') or time.monotonic()>=deadline: return last
+        time.sleep(2)
 try:
-    values=secure_config(); state = 'config_ready' if sys.argv[1:] == ['--check-config'] else ('published' if publish(values) else 'delivery_failed')
+    values=secure_config(); state = 'config_ready' if sys.argv[1:] == ['--check-config'] else smoke(values)
     print('status='+state); sys.exit(0 if state in ('config_ready','published') else 1)
 except Exception: print('status=publisher_refused'); sys.exit(78)
 PY

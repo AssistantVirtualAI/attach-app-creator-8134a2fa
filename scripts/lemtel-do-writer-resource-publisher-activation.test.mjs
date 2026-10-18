@@ -25,6 +25,14 @@ test('secret stays bounded and root-only while Edge is recreated before the smok
   assert.match(source,/if self\.timer_attempted: subprocess\.run\(\['systemctl','disable','--now'/u);
   assert.match(source,/self\.compose\(False\).*force-recreate/u);
 });
+test('Python refusal reports only a bounded phase and guard category',()=>{
+  assert.match(source,/reason=f'\{transaction\.phase\}_\{transaction\.guard\}'/u);
+  assert.match(source,/re\.fullmatch\(r'\[a-z_\]\{1,96\}',reason\)/u);
+  assert.match(source,/print\('reason='\+reason\)/u);
+  assert.doesNotMatch(source,/str\((?:error|exception)\)|repr\(|traceback|exc_info/iu);
+  const guards=[...source.matchAll(/self\.guard='([a-z_]+)'/gu)].map((match)=>match[1]);
+  assert.deepEqual([...new Set(guards)].sort(),['entry','initial_absence','runtime_identity','secret_generation','source_integrity']);
+});
 test('embedded Python parses and manifest pins every installed source',()=>{
   const start=source.indexOf("<<'PY'\n"), end=source.lastIndexOf('\nPY\n'); assert.ok(start>=0&&end>start);
   execFileSync('/usr/bin/python3',['-c','import ast,sys;ast.parse(sys.stdin.read())'],{input:source.slice(start+7,end+1),stdio:['pipe','ignore','pipe']});

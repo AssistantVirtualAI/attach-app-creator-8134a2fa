@@ -166,5 +166,7 @@ try:
     print('writer=digitalocean_writer'); print('edge_secret_configured=true'); print('publisher_smoke_test=published'); print('publisher_timer_enabled=true'); print('publisher_timer_active=true'); scope(); print('do_writer_resource_publisher_activation_status=complete')
 except BaseException:
     rollback=transaction.rollback() if transaction.created or transaction.edge_attempted else 'not_required'
-    print('do_writer_resource_publisher_activation_status=failed'); print('rollback_status='+rollback); scope(); sys.exit(78)
+    reason=f'{transaction.phase}_{transaction.guard}'
+    if not re.fullmatch(r'[a-z_]{1,96}',reason): reason='internal_refusal'
+    print('do_writer_resource_publisher_activation_status=failed'); print('reason='+reason); print('rollback_status='+rollback); scope(); sys.exit(78)
 PY

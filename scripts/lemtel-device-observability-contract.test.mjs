@@ -46,6 +46,9 @@ test('portal device inventory and operational trend remain behind authenticated 
   assert.match(admin, /lemtel_operational_status_history/);
   assert.match(admin, /platformAdmin\(admin, actor\)/);
   assert.match(admin, /portalOrganizationAdmin\(admin, actor, request\.organizationId\)/);
+  assert.match(admin, /platformOverviewClientPresence/);
+  assert.match(admin, /observation: "no_observation"/);
+  assert.match(portalApi, /clientPresence/);
   assert.match(portalApi, /getOperationalTrend/);
   assert.match(portalApi, /listClientConnections/);
   assert.match(portal, /Application connections/);

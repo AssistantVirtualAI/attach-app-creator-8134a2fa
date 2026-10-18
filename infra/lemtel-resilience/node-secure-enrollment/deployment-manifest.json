@@ -174,7 +174,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "aee756439116509f7bddc7982827454aa4e9935e1c40a208875d0b5bd4770942"
+      "sha256": "e507956be53e2aefab583139a46764656852e9978f53ee8fb4c8a111a9d820eb"
     }
   ],
   "required_preconditions": [

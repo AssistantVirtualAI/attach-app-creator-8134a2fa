@@ -1,3 +1,4 @@
+import { logAiUsage } from "./claude-compat.ts";
 /**
  * Shared Anthropic (Claude) client with **prompt caching** enabled.
  *
@@ -197,6 +198,12 @@ export async function callAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResu
     `[claude${opts.label ? ":" + opts.label : ""}] in=${usage.input_tokens ?? 0} out=${usage.output_tokens ?? 0} ` +
       `cache_write=${usage.cache_creation_input_tokens ?? 0} cache_read=${usage.cache_read_input_tokens ?? 0}`,
   );
+
+  logAiUsage({
+    provider: "claude", model: opts.model, status_code: r.status, label: opts.label,
+    input_tokens: usage.input_tokens, output_tokens: usage.output_tokens,
+    cache_read_tokens: usage.cache_read_input_tokens, cache_write_tokens: usage.cache_creation_input_tokens,
+  });
 
   return { ok: true, status: r.status, text, toolInput, data, usage };
 }

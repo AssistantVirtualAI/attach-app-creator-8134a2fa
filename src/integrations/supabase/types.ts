@@ -9123,35 +9123,50 @@ export type Database = {
       }
       planipret_ai_provider_usage: {
         Row: {
+          cache_read_tokens: number | null
+          cache_write_tokens: number | null
           created_at: string
           duration_ms: number | null
           endpoint: string
           error: string | null
           failover: boolean
           id: string
+          input_tokens: number | null
+          label: string | null
           model: string | null
+          output_tokens: number | null
           provider: string
           status_code: number | null
         }
         Insert: {
+          cache_read_tokens?: number | null
+          cache_write_tokens?: number | null
           created_at?: string
           duration_ms?: number | null
           endpoint: string
           error?: string | null
           failover?: boolean
           id?: string
+          input_tokens?: number | null
+          label?: string | null
           model?: string | null
+          output_tokens?: number | null
           provider: string
           status_code?: number | null
         }
         Update: {
+          cache_read_tokens?: number | null
+          cache_write_tokens?: number | null
           created_at?: string
           duration_ms?: number | null
           endpoint?: string
           error?: string | null
           failover?: boolean
           id?: string
+          input_tokens?: number | null
+          label?: string | null
           model?: string | null
+          output_tokens?: number | null
           provider?: string
           status_code?: number | null
         }

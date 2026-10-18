@@ -54,6 +54,34 @@ function looksLikeMessage(o: any): boolean {
   return o?.message != null || o?.body != null || o?.["message-text"] != null;
 }
 
+/**
+ * undefined = not a v2 message object; null = v2 message to ignore
+ * (no on-net receiver, or sender == receiver echo).
+ */
+export function mapV2Message(o: any): NsNormalizedEvent | null | undefined {
+  const kind = String(o?.type ?? "").toLowerCase();
+  const isV2 = ["sms", "mms", "chat"].includes(kind) &&
+    (o?.["messagesession-id"] != null || o?.["terminating-user-id"] !== undefined || o?.text !== undefined);
+  if (!isV2) return undefined;
+  const receiver = String(o?.["terminating-user-id"] ?? "").trim();
+  const sender = String(o?.["from-user-id"] ?? "").trim();
+  if (!receiver || receiver === sender) return null;
+  const media = o?.["media-type"] ? "[média]" : "";
+  return {
+    type: "message.inbound",
+    data: {
+      ...o,
+      extension: receiver,
+      domain: o?.domain ?? null,
+      from_number: o?.["from-number"] != null ? String(o["from-number"]) : (sender || null),
+      to_number: o?.["terminating-number"] ?? o?.dialed ?? null,
+      body: typeof o?.text === "string" ? o.text : (o?.text == null ? media : String(o.text)),
+      message_id: o?.id ?? null,
+      messagesession_id: o?.["messagesession-id"] ?? null,
+    },
+  };
+}
+
 /** Extension the call is terminating to (the broker being rung). */
 export function nsTermExtension(o: any): string | null {
   const raw = o?.term_user ?? o?.["term-user"] ?? o?.["call-term-user"] ??
@@ -129,6 +157,15 @@ export function normalizeNsEvents(body: any): NsNormalizedEvent[] {
   const out: NsNormalizedEvent[] = [];
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
+
+    // NS-API v2 message object (docs/netsapiens/messaging.md): `type` is the
+    // message kind (sms/mms/chat), body is `text`, receiver is
+    // `terminating-user-id`. Previously these were dropped silently.
+    const v2Message = mapV2Message(item);
+    if (v2Message !== undefined) {
+      if (v2Message) out.push(v2Message);
+      continue;
+    }
 
     // Legacy / explicit shape wins.
     const explicit = item?.type ?? item?.event?.type;

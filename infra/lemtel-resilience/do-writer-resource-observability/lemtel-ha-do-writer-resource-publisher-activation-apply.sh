@@ -132,18 +132,17 @@ class Transaction:
         marker=docker_value('{{range .Config.Env}}{{if eq (index (split . "=") 0) "'+KEY+'"}}present{{end}}{{end}}',self.edge); require((marker=='present')==present)
         if present: quiet(['docker','exec',self.edge,'sh','-eu','-c','set +x; v=${LEMTEL_DO_WRITER_RESOURCE_SECRET-}; [ "${#v}" -eq 64 ]; case "$v" in *[!0-9a-f]*) exit 1;; esac'])
     def apply(self,secret):
-        self.phase='configuration'; self.mkdir(ROOT); self.create(LOCK,b'',0o600); fd=os.open(LOCK,os.O_RDWR|os.O_NOFOLLOW); fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        self.mkdir(CONFIG.parent) if not exists(CONFIG.parent) else None
-        self.mkdir(LIB.parent) if not exists(LIB.parent) else None
-        self.mkdir(EDGE_CONFIG)
-        self.create(CONFIG,(f'LEMTEL_DO_WRITER_RESOURCE_ENDPOINT={ENDPOINT}\n{KEY}={secret}\n').encode(),0o600)
+        self.phase='configuration'; self.guard='runtime_directories'; self.mkdir(ROOT); self.create(LOCK,b'',0o600); fd=os.open(LOCK,os.O_RDWR|os.O_NOFOLLOW); fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        self.guard='configuration_directories'; self.mkdir(CONFIG.parent) if not exists(CONFIG.parent) else None
+        self.mkdir(LIB.parent) if not exists(LIB.parent) else None; self.mkdir(EDGE_CONFIG)
+        self.guard='configuration_credentials'; self.create(CONFIG,(f'LEMTEL_DO_WRITER_RESOURCE_ENDPOINT={ENDPOINT}\n{KEY}={secret}\n').encode(),0o600)
         self.create(EDGE_ENV,(KEY+'='+secret+'\n').encode(),0o600); secret=None
-        self.create(OVERRIDE,('services:\n  '+self.service+':\n    environment:\n      '+KEY+': ${'+KEY+':?required}\n').encode(),0o600)
-        self.create(PUBLISHER,read_protected(self.publisher_source),0o700); self.create(SERVICE,read_protected(self.service_source),0o644); self.create(TIMER,read_protected(self.timer_source),0o644)
-        out,err=command([str(PUBLISHER),'--check-config']); require(not err and out=='status=config_ready\n')
-        quiet(self.compose(True)+['config','--quiet']); self.phase='edge_recreate'; self.edge_attempted=True; command(self.compose(True)+['up','--no-deps','--force-recreate','--no-build','--pull','never','-d',self.service]); self.edge=container_for('supabase-edge-functions'); self.verify_edge(True)
-        self.phase='smoke_test'; out,err=command([str(PUBLISHER)]); require(not err and out=='status=published\n')
-        self.phase='timer'; quiet(['systemctl','daemon-reload']); self.timer_attempted=True; quiet(['systemctl','enable','--now','lemtel-do-writer-resource-publisher.timer']); out,err=command(['systemctl','is-enabled','lemtel-do-writer-resource-publisher.timer']); require(not err and out=='enabled\n'); out,err=command(['systemctl','is-active','lemtel-do-writer-resource-publisher.timer']); require(not err and out=='active\n')
+        self.guard='configuration_override'; self.create(OVERRIDE,('services:\n  '+self.service+':\n    environment:\n      '+KEY+': ${'+KEY+':?required}\n').encode(),0o600)
+        self.guard='configuration_publisher_files'; self.create(PUBLISHER,read_protected(self.publisher_source),0o700); self.create(SERVICE,read_protected(self.service_source),0o644); self.create(TIMER,read_protected(self.timer_source),0o644)
+        self.guard='configuration_publisher_check'; out,err=command([str(PUBLISHER),'--check-config']); require(not err and out=='status=config_ready\n')
+        self.guard='configuration_compose_contract'; quiet(self.compose(True)+['config','--quiet']); self.phase='edge_recreate'; self.guard='edge_recreate'; self.edge_attempted=True; command(self.compose(True)+['up','--no-deps','--force-recreate','--no-build','--pull','never','-d',self.service]); self.edge=container_for('supabase-edge-functions'); self.verify_edge(True)
+        self.phase='smoke_test'; self.guard='publisher_smoke_test'; out,err=command([str(PUBLISHER)]); require(not err and out=='status=published\n')
+        self.phase='timer'; self.guard='timer_daemon_reload'; quiet(['systemctl','daemon-reload']); self.guard='timer_enable'; self.timer_attempted=True; quiet(['systemctl','enable','--now','lemtel-do-writer-resource-publisher.timer']); self.guard='timer_state'; out,err=command(['systemctl','is-enabled','lemtel-do-writer-resource-publisher.timer']); require(not err and out=='enabled\n'); out,err=command(['systemctl','is-active','lemtel-do-writer-resource-publisher.timer']); require(not err and out=='active\n')
         self.committed=True
     def rollback(self):
         state='complete'

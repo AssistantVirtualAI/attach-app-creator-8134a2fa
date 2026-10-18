@@ -45,3 +45,4 @@
 - [x] Add regression tests and verify the central flows
 
 - [x] Admin pending commissions: filtres courtier / équipe / mois / trimestre / année (portail Gilles & Marc), commissions par broker poussées au portail + app
+- [x] SMS threads: read/unread, mark-all-read, device-local delete (hide)

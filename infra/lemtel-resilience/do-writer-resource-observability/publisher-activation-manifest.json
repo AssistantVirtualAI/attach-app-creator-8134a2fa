@@ -16,7 +16,7 @@
     "timer": "lemtel-do-writer-resource-publisher.timer"
   },
   "sha256": {
-    "publisher": "aeb0522fc3fc429eeb0babcc0f7347b02b61e783a51c98d7c909f3dc19c74025",
+    "publisher": "97cf0a3905d4e5d33210e012a260e478516ec511e47770ca6e2372860771b1e4",
     "service": "5cb4690bb3a7d055f201b073c2e37b30a1907386a52c572fa4c48bfc65154c2c",
     "timer": "15e2082cd9b9a2647962c645aed905aa8282fa48179e054e442a3b79da173f36"
   },

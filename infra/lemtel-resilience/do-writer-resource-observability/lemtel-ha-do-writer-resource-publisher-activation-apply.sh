@@ -93,7 +93,7 @@ class Transaction:
         try:
             with os.fdopen(fd,'wb') as stream: stream.write(data); stream.flush(); os.fsync(stream.fileno())
         except BaseException: raise Refusal() from None
-        os.chown(path,0,0); meta=secure_file(path,mode); self.created.append((path,identity(meta)))
+        os.chown(path,0,0); os.chmod(path,mode); meta=secure_file(path,mode); self.created.append((path,identity(meta)))
     def mkdir(self,path):
         secure_directory(path.parent); require(not exists(path)); path.mkdir(mode=0o700); os.chown(path,0,0); secure_directory(path); self.directories.append((path,identity(path.lstat())))
     def remove(self,path):

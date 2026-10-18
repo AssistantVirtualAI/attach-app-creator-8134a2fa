@@ -89,11 +89,11 @@ class Transaction:
     def __init__(self):
         self.created=[]; self.directories=[]; self.edge=None; self.edge_attempted=False; self.timer_attempted=False; self.committed=False; self.phase='preflight'; self.guard='entry'
     def create(self,path,data,mode):
-        secure_directory(path.parent); require(not exists(path)); fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,mode)
+        self.guard='destination_parent_security'; secure_directory(path.parent); self.guard='destination_absence'; require(not exists(path)); self.guard='destination_open'; fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,mode)
         try:
             with os.fdopen(fd,'wb') as stream: stream.write(data); stream.flush(); os.fsync(stream.fileno())
         except BaseException: raise Refusal() from None
-        os.chown(path,0,0); os.chmod(path,mode); meta=secure_file(path,mode); self.created.append((path,identity(meta)))
+        self.guard='destination_ownership'; os.chown(path,0,0); self.guard='destination_permissions'; os.chmod(path,mode); self.guard='destination_attestation'; meta=secure_file(path,mode); self.created.append((path,identity(meta)))
     def mkdir(self,path):
         secure_directory(path.parent); require(not exists(path)); path.mkdir(mode=0o700); os.chown(path,0,0); secure_directory(path); self.directories.append((path,identity(path.lstat())))
     def remove(self,path):

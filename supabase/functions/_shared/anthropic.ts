@@ -1,3 +1,4 @@
+import { logAiUsage } from "./claude-compat.ts";
 /**
  * Shared Anthropic (Claude) client with **prompt caching** enabled.
  *

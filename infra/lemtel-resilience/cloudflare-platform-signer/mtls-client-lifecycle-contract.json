@@ -21,6 +21,20 @@
     "bootstrap_leaf_for_active_relay_forbidden": true,
     "sustainable_issuer_and_approved_lifecycle_evidence_required": true
   },
+  "durable_local_issuer_fallback": {
+    "scope": "source_only_before_cloudflare_import",
+    "external_hsm_equivalence_claimed": false,
+    "root_key_source": "host_bound_root_only_encrypted_systemd_credential",
+    "root_public_certificate_path": "/etc/lemtel-platform-signer/cloudflare-access-managed-root-ca.pem",
+    "root_private_key_in_repository": false,
+    "root_private_key_in_attestation": false,
+    "writer_rebuild_requires_new_ca_and_access_migration": true,
+    "rollback_cleanup_must_be_observable": true,
+    "host_credential_at_rest_protection_attested": false,
+    "cloudflare_access_imported": false,
+    "intermediate_per_leaf_required": true,
+    "leaf_issuance_or_relay_activation_authorized": false
+  },
   "access_root_ca_attestation": {
     "imported_out_of_band": true,
     "associated_hostname_exact": "signer.lemtel.assistantvirtualai.com",
@@ -127,6 +141,7 @@
     "der_fingerprint_reconciliation_between_do_attestation_and_imported_ca",
     "sustainable_mtls_issuer_rotation_and_revocation_drill",
     "cloudflare_access_service_auth_common_name_policy_positive_and_negative_tests",
+    "host_credential_at_rest_protection_attested",
     "access_revocation_denial_test",
     "edge_jwks_rollover_and_stale_configuration_test",
     "durable_replay_ledger_corruption_and_concurrency_test",

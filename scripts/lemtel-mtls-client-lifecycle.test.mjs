@@ -43,6 +43,17 @@ test('mTLS lifecycle contract is source-only, imported-CA aware, and remains non
   assert.equal(contract.identity.private_key_in_repository, false);
   assert.equal(contract.bootstrap_ca_boundary.bootstrap_ca_private_key_destroyed, true);
   assert.equal(contract.bootstrap_ca_boundary.bootstrap_leaf_for_active_relay_forbidden, true);
+  assert.equal(contract.durable_local_issuer_fallback.scope, 'source_only_before_cloudflare_import');
+  assert.equal(contract.durable_local_issuer_fallback.external_hsm_equivalence_claimed, false);
+  assert.equal(contract.durable_local_issuer_fallback.root_key_source, 'host_bound_root_only_encrypted_systemd_credential');
+  assert.equal(contract.durable_local_issuer_fallback.root_private_key_in_repository, false);
+  assert.equal(contract.durable_local_issuer_fallback.root_private_key_in_attestation, false);
+  assert.equal(contract.durable_local_issuer_fallback.writer_rebuild_requires_new_ca_and_access_migration, true);
+  assert.equal(contract.durable_local_issuer_fallback.rollback_cleanup_must_be_observable, true);
+  assert.equal(contract.durable_local_issuer_fallback.host_credential_at_rest_protection_attested, false);
+  assert.equal(contract.durable_local_issuer_fallback.cloudflare_access_imported, false);
+  assert.equal(contract.durable_local_issuer_fallback.intermediate_per_leaf_required, true);
+  assert.equal(contract.durable_local_issuer_fallback.leaf_issuance_or_relay_activation_authorized, false);
   assert.equal(contract.access_root_ca_attestation.imported_out_of_band, true);
   assert.equal(contract.access_root_ca_attestation.service_auth_policy_count, 0);
   assert.equal(contract.access_root_ca_attestation.der_fingerprint_reconciliation_complete, false);
@@ -59,6 +70,7 @@ test('mTLS lifecycle contract is source-only, imported-CA aware, and remains non
     assert.ok(relayContract.required_before_any_deployment.includes(requirement), requirement);
   }
   for (const expected of ['source-only', 'importée hors bande', 'ne permet pas d’activer', 'sans certificat', 'mauvais Common Name', 'révocation']) assert.ok(runbook.includes(expected), expected);
+  assert.ok(contract.required_before_any_relay_activation.includes('host_credential_at_rest_protection_attested'));
 });
 
 test('lifecycle metadata rejects ambiguity, non-dedicated identity, excessive lifetime, and invalid terminal records', () => {

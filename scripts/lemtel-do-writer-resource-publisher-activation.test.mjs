@@ -31,7 +31,11 @@ test('Python refusal reports only a bounded phase and guard category',()=>{
   assert.match(source,/print\('reason='\+reason\)/u);
   assert.doesNotMatch(source,/str\((?:error|exception)\)|repr\(|traceback|exc_info/iu);
   const guards=[...source.matchAll(/self\.guard='([a-z_]+)'/gu)].map((match)=>match[1]);
-  assert.deepEqual([...new Set(guards)].sort(),['entry','initial_absence','runtime_identity','secret_generation','source_integrity']);
+  assert.deepEqual([...new Set(guards)].sort(),['entry','initial_absence','runtime_identity','secret_generation','source_component_hashes','source_directory','source_ingest_hash','source_manifest_read','source_manifest_shape']);
+  assert.ok(source.indexOf("self.guard='source_directory'")<source.indexOf("self.guard='source_manifest_read'"));
+  assert.ok(source.indexOf("self.guard='source_manifest_read'")<source.indexOf("self.guard='source_manifest_shape'"));
+  assert.ok(source.indexOf("self.guard='source_manifest_shape'")<source.indexOf("self.guard='source_component_hashes'"));
+  assert.ok(source.indexOf("self.guard='source_component_hashes'")<source.indexOf("self.guard='source_ingest_hash'"));
 });
 test('embedded Python parses and manifest pins every installed source',()=>{
   const start=source.indexOf("<<'PY'\n"), end=source.lastIndexOf('\nPY\n'); assert.ok(start>=0&&end>start);

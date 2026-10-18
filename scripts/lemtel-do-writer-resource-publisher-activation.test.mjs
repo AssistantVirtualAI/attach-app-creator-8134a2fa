@@ -31,7 +31,7 @@ test('Python refusal reports only a bounded phase and guard category',()=>{
   assert.match(source,/print\('reason='\+reason\)/u);
   assert.doesNotMatch(source,/str\((?:error|exception)\)|repr\(|traceback|exc_info/iu);
   const guards=[...source.matchAll(/self\.guard='([a-z_]+)'/gu)].map((match)=>match[1]);
-  assert.deepEqual([...new Set(guards)].sort(),['entry','initial_absence','runtime_identity','secret_generation','source_component_hashes','source_directory','source_ingest_hash','source_manifest_read','source_manifest_shape']);
+  assert.deepEqual([...new Set(guards)].sort(),['configuration_compose_contract','configuration_credentials','configuration_directories','configuration_override','configuration_publisher_check','configuration_publisher_files','edge_recreate','entry','initial_absence','publisher_smoke_test','runtime_directories','runtime_identity','secret_generation','source_component_hashes','source_directory','source_ingest_hash','source_manifest_read','source_manifest_shape','timer_daemon_reload','timer_enable','timer_state']);
   assert.ok(source.indexOf("self.guard='source_directory'")<source.indexOf("self.guard='source_manifest_read'"));
   assert.ok(source.indexOf("self.guard='source_manifest_read'")<source.indexOf("self.guard='source_manifest_shape'"));
   assert.ok(source.indexOf("self.guard='source_manifest_shape'")<source.indexOf("self.guard='source_component_hashes'"));
@@ -39,6 +39,9 @@ test('Python refusal reports only a bounded phase and guard category',()=>{
   assert.match(source,/relative_path=Path\(name\) if key=='publisher' else Path\('systemd'\)\/name/u);
   assert.match(source,/hash_file\(SOURCE\/relative_path\)/u);
   assert.doesNotMatch(source,/SOURCE\/\(name if key=='publisher' else 'systemd'\/name\)/u);
+  assert.ok(source.indexOf("self.guard='runtime_directories'")<source.indexOf("self.guard='configuration_credentials'"));
+  assert.ok(source.indexOf("self.guard='configuration_credentials'")<source.indexOf("self.guard='configuration_compose_contract'"));
+  assert.ok(source.indexOf("self.guard='configuration_compose_contract'")<source.indexOf("self.guard='edge_recreate'"));
 });
 test('embedded Python parses and manifest pins every installed source',()=>{
   const start=source.indexOf("<<'PY'\n"), end=source.lastIndexOf('\nPY\n'); assert.ok(start>=0&&end>start);

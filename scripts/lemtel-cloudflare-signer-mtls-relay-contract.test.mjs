@@ -5,8 +5,10 @@ import test from 'node:test';
 
 const root = resolve(import.meta.dirname, '..');
 const contractPath = resolve(root, 'infra/lemtel-resilience/cloudflare-platform-signer/mtls-relay-contract.json');
+const lifecycleContractPath = resolve(root, 'infra/lemtel-resilience/cloudflare-platform-signer/mtls-client-lifecycle-contract.json');
 const modelPath = resolve(root, 'docs/lemtel-ha/CLOUDFLARE_SIGNER_MTLS_RELAY_THREAT_MODEL.md');
 const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
+const lifecycleContract = JSON.parse(readFileSync(lifecycleContractPath, 'utf8'));
 const model = readFileSync(modelPath, 'utf8');
 
 test('mTLS relay remains a source-only, non-deployable identity alternative', () => {
@@ -30,7 +32,8 @@ test('mTLS relay remains a source-only, non-deployable identity alternative', ()
   assert.equal(contract.certificate_lifecycle.contract_file, 'mtls-client-lifecycle-contract.json');
   assert.equal(contract.certificate_lifecycle.current_access_root_ca_imported_out_of_band, true);
   assert.equal(contract.certificate_lifecycle.current_access_root_ca_associated_hostname, 'signer.lemtel.assistantvirtualai.com');
-  assert.equal(contract.certificate_lifecycle.current_access_root_ca_der_fingerprint_reconciliation_complete, false);
+  assert.equal(contract.certificate_lifecycle.current_access_root_ca_der_fingerprint_reconciliation_complete, true);
+  assert.equal(lifecycleContract.access_root_ca_attestation.der_fingerprint_reconciliation_complete, true);
   assert.equal(contract.certificate_lifecycle.bootstrap_leaf_for_active_relay_forbidden, true);
   assert.equal(contract.certificate_lifecycle.service_auth_policy_count, 0);
   assert.equal(contract.certificate_lifecycle.relay_activation_allowed, false);

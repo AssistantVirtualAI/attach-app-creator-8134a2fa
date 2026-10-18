@@ -1,0 +1,61 @@
+{
+  "package_version": "lemtel_operations_portal_static_refresh_v3",
+  "scope": "offline_lemtel_operations_portal_static_refresh",
+  "deployment_authorized": false,
+  "activation_authorized": false,
+  "target_role": "digitalocean_writer",
+  "artifact_provenance": {
+    "required_workflow": ".github/workflows/lemtel-operations-portal-build.yml",
+    "required_branch": "lemtel/integration",
+    "artifact_name_prefix": "lemtel-operations-portal-",
+    "github_sha256_required": true,
+    "github_native_attestation_required": true,
+    "github_attestation_verifier": "gh_attestation_verify",
+    "github_attestation_offline_bundle_required": true,
+    "github_trusted_root_required": true,
+    "github_repository_identifier_required": true,
+    "deny_self_hosted_runners": true,
+    "local_portal_build_allowed": false
+  },
+  "sources": [
+    {
+      "path": "infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-operations-portal-static-refresh.sh",
+      "sha256": "3ead5ae287e4f31af23d508db889ee2d5710fa91d7d3882f30aa6ad4c106c6d4"
+    },
+    {
+      "path": "infra/lemtel-resilience/active-passive/lemtel-verified-portal-zip.py",
+      "sha256": "7a787f07fdf409e1ed2dd2bc64ba9b9ff0d843dfdee0c4f7f8685f6ccc9477bc"
+    },
+    {
+      "path": "infra/lemtel-resilience/active-passive/lemtel-portal-static-refresh-transaction.py",
+      "sha256": "d24283a8da582adfb5c78184f2e3a3ea40237f10b06fb419d7f6bf99059fb597"
+    },
+    {
+      "path": "scripts/lemtel-operations-portal-static-refresh-package.mjs",
+      "sha256": "e78e2d86a738688662636c5334274b99582f651cd5e0e6552c59edf0f8ac3364"
+    }
+  ],
+  "required_preconditions": [
+    "successful_nonexpired_sha256_attested_github_portal_artifact",
+    "verified_offline_bundle_and_trusted_root",
+    "explicit_do_writer_static_portal_review",
+    "single_running_caddy_container_with_existing_lemtel_portal_route",
+    "root_owned_non_group_writable_mount_and_portal_directory",
+    "durable_local_transaction_recovery_preflight"
+  ],
+  "allowed_mutation": [
+    "atomic_replacement_of_existing_lemtel_portal_static_directory_only"
+  ],
+  "explicitly_excluded": [
+    "database_schema_or_business_data",
+    "edge_functions",
+    "caddyfile_or_route_configuration",
+    "caddy_or_edge_restart",
+    "traffic_collector_or_timer",
+    "secrets_or_credentials",
+    "cloudflare_dns_or_provider_action",
+    "hostinger_contact_or_runtime",
+    "promotion_fencing_or_automatic_failover",
+    "telephony_or_fusionpbx"
+  ]
+}

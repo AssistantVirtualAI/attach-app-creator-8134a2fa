@@ -21,6 +21,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 concurrency:
   group: lemtel-operations-portal-build-${{ github.ref }}
@@ -40,8 +42,8 @@ jobs:
       VITE_LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       VITE_LEMTEL_HOSTED_ONBOARDING: approved
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
@@ -65,9 +67,16 @@ jobs:
             echo 'Legacy cross-product content detected in the Lemtel portal artifact.' >&2
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
+      - name: Upload immutable Operations portal artifact
+        id: portal_artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: lemtel-operations-portal-${{ github.run_id }}
           path: dist-lemtel-portal
           if-no-files-found: error
           retention-days: 3
+      - name: Attest immutable Operations portal artifact provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: lemtel-operations-portal-${{ github.run_id }}
+          subject-digest: sha256:${{ steps.portal_artifact.outputs.artifact-digest }}

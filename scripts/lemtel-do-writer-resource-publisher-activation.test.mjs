@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -71,3 +71,22 @@ test('package is deterministic and excludes all runtime configuration',()=>{
   const temp=mkdtempSync(join(tmpdir(),'lemtel-resource-publisher-test-')); try { const a=join(temp,'a.tar'), b=join(temp,'b.tar'), rev='b570841b77f8f283f38828fb140a429cdb969298'; assembleDoWriterResourcePublisherActivationPackage({sourceRevision:rev,output:a}); assembleDoWriterResourcePublisherActivationPackage({sourceRevision:rev,output:b}); assert.equal(sha(a),sha(b)); const entries=execFileSync('/usr/bin/tar',['-tf',a],{encoding:'utf8'}); for(const forbidden of ['.env','secret','hostinger','traffic','cloudflare','telephony']) assert.doesNotMatch(entries,new RegExp(forbidden,'iu')); } finally { rmSync(temp,{recursive:true,force:true}); } });
 test('package CLI creates exactly one attestable archive',()=>{
   const temp=mkdtempSync(join(tmpdir(),'lemtel-resource-publisher-cli-')); try { const output=join(temp,'release.tar'); const result=execFileSync(process.execPath,[resolve(root,'scripts/lemtel-do-writer-resource-publisher-activation-package.mjs'),'--source-revision','2f21c400e9043ed8775a9d5c5dc6788187348cee','--output',output],{encoding:'utf8'}); assert.match(result,/"package_status":"created"/u); assert.equal(sha(output).length,64); } finally { rmSync(temp,{recursive:true,force:true}); } });
+test('timer enable is quiet so the strict empty-output guard accepts a valid activation',()=>{
+  assert.match(source,/subprocess\.run\(\['systemctl','--quiet','enable','--now','lemtel-do-writer-resource-publisher\.timer'\]/u);
+  assert.doesNotMatch(source,/\['systemctl','enable'/u);
+  assert.match(source,/require\(not err\); self\.guard='timer_state'/u);
+  assert.match(source,/out=='enabled\\n'\); out,err=command\(\['systemctl','is-active'/u);
+  const systemctl=['/usr/bin/systemctl','/bin/systemctl'].find((path)=>existsSync(path));
+  if(!systemctl) return;
+  const temp=mkdtempSync(join(tmpdir(),'lemtel-resource-publisher-systemctl-')); try {
+    const units=join(temp,'etc/systemd/system'); mkdirSync(units,{recursive:true});
+    cpSync(resolve(root,'infra/lemtel-resilience/do-writer-resource-observability/systemd/lemtel-do-writer-resource-publisher.timer'),join(units,'lemtel-do-writer-resource-publisher.timer'));
+    cpSync(resolve(root,'infra/lemtel-resilience/do-writer-resource-observability/systemd/lemtel-do-writer-resource-publisher.service'),join(units,'lemtel-do-writer-resource-publisher.service'));
+    mkdirSync(join(temp,'usr/lib/systemd/system'),{recursive:true}); cpSync('/dev/null',join(temp,'usr/lib/systemd/system/timers.target'));
+    const run=(args)=>{ const result=spawnSync(systemctl,['--root='+temp,...args,'lemtel-do-writer-resource-publisher.timer'],{encoding:'utf8',env:{PATH:'/usr/sbin:/usr/bin:/sbin:/bin',LANG:'C'}}); return result; };
+    const plain=run(['enable']); assert.equal(plain.status,0); assert.match(plain.stderr,/Created symlink/u);
+    assert.equal(run(['disable']).status,0);
+    const silent=run(['--quiet','enable']); assert.equal(silent.status,0); assert.equal(silent.stdout,''); assert.equal(silent.stderr,'');
+    assert.ok(lstatSync(join(temp,'etc/systemd/system/timers.target.wants/lemtel-do-writer-resource-publisher.timer')).isSymbolicLink());
+  } finally { rmSync(temp,{recursive:true,force:true}); }
+});

@@ -1,0 +1,24 @@
+{
+  "package_format": "lemtel_do_writer_resource_publisher_activation_v1",
+  "target_role": "digitalocean_writer",
+  "deployment_authorized": false,
+  "publisher_install_authorized": false,
+  "publisher_timer_enable_authorized": false,
+  "hostinger_contacted": false,
+  "cloudflare_or_dns_changed": false,
+  "automatic_failover_enabled": false,
+  "fencing_executed": false,
+  "telephony_contacted": false,
+  "credential_values_emitted": false,
+  "files": {
+    "publisher": "lemtel-do-writer-resource-publish.sh",
+    "service": "lemtel-do-writer-resource-publisher.service",
+    "timer": "lemtel-do-writer-resource-publisher.timer"
+  },
+  "sha256": {
+    "publisher": "aeb0522fc3fc429eeb0babcc0f7347b02b61e783a51c98d7c909f3dc19c74025",
+    "service": "5cb4690bb3a7d055f201b073c2e37b30a1907386a52c572fa4c48bfc65154c2c",
+    "timer": "15e2082cd9b9a2647962c645aed905aa8282fa48179e054e442a3b79da173f36"
+  },
+  "ingest_sha256": "96c8d0d31a38279d5d2d1383a49b28b0f29bb216e81d6095a49a7b71c990138a"
+}

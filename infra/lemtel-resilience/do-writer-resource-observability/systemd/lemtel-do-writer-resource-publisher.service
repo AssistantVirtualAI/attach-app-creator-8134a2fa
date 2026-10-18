@@ -1,0 +1,16 @@
+[Unit]
+Description=Lemtel DO writer redacted resource publisher
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/libexec/lemtel-do-writer-resource-publisher/publish.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run

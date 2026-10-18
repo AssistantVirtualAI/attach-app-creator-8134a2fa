@@ -45,6 +45,15 @@ jobs:
           scripts/lemtel-github-release-readiness.test.mjs
           scripts/lemtel-hostinger-client-config-filter.test.mjs
           scripts/lemtel-promoted-writer-delivery-boundary.test.mjs
+          scripts/lemtel-mtls-client-lifecycle.test.mjs
+          scripts/lemtel-do-managed-mtls-leaf-candidate-issuer.test.mjs
+          scripts/lemtel-do-managed-mtls-leaf-candidate-crypto.test.mjs
+          scripts/lemtel-cloudflare-signer-mtls-relay-contract.test.mjs
+          scripts/lemtel-do-managed-mtls-local-ca-bootstrap.test.mjs
+          scripts/lemtel-do-managed-mtls-storage-observation.test.mjs
+          scripts/lemtel-do-signer-mtls-relay-root-only-bootstrap.test.mjs
+          scripts/lemtel-do-signer-mtls-relay-source-only-deploy.test.mjs
+          scripts/lemtel-signer-mtls-relay-source.test.mjs
       - id: package
         name: Build one immutable Lemtel source artifact
         shell: bash

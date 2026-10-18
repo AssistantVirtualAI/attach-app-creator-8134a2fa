@@ -172,7 +172,9 @@ validate_existing_caddy_route() {
 import re,sys
 text=open(sys.argv[1],encoding='utf-8').read(); marker=re.escape(sys.argv[2])
 try:
-  if len(re.findall(r'(?m)^\s*'+marker+r'\s*$',text))!=1: raise ValueError
+  # The comment establishes Lemtel ownership but does not select a route.
+  # Repeated comments are harmless; the functional handler remains unique below.
+  if len(re.findall(r'(?m)^\s*'+marker+r'\s*$',text))<1: raise ValueError
   blocks=re.findall(r'(?ms)^\s*handle\s+@lemtel_operations_portal\s*\{\s*(.*?)^\s*\}',text)
   if len(blocks)!=1: raise ValueError
   block=blocks[0]
@@ -214,7 +216,13 @@ verify_offline_attestation || fail github_native_attestation_offline_verificatio
 
 docker inspect "$caddy_container" >/dev/null 2>&1 || fail caddy_container_missing
 [ "$(docker inspect --format '{{.State.Running}}' "$caddy_container")" = true ] || fail caddy_container_not_running
-mapfile -t caddy_mounts < <(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy"}}{{.Source}}{{"\n"}}{{end}}{{end}}' "$caddy_container")
+mapfile -t discovered_caddy_mounts < <(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy"}}{{.Source}}{{"\n"}}{{end}}{{end}}' "$caddy_container")
+caddy_mounts=()
+for caddy_mount in "${discovered_caddy_mounts[@]}"; do
+  # Docker appends its own terminal newline after the template newline.
+  [ -n "$caddy_mount" ] || continue
+  caddy_mounts+=("$caddy_mount")
+done
 [ "${#caddy_mounts[@]}" -eq 1 ] || fail caddy_mount_ambiguous
 caddy_source="${caddy_mounts[0]}"; caddyfile="$caddy_source/Caddyfile"; portal_dir="$caddy_source/lemtel-portal"
 secure_root_directory "$caddy_source" && secure_root_nonwritable_regular_file "$caddyfile" && secure_root_directory "$portal_dir" || fail caddy_mount_or_portal_insecure

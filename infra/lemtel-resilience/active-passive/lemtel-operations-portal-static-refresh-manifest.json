@@ -20,7 +20,7 @@
   "sources": [
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-operations-portal-static-refresh.sh",
-      "sha256": "3ead5ae287e4f31af23d508db889ee2d5710fa91d7d3882f30aa6ad4c106c6d4"
+      "sha256": "acec4e80fb69616b4b38b2e1e920e759fca304aa3db8b5c7de5ef9a31340fc4a"
     },
     {
       "path": "infra/lemtel-resilience/active-passive/lemtel-verified-portal-zip.py",

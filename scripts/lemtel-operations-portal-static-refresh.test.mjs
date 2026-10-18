@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
 
 const root = resolve(import.meta.dirname, '..');
@@ -10,6 +12,38 @@ const transaction = readFileSync(resolve(root, 'infra/lemtel-resilience/active-p
 const zipHelper = readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-verified-portal-zip.py'), 'utf8');
 const manifest = JSON.parse(readFileSync(resolve(root, 'infra/lemtel-resilience/active-passive/lemtel-operations-portal-static-refresh-manifest.json'), 'utf8'));
 const digest = (path) => createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex');
+
+function extractCaddyRouteValidator() {
+  const functionStart = source.indexOf('validate_existing_caddy_route() {');
+  const heredocStart = source.indexOf("<<'PY'", functionStart);
+  const bodyStart = source.indexOf('\n', heredocStart) + 1;
+  const bodyEnd = source.indexOf('\nPY\n}', bodyStart);
+  assert.ok(functionStart >= 0 && heredocStart >= 0 && bodyStart > heredocStart && bodyEnd > bodyStart, 'route validator heredoc must remain extractable');
+  return source.slice(bodyStart, bodyEnd);
+}
+
+function validateCaddyRoute(caddyfileText) {
+  const directory = mkdtempSync(join(tmpdir(), 'lemtel-caddy-route-contract-'));
+  try {
+    const caddyfile = join(directory, 'Caddyfile');
+    const validator = join(directory, 'validator.py');
+    writeFileSync(caddyfile, caddyfileText);
+    writeFileSync(validator, extractCaddyRouteValidator());
+    return spawnSync('python3', [validator, caddyfile, '# LEMTEL_OPERATIONS_PORTAL_V1'], { stdio: 'ignore' }).status;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+const functionalPortalRoute = `handle @lemtel_operations_portal {
+  uri strip_prefix /lemtel-portal
+  root * /etc/caddy/lemtel-portal
+  try_files {path} /lemtel-portal.html
+  file_server
+}
+`;
+
+const caddyFixture = (markers = 1) => `${'# LEMTEL_OPERATIONS_PORTAL_V1\n'.repeat(markers)}${functionalPortalRoute}`;
 
 test('static Operations refresh is root-gated and accepts only a root-private release containing the signed proof material', () => {
   for (const expected of ['[ "$(id -u)" -eq 0 ]', 'refresh_verified_operations_portal_static', 'digitalocean_writer', 'REVIEWED_DO_WRITER_STATIC_PORTAL_REFRESH', 'release_sidecar=', 'secure_root_regular_file "$release_archive"', 'secure_root_regular_file "$release_sidecar"', 'release_digest_mismatch', 'lock_file="$work_root/refresh.lock"', 'portal-artifact.zip', 'portal-artifact.attestation.jsonl', 'trusted-root.jsonl', 'validate_release_metadata', 'validate_inner_manifest', 'verify_offline_attestation', 'github_native_attestation_offline_verification_failed', 'supabase-caddy', 'operations_portal_static_refresh_status=complete']) assert.match(source, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -20,6 +54,18 @@ test('static Operations refresh is root-gated and accepts only a root-private re
 
 test('writer verifies the exact offline GitHub attestation policy and validates the existing Caddy route binding', () => {
   for (const expected of ['attestation verify', '--bundle', '--custom-trusted-root', '--signer-workflow AssistantVirtualAI/attach-app-creator-8134a2fa/.github/workflows/lemtel-operations-portal-build.yml', '--source-ref refs/heads/lemtel/integration', '--source-digest "$source_revision"', '--deny-self-hosted-runners', 'sourceRepositoryIdentifier', 'validate_existing_caddy_route', 'handle\\s+@lemtel_operations_portal', 'root\\s+\\*\\s+/etc/caddy/lemtel-portal', 'try_files\\s+\\{path\\}\\s+/lemtel-portal\\.html']) assert.match(source, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+
+test('Caddy validator accepts repeated non-semantic ownership comments only with one complete functional route', () => {
+  assert.equal(validateCaddyRoute(caddyFixture()), 0);
+  assert.equal(validateCaddyRoute(caddyFixture(2)), 0);
+  assert.notEqual(validateCaddyRoute(functionalPortalRoute), 0, 'the Lemtel ownership marker remains required');
+  assert.notEqual(validateCaddyRoute(caddyFixture() + functionalPortalRoute), 0, 'the portal handler remains unique');
+  assert.notEqual(validateCaddyRoute(caddyFixture().replace('  file_server\n', '  file_server\n  file_server\n')), 0, 'each required directive remains unique');
+});
+
+test('Caddy mount collection ignores only Docker terminal blank records before enforcing a single non-empty source', () => {
+  for (const expected of ['mapfile -t discovered_caddy_mounts', 'caddy_mounts=()', 'for caddy_mount in "${discovered_caddy_mounts[@]}"', '[ -n "$caddy_mount" ] || continue', 'caddy_mounts+=("$caddy_mount")', '[ "${#caddy_mounts[@]}" -eq 1 ] || fail caddy_mount_ambiguous']) assert.match(source, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
 test('static Operations refresh uses a durable transaction journal to recover an interrupted exchange before touching live content', () => {

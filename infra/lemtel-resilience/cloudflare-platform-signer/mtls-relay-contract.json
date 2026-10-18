@@ -1,5 +1,5 @@
 {
-  "contract_version": "lemtel_cloudflare_platform_signer_mtls_relay_v5",
+  "contract_version": "lemtel_cloudflare_platform_signer_mtls_relay_v7",
   "scope": "source_only_machine_identity_alternative",
   "status": "design_review_required_not_deployable",
   "purpose": "authenticate a dedicated root-only relay to the existing Access-protected platform signer for node_enrollment_publication_delivery only",
@@ -12,6 +12,17 @@
     "access_policy_selector": "common_name_exact",
     "access_application_default_deny": true,
     "access_user_policy_allowed": false
+  },
+  "certificate_lifecycle": {
+    "contract_file": "mtls-client-lifecycle-contract.json",
+    "current_access_root_ca_imported_out_of_band": true,
+    "current_access_root_ca_associated_hostname": "signer.lemtel.assistantvirtualai.com",
+    "current_access_root_ca_der_fingerprint_reconciliation_complete": false,
+    "bootstrap_leaf_for_active_relay_forbidden": true,
+    "sustainable_issuer_rotation_and_revocation_drill_required": true,
+    "common_name_policy_positive_and_negative_evidence_required": true,
+    "service_auth_policy_count": 0,
+    "relay_activation_allowed": false
   },
   "implementation": {
     "source_available": true,
@@ -135,9 +146,10 @@
   },
   "required_before_any_deployment": [
     "independent_security_review",
+    "der_fingerprint_reconciliation_between_do_attestation_and_imported_ca",
     "root_only_credential_backend_with_encrypted_at_rest_attestation",
-    "dedicated_client_certificate_rotation_and_revocation_test",
-    "cloudflare_access_mtls_common_name_policy_test",
+    "sustainable_mtls_issuer_rotation_and_revocation_drill",
+    "cloudflare_access_service_auth_common_name_policy_positive_and_negative_tests",
     "unix_socket_container_isolation_test",
     "local_peer_authorization_test",
     "socket_owner_mode_and_mount_boundary_test",

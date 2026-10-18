@@ -4,7 +4,7 @@
 
 ## État réellement attesté
 
-Un hostname dédié `signer.lemtel.assistantvirtualai.com` existe et est protégé par Cloudflare Access en **default-deny**. Le Worker reste non exposé par `workers.dev` et ne peut pas être invoqué sans la configuration explicite attendue. Aucun service token n’existe encore, aucune policy Access `service_auth` n’est attachée, aucun binding Secrets Store, Durable Object ou variable de production n’est présent.
+Un hostname dédié `signer.lemtel.assistantvirtualai.com` existe et est protégé par Cloudflare Access en **default-deny**. Une CA publique dédiée a été importée hors bande et associée exclusivement à ce hostname, sans contenu de certificat ni identifiant Cloudflare conservé dans ce dépôt. Cette importation ne permet pas d’activer le signer : Aucun service token n’existe encore, aucune policy Access `service_auth` n’est attachée, aucun binding Secrets Store, Durable Object ou variable de production n’est présent. Le rapprochement DER entre l’attestation DO et la CA importée demeure requis avant toute confiance opérationnelle.
 
 La clé de plateforme reste un secret write-only attendu uniquement dans un binding Cloudflare Secrets Store. Elle n’est jamais affichée, stockée dans le dépôt, ajoutée à un gist, une commande ou un journal. L’implémentation ne lit ce binding qu’après contrôle de l’hôte, de l’assertion Access, du certificat mTLS, de l’autorisation d’enrôlement et du ledger anti-rejeu.
 
@@ -18,7 +18,7 @@ L’autorisation d’enrôlement lie précisément le `requestId`, le rôle, l�
 
 ## Identité mTLS et Access
 
-Le futur relais DO root-only doit posséder une identité mTLS dédiée, distincte de toute clé de nœud, de plateforme, d’arbitre et de fournisseur. Cloudflare Access doit appliquer une policy `service_auth` au **Common Name exact** attendu. Le Worker doit simultanément vérifier :
+Le futur relais DO root-only doit posséder une identité mTLS dédiée, distincte de toute clé de nœud, de plateforme, d’arbitre et de fournisseur. Le leaf issu du bootstrap CA éphémère est interdit au relais actif tant qu’un émetteur durable et les drills de rotation/révocation ne sont pas prouvés. Cloudflare Access doit appliquer une policy `service_auth` au **Common Name exact** attendu. Le Worker doit simultanément vérifier :
 
 - le JWT Access signé avec l’émetteur et l’audience de l’application ;
 - `request.cf.tlsClientAuth.certVerified === "SUCCESS"` et `certRevoked === "0"` ;
@@ -43,6 +43,8 @@ Le relais ne fournit aucune installation, aucun socket permanent et aucune confi
 6. Service d’autorisation d’enrôlement à usage unique, autoritaire et audité ; un nœud ne peut pas choisir sa propre empreinte, rôle, challenge ni expiration.
 7. Binding Secrets Store write-only, Durable Object anti-rejeu, `compatibility_date` Worker explicite et testés dans un environnement isolé. Aucune route Worker, aucun `workers.dev` et aucun preview public ne doit être activé.
 8. Déploiement Edge/enrôlement attesté puis publication redacted d’un seul nœud à la fois, avec timers encore désactivés.
+
+Le contrat et le runbook de préparation du cycle de vie sont dans `MTLS_CLIENT_CERTIFICATE_LIFECYCLE.md`. Ils imposent les preuves acceptées avec le leaf exact et de refus sans certificat, certificat révoqué, mauvais Common Name, sujet additionnel, mauvaise empreinte, mauvais émetteur, expiration et état JWKS stale. Une CA importée hors bande ne permet pas d’activer une policy, un binding, un relais ou une bascule.
 
 Même après ces étapes, le signer autoriserait au plus l’enrôlement de publication redacted. Il ne remplacerait jamais les gates L7, Node Status, trafic, fencing, promotion, runtime Hostinger, routage Cloudflare de failover, failback ni retry client requis pour un failover automatique.
 

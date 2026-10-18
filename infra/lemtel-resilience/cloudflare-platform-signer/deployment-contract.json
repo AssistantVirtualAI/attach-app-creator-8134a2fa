@@ -1,5 +1,5 @@
 {
-  "contract_version": "lemtel_cloudflare_platform_signer_v4",
+  "contract_version": "lemtel_cloudflare_platform_signer_v5",
   "scope": "access_protected_external_signer_source_only",
   "worker": {
     "logical_name": "lemtel-platform-signer",
@@ -29,6 +29,12 @@
     "session_duration": "10m",
     "service_token_created": false,
     "service_auth_policy_configured": false,
+    "mtls_root_ca_imported_out_of_band": true,
+    "mtls_root_ca_associated_hostname": "signer.lemtel.assistantvirtualai.com",
+    "mtls_root_ca_certificate_content_in_repository": false,
+    "mtls_root_ca_certificate_identifier_in_repository": false,
+    "mtls_root_ca_der_fingerprint_reconciled": false,
+    "mtls_root_ca_import_does_not_authorize_service_auth": true,
     "source_access_jwt_issuer_audience_signature_verification_implemented": true,
     "source_mtls_cert_verified_fingerprint_subject_verification_implemented": true,
     "source_access_jwks_network_fetch_forbidden": true,
@@ -82,9 +88,10 @@
   "required_before_signing": [
     "independent_threat_model_review",
     "external_code_review",
+    "der_fingerprint_reconciliation_between_do_attestation_and_imported_ca",
     "encrypted_root_only_mtls_relay_credential_backend_attestation",
-    "dedicated_mtls_client_certificate_rotation_and_revocation_drill",
-    "cloudflare_access_service_auth_common_name_policy_test",
+    "sustainable_mtls_issuer_rotation_and_revocation_drill",
+    "cloudflare_access_service_auth_common_name_policy_positive_and_negative_tests",
     "access_jwks_rotation_update_and_negative_test",
     "authenticated_edge_to_worker_channel",
     "enrollment_authority_issue_consume_and_expiry_test",

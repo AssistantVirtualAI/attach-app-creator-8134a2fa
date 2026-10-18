@@ -27,6 +27,8 @@ Après le token explicite, le script produit dans un répertoire temporaire root
 
 La clé privée de CA est supprimée dès la signature du leaf, avant l’écriture des sorties, et n’est jamais persistée. Seul son certificat public est conservé au chemin déterministe ci-dessus, après contrôle `root:root`, fichier régulier et mode `0644`. La CSR, la configuration d’extensions, les clés/certificats leaf en clair et tous les autres fichiers temporaires sont supprimés avant le statut de succès. Un échec déclenche le rollback des liens de sortie créés par cette invocation, **y compris le nouveau certificat CA public**, puis le nettoyage du temporaire. La suppression logique ne doit pas être présentée comme une preuve d’effacement physique sur un support de stockage donné.
 
+La destruction délibérée de cette clé signifie que le leaf produit est un artefact de bootstrap éphémère : il ne peut être ni tourné ni révoqué par le script sous ce même émetteur. Il est donc interdit comme credential d’un relais actif. Une CA importée hors bande dans Cloudflare Access, même si elle est associée au hostname dédié, ne contourne pas ce blocker. Le cycle de vie durable exige un émetteur approuvé séparément, un rapprochement d’empreinte DER et des drills de rotation/révocation, selon `MTLS_CLIENT_CERTIFICATE_LIFECYCLE.md`.
+
 ## Attestation publique et diagnostic
 
 L’attestation locale publique est écrite séparément avec le mode `0644`. Elle contient seulement :

@@ -25,7 +25,11 @@ test('secret stays bounded and root-only while Edge is recreated before the smok
   assert.doesNotMatch(source,/console\.|printenv|Deno\.env\.toObject|EnvironmentFile=|Environment=.*(?:SECRET|TOKEN|KEY)/iu);
   assert.match(source,/if self\.timer_attempted: subprocess\.run\(\['systemctl','disable','--now'/u);
   assert.match(source,/self\.compose\(False\).*force-recreate/u);
-  assert.match(source,/out,err=command\(\['systemctl','enable','--now','lemtel-do-writer-resource-publisher\.timer'\]\); require\(not err and len\(out\)<=1024\); self\.guard='timer_state'/u);
+  assert.match(source,/systemd-analyze','verify',str\(SERVICE\),str\(TIMER\)/u);
+  assert.match(source,/timer_enable_systemd_unavailable/u);
+  assert.match(source,/timer_enable_unit_missing/u);
+  assert.match(source,/timer_enable_start_failed/u);
+  assert.match(source,/timer_enable_command_failed/u);
   assert.match(source,/publisher_smoke_http_503/u);
   assert.match(source,/publisher_smoke_transport/u);
 });
@@ -35,7 +39,7 @@ test('Python refusal reports only a bounded phase and guard category',()=>{
   assert.match(source,/print\('reason='\+reason\)/u);
   assert.doesNotMatch(source,/str\((?:error|exception)\)|repr\(|traceback|exc_info/iu);
   const guards=[...source.matchAll(/self\.guard='([a-z_]+)'/gu)].map((match)=>match[1]);
-  assert.deepEqual([...new Set(guards)].sort(),['configuration_compose_contract','configuration_credentials','configuration_directories','configuration_override','configuration_publisher_check','configuration_publisher_destination_copy','configuration_publisher_source_read','configuration_service_copy','configuration_timer_copy','destination_absence','destination_attestation','destination_open','destination_ownership','destination_parent_security','destination_permissions','edge_recreate','entry','initial_absence','publisher_smoke_test','runtime_directories','runtime_identity','secret_generation','source_component_hashes','source_directory','source_ingest_hash','source_manifest_read','source_manifest_shape','timer_daemon_reload','timer_enable','timer_state']);
+  assert.deepEqual([...new Set(guards)].sort(),['configuration_compose_contract','configuration_credentials','configuration_directories','configuration_override','configuration_publisher_check','configuration_publisher_destination_copy','configuration_publisher_source_read','configuration_service_copy','configuration_timer_copy','destination_absence','destination_attestation','destination_open','destination_ownership','destination_parent_security','destination_permissions','edge_recreate','entry','initial_absence','publisher_smoke_test','runtime_directories','runtime_identity','secret_generation','source_component_hashes','source_directory','source_ingest_hash','source_manifest_read','source_manifest_shape','timer_daemon_reload','timer_enable','timer_enable_systemd_unavailable','timer_state','timer_unit_verify']);
   assert.ok(source.indexOf("self.guard='source_directory'")<source.indexOf("self.guard='source_manifest_read'"));
   assert.ok(source.indexOf("self.guard='source_manifest_read'")<source.indexOf("self.guard='source_manifest_shape'"));
   assert.ok(source.indexOf("self.guard='source_manifest_shape'")<source.indexOf("self.guard='source_component_hashes'"));

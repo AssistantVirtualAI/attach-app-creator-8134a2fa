@@ -138,7 +138,7 @@ class Transaction:
         self.guard='configuration_credentials'; self.create(CONFIG,(f'LEMTEL_DO_WRITER_RESOURCE_ENDPOINT={ENDPOINT}\n{KEY}={secret}\n').encode(),0o600)
         self.create(EDGE_ENV,(KEY+'='+secret+'\n').encode(),0o600); secret=None
         self.guard='configuration_override'; self.create(OVERRIDE,('services:\n  '+self.service+':\n    environment:\n      '+KEY+': ${'+KEY+':?required}\n').encode(),0o600)
-        self.guard='configuration_publisher_files'; self.create(PUBLISHER,read_protected(self.publisher_source),0o700); self.create(SERVICE,read_protected(self.service_source),0o644); self.create(TIMER,read_protected(self.timer_source),0o644)
+        self.guard='configuration_publisher_copy'; self.create(PUBLISHER,read_protected(self.publisher_source),0o700); self.guard='configuration_service_copy'; self.create(SERVICE,read_protected(self.service_source),0o644); self.guard='configuration_timer_copy'; self.create(TIMER,read_protected(self.timer_source),0o644)
         self.guard='configuration_publisher_check'; out,err=command([str(PUBLISHER),'--check-config']); require(not err and out=='status=config_ready\n')
         self.guard='configuration_compose_contract'; quiet(self.compose(True)+['config','--quiet']); self.phase='edge_recreate'; self.guard='edge_recreate'; self.edge_attempted=True; command(self.compose(True)+['up','--no-deps','--force-recreate','--no-build','--pull','never','-d',self.service]); self.edge=container_for('supabase-edge-functions'); self.verify_edge(True)
         self.phase='smoke_test'; self.guard='publisher_smoke_test'; out,err=command([str(PUBLISHER)]); require(not err and out=='status=published\n')

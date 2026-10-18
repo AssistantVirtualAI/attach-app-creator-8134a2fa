@@ -107,7 +107,9 @@ class Transaction:
         required={'publisher':'lemtel-do-writer-resource-publish.sh','service':'lemtel-do-writer-resource-publisher.service','timer':'lemtel-do-writer-resource-publisher.timer'}
         require(data.get('files')==required and set(data.get('sha256',{}))==set(required))
         self.guard='source_component_hashes'
-        for key,name in required.items(): require(re.fullmatch(r'[a-f0-9]{64}',data['sha256'][key]) is not None and hash_file(SOURCE/(name if key=='publisher' else 'systemd'/name))==data['sha256'][key])
+        for key,name in required.items():
+            relative_path=Path(name) if key=='publisher' else Path('systemd')/name
+            require(re.fullmatch(r'[a-f0-9]{64}',data['sha256'][key]) is not None and hash_file(SOURCE/relative_path)==data['sha256'][key])
         self.publisher_source=SOURCE/required['publisher']; self.service_source=SOURCE/'systemd'/required['service']; self.timer_source=SOURCE/'systemd'/required['timer']; self.ingest_hash=data.get('ingest_sha256'); self.guard='source_ingest_hash'; require(re.fullmatch(r'[a-f0-9]{64}',self.ingest_hash or '') is not None)
         self.guard='runtime_identity'; self.edge=container_for('supabase-edge-functions'); self.project=label(self.edge,'com.docker.compose.project'); self.service=label(self.edge,'com.docker.compose.service')
         require(re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,62}',self.project) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,62}',self.service))

@@ -63,6 +63,8 @@ export function mapV2Message(o: any): NsNormalizedEvent | null | undefined {
   const isV2 = ["sms", "mms", "chat"].includes(kind) &&
     (o?.["messagesession-id"] != null || o?.["terminating-user-id"] !== undefined || o?.text !== undefined);
   if (!isV2) return undefined;
+  // NS v2 docs: direction "orig" = inbound, "term" = outbound.
+  if (String(o?.direction ?? "").trim().toLowerCase() !== "orig") return null;
   const receiver = String(o?.["terminating-user-id"] ?? "").trim();
   const sender = String(o?.["from-user-id"] ?? "").trim();
   if (!receiver || receiver === sender) return null;

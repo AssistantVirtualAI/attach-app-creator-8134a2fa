@@ -14,7 +14,7 @@ L’unique endpoint prévu est un `POST` HTTPS sur `/v1/node-enrollment-delivery
 
 Le Worker refuse toute variante d’hôte, de chemin, de méthode, d’origine navigateur, de forme JSON, d’encodage Base64URL, de rôle ou de taille. Il ne fait aucun appel HTTP sortant : le jeu de clés public Access doit être fourni par un binding de configuration redacted et mis à jour de manière contrôlée pendant une rotation Cloudflare Access. Toute absence ou incohérence répond par un résultat redacted et ne signe rien.
 
-L’autorisation d’enrôlement lie précisément le `requestId`, le rôle, l’empreinte du nœud, le challenge, le digest de la remise et son expiration. Elle est vérifiée avec une clé publique distincte. Le transcript signé renvoie ces mêmes éléments. Ce signer n’est donc pas un oracle de signature générique.
+L’autorisation d’enrôlement lie précisément le `requestId`, le rôle, l’empreinte du nœud, le challenge, le digest de la remise et son expiration. Elle est vérifiée avec une clé publique distincte. Le transcript signé renvoie ces mêmes éléments. Ce signer n’est donc pas un oracle de signature générique. Toute entrée anti-rejeu existante mais corrompue, incomplète ou ambiguë est refusée sans la supprimer, sans créer de claim et sans accéder à la clé de signature, tant par `/claim` que par le nettoyage d’alarme.
 
 ## Identité mTLS et Access
 

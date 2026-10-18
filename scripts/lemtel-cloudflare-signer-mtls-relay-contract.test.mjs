@@ -34,6 +34,7 @@ test('mTLS relay remains a source-only, non-deployable identity alternative', ()
   assert.equal(contract.certificate_lifecycle.bootstrap_leaf_for_active_relay_forbidden, true);
   assert.equal(contract.certificate_lifecycle.service_auth_policy_count, 0);
   assert.equal(contract.certificate_lifecycle.relay_activation_allowed, false);
+  assert.equal(contract.signer.source_replay_ledger_corruption_fails_closed, true);
   for (const [key, value] of Object.entries(contract.activation)) assert.equal(value, false, key);
 });
 

@@ -57,6 +57,7 @@
     "source_only_endpoint_implemented": true,
     "source_only_canonical_request_validation_implemented": true,
     "source_only_replay_ledger_implemented": true,
+    "source_only_replay_ledger_corruption_fails_closed": true,
     "source_only_authorization_claim_implemented": true,
     "source_only_key_binding_after_all_gates_implemented": true,
     "active": false

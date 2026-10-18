@@ -142,6 +142,7 @@
     "worker_secret_binding_created": false,
     "signing_endpoint_configured": false,
     "replay_ledger_configured": false,
+    "source_replay_ledger_corruption_fails_closed": true,
     "node_enrollment_integration_configured": false
   },
   "required_before_any_deployment": [

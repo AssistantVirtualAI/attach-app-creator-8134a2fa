@@ -35,7 +35,7 @@ const unconfigured = (value) =>
   value.signing.request_authentication_configured === false && value.signing.replay_ledger_configured === false &&
   value.signing.semantic_authorization_key_configured === false && value.signing.signing_endpoint_configured === false &&
   value.signing.node_enrollment_integration_configured === false && value.signing.source_only_endpoint_implemented === true &&
-  value.signing.source_only_canonical_request_validation_implemented === true && value.signing.source_only_replay_ledger_implemented === true &&
+  value.signing.source_only_canonical_request_validation_implemented === true && value.signing.source_only_replay_ledger_implemented === true && value.signing.source_only_replay_ledger_corruption_fails_closed === true &&
   value.signing.source_only_authorization_claim_implemented === true && value.signing.source_only_key_binding_after_all_gates_implemented === true &&
   value.signing.active === false && Object.values(value.activation).every((entry) => entry === false) &&
   value.boundaries.do_writer_remains_unique === true && value.boundaries.hostinger_runtime_remains_private_and_stopped === true &&
@@ -63,6 +63,17 @@ function requestWithMtls(body, token, fingerprint, host = 'signer.lemtel.assista
     certSubjectDNRFC2253: 'CN=lemtel-do-signer-mtls-relay', ...client,
   } } });
   return request;
+}
+
+function ledgerStorage(values, alarms, writes) {
+  return {
+    transaction: async (callback) => callback({
+      get: async (key) => values.get(key),
+      put: async (key, value) => { writes.put++; values.set(key, value); },
+      delete: async (key) => { writes.delete++; values.delete(key); },
+      setAlarm: async (value) => { writes.alarm++; alarms.push(value); },
+    }),
+  };
 }
 
 test('Cloudflare platform signer remains Access-protected and operationally unconfigured', () => {
@@ -186,22 +197,42 @@ test('Worker denies missing, invalid, revoked, wrong-subject, and wrong-fingerpr
 
 test('Worker source retains guards for semantic authorization and access token expiry before signer-key access', async () => {
   const source = readFileSync(workerPath, 'utf8');
-  for (const required of ['certVerified', 'certFingerprintSHA256', 'certSubjectDNRFC2253', 'ACCESS_JWKS_JSON', 'ENROLLMENT_AUTHORIZATION_PUBLIC_JWK', 'expectedRequest(request)', 'setAlarm']) assert.ok(source.includes(required), required);
+  for (const required of ['certVerified', 'certFingerprintSHA256', 'certSubjectDNRFC2253', 'ACCESS_JWKS_JSON', 'ENROLLMENT_AUTHORIZATION_PUBLIC_JWK', 'expectedRequest(request)', 'validStoredClaim', 'setAlarm']) assert.ok(source.includes(required), required);
   assert.doesNotMatch(source, /(?:payload\.sub|payload\.type|networkFetch|cdn-cgi\/access\/certs)/u);
 });
 
-test('replay ledger retains a claim until expiry, rejects concurrent reuse, and clears expired state by alarm', async () => {
+test('replay ledger retains a live claim through a stale alarm and deletes only a valid expired claim', async () => {
   const module = await import(workerPath + `?ledger=${crypto.randomUUID()}`);
-  const values = new Map(), alarms = [];
-  const storage = {
-    transaction: async (callback) => callback({ get: async (key) => values.get(key), put: async (key, value) => values.set(key, value), delete: async (key) => values.delete(key), setAlarm: async (value) => alarms.push(value) }),
-    deleteAll: async () => values.clear(),
-  };
+  const values = new Map(), alarms = [], writes = { put: 0, delete: 0, alarm: 0 };
+  const storage = ledgerStorage(values, alarms, writes);
   const ledger = new module.LemtelSignerReplayLedger({ storage }); const now = Math.floor(Date.now() / 1000);
   const value = { requestId: '33333333-3333-4333-8333-333333333333', digest: 'f'.repeat(64), expiresAt: now + 90 };
   const claim = () => new Request('https://lemtel-replay-ledger/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: module.canonical(value) });
   assert.equal((await ledger.fetch(claim())).status, 204); assert.equal((await ledger.fetch(claim())).status, 409);
-  assert.equal(alarms[0], value.expiresAt * 1000); assert.equal(values.size, 1); await ledger.alarm(); assert.equal(values.size, 0);
+  assert.equal(alarms[0], value.expiresAt * 1000); assert.deepEqual(values.get('claim'), value); assert.equal(values.size, 1);
+  await ledger.alarm();
+  assert.deepEqual(values.get('claim'), value); assert.equal(writes.delete, 0); assert.equal(alarms.at(-1), value.expiresAt * 1000);
+  values.set('claim', { ...value, expiresAt: now - 1 });
+  await ledger.alarm();
+  assert.equal(values.size, 0); assert.equal(writes.delete, 1);
+  assert.equal((await ledger.fetch(claim())).status, 204);
+});
+
+test('replay ledger preserves corrupt claims during both alarm and claim handling', async () => {
+  const module = await import(workerPath + `?ledger-corruption=${crypto.randomUUID()}`);
+  const now = Math.floor(Date.now() / 1000);
+  const value = { requestId: '33333333-3333-4333-8333-333333333333', digest: 'f'.repeat(64), expiresAt: now + 90 };
+  const claim = () => new Request('https://lemtel-replay-ledger/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: module.canonical(value) });
+  for (const corrupt of [null, {}, { requestId: value.requestId, digest: value.digest }, { requestId: value.requestId, digest: value.digest, expiresAt: now + 90, unexpected: true }, { requestId: 'not-a-uuid', digest: value.digest, expiresAt: now + 90 }, { requestId: value.requestId, digest: 'wrong', expiresAt: now + 90 }, { requestId: value.requestId, digest: value.digest, expiresAt: Number.MAX_SAFE_INTEGER + 1 }]) {
+    const values = new Map([['claim', corrupt]]), alarms = [], writes = { put: 0, delete: 0, alarm: 0 };
+    const ledger = new module.LemtelSignerReplayLedger({ storage: ledgerStorage(values, alarms, writes) });
+    await ledger.alarm();
+    assert.strictEqual(values.get('claim'), corrupt);
+    assert.deepEqual(writes, { put: 0, delete: 0, alarm: 0 });
+    assert.equal((await ledger.fetch(claim())).status, 409);
+    assert.strictEqual(values.get('claim'), corrupt);
+    assert.deepEqual(writes, { put: 0, delete: 0, alarm: 0 });
+  }
 });
 
 test('runbook preserves production default-deny and non-activation boundaries', () => {

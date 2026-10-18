@@ -256,6 +256,10 @@ async function signDelivery(value, authorization, env) {
   } catch (error) { if (error instanceof Deny) throw error; throw new Deny(); }
 }
 
+function validStoredClaim(value) {
+  return exact(value, ['requestId', 'digest', 'expiresAt']) && typeof value.requestId === 'string' && uuidV4.test(value.requestId) && typeof value.digest === 'string' && hex64.test(value.digest) && Number.isSafeInteger(value.expiresAt) && value.expiresAt > 0;
+}
+
 export class LemtelSignerReplayLedger {
   constructor(state) { this.state = state; }
   async fetch(request) {
@@ -268,16 +272,27 @@ export class LemtelSignerReplayLedger {
       let accepted = false;
       await this.state.storage.transaction(async (store) => {
         const existing = await store.get('claim');
-        if (existing && existing.expiresAt > now) return;
-        if (existing) await store.delete('claim');
-        await store.put('claim', { digest: value.digest, expiresAt: value.expiresAt });
+        if (existing !== undefined) {
+          if (!validStoredClaim(existing) || existing.requestId !== value.requestId) throw new Deny();
+          if (existing.expiresAt > now) return;
+          await store.delete('claim');
+        }
+        await store.put('claim', { requestId: value.requestId, digest: value.digest, expiresAt: value.expiresAt });
         await store.setAlarm(value.expiresAt * 1000);
         accepted = true;
       });
       return accepted ? new Response(null, { status: 204, headers: noStore }) : empty(409);
     } catch { return empty(409); }
   }
-  async alarm() { await this.state.storage.deleteAll(); }
+  async alarm() {
+    const now = Math.floor(Date.now() / 1000);
+    await this.state.storage.transaction(async (store) => {
+      const existing = await store.get('claim');
+      if (existing === undefined || !validStoredClaim(existing)) return;
+      if (existing.expiresAt <= now) { await store.delete('claim'); return; }
+      await store.setAlarm(existing.expiresAt * 1000);
+    });
+  }
 }
 
 function expectedRequest(request) {

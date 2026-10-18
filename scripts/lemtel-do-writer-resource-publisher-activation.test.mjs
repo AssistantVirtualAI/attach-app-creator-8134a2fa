@@ -25,6 +25,7 @@ test('secret stays bounded and root-only while Edge is recreated before the smok
   assert.doesNotMatch(source,/console\.|printenv|Deno\.env\.toObject|EnvironmentFile=|Environment=.*(?:SECRET|TOKEN|KEY)/iu);
   assert.match(source,/if self\.timer_attempted: subprocess\.run\(\['systemctl','disable','--now'/u);
   assert.match(source,/self\.compose\(False\).*force-recreate/u);
+  assert.match(source,/out,err=command\(\['systemctl','enable','--now','lemtel-do-writer-resource-publisher\.timer'\]\); require\(not err and len\(out\)<=1024\); self\.guard='timer_state'/u);
   assert.match(source,/publisher_smoke_http_503/u);
   assert.match(source,/publisher_smoke_transport/u);
 });

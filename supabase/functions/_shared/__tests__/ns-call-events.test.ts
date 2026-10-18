@@ -112,8 +112,10 @@ describe("NS v2 message webhook", () => {
   });
   it("ignores messages without on-net receiver or self echo", () => {
     expect(normalizeNsEvents([
-      { type: "sms", "from-user-id": "113", "terminating-user-id": null, text: "x", "messagesession-id": "s" },
-      { type: "sms", "from-user-id": "113", "terminating-user-id": "113", text: "x", "messagesession-id": "s" },
+      { type: "sms", direction: "term", "from-user-id": "113", "terminating-user-id": "1064", text: "x", "messagesession-id": "s" },
+      { type: "sms", "from-user-id": "113", "terminating-user-id": "1064", text: "x", "messagesession-id": "s" },
+      { type: "sms", direction: "orig", "from-user-id": "113", "terminating-user-id": null, text: "x", "messagesession-id": "s" },
+      { type: "sms", direction: "orig", "from-user-id": "113", "terminating-user-id": "113", text: "x", "messagesession-id": "s" },
     ])).toHaveLength(0);
   });
 });

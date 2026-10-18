@@ -16,6 +16,14 @@ import { withPromptCache, ANTHROPIC_VERSION } from "./anthropic.ts";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const OPENAI_STT_URL = "https://api.openai.com/v1/audio/transcriptions";
 
+/** Server environment access also permits importing pure helpers in web tests. */
+function serverEnv(name: string): string | undefined {
+  const runtime = globalThis as typeof globalThis & {
+    Deno?: { env?: { get?: (key: string) => string | undefined } };
+  };
+  return runtime.Deno?.env?.get?.(name);
+}
+
 export const CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
 export const CLAUDE_FAST_MODEL = "claude-haiku-4-5-20251001";
 
@@ -225,10 +233,10 @@ export function logAiUsage(row: {
   label?: string;
 }) {
   try {
-    const url = Deno.env.get("SUPABASE_URL");
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const url = serverEnv("SUPABASE_URL");
+    const key = serverEnv("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) return;
-    const endpoint = Deno.env.get("SB_EXECUTION_ID") ? "edge" : "edge";
+    const endpoint = serverEnv("SB_EXECUTION_ID") ? "edge" : "edge";
     void fetch(`${url}/rest/v1/planipret_ai_provider_usage`, {
       method: "POST",
       headers: {
@@ -256,7 +264,7 @@ export function logAiUsage(row: {
 }
 
 /** Name reported in AI usage telemetry. Set once per function. */
-let AI_ENDPOINT_NAME = Deno.env.get("SB_FUNCTION_NAME") ?? "unknown";
+let AI_ENDPOINT_NAME = serverEnv("SB_FUNCTION_NAME") ?? "unknown";
 export function setAiEndpointName(name: string) { AI_ENDPOINT_NAME = name; }
 
 /** Maps any model id to an OpenAI failover model. */
@@ -268,7 +276,7 @@ function toOpenAiModel(model?: string): string {
 
 /** Secondary provider: OpenAI, same OpenAI-shaped request/response. */
 async function openAiFailover(body: any): Promise<Response> {
-  const key = Deno.env.get("OPENAI_API_KEY");
+  const key = serverEnv("OPENAI_API_KEY");
   if (!key) {
     logAiUsage({ provider: "openai", failover: true, status_code: 502, error: "OPENAI_API_KEY missing" });
     return json({ error: { message: "claude failed and OPENAI_API_KEY is missing" } }, 502);
@@ -301,7 +309,7 @@ async function chatCompletions(init: RequestInit): Promise<Response> {
   let body: any;
   try { body = JSON.parse(String(init.body ?? "{}")); } catch { return json({ error: { message: "bad request body" } }, 400); }
 
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  const key = serverEnv("ANTHROPIC_API_KEY");
   if (!key) {
     logAiUsage({ provider: "claude", model: body.model, failover: true, error: "ANTHROPIC_API_KEY missing" });
     return openAiFailover(body);
@@ -358,7 +366,7 @@ async function chatCompletions(init: RequestInit): Promise<Response> {
 
 
 async function transcriptions(init: RequestInit): Promise<Response> {
-  const key = Deno.env.get("OPENAI_API_KEY");
+  const key = serverEnv("OPENAI_API_KEY");
   if (!key) return json({ error: { message: "missing OPENAI_API_KEY" } }, 500);
 
   const src = init.body as FormData;

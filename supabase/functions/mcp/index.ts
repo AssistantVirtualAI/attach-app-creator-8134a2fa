@@ -3,10 +3,10 @@
 // supabase function: mcp
 // Bundled from src/lib/mcp/index.ts by @lovable.dev/mcp-js.
 // src/lib/mcp/index.ts
-import { auth, defineMcp } from "npm:@lovable.dev/mcp-js@3.1.1";
+import { auth, defineMcp } from "npm:@lovable.dev/mcp-js@3.0.5";
 
 // src/lib/mcp/tools/luc-read.ts
-import { defineTool, ToolError } from "npm:@lovable.dev/mcp-js@3.1.1";
+import { defineTool, ToolError } from "npm:@lovable.dev/mcp-js@3.0.5";
 import { z } from "npm:zod@^4.4.3";
 
 // src/lib/mcp/supabase.ts
@@ -146,7 +146,7 @@ var listMessages = defineTool({
 });
 
 // src/lib/mcp/tools/luc-create-contact.ts
-import { defineTool as defineTool2, ToolError as ToolError2 } from "npm:@lovable.dev/mcp-js@3.1.1";
+import { defineTool as defineTool2, ToolError as ToolError2 } from "npm:@lovable.dev/mcp-js@3.0.5";
 import { z as z2 } from "npm:zod@^4.4.3";
 var luc_create_contact_default = defineTool2({
   name: "create_contact",
@@ -184,5 +184,5 @@ var mcp_default = defineMcp({
 });
 
 // lovable-mcp-supabase-entry.ts
-import { createSupabaseHandler } from "npm:@lovable.dev/mcp-js@3.1.1/stacks/supabase";
+import { createSupabaseHandler } from "npm:@lovable.dev/mcp-js@3.0.5/stacks/supabase";
 Deno.serve(createSupabaseHandler(mcp_default, { functionName: "mcp" }));

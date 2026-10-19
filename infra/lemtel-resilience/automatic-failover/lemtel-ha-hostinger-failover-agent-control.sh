@@ -17,7 +17,7 @@ fail() { printf 'agent_control_status=failed\nreason=%s\n' "$1"; exit 1; }
 report() {
   echo "agent_timer=$(systemctl is-active lemtel-ha-hostinger-failover-agent.timer 2>/dev/null || true)"
   echo "agent_promotion_mode=$(sed -n 's/^PROMOTION_EXECUTION_MODE=//p' /etc/lemtel-ha/failover-agent.env 2>/dev/null || echo none)"
-  echo "agent_last_result=$(journalctl -u lemtel-ha-hostinger-failover-agent.service -n 30 --no-pager -o cat 2>/dev/null | grep -E 'hostinger_failover_agent_status=|reason=' | tail -2 | tr '\n' ' ')"
+  echo "agent_last_result=$(journalctl -u lemtel-ha-hostinger-failover-agent.service -n 30 --no-pager -o cat 2>/dev/null | grep -E 'hostinger_failover_agent_status=|reason=|error_class=' | tail -3 | tr '\n' ' ')"
   for f in "$STATE"/*.consumed; do [ -e "$f" ] && echo "incident_ledger $(basename "$f" .consumed | cut -c1-8)…: $(tr '\n' ' ' < "$f")"; done
   ls "$EVIDENCE" 2>/dev/null | sed 's/^/evidence_file=/'
   echo "standby_in_recovery=$(docker exec -u postgres lemtel-postgres-hostinger-standby psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()' 2>/dev/null)"

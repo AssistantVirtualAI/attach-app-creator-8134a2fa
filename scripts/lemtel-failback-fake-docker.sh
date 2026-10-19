@@ -53,7 +53,9 @@ case "$1" in
       echo "basebackup $*" >> "$F/basebackup"; exit 0
     fi
     if [[ "$*" == *IDENTIFY_SYSTEM* ]]; then [ -f "$F/replication-login-refused" ] && exit 2; echo ok; exit 0; fi
-    if [[ "$*" == *"--entrypoint psql"* ]]; then sql="$last"; file="$F/client-sql"; else exit 0; fi ;;
+    if [[ "$*" == *"--entrypoint psql"* ]]; then
+      if [ -f "$F/client-stderr" ]; then cat "$F/client-stderr" >&2; exit 2; fi
+      sql="$last"; file="$F/client-sql"; else exit 0; fi ;;
   exec)
     if [[ "$*" == *"grep -Fqx"* ]]; then [ -f "$F/hba-has-rule" ]; exit $?; fi
     if [[ "$*" == *"sh -eu -c"* ]]; then echo hba-append >> "$F/hba-writes"; exit 0; fi

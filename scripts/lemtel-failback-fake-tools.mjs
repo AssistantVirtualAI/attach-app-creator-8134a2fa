@@ -42,6 +42,14 @@ export function world({ sql = [], clientSql = [], files = {}, containers = {}, p
   tool('chown', `exit 0`);
   tool('sleep', `exit 0`);
   tool('socat', `exit 0`);
+  // ufw: "inactive" unless the test writes fake/ufw-active; rules kept in fake/ufw-rules.
+  tool('ufw', `echo "ufw $*" >> "${fake}/log"
+case "$1" in
+  status) if [ -f "${fake}/ufw-active" ]; then echo "Status: active"; cat "${fake}/ufw-rules" 2>/dev/null; else echo "Status: inactive"; fi ;;
+  allow) echo "[ 9] 10.253.47.1 5432/tcp on lemtel-ha0      ALLOW IN    10.253.47.2                # Lemtel failback relay" >> "${fake}/ufw-rules" ;;
+  delete) rm -f "${fake}/ufw-rules" ;;
+esac
+exit 0`);
   tool('apt-get', `exit 0`);
   const run = (script, args = [], env = {}, input = undefined) => spawnSync('bash', [script, ...args], { encoding: 'utf8', input,
     env: { PATH: `${bin}:${process.env.PATH}`, LEMTEL_FB_TEST_ROOT: root, ...env } });

@@ -55,7 +55,11 @@ type RequestBody =
   | { action: "reactivate_domain"; organizationId: string; domainId: string }
   | { action: "set_client_session_access"; organizationId: string; recipientUserId: string; clientKind: "mobile" | "desktop" | "client"; accessState: "active" | "revoked" }
   | { action: "update_organization"; organizationId: string; organization: OrganizationUpdateInput }
-  | { action: "archive_organization"; organizationId: string; confirmation: "ARCHIVE" };
+  | { action: "archive_organization"; organizationId: string; confirmation: "ARCHIVE" }
+  | { action: "remove_member"; organizationId: string; recipientUserId: string; confirmation: "REMOVE_MEMBER" }
+  | { action: "restore_member"; organizationId: string; recipientUserId: string }
+  | { action: "update_member_profile"; organizationId: string; recipientUserId: string; profile: { fullName: string; locale: Locale } }
+  | { action: "delete_domain"; organizationId: string; domainId: string; confirmation: "DELETE_DOMAIN" };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -246,6 +250,38 @@ export function validateBody(raw: unknown): RequestBody | Failure {
     if (isFailure(selectedLocale)) return selectedLocale;
     return { action: "resend_welcome", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId, locale: selectedLocale };
   }
+  if (raw.action === "remove_member" || raw.action === "restore_member") {
+    const keys = raw.action === "remove_member" ? ["action", "organizationId", "recipientUserId", "confirmation"] : ["action", "organizationId", "recipientUserId"];
+    if (!exactKeys(raw, keys)) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedRecipientUserId = organizationId(raw.recipientUserId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedRecipientUserId)) return parsedRecipientUserId;
+    if (raw.action === "restore_member") return { action: "restore_member", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId };
+    if (raw.confirmation !== "REMOVE_MEMBER") return fail("remove_confirmation_required", 400);
+    return { action: "remove_member", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId, confirmation: "REMOVE_MEMBER" };
+  }
+  if (raw.action === "update_member_profile") {
+    if (!exactKeys(raw, ["action", "organizationId", "recipientUserId", "profile"]) || !plainObject(raw.profile) || !exactKeys(raw.profile, ["fullName", "locale"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedRecipientUserId = organizationId(raw.recipientUserId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedRecipientUserId)) return parsedRecipientUserId;
+    const fullName = typeof raw.profile.fullName === "string" ? raw.profile.fullName.trim().replace(/\s+/g, " ") : "";
+    if (fullName.length < 1 || fullName.length > 120 || /[<>\u0000-\u001f]/.test(fullName)) return fail("invalid_user", 400);
+    const parsedLocale = locale(raw.profile.locale);
+    if (isFailure(parsedLocale)) return parsedLocale;
+    return { action: "update_member_profile", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId, profile: { fullName, locale: parsedLocale } };
+  }
+  if (raw.action === "delete_domain") {
+    if (!exactKeys(raw, ["action", "organizationId", "domainId", "confirmation"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    const parsedDomainId = organizationId(raw.domainId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (isFailure(parsedDomainId)) return parsedDomainId;
+    if (raw.confirmation !== "DELETE_DOMAIN") return fail("delete_confirmation_required", 400);
+    return { action: "delete_domain", organizationId: parsedOrganizationId, domainId: parsedDomainId, confirmation: "DELETE_DOMAIN" };
+  }
   if (raw.action === "revoke_invitation") {
     if (!exactKeys(raw, ["action", "organizationId", "recipientUserId"])) return fail("invalid_body", 400);
     const parsedOrganizationId = organizationId(raw.organizationId);
@@ -372,6 +408,37 @@ async function deliverWelcome(admin: any, organizationId: string, actor: string,
 }
 
 type ProvisionResult = { email: string; userId?: string; deliveryStatus: "provider_accepted" | "failed" | "needs_attention"; error?: string };
+/**
+ * Removes a person from one organization: membership deleted, every client session of that organization revoked.
+ * The account itself is deleted only when it belongs to no other organization and is not a platform administrator;
+ * when the database keeps it (it authored records), it is banned instead, so it can never sign in again.
+ */
+export async function removeMember(admin: any, organizationId: string, actor: string, recipientUserId: string): Promise<{ ok: true; account: "deleted" | "disabled" | "kept_other_organizations" } | Failure> {
+  if (!(await portalOrganizationAdmin(admin, actor, organizationId))) return fail("forbidden", 403);
+  if (recipientUserId === actor) return fail("cannot_remove_yourself", 400);
+  const { data: membership, error: membershipError } = await admin.from("lemtel_organization_memberships")
+    .select("role,status").eq("organization_id", organizationId).eq("user_id", recipientUserId).maybeSingle();
+  if (membershipError) return fail("member_remove_failed", 503);
+  if (!membership) return fail("recipient_not_found", 404);
+  if (membership.role === "owner") return fail("transfer_ownership_first", 409);
+  const { error: deleteError } = await admin.from("lemtel_organization_memberships").delete().eq("organization_id", organizationId).eq("user_id", recipientUserId);
+  if (deleteError) return fail("member_remove_failed", 503);
+  await admin.from("lemtel_client_session_controls").delete().eq("organization_id", organizationId).eq("user_id", recipientUserId);
+  await bumpAccountAuthorityRevision(admin, organizationId);
+  const { data: others } = await admin.from("lemtel_organization_memberships").select("organization_id").eq("user_id", recipientUserId).limit(1);
+  let account: "deleted" | "disabled" | "kept_other_organizations" = "kept_other_organizations";
+  if (!(others ?? []).length && !(await platformAdmin(admin, recipientUserId))) {
+    const { error } = await admin.auth.admin.deleteUser(recipientUserId);
+    if (!error) account = "deleted";
+    else {
+      await admin.auth.admin.updateUserById(recipientUserId, { ban_duration: "876000h" });
+      account = "disabled";
+    }
+  }
+  await audit(admin, organizationId, actor, "user_removed", account === "deleted" ? null : recipientUserId, { removed_user_id: recipientUserId, account });
+  return { ok: true, account };
+}
+
 export async function provisionMany(admin: any, organizationId: string, actor: string, recipients: UserInput[], configurationProvider: () => TransactionalEmailConfig | Failure = transactionalEmailConfig): Promise<ProvisionResult[]> {
   // Fail before creating any account when sender/logo/link configuration is invalid.
   const configuration = configurationProvider();
@@ -1261,6 +1328,50 @@ export async function handler(req: Request): Promise<Response> {
     if (error) return respond({ error: "domain_suspend_failed" }, 503);
     if (!domain?.id) return respond({ error: "domain_not_found" }, 404);
     await audit(admin, request.organizationId, actor, "domain_suspended", null, { domain_id: request.domainId });
+    return respond({ ok: true });
+  }
+
+  if (request.action === "delete_domain") {
+    // Only a suspended domain can be deleted: suspension is the reversible step, deletion the final one.
+    if (!(await organizationAdmin(admin, actor, request.organizationId)) && !(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const { data: domain, error } = await admin.from("lemtel_organization_domains")
+      .select("id,hostname,status").eq("id", request.domainId).eq("organization_id", request.organizationId).maybeSingle();
+    if (error) return respond({ error: "domain_delete_failed" }, 503);
+    if (!domain?.id) return respond({ error: "domain_not_found" }, 404);
+    if (domain.status !== "suspended") return respond({ error: "domain_must_be_suspended_first" }, 409);
+    const { error: deleteError } = await admin.from("lemtel_organization_domains").delete().eq("id", domain.id).eq("organization_id", request.organizationId).eq("status", "suspended");
+    if (deleteError) return respond({ error: "domain_delete_failed" }, 503);
+    await audit(admin, request.organizationId, actor, "domain_deleted", null, { domain_id: domain.id, hostname: domain.hostname });
+    return respond({ ok: true });
+  }
+
+  if (request.action === "remove_member") {
+    const result = await removeMember(admin, request.organizationId, actor, request.recipientUserId);
+    return respond(isFailure(result) ? { error: result.error } : result, isFailure(result) ? result.status : 200);
+  }
+
+  if (request.action === "update_member_profile") {
+    if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const { data: membership } = await admin.from("lemtel_organization_memberships").select("user_id").eq("organization_id", request.organizationId).eq("user_id", request.recipientUserId).maybeSingle();
+    if (!membership?.user_id) return respond({ error: "recipient_not_found" }, 404);
+    const { data: userResult } = await admin.auth.admin.getUserById(request.recipientUserId);
+    if (!userResult?.user) return respond({ error: "recipient_not_found" }, 404);
+    const { error } = await admin.auth.admin.updateUserById(request.recipientUserId, { user_metadata: { ...(userResult.user.user_metadata ?? {}), full_name: request.profile.fullName, locale: request.profile.locale } });
+    if (error) return respond({ error: "profile_update_failed" }, 503);
+    await audit(admin, request.organizationId, actor, "user_profile_updated", request.recipientUserId, { locale: request.profile.locale });
+    return respond({ ok: true });
+  }
+
+  if (request.action === "restore_member") {
+    if (!(await portalOrganizationAdmin(admin, actor, request.organizationId))) return respond({ error: "forbidden" }, 403);
+    const { data: restored, error } = await admin.from("lemtel_organization_memberships")
+      .update({ status: "active", suspended_at: null })
+      .eq("organization_id", request.organizationId).eq("user_id", request.recipientUserId).eq("status", "suspended")
+      .select("user_id").maybeSingle();
+    if (error) return respond({ error: "access_restore_failed" }, 503);
+    if (!restored?.user_id) return respond({ error: "recipient_not_found" }, 404);
+    await bumpAccountAuthorityRevision(admin, request.organizationId);
+    await audit(admin, request.organizationId, actor, "user_access_restored", request.recipientUserId, {});
     return respond({ ok: true });
   }
 

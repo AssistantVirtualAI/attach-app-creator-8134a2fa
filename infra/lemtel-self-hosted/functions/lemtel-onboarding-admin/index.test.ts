@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1.0.14";
-import { noObservationNodeStatus, platformOverview, provisionMany, redactedHostingerStandbyResources, redactedOperationalStatusFromRow, validateBody } from "./index.ts";
+import { noObservationNodeStatus, platformOverview, provisionMany, removeMember, redactedHostingerStandbyResources, redactedOperationalStatusFromRow, validateBody } from "./index.ts";
 import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
 
 Deno.test("portal list action accepts only its exact body", () => {
@@ -202,4 +202,87 @@ Deno.test("Hostinger standby resources are labelled as signed, not enrolled, and
   }
   assert(!("error" in validateBody({ action: "get_hostinger_standby_resources" })));
   assert("error" in validateBody({ action: "get_hostinger_standby_resources", role: "do_writer" }));
+});
+
+// Minimal in-memory PostgREST/Auth fake for the member-removal flow.
+function memberWorld(rows: Record<string, Record<string, unknown>[]>, options: { deleteUserFails?: boolean } = {}) {
+  const calls: string[] = [];
+  const from = (table: string) => {
+    const filters: [string, unknown][] = [];
+    const sets: [string, unknown[]][] = [];
+    let mode: "select" | "delete" | "update" = "select";
+    let patch: Record<string, unknown> = {};
+    const match = () => (rows[table] ?? []).filter((row) => filters.every(([k, v]) => row[k] === v) && sets.every(([k, v]) => v.includes(row[k])));
+    const run = () => {
+      if (mode === "delete") { const keep = (rows[table] ?? []).filter((row) => !match().includes(row)); calls.push(`delete:${table}`); rows[table] = keep; return { data: null, error: null }; }
+      if (mode === "update") { for (const row of match()) Object.assign(row, patch); calls.push(`update:${table}`); return { data: match()[0] ?? null, error: null }; }
+      return { data: match(), error: null };
+    };
+    const builder: any = {
+      select: () => builder, eq: (k: string, v: unknown) => { filters.push([k, v]); return builder; }, in: (k: string, v: unknown[]) => { sets.push([k, v]); return builder; }, limit: () => builder,
+      delete: () => { mode = "delete"; return builder; }, update: (p: Record<string, unknown>) => { mode = "update"; patch = p; return builder; },
+      insert: (row: Record<string, unknown>) => { (rows[table] ??= []).push(row); calls.push(`insert:${table}`); return Promise.resolve({ data: null, error: null }); },
+      maybeSingle: () => Promise.resolve({ data: run().data instanceof Array ? (run().data as unknown[])[0] ?? null : run().data, error: null }),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve(run()).then(resolve),
+    };
+    return builder;
+  };
+  const admin = {
+    from, rpc: () => Promise.resolve({ error: null }),
+    auth: { admin: {
+      deleteUser: (id: string) => { calls.push(`deleteUser:${id}`); return Promise.resolve({ error: options.deleteUserFails ? { message: "restricted" } : null }); },
+      updateUserById: (id: string, attrs: Record<string, unknown>) => { calls.push(`ban:${id}:${attrs.ban_duration}`); return Promise.resolve({ error: null }); },
+    } },
+  };
+  return { admin, calls, rows };
+}
+const ORG = "11111111-1111-4111-8111-111111111111", OTHER_ORG = "22222222-2222-4222-8222-222222222222";
+const ADMIN_USER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", MEMBER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const baseRows = () => ({
+  lemtel_organization_memberships: [
+    { organization_id: ORG, user_id: ADMIN_USER, role: "owner", status: "active" },
+    { organization_id: ORG, user_id: MEMBER, role: "member", status: "active" },
+  ],
+  lemtel_platform_administrators: [],
+  lemtel_client_session_controls: [{ organization_id: ORG, user_id: MEMBER, client_kind: "mobile" }],
+});
+
+Deno.test("remove, restore and domain deletion require exact, confirmed bodies", () => {
+  assertEquals(validateBody({ action: "remove_member", organizationId: ORG, recipientUserId: MEMBER, confirmation: "REMOVE_MEMBER" }),
+    { action: "remove_member", organizationId: ORG, recipientUserId: MEMBER, confirmation: "REMOVE_MEMBER" });
+  assert("error" in (validateBody({ action: "remove_member", organizationId: ORG, recipientUserId: MEMBER }) as object));
+  assert("error" in (validateBody({ action: "remove_member", organizationId: ORG, recipientUserId: MEMBER, confirmation: "yes" }) as object));
+  assertEquals(validateBody({ action: "restore_member", organizationId: ORG, recipientUserId: MEMBER }), { action: "restore_member", organizationId: ORG, recipientUserId: MEMBER });
+  assertEquals(validateBody({ action: "delete_domain", organizationId: ORG, domainId: MEMBER, confirmation: "DELETE_DOMAIN" }),
+    { action: "delete_domain", organizationId: ORG, domainId: MEMBER, confirmation: "DELETE_DOMAIN" });
+  assert("error" in (validateBody({ action: "delete_domain", organizationId: ORG, domainId: MEMBER }) as object));
+  assertEquals(validateBody({ action: "update_member_profile", organizationId: ORG, recipientUserId: MEMBER, profile: { fullName: "  Ana   Roy ", locale: "en" } }),
+    { action: "update_member_profile", organizationId: ORG, recipientUserId: MEMBER, profile: { fullName: "Ana Roy", locale: "en" } });
+  assert("error" in (validateBody({ action: "update_member_profile", organizationId: ORG, recipientUserId: MEMBER, profile: { fullName: "<b>", locale: "en" } }) as object));
+  assert("error" in (validateBody({ action: "update_member_profile", organizationId: ORG, recipientUserId: MEMBER, profile: { fullName: "Ana", locale: "es" } }) as object));
+});
+
+Deno.test("removing a member deletes the membership and sessions, then the account when it belongs nowhere else", async () => {
+  const w = memberWorld(baseRows());
+  const result = await removeMember(w.admin, ORG, ADMIN_USER, MEMBER);
+  assertEquals(result, { ok: true, account: "deleted" });
+  assertEquals(w.rows.lemtel_organization_memberships.filter((r) => r.user_id === MEMBER).length, 0);
+  assertEquals(w.rows.lemtel_client_session_controls.length, 0);
+  assert(w.calls.includes(`deleteUser:${MEMBER}`));
+});
+
+Deno.test("a member of another organization keeps the account; a referenced account is banned; owners and self are protected", async () => {
+  const shared = baseRows(); shared.lemtel_organization_memberships.push({ organization_id: OTHER_ORG, user_id: MEMBER, role: "member", status: "active" });
+  const w1 = memberWorld(shared);
+  assertEquals(await removeMember(w1.admin, ORG, ADMIN_USER, MEMBER), { ok: true, account: "kept_other_organizations" });
+  assert(!w1.calls.some((c) => c.startsWith("deleteUser")));
+  const w2 = memberWorld(baseRows(), { deleteUserFails: true });
+  assertEquals(await removeMember(w2.admin, ORG, ADMIN_USER, MEMBER), { ok: true, account: "disabled" });
+  assert(w2.calls.includes(`ban:${MEMBER}:876000h`));
+  const w3 = memberWorld(baseRows());
+  assertEquals((await removeMember(w3.admin, ORG, ADMIN_USER, ADMIN_USER) as { error: string }).error, "cannot_remove_yourself");
+  const w4 = memberWorld(baseRows()); w4.rows.lemtel_organization_memberships[1].role = "owner";
+  assertEquals((await removeMember(w4.admin, ORG, ADMIN_USER, MEMBER) as { error: string }).error, "transfer_ownership_first");
+  const w5 = memberWorld(baseRows());
+  assertEquals((await removeMember(w5.admin, ORG, MEMBER, ADMIN_USER) as { error: string }).error, "forbidden");
 });

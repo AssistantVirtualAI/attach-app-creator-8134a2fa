@@ -86,14 +86,40 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] ?? character));
 }
 
+// Email images: PNG only (Gmail and Outlook do not render SVG), immutable (pinned commit), overridable per deployment.
+const EMAIL_ASSET_BASE = "https://raw.githubusercontent.com/AssistantVirtualAI/attach-app-creator-8134a2fa/aab93f43c79dc86e0295ad5fc8ae481c60dbaf31/public/email";
+export const EMAIL_ASSETS = Object.freeze({
+  mark: `${EMAIL_ASSET_BASE}/lemtel-mark-112.png`,
+  phone: `${EMAIL_ASSET_BASE}/icon-phone.png`,
+  desktop: `${EMAIL_ASSET_BASE}/icon-desktop.png`,
+  laptop: `${EMAIL_ASSET_BASE}/icon-laptop.png`,
+});
+const FONT = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const NAVY = "#0b1730", NAVY_2 = "#163a6b", GOLD = "#f4b740", INK = "#0f1d33", INK_2 = "#55657d", LINE = "#e3e9f2";
+
 function brandMarkup(logoUrl?: string): string {
-  if (logoUrl) return `<img src="${escapeHtml(logoUrl)}" width="132" height="38" alt="Lemtel" style="display:block;max-width:132px;height:auto;border:0;outline:none;text-decoration:none" />`;
-  // No network request is made for the fallback mark.
-  return `<div role="img" aria-label="Lemtel" style="font-family:Arial,sans-serif;font-size:27px;line-height:38px;font-weight:800;letter-spacing:-1px;color:#10213b">Lem<span style="color:#00a7b5">tel</span></div>`;
+  const src = escapeHtml(logoUrl ?? EMAIL_ASSETS.mark);
+  return `<table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="vertical-align:middle;padding-right:14px"><img src="${src}" width="52" height="52" alt="Lemtel" style="display:block;width:52px;height:52px;border:0;border-radius:12px" /></td><td style="vertical-align:middle;${FONT}"><div style="font-size:26px;line-height:28px;font-weight:800;letter-spacing:-0.5px;color:#ffffff">Lemtel</div><div style="font-size:12px;line-height:16px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:${GOLD}">Communications</div></td></tr></table>`;
 }
 
-function link(url: string, label: string): string {
-  return `<a href="${escapeHtml(url)}" style="color:#007d8a;font-weight:700;text-decoration:none">${escapeHtml(label)}</a>`;
+
+function storeButton(url: string, icon: string, small: string, big: string): string {
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="background:${NAVY};border-radius:12px"><a href="${escapeHtml(url)}" style="display:block;padding:11px 14px;text-decoration:none;color:#ffffff"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="vertical-align:middle;padding-right:11px"><img src="${escapeHtml(icon)}" width="26" height="26" alt="" style="display:block;width:26px;height:26px;border:0" /></td><td style="vertical-align:middle;${FONT}"><div style="font-size:11px;line-height:14px;color:#b9c7dd">${escapeHtml(small)}</div><div style="font-size:16px;line-height:20px;font-weight:700;color:#ffffff">${escapeHtml(big)}</div></td></tr></table></a></td></tr></table>`;
+}
+
+function downloadGrid(urls: DistributionUrls, fr: boolean): string {
+  const cell = (content: string, width: string) => `<td width="${width}" style="padding:5px;vertical-align:top">${content}</td>`;
+  const mobile = [
+    storeButton(urls.ios, EMAIL_ASSETS.phone, fr ? "iPhone et iPad" : "iPhone & iPad", "App Store"),
+    storeButton(urls.android, EMAIL_ASSETS.phone, "Android", "Google Play"),
+  ];
+  const desktop = [
+    storeButton(urls.windows, EMAIL_ASSETS.desktop, fr ? "Ordinateur" : "Computer", "Windows"),
+    storeButton(urls.macosApple, EMAIL_ASSETS.laptop, fr ? "Mac · puce Apple" : "Mac · Apple silicon", "macOS"),
+    storeButton(urls.macosIntel, EMAIL_ASSETS.laptop, "Mac · Intel", "macOS"),
+  ];
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 -5px"><tr>${mobile.map((b) => cell(b, "50%")).join("")}</tr></table>`
+    + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 -5px"><tr>${desktop.map((b) => cell(b, "33%")).join("")}</tr></table>`;
 }
 
 /**
@@ -120,8 +146,8 @@ export function transactionalEmailMessage(input: {
     ? (isWelcome ? `Bienvenue, ${name}` : `Bonjour ${name},`)
     : (isWelcome ? `Welcome, ${name}` : `Hello ${name},`);
   const intro = fr
-    ? (isWelcome ? "Votre accès Lemtel est prêt." : "Une demande de réinitialisation de mot de passe a été reçue pour votre compte Lemtel.")
-    : (isWelcome ? "Your Lemtel access is ready." : "A password reset request was received for your Lemtel account.");
+    ? (isWelcome ? "Votre accès Lemtel est prêt. Voici vos informations de connexion." : "Une demande de réinitialisation de mot de passe a été reçue pour votre compte Lemtel.")
+    : (isWelcome ? "Your Lemtel access is ready. Here are your sign-in details." : "A password reset request was received for your Lemtel account.");
   const accountLabel = fr ? "Adresse courriel" : "Email address";
   const passwordLabel = fr ? "Mot de passe temporaire" : "Temporary password";
   const instructions = fr
@@ -131,14 +157,31 @@ export function transactionalEmailMessage(input: {
     ? "Ne partagez jamais ce mot de passe temporaire. Si vous n’attendiez pas ce courriel, contactez le soutien Lemtel."
     : "Never share this temporary password. If you did not expect this email, contact Lemtel support.";
   const apps = fr ? "Obtenir Lemtel" : "Get Lemtel";
-  const links = fr
-    ? [link(input.config.downloadUrls.ios, "iPhone et iPad"), link(input.config.downloadUrls.android, "Android"), link(input.config.downloadUrls.windows, "Windows"),
-      link(input.config.downloadUrls.macosApple, "Mac (puce Apple)"), link(input.config.downloadUrls.macosIntel, "Mac (Intel)")].join(" &nbsp;·&nbsp; ")
-    : [link(input.config.downloadUrls.ios, "iPhone & iPad"), link(input.config.downloadUrls.android, "Android"), link(input.config.downloadUrls.windows, "Windows"),
-      link(input.config.downloadUrls.macosApple, "Mac (Apple silicon)"), link(input.config.downloadUrls.macosIntel, "Mac (Intel)")].join(" &nbsp;·&nbsp; ");
+  const appsIntro = fr ? "Installez l’application sur vos appareils :" : "Install the app on your devices:";
+  const steps = fr
+    ? ["Installez l’application Lemtel ci-dessous.", "Connectez-vous avec votre courriel et le mot de passe temporaire.", "Choisissez votre mot de passe personnel."]
+    : ["Install the Lemtel app below.", "Sign in with your email and the temporary password.", "Choose your own password."];
+  const stepRows = steps.map((step, index) => `<tr><td style="vertical-align:top;padding:0 12px 10px 0"><div style="width:26px;height:26px;line-height:26px;border-radius:13px;background:${GOLD};color:${NAVY};font-weight:800;font-size:13px;text-align:center;${FONT}">${index + 1}</div></td><td style="vertical-align:top;padding:3px 0 10px;font-size:15px;line-height:21px;color:${INK};${FONT}">${escapeHtml(step)}</td></tr>`).join("");
+  const welcomeBlocks = isWelcome
+    ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 18px">${stepRows}</table>`
+      + `<h2 style="margin:8px 0 6px;font-size:18px;line-height:24px;color:${INK};${FONT}">${apps}</h2><p style="margin:0 0 12px;font-size:14px;line-height:20px;color:${INK_2};${FONT}">${appsIntro}</p>`
+      + downloadGrid(input.config.downloadUrls, fr)
+    : `<p style="margin:0;font-size:15px;line-height:23px;color:${INK};${FONT}">${instructions}</p>`;
   return {
     subject,
-    html: `<!doctype html><html lang="${input.locale}"><head><meta name="viewport" content="width=device-width,initial-scale=1" /><meta charset="utf-8" /></head><body style="margin:0;padding:0;background:#edf3f7;color:#10213b"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#edf3f7"><tr><td align="center" style="padding:28px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden"><tr><td style="height:6px;background:#00a7b5"></td></tr><tr><td style="padding:30px 32px 8px">${brandMarkup(input.config.logoUrl)}</td></tr><tr><td style="padding:8px 32px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"><h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#10213b">${heading}</h1><p style="margin:0 0 22px;font-size:16px;line-height:1.55">${intro}</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 22px;background:#f3f8fa;border:1px solid #d7e8eb;border-radius:12px"><tr><td style="padding:18px 20px;font-size:15px;line-height:1.65"><strong>${accountLabel}:</strong> ${email}<br /><strong>${passwordLabel}:</strong> <code style="display:inline-block;margin-top:5px;padding:4px 7px;background:#10213b;color:#ffffff;border-radius:5px;font-size:15px;word-break:break-all">${password}</code></td></tr></table><p style="margin:0 0 24px;font-size:16px;line-height:1.55">${instructions}</p>${isWelcome ? `<h2 style="margin:0 0 10px;font-size:18px;color:#10213b">${apps}</h2><p style="margin:0 0 24px;font-size:15px;line-height:1.6">${links}</p>` : ""}<p style="margin:0;padding-top:18px;border-top:1px solid #d7e8eb;color:#52657b;font-size:13px;line-height:1.55">${safety}</p></td></tr></table></td></tr></table></body></html>`,
+    html: `<!doctype html><html lang="${input.locale}"><head><meta name="viewport" content="width=device-width,initial-scale=1" /><meta charset="utf-8" /><meta name="color-scheme" content="light only" /><title>${escapeHtml(subject)}</title></head>`
+      + `<body style="margin:0;padding:0;background:#eef2f8;color:${INK}"><div style="display:none;max-height:0;overflow:hidden">${escapeHtml(intro)}</div>`
+      + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2f8"><tr><td align="center" style="padding:28px 12px">`
+      + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(11,23,48,0.12)">`
+      + `<tr><td style="background:${NAVY};background-image:linear-gradient(135deg,${NAVY} 0%,${NAVY_2} 100%);padding:26px 32px">${brandMarkup(input.config.logoUrl)}</td></tr>`
+      + `<tr><td style="height:4px;line-height:4px;font-size:0;background:${GOLD}">&nbsp;</td></tr>`
+      + `<tr><td style="padding:32px 32px 8px;${FONT}"><h1 style="margin:0 0 10px;font-size:26px;line-height:32px;font-weight:800;color:${INK}">${heading}</h1><p style="margin:0 0 22px;font-size:16px;line-height:24px;color:${INK_2}">${intro}</p>`
+      + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 24px;background:#f6f8fc;border:1px solid ${LINE};border-radius:14px"><tr><td style="padding:18px 20px">`
+      + `<div style="font-size:11px;line-height:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${INK_2}">${accountLabel}</div><div style="margin:2px 0 14px;font-size:16px;line-height:22px;font-weight:600;color:${INK};word-break:break-all">${email}</div>`
+      + `<div style="font-size:11px;line-height:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${INK_2}">${passwordLabel}</div><div style="margin-top:6px"><code style="display:inline-block;padding:8px 14px;background:#fff8e6;border:1px solid ${GOLD};border-radius:8px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:19px;line-height:24px;letter-spacing:1px;color:${NAVY};word-break:break-all">${password}</code></div>`
+      + `</td></tr></table>${welcomeBlocks}</td></tr>`
+      + `<tr><td style="padding:22px 32px 28px;${FONT}"><p style="margin:0;padding-top:18px;border-top:1px solid ${LINE};font-size:13px;line-height:19px;color:${INK_2}">${safety}</p><p style="margin:12px 0 0;font-size:12px;line-height:18px;color:#8a97ab">Lemtel Communications · ${fr ? "Propulsé par AVA" : "Powered by AVA"}</p></td></tr>`
+      + `</table></td></tr></table></body></html>`,
   };
 }
 

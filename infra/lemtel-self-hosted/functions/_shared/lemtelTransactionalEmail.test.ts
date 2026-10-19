@@ -42,7 +42,9 @@ Deno.test("only an explicitly configured safe HTTPS logo is rendered remotely; u
   assertEquals(configured({ LEMTEL_EMAIL_LOGO_URL: "https://assets.lemtel.example/logo.svg?tracking=1" }), undefined);
   assertEquals(configured({ LEMTEL_EMAIL_LOGO_URL: "http://assets.lemtel.example/logo.svg" }), undefined);
   const fallback = transactionalEmailMessage({ kind: "welcome", locale: "en", displayName: "Brand", email: "brand@example.test", temporaryPassword: "Synthetic1!", config: configured()! });
-  assertStringIncludes(fallback.html, "Lem<span");
+  // Default: the Lemtel mark as an immutable PNG (pinned commit), never SVG.
+  assertStringIncludes(fallback.html, "/public/email/lemtel-mark-112.png");
+  assert(!/src="[^"]+\.svg"/.test(fallback.html), "no SVG image by default");
 });
 
 Deno.test("the welcome email links every platform separately (iOS, Android, Windows, Mac Apple, Mac Intel); recovery carries the temporary password", () => {
@@ -57,7 +59,10 @@ Deno.test("the welcome email links every platform separately (iOS, Android, Wind
         assertStringIncludes(message.html, url.replaceAll("&", "&amp;"));
       }
       assertStringIncludes(message.html, "Windows");
-      assertStringIncludes(message.html, "Mac (Intel)");
+      assertStringIncludes(message.html, "Mac · Intel");
+      assertStringIncludes(message.html, "App Store");
+      assertStringIncludes(message.html, "Google Play");
+      assertStringIncludes(message.html, "/public/email/icon-laptop.png");
       assertStringIncludes(message.html, `lang="${locale}"`);
     }
   }

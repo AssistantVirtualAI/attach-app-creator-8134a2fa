@@ -46,7 +46,7 @@ export async function createBootstrapEnvelope({ session, publicDescriptor, confi
   // Pin to the locally generated public key, not merely to whatever the endpoint returns.
   if (canonical(publicDescriptor) !== canonical(session.publicDescriptor) ||
       !Number.isSafeInteger(now) || !Number.isSafeInteger(bootstrapTTL) || bootstrapTTL < 1 || bootstrapTTL > 300 ||
-      !Number.isSafeInteger(configTTL) || configTTL < bootstrapTTL || configTTL > 3600 ||
+      !Number.isSafeInteger(configTTL) || configTTL < bootstrapTTL || configTTL > 90 * 86400 ||
       !/^[A-Za-z0-9_-]{43}$/.test(nonce) || decode(nonce).length !== 32) throw new Error('invalid_bootstrap_input');
   const metadata = { format: 'lemtel_failover_bootstrap_v1', version: 1, algorithm: 'RSA-OAEP-256+A256GCM',
     kid: publicDescriptor.kid, config_revision: session.configRevision, nonce,
@@ -72,7 +72,7 @@ export async function createBootstrapEnvelope({ session, publicDescriptor, confi
 export async function sealDrillReceipt({ session, receipt, issuedAt, expiresAt }) {
   // Does NOT grant approval or sign a drill. A separately approved signed receipt must be supplied.
   if (!Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt) ||
-      expiresAt <= issuedAt || expiresAt - issuedAt > 3600) throw new Error('invalid_bootstrap_input');
+      expiresAt <= issuedAt || expiresAt - issuedAt > 90 * 86400) throw new Error('invalid_bootstrap_input');
   const metadata = { format: 'lemtel_failover_sealed_state_v1', version: 1, algorithm: 'AES-256-GCM', kind: 'drill',
     config_revision: session.configRevision, issued_at: issuedAt, expires_at: expiresAt };
   const iv = random(12), aes = await crypto.subtle.importKey('raw',

@@ -22,7 +22,10 @@ const BOOTSTRAP_TTL = 300;
 const SERIALIZER_SINGLETON_NAME = 'lemtel-failover-arbiter-serializer-v1';
 const SERIALIZER_FORMAT = 'lemtel_failover_serializer_v1';
 const SERIALIZER_LEASE_SECONDS = 15; // Deliberately shorter than every configured observation cycle.
-const CONFIG_TTL = 3600;
+// Sealed configuration (and records bound to it) and the signed drill approval stay valid for at most
+// 90 days: a permanent arbiter must not lapse after an hour, and a quarterly drill renews the approval.
+const CONFIG_TTL = 90 * 86400;
+const DRILL_APPROVAL_MAX_SECONDS = 90 * 86400;
 const bootstrapControllers = new WeakMap(); // Local serialization only; KV is NOT a distributed CAS.
 const ROUTING_ENABLED = false; // Routing is a separate revision, never an env toggle here.
 let tickRunning = false;
@@ -408,7 +411,7 @@ async function readiness(env, cfg, now) {
         proof.destructive_drill_validated !== true || proof.serialized_execution_verified !== true ||
         !Number.isSafeInteger(proof.validated_at) || proof.validated_at > now ||
         !Number.isSafeInteger(proof.expires_at) || proof.expires_at <= now ||
-        proof.expires_at - proof.validated_at > 86400 ||
+        proof.expires_at - proof.validated_at > DRILL_APPROVAL_MAX_SECONDS ||
         !await verify(env.DRILL_APPROVAL_SECRET, 'lemtel-production-drill-v1', proof, receipt.signature)) {
       return status('blocked', 'production_drill_or_serialization_not_verified');
     }

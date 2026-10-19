@@ -33,10 +33,9 @@ describe("TranscriptConversation", () => {
       { speaker: "sip:113M@planipret.ca", text: "Bonjour, comment allez-vous ?" },
       { speaker: "sip:1136M@planipret.ca", text: "Très bien, merci.\n\nJ’ai une question." },
     ]} />);
-    expect(screen.getByText("Intervenant 1")).toBeInTheDocument();
-    expect(screen.getByText("Intervenant 2")).toBeInTheDocument();
-    expect(screen.getByText("113M")).toBeInTheDocument();
-    expect(screen.getByText("1136M")).toBeInTheDocument();
+    expect(screen.getByText("Poste 113")).toBeInTheDocument();
+    expect(screen.getByText("Poste 1136")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("planipret.ca");
     expect(container.querySelectorAll(".pp-transcript-bubble")[1]?.textContent).toBe("Très bien, merci.\n\nJ’ai une question.");
     expect(screen.queryByText("Courtier")).not.toBeInTheDocument();
   });

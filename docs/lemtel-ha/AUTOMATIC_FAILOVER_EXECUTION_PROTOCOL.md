@@ -128,3 +128,24 @@ git diff --check
 ```
 
 Aucun frontend modifié, donc aucun build frontend requis. Ces validations sont **sans réseau ni fournisseur** et ne constituent ni un drill destructif ni une preuve de disponibilité en production.
+
+## Re-bootstrap and the incident record from an earlier revision
+
+The incident record (`lemtel_failover_execution_v1:incident`) is sealed with the `CONFIG_REVISION` that wrote it,
+and a new sealed bootstrap always produces a new revision. Before this rule, every tick after a re-bootstrap failed
+with `state_or_protocol_error_manual_review` (the sealed-state check refused the older revision), so the arbiter
+could never observe again.
+
+- Record from the current revision: used as is.
+- Record from an earlier revision that is decryptable, in `observation` or `incident_suspected`, with no
+  `fencing_started_at`, no `action_id` and no `command`: nothing destructive happened, so it is superseded by a
+  fresh observation record (failure cycles restart at 0).
+- Anything else (blocked, fencing, command prepared or dispatched, unreadable): the record is left untouched,
+  no observation and no provider call happen, the status is `previous_revision_incident_manual_review`, and the
+  agent mailbox answers `no_command`. A new configuration can never erase an in-flight fence.
+
+## Agent User-Agent
+
+The Hostinger agent sends `User-Agent: lemtel-hostinger-failover-agent/1`. Cloudflare's edge refuses the default
+`Python-urllib/3.x` signature with HTTP 403 before the request reaches the Worker, which left the mailbox and
+the signed standby readiness unreachable (agent `error_class=HTTPError_403`, no `/agent/command` in the tail).

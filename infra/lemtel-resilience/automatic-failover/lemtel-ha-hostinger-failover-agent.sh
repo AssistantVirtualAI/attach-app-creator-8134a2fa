@@ -214,11 +214,16 @@ def standby_readiness(cfg):
     envelope = canonical({'payload': payload, 'signature': signature}).encode()
     return base64.urlsafe_b64encode(envelope).decode().rstrip('=')
 
+AGENT_USER_AGENT = 'lemtel-hostinger-failover-agent/1'
+
 def poll(cfg):
     # The only remote endpoint in this agent is the authenticated arbiter command mailbox.
     # Every poll also carries the signed standby readiness the arbiter requires before any fencing.
     request = urllib.request.Request(cfg['ARBITER_URL'].rstrip('/') + '/agent/command',
+        # Explicit User-Agent: Cloudflare's edge rejects the default Python-urllib signature with
+        # 403 (error 1010) before the request ever reaches the arbiter Worker.
         headers={'Authorization': 'Bearer ' + cfg['AGENT_SHARED_SECRET'], 'Accept': 'application/json',
+                 'User-Agent': AGENT_USER_AGENT,
                  'X-Lemtel-Standby-Readiness': standby_readiness(cfg)}, method='GET')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     with opener.open(request, timeout=8) as response:

@@ -159,7 +159,7 @@ export async function handleQuickReplyAction(
 ): Promise<QuickReplyResult | "open"> {
   const expiresAt = Number(extra.expiresAt || 0);
   if (expiresAt && Date.now() > expiresAt) return { ok: false, error: "expired" };
-  const lang: QuickReplyLang = (localStorage.getItem("pp.lang") === "en" ? "en" : "fr");
+  const lang: QuickReplyLang = (localStorage.getItem("mplanipret-lang") === "en" ? "en" : "fr");
   const { data } = await supabase.auth.getUser();
   const tpl = loadQuickReplies(data.user?.id ?? null, lang);
   let text = "";

@@ -37,7 +37,7 @@ import { resetSpeakerCtxCache } from "./transcriptSpeakers";
 const turns = [{ speaker: "sip:1284M@planipret.ca", text: "Bonjour" }, { speaker: "sip:15145550000@sbc1.ucstack.io", text: "Allô" }];
 
 describe("speaker context isolation", () => {
-  beforeEach(() => { resetSpeakerCtxCache(); currentUid = "A"; });
+  beforeEach(() => { resetSpeakerCtxCache(); currentUid = "A"; data.A.me = { extension: "1284", full_name: "Courtier A" }; });
   it("reloads profile on USER_UPDATED with the same user id", async () => {
     const { container } = render(<TranscriptConversation turns={turns} />);
     await waitFor(() => expect(screen.getByText("Courtier A")).toBeInTheDocument());

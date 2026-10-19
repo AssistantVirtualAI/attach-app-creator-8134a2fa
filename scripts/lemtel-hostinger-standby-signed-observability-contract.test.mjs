@@ -13,7 +13,7 @@ const manifest = JSON.parse(read(`${N}/deployment-manifest.json`));
 test('manifest pins every source and authorizes nothing', () => {
   assert.equal(manifest.trust_model, 'signed_publication_not_enrolled');
   for (const key of ['deployment_authorized', 'schema_apply_authorized', 'publisher_install_authorized', 'publisher_timer_enable_authorized', 'secure_enrollment_claimed', 'hostinger_runtime_started', 'postgres_promotion_executed', 'cloudflare_or_dns_changed', 'fencing_executed', 'automatic_failover_enabled', 'telephony_contacted']) assert.equal(manifest[key], false, key);
-  for (const entry of [...manifest.sources, ...manifest.validation_sources]) assert.equal(sha(entry.path), entry.sha256, entry.path);
+  for (const entry of [...manifest.sources, ...manifest.validation_sources, ...manifest.deployment_tooling, ...manifest.deployment_validation]) assert.equal(sha(entry.path), entry.sha256, entry.path);
 });
 
 test('migration 0023 is a private singleton writable only through its bounded RPC', () => {

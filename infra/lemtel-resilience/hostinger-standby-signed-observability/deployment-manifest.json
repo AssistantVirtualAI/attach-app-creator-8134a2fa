@@ -99,5 +99,29 @@
     "ip_address",
     "hostname",
     "customer_data"
+  ],
+  "deployment_tooling": [
+    {
+      "path": "infra/lemtel-resilience/hostinger-standby-signed-observability/lemtel-ha-do-writer-hostinger-standby-ingress-apply.py",
+      "sha256": "8675c8b392abe900ecd25634c271ea17901629446c5e0fa3b683570539ab9637"
+    },
+    {
+      "path": "infra/lemtel-resilience/hostinger-standby-signed-observability/lemtel-ha-hostinger-standby-publisher-install.py",
+      "sha256": "f05ee68c373bb813fea59e2c76f6c52fbb5b69513570162b773492650d308845"
+    },
+    {
+      "path": "scripts/lemtel-hostinger-standby-deploy-package.mjs",
+      "sha256": "8b61f7e015606175c3f915dd5db4ff549485e1effe71e6daa798e8f762b72583"
+    }
+  ],
+  "deployment_validation": [
+    {
+      "path": "scripts/lemtel-hostinger-standby-deploy.test.mjs",
+      "sha256": "515fb4067c2d6850e5882f98bdfa1910cf3cded76e3b8efd4cd036cb67fae045"
+    },
+    {
+      "path": "scripts/lemtel-hostinger-standby-deploy-fakes.py",
+      "sha256": "eec35d81322e566f7dd6f36d580f63e47aa3d82ac837dd97b21805fa88e6579d"
+    }
   ]
 }

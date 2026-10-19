@@ -73,7 +73,42 @@ runtime_attempted=true
 "${compose[@]}" up --detach --force-recreate --no-build --pull never --no-deps "${services[@]}" >/dev/null
 for service in "${services[@]}"; do id="$("${compose[@]}" ps --quiet "$service")"; [ -n "$id" ] || fail "runtime_service_missing_${service}"; [ "$(docker inspect --format '{{.State.Running}}' "$id")" = true ] || fail "runtime_service_not_running_${service}"; done
 caddy_id="$("${compose[@]}" ps --quiet caddy)"; docker port "$caddy_id" | grep -q . || fail runtime_public_listener_missing
+# Publish the promoted writer readiness marker (Cloudflare monitor + pool health), refreshed every 30 s
+# and removed as soon as Caddy, the promoted database or Auth stop answering. Persistent across reboots.
+marker_script='/opt/lemtel-ha/automatic-failover/lemtel-ha-writer-lb-ready-refresh.sh'
+lb_marker=absent
+if [ -f "$marker_script" ] && [ ! -L "$marker_script" ] && [ "$(stat -c '%u:%a' "$marker_script")" = '0:750' ]; then
+  cat > /etc/systemd/system/lemtel-ha-hostinger-lb-ready.service <<'UNIT'
+[Unit]
+Description=Lemtel promoted Hostinger writer L7 readiness marker
+After=docker.service
+
+[Service]
+Type=oneshot
+Environment=LEMTEL_HA_EXECUTE=refresh_hostinger_writer_l7_ready
+Environment=LEMTEL_HA_ROLE=hostinger_promoted_writer
+ExecStart=/usr/bin/bash /opt/lemtel-ha/automatic-failover/lemtel-ha-writer-lb-ready-refresh.sh
+UNIT
+  cat > /etc/systemd/system/lemtel-ha-hostinger-lb-ready.timer <<'UNIT'
+[Unit]
+Description=Refresh Lemtel promoted Hostinger writer L7 readiness marker
+
+[Timer]
+OnActiveSec=5s
+OnBootSec=45s
+OnUnitActiveSec=30s
+Persistent=false
+Unit=lemtel-ha-hostinger-lb-ready.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  for attempt in 1 2 3 4 5 6; do systemctl start lemtel-ha-hostinger-lb-ready.service >/dev/null 2>&1 && { lb_marker=present; break; }; sleep 10; done
+  systemctl --quiet enable --now lemtel-ha-hostinger-lb-ready.timer || true
+fi
 [ -z "$(docker port "$container" 2>/dev/null || true)" ] || fail promoted_database_published_port
 if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_detected; fi
 printf 'hostinger_current_topology_runtime_start_format=lemtel_hostinger_current_topology_runtime_start_v1\n'
+printf 'lb_ready_marker=%s\n' "$lb_marker"
 printf 'writer=hostinger_promoted_writer\nincident_id_matched=true\ndo_writer_fence_receipt_hmac_verified=true\npromoted_database_writer_verified=true\nstandby_runtime_started=true\npublic_runtime_listener_enabled=true\npublic_database_listener_enabled=false\ndns_change_executed=false\nautomatic_traffic_routing_enabled=false\ntelephony_contacted=false\ncredential_values_emitted=false\nhostinger_current_topology_runtime_start_status=complete\n'

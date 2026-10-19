@@ -17,7 +17,10 @@ UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+# read-only, not true: the stage attestation and the runtime start must see the standby Storage
+# receiver (/home/lemtelstorage/storage-current). With ProtectHome=true /home is empty inside the
+# sandbox and the attestation always failed (first real drill, 2026-10-19).
+ProtectHome=read-only
 StateDirectory=lemtel-ha/failover-agent
 StateDirectoryMode=0700
 # current-topology-evidence must exist before start (created by the agent control script).

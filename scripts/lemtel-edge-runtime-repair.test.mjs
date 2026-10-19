@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 const SCRIPT = resolve(import.meta.dirname, '../infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-edge-runtime-repair.sh');
 const reason = (r) => (r.stderr.match(/reason=([a-z0-9_]+)/u) || [])[1];
 
-function world({ composeInvalid = false, upLosesTraffic = false } = {}) {
+function world({ composeInvalid = false, upLosesTraffic = false, onboarding = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'lemtel-er-'));
   const bin = join(root, 'bin'), fake = join(root, 'fake');
   const files = {
@@ -20,6 +20,7 @@ function world({ composeInvalid = false, upLosesTraffic = false } = {}) {
     'var/lib/lemtel-ha/traffic-observability/edge-config/edge-secret.env': '', 'var/lib/lemtel-ha/traffic-observability/edge-config/edge-traffic.override.yaml': '',
     'var/lib/lemtel-ha/hostinger-standby-publisher/edge-config/edge-secret.env': '', 'var/lib/lemtel-ha/hostinger-standby-publisher/edge-config/edge-hostinger-standby.override.yaml': '',
   };
+  if (onboarding) files['srv/supabase/docker-compose.lemtel-onboarding.yml'] = '';
   for (const [p, c] of Object.entries(files)) { mkdirSync(join(root, p, '..'), { recursive: true }); writeFileSync(join(root, p), c); }
   mkdirSync(bin); mkdirSync(fake);
   const full = 'SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY RESEND_API_KEY LEMTEL_WELCOME_FROM LEMTEL_DO_WRITER_RESOURCE_SECRET LEMTEL_TRAFFIC_COLLECTOR_SECRET LEMTEL_HOSTINGER_STANDBY_PUBLISHER_SECRET LEMTEL_PBX_SECRET_ENCRYPTION_KEY';
@@ -72,4 +73,14 @@ test('refusals: invalid chain before any change, and a name still missing after 
   assert.equal(reason(bad.run('repair', GO)), 'compose_chain_invalid');
   assert.doesNotMatch(bad.log(), / up /u);
   assert.equal(reason(world({ upLosesTraffic: true }).run('repair', GO)), 'variables_still_missing_lemtel_traffic_collector_secret');
+});
+
+test('the transactional email compose file (edge-only, never on a sibling) is put back in the chain and its names proven', () => {
+  const w = world({ onboarding: true });
+  const r = w.run('check');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /base_files=docker-compose\.yml,docker-compose\.email\.yml,docker-compose\.lemtel-private\.yml,docker-compose\.lemtel-onboarding\.yml/u);
+  const fixed = w.run('repair', GO);
+  assert.equal(fixed.status, 0, fixed.stderr);
+  assert.match(w.log(), /-f \S+docker-compose\.lemtel-onboarding\.yml/u);
 });

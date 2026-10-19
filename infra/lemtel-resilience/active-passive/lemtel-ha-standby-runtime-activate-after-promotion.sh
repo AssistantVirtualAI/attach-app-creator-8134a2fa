@@ -50,6 +50,8 @@ if docker port "$postgres_container" | grep -q .; then fail standby_published_po
 if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_detected; fi
 
 compose=(docker compose --project-name lemtel-ha-standby --env-file .env -f docker-compose.yml -f docker-compose.caddy.yml -f docker-compose.lemtel-private.yml -f docker-compose.lemtel-db-init.yml)
+# Optional transactional email wiring staged with the runtime (absent = runtime without email, never a failure).
+[ -f "$stage_dir/docker-compose.lemtel-onboarding.yml" ] && compose+=(-f docker-compose.lemtel-onboarding.yml)
 cd "$stage_dir"
 actual_services="$("${compose[@]}" config --services | sort | paste -sd, -)"
 [ "$actual_services" = "$expected_services" ] || fail runtime_service_inventory_mismatch

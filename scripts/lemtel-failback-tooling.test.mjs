@@ -287,3 +287,13 @@ test('step 1 prefers the default bridge when the database is on both networks', 
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /relay_network=bridge\nrelay_source=172\.17\.0\.1/u);
 });
+test('step 1 on the real Hostinger topology: 10.x Docker networks (default-address-pools) are private and accepted', () => {
+  const w = hWriter();
+  writeFileSync(join(w.fake, 'containers/lemtel-postgres-hostinger-standby/netips'), 'bridge 10.0.0.2\nlemtel-ha-hostinger-promoted_default 10.0.1.2\n');
+  writeFileSync(join(w.fake, 'net-bridge-gw'), '10.0.0.1\n');
+  writeFileSync(join(w.fake, 'net-lemtel-ha-hostinger-promoted_default-gw'), '10.0.1.1\n');
+  const r = w.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /relay_network=bridge\nrelay_source=10\.0\.0\.1/u);
+  assert.match(w.log(), /address = '10\.0\.0\.1'/u);
+});

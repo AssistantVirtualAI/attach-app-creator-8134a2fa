@@ -64,7 +64,7 @@ hba="$(psql "SELECT current_setting('hba_file')")"
 [[ "$hba" =~ ^/[A-Za-z0-9/._-]+$ ]] || fail hba_path_invalid
 # The relay reaches the database through ONE Docker network, chosen here and pinned in the relay; PostgreSQL then sees
 # that network's gateway (the host side of the bridge). The default bridge is preferred when the container is on it.
-private='^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$'
+private='^(10\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$'
 relay_net=''; relay_ip=''; gateway=''
 while read -r net ip; do
   [ -n "$net" ] && [[ "$ip" =~ $private ]] || continue

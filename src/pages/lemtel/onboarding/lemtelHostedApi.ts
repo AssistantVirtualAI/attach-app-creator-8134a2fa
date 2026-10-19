@@ -364,7 +364,16 @@ export function buildSetClientSessionAccessBody(organizationId: string, recipien
  * Every object below uses the exact Lemtel Edge contract. There is intentionally
  * no generic action/payload wrapper and no legacy Planiprêt action name.
  */
+export type PortalFailoverStatus = {
+  checkedAt: string;
+  arbiter: { reachable: boolean; automaticFailover: "on" | "off" | "unknown"; state: string | null; reason: string | null };
+  routing: { servingRole: "do_writer" | "hostinger_writer" | "unknown"; httpStatus: number | null };
+  loadBalancer: { configured: boolean; reachable: boolean; pools: Array<{ role: "do_writer" | "hostinger_standby" | "other"; healthy: boolean | null; enabled: boolean | null }> };
+};
+
 export const portalApi = {
+  /** Plan 6.8 — platform administrators only (Edge Function lemtel-failover-status). */
+  getFailoverStatus: () => invoke<PortalFailoverStatus>("lemtel-failover-status", {}),
   listOrganizations: () => invoke<{ organizations: PortalOrganization[] }>("lemtel-onboarding-admin", { action: "list_organizations" }),
   listPlatformAdministrators: () => invoke<{ administrators: PlatformAdministrator[] }>("lemtel-onboarding-admin", { action: "list_platform_administrators" }),
   grantPlatformAdministrator: (email: string, confirmation: string) => invoke<{ ok: true }>("lemtel-onboarding-admin", buildGrantPlatformAdministratorBody(email, confirmation), { write: true }),

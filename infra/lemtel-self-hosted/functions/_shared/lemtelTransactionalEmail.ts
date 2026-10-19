@@ -3,7 +3,7 @@ export type LemtelLocale = "fr" | "en";
 export type TransactionalEmailKind = "welcome" | "password_recovery";
 export type EmailEnvironment = { get(name: string): string | undefined };
 
-export type DistributionUrls = { ios: string; android: string; desktop: string };
+export type DistributionUrls = { ios: string; android: string; windows: string; macosApple: string; macosIntel: string };
 export type TransactionalEmailConfig = {
   apiKey: string;
   from: string;
@@ -16,6 +16,7 @@ const EMAIL_RE = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0
 const MAX_URL_LENGTH = 2048;
 const RELEASE_ROOT = "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases";
 const RELEASE_TAG = `${RELEASE_ROOT}/download/v2.5.20`;
+const ANDROID_STORE = "https://play.google.com/store/apps/details?id=com.lemtel.softphone";
 
 function trimmed(environment: EmailEnvironment, name: string): string | undefined {
   const value = environment.get(name)?.trim();
@@ -27,7 +28,9 @@ export function safeHttpsUrl(value: string | undefined): string | undefined {
   if (!value || value.length > MAX_URL_LENGTH || /[\u0000-\u001f\u007f\s]/.test(value)) return undefined;
   try {
     const url = new URL(value);
-    if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search || url.hash) return undefined;
+    // Single exception to "no query": a Google Play listing is only addressable as ?id=<application id>.
+    const playListing = url.hostname === "play.google.com" && url.pathname === "/store/apps/details" && /^\?id=[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(url.search);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password || (url.search && !playListing) || url.hash) return undefined;
     if (url.hostname === "localhost" || url.hostname.endsWith(".localhost")) return undefined;
     return url.href;
   } catch {
@@ -58,10 +61,13 @@ export function validatedFrom(environment: EmailEnvironment): string | undefined
 
 export function distributionUrls(environment: EmailEnvironment): DistributionUrls | undefined {
   const configured = (name: string, fallback: string) => safeHttpsUrl(trimmed(environment, name) ?? fallback);
+  // Same variables and defaults as the portal download center (lemtel-onboarding-admin distributionUrls).
   const ios = configured("LEMTEL_DOWNLOAD_IOS_URL", "https://testflight.apple.com");
-  const android = configured("LEMTEL_DOWNLOAD_ANDROID_URL", RELEASE_ROOT);
-  const desktop = configured("LEMTEL_DOWNLOAD_DESKTOP_URL", `${RELEASE_ROOT}/tag/v2.5.20`);
-  return ios && android && desktop ? { ios, android, desktop } : undefined;
+  const android = configured("LEMTEL_DOWNLOAD_ANDROID_URL", ANDROID_STORE);
+  const windows = configured("LEMTEL_DOWNLOAD_WINDOWS_URL", `${RELEASE_TAG}/Lemtel-Telecom-Setup-2.5.20.exe`);
+  const macosApple = configured("LEMTEL_DOWNLOAD_MACOS_APPLE_URL", `${RELEASE_TAG}/Lemtel-Telecom-2.5.20-arm64.dmg`);
+  const macosIntel = configured("LEMTEL_DOWNLOAD_MACOS_INTEL_URL", `${RELEASE_TAG}/Lemtel-Telecom-2.5.20-x64.dmg`);
+  return ios && android && windows && macosApple && macosIntel ? { ios, android, windows, macosApple, macosIntel } : undefined;
 }
 
 /** A configuration failure is intentionally one generic condition at every public boundary. */
@@ -126,8 +132,10 @@ export function transactionalEmailMessage(input: {
     : "Never share this temporary password. If you did not expect this email, contact Lemtel support.";
   const apps = fr ? "Obtenir Lemtel" : "Get Lemtel";
   const links = fr
-    ? `${link(input.config.downloadUrls.ios, "iPhone et iPad")} &nbsp;·&nbsp; ${link(input.config.downloadUrls.android, "Android")} &nbsp;·&nbsp; ${link(input.config.downloadUrls.desktop, "Mac et Windows")}`
-    : `${link(input.config.downloadUrls.ios, "iPhone & iPad")} &nbsp;·&nbsp; ${link(input.config.downloadUrls.android, "Android")} &nbsp;·&nbsp; ${link(input.config.downloadUrls.desktop, "Mac & Windows")}`;
+    ? [link(input.config.downloadUrls.ios, "iPhone et iPad"), link(input.config.downloadUrls.android, "Android"), link(input.config.downloadUrls.windows, "Windows"),
+      link(input.config.downloadUrls.macosApple, "Mac (puce Apple)"), link(input.config.downloadUrls.macosIntel, "Mac (Intel)")].join(" &nbsp;·&nbsp; ")
+    : [link(input.config.downloadUrls.ios, "iPhone & iPad"), link(input.config.downloadUrls.android, "Android"), link(input.config.downloadUrls.windows, "Windows"),
+      link(input.config.downloadUrls.macosApple, "Mac (Apple silicon)"), link(input.config.downloadUrls.macosIntel, "Mac (Intel)")].join(" &nbsp;·&nbsp; ");
   return {
     subject,
     html: `<!doctype html><html lang="${input.locale}"><head><meta name="viewport" content="width=device-width,initial-scale=1" /><meta charset="utf-8" /></head><body style="margin:0;padding:0;background:#edf3f7;color:#10213b"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#edf3f7"><tr><td align="center" style="padding:28px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden"><tr><td style="height:6px;background:#00a7b5"></td></tr><tr><td style="padding:30px 32px 8px">${brandMarkup(input.config.logoUrl)}</td></tr><tr><td style="padding:8px 32px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"><h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#10213b">${heading}</h1><p style="margin:0 0 22px;font-size:16px;line-height:1.55">${intro}</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 22px;background:#f3f8fa;border:1px solid #d7e8eb;border-radius:12px"><tr><td style="padding:18px 20px;font-size:15px;line-height:1.65"><strong>${accountLabel}:</strong> ${email}<br /><strong>${passwordLabel}:</strong> <code style="display:inline-block;margin-top:5px;padding:4px 7px;background:#10213b;color:#ffffff;border-radius:5px;font-size:15px;word-break:break-all">${password}</code></td></tr></table><p style="margin:0 0 24px;font-size:16px;line-height:1.55">${instructions}</p>${isWelcome ? `<h2 style="margin:0 0 10px;font-size:18px;color:#10213b">${apps}</h2><p style="margin:0 0 24px;font-size:15px;line-height:1.6">${links}</p>` : ""}<p style="margin:0;padding-top:18px;border-top:1px solid #d7e8eb;color:#52657b;font-size:13px;line-height:1.55">${safety}</p></td></tr></table></td></tr></table></body></html>`,

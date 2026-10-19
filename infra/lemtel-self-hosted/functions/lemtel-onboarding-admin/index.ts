@@ -278,7 +278,8 @@ function distributionUrls() {
     macosApple: value("LEMTEL_DOWNLOAD_MACOS_APPLE_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/download/v2.5.20/Lemtel-Telecom-2.5.20-arm64.dmg"),
     macosIntel: value("LEMTEL_DOWNLOAD_MACOS_INTEL_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/download/v2.5.20/Lemtel-Telecom-2.5.20-x64.dmg"),
     ios: value("LEMTEL_DOWNLOAD_IOS_URL", "https://testflight.apple.com"),
-    android: value("LEMTEL_DOWNLOAD_ANDROID_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases"),
+    // The GitHub releases carry no Android package: the store listing is the only working default.
+    android: value("LEMTEL_DOWNLOAD_ANDROID_URL", "https://play.google.com/store/apps/details?id=com.lemtel.softphone"),
   };
 }
 

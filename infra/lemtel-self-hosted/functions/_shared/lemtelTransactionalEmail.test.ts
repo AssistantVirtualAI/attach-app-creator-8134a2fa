@@ -45,6 +45,25 @@ Deno.test("only an explicitly configured safe HTTPS logo is rendered remotely; u
   assertStringIncludes(fallback.html, "Lem<span");
 });
 
+Deno.test("the welcome email links every platform separately (iOS, Android, Windows, Mac Apple, Mac Intel); recovery carries the temporary password", () => {
+  const config = configured({});
+  if (!config) throw new Error("default configuration expected");
+  for (const locale of ["fr", "en"] as const) {
+    const recovery = transactionalEmailMessage({ kind: "password_recovery", locale, displayName: "Test", email: "t@lemtel.example", temporaryPassword: "Temp-Pass-123", config });
+    assertStringIncludes(recovery.html, "Temp-Pass-123");
+    for (const kind of ["welcome"] as const) {
+      const message = transactionalEmailMessage({ kind, locale, displayName: "Test", email: "t@lemtel.example", temporaryPassword: "Temp-Pass-123", config });
+      for (const url of [config.downloadUrls.ios, config.downloadUrls.android, config.downloadUrls.windows, config.downloadUrls.macosApple, config.downloadUrls.macosIntel]) {
+        assertStringIncludes(message.html, url.replaceAll("&", "&amp;"));
+      }
+      assertStringIncludes(message.html, "Windows");
+      assertStringIncludes(message.html, "Mac (Intel)");
+      assertStringIncludes(message.html, `lang="${locale}"`);
+    }
+  }
+  assertEquals(config.downloadUrls.android, "https://play.google.com/store/apps/details?id=com.lemtel.softphone");
+});
+
 Deno.test("sender and all mail URLs are strict HTTPS configuration, with no credentials, query or fragment", () => {
   assertEquals(validatedFrom(environment({ LEMTEL_WELCOME_FROM: "Welcome <welcome@lemtel.example>" })), undefined);
   assertEquals(validatedFrom(environment({ LEMTEL_WELCOME_FROM: "Lemtel <not-an-email>" })), undefined);
@@ -54,6 +73,9 @@ Deno.test("sender and all mail URLs are strict HTTPS configuration, with no cred
   assertEquals(safeHttpsUrl("https://cdn.lemtel.example/logo.svg#fragment"), undefined);
   assertEquals(safeHttpsUrl("https://cdn.lemtel.example/logo.svg?query=1"), undefined);
   assertEquals(safeHttpsUrl("http://cdn.lemtel.example/logo.svg"), undefined);
+  assertEquals(safeHttpsUrl("https://play.google.com/store/apps/details?id=com.lemtel.softphone"), "https://play.google.com/store/apps/details?id=com.lemtel.softphone");
+  assertEquals(safeHttpsUrl("https://play.google.com/store/apps/details?id=com.lemtel.softphone&x=1"), undefined);
+  assertEquals(safeHttpsUrl("https://evil.example/store/apps/details?id=com.lemtel.softphone"), undefined);
   assertEquals(configured({ LEMTEL_DOWNLOAD_IOS_URL: "http://unsafe.example/download" }), undefined);
   assertEquals(configured({ RESEND_API_KEY: "invalid-key" }), undefined);
 });

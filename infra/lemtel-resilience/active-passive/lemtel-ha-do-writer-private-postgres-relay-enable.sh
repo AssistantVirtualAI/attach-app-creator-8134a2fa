@@ -37,8 +37,8 @@ resolve_database_backend_target() {
       ;;
     *)
       container_ips="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' "$db_container")"
-      container_ip="$(printf '%s\n' "$container_ips" | awk '/^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$/ { print; exit }')"
-      [[ "$container_ip" =~ ^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || return 1
+      container_ip="$(printf '%s\n' "$container_ips" | awk '/^(10\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$/ { print; exit }')"
+      [[ "$container_ip" =~ ^(10\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || return 1
       printf '%s:5432\n' "$container_ip"
       ;;
   esac
@@ -103,7 +103,7 @@ case "$mode" in
     ;;
   *)
     container_ips="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' "$container")"
-    container_ip="$(printf '%s\n' "$container_ips" | awk '/^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$/ { print; exit }')"
+    container_ip="$(printf '%s\n' "$container_ips" | awk '/^(10\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$/ { print; exit }')"
     case "$container_ip" in
       172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|10.*|192.168.*) database_backend_target="${container_ip}:5432" ;;
       *) exit 1 ;;

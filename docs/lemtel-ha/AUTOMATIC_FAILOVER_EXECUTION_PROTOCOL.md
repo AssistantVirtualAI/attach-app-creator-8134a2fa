@@ -16,7 +16,7 @@ Le contrat de [gates actuelles](CURRENT_AUTOMATIC_FAILOVER_GATES.md) conserve to
 
 | Artefact | Responsabilité maximale |
 |---|---|
-| `lemtel-failover-arbiter-worker.mjs` | Worker avec classe Durable Object exportée ; HTTP status-only, observation L7 et machine de fencing uniquement après toutes les gates et un lease DO. Aucun HTTP de commande. |
+| `lemtel-failover-arbiter-worker.mjs` | Worker avec classe Durable Object exportée ; HTTP status-only, observation L7 et machine de fencing uniquement après toutes les gates et un lease DO. Seule surface de commande : la boîte à commande authentifiée et à usage unique de l’agent. |
 | `lemtel-ha-hostinger-failover-agent.sh` | Agent root-only ; preflight local ou collecte d’une commande, HMAC, échéance, ledger one-time et persistance root-only du reçu de fencing vérifié. |
 | `.service` / `.timer` | Modèles non installés et non activés ; aucun auto-installeur et aucune section d’activation. |
 | `scripts/lemtel-failover-execution-protocol.test.mjs` | Tests Node et contrôles de texte ; KV, horloge et HTTP simulés, aucun appel externe. |
@@ -67,7 +67,7 @@ La configuration Workers et son cron doivent être préparés dans une étape s�
 | `GET /.well-known/lemtel-failover-bootstrap-key` | Seulement en mode bootstrap : JWK public et métadonnées non sensibles ; sinon `404`. |
 | `POST /.well-known/lemtel-failover-bootstrap` | Seulement en mode bootstrap : HMAC, RSA-OAEP/SHA-256 + AES-GCM, nonce/révision one-use, échéances et validation complète ; aucun changement de mode ni commande. |
 | `GET /healthz`, `GET /status` | État de sécurité sans secrets, IDs fournisseur ou commande. Pas un signal autorisant le routage. |
-| Ancienne route de commande | `404` dans ce source. Aucune commande n’est accessible par HTTP, y compris avec authentification. |
+| `GET /agent/command` | Boîte à commande de l’agent Hostinger. `404` si une seule gate manque (mode, config scellée, binding DO, reçu de drill). Sinon `Authorization: Bearer AGENT_SHARED_SECRET` obligatoire (`401` sinon, comparaison sur empreintes). Lease du singleton DO obligatoire (`503` sinon). Retourne `{state: no_command}` ou, une seule fois, `{state: command_available, command}`. |
 | Autres méthodes/chemins en actif | Refus ; aucun endpoint permettant de lancer un incident ou de réinitialiser un fence. |
 
 Les clés KV `lemtel_failover_execution_v1:status` et `lemtel_failover_execution_v1:incident` restent des records scellés AES-256-GCM ; **elles ne sont pas le ledger de sérialisation**. Le lease et les digests d’intention vivent exclusivement dans le Durable Object transactionnel. Le statut public est reconstruit sur allowlist et ne contient que des états de sécurité. En mode désactivé, **rien n’est lu ni écrit, y compris aucun appel DO** ; l’incident existant n’est pas effacé ni réarmé. Aucune commande ne sort du Worker par HTTP.
@@ -86,7 +86,7 @@ Une intention destructive est persistée **avant** chaque POST fournisseur. Une 
 8. **Hostinger : inchangé et non exécuté** : l’agent/modèles historiques restent non installés. Leur futur transport, persistance puis exécution contrôlée devront faire l’objet d’une révision séparée avec toutes les gates ; cette correction ne les adapte pas.
 9. **Routage et failback** : l’agent ne modifie jamais Cloudflare/DNS. Le routage reste la responsabilité du Load Balancer Cloudflare, après sa configuration et son drill. Le failback automatique reste interdit.
 
-Aucune boîte à commande HTTP n’existe dans ce source. Toute conception future de transport doit marquer son intention avant sortie, conserver le one-time local et traiter une livraison perdue, réponse inconnue ou expiration comme un blocage humain ; elle n’est pas fournie ici.
+**Transport de commande (boîte à commande).** Il respecte les trois règles posées pour tout transport : (1) **intention marquée avant sortie** — l’intention `dispatch` est inscrite une seule fois dans le ledger transactionnel du Durable Object, puis l’incident scellé passe en `promotion_command_dispatched` ; si l’une de ces écritures échoue, aucune commande ne sort ; (2) **one-time** — une commande déjà marquée n’est jamais renvoyée, et l’agent garde son propre ledger `O_EXCL` ; (3) **livraison perdue, réponse inconnue ou expiration = blocage humain** — une intention déjà inscrite sans état `dispatched` bloque l’incident (`command_delivery_unknown_manual_review`), une commande expirée n’est pas livrée et le cycle suivant bloque l’incident. La livraison ne déclenche aucune action fournisseur, aucun routage et aucun failback.
 
 ## Agent root-only et preflight
 

@@ -58,6 +58,7 @@ async function fixture(t) {
     async get(key) { return values.get(key) ?? null; },
     async put(key, value) {
       if (f.failIntent && key === incidentKey && (await f.open(value)).phase === 'fence_graceful_shutdown_requested') throw new Error('synthetic_kv_failure');
+      if (f.failDispatchPersist && key === incidentKey && (await f.open(value)).phase === 'promotion_command_dispatched') throw new Error('synthetic_kv_failure');
       values.set(key, value);
     },
   };
@@ -146,7 +147,8 @@ async function fixture(t) {
   f.incident = async () => values.has(incidentKey) ? f.open(values.get(incidentKey)) : null;
   f.posts = () => f.calls.filter((call) => call.options.method === 'POST').map((call) => JSON.parse(call.options.body).type);
   f.get = (path, authorized = false) => worker.fetch(new Request(fakeURL('arbiter') + path,
-    { headers: authorized ? { authorization: `Bearer ${f.configuration.AGENT_SHARED_SECRET}` } : {} }), f.env);
+    { headers: authorized === true ? { authorization: `Bearer ${f.configuration.AGENT_SHARED_SECRET}` }
+      : typeof authorized === 'string' ? { authorization: authorized } : {} }), f.env);
   return f;
 }
 async function suspicion(f) {
@@ -314,9 +316,10 @@ test('graceful shutdown, delay, hard power_off, repeated terminal poll, signed f
   assert.equal(publicStatus.automatic_traffic_routing_enabled, false);
   assert.equal(publicStatus.command, undefined);
   assert.ok(!JSON.stringify(publicStatus).includes(writerID));
-  // The Worker has no HTTP command-delivery surface, even with a valid authenticated header.
-  assert.equal((await f.get('/agent/command')).status, 404);
-  assert.equal((await f.get('/agent/command', true)).status, 404);
+  // The mailbox refuses anonymous or wrongly authenticated callers without touching the incident.
+  assert.equal((await f.get('/agent/command')).status, 401);
+  assert.equal((await f.get('/agent/command', `Bearer ${secret('wrong-agent')}`)).status, 401);
+  assert.equal((await f.get('/agent/command', f.configuration.AGENT_SHARED_SECRET)).status, 401);
   const prepared = await f.incident();
   assert.equal(prepared.phase, 'promotion_command_ready');
   assert.equal(prepared.command.payload.name, 'promotion');
@@ -332,7 +335,9 @@ test('graceful terminal state needs no hard fence; expired command is not reissu
   await gracefulCommand(f);
   assert.deepEqual(f.posts(), ['shutdown']);
   f.now += 121;
-  assert.equal((await f.get('/agent/command', true)).status, 404);
+  const expired = await f.get('/agent/command', true);
+  assert.equal(expired.status, 200);
+  assert.deepEqual(await expired.json(), { state: 'no_command' });
   assert.equal((await f.incident()).phase, 'promotion_command_ready');
   assert.equal((await f.tick()).state, 'blocked');
   assert.equal((await f.incident()).phase, 'blocked');
@@ -384,10 +389,13 @@ test('a recovered destructive intent requires manual reconciliation, not a POST 
   assert.equal(f.calls.length, 0);
 });
 
-test('HTTP is status-only: no command route exists and mutating methods are refused', async (t) => {
+test('HTTP never starts an incident: the mailbox is read-only without a prepared command and mutating methods are refused', async (t) => {
   const f = await fixture(t);
   assert.equal((await f.get('/status')).status, 200);
-  assert.equal((await f.get('/agent/command', true)).status, 404);
+  const empty = await f.get('/agent/command', true);
+  assert.equal(empty.status, 200);
+  assert.deepEqual(await empty.json(), { state: 'no_command' });
+  assert.equal((await f.incident()), null);
   const res = await worker.fetch(new Request(fakeURL('arbiter') + '/agent/command', { method: 'POST' }), f.env);
   assert.equal(res.status, 405);
   assert.equal(f.calls.length, 0);
@@ -475,4 +483,68 @@ test('service and timer are uninstalled, unenabled templates with no Install/Wan
   const contract = JSON.parse(read('current-topology-contract.json'));
   assert.ok(Object.values(contract.activation).every((value) => value === false));
   assert.ok(Object.values(contract.fail_closed_gates).every((value) => value === false));
+});
+
+test('mailbox delivers a prepared command exactly once, after recording the dispatch intent and state', async (t) => {
+  const f = await fixture(t);
+  await gracefulCommand(f);
+  const prepared = await f.incident();
+  f.now += 16; // the scheduler lease (15 s) has expired
+  const res = await f.get('/agent/command', true);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/json');
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  const reply = await res.json();
+  // Exact shapes the Hostinger agent accepts.
+  assert.deepEqual(Object.keys(reply).sort(), ['command', 'state']);
+  assert.equal(reply.state, 'command_available');
+  assert.deepEqual(reply.command, prepared.command);
+  assert.deepEqual(Object.keys(reply.command.payload).sort(), ['expires_at', 'fence_receipt', 'format', 'incident_id',
+    'issued_at', 'name', 'nonce', 'target_role', 'writer_role']);
+  assert.deepEqual(Object.keys(reply.command.payload.fence_receipt.payload).sort(), ['confirmations', 'format', 'incident_id',
+    'observed_at', 'provider_action_id', 'provider_action_type', 'terminal_action_status', 'terminal_power_state', 'writer_droplet_id', 'writer_role']);
+  assert.equal(reply.command.signature, signature(f.configuration.AGENT_SHARED_SECRET, 'lemtel-promotion-command-v1', reply.command.payload));
+  assert.equal(reply.command.payload.fence_receipt.signature, signature(f.configuration.AGENT_SHARED_SECRET,
+    'lemtel-fence-receipt-v1', reply.command.payload.fence_receipt.payload));
+  const after = await f.incident();
+  assert.equal(after.phase, 'promotion_command_dispatched');
+  assert.equal(after.dispatched_at, f.now);
+  const ledger = [...f.serializer.storage.values.keys()].filter((key) => key.startsWith('intent:'));
+  assert.equal(ledger.length, 3, 'shutdown, promotion and dispatch intents are each recorded once');
+  f.now += 16;
+  assert.deepEqual(await (await f.get('/agent/command', true)).json(), { state: 'no_command' }, 'never re-delivered');
+  assert.equal((await f.tick()).state, 'manual_promotion_action_required');
+  const publicStatus = await (await f.get('/status')).json();
+  assert.equal(publicStatus.command, undefined);
+  assert.ok(!JSON.stringify(publicStatus).includes(writerID));
+  assert.deepEqual(f.posts(), ['shutdown'], 'delivery never triggers a provider action');
+});
+
+test('mailbox refuses while the scheduler holds the serializer lease, without changing the incident', async (t) => {
+  const f = await fixture(t);
+  await gracefulCommand(f);
+  const res = await f.get('/agent/command', true);
+  assert.equal(res.status, 503);
+  assert.equal((await res.json()).command, undefined);
+  assert.equal((await f.incident()).phase, 'promotion_command_ready');
+  f.now += 16;
+  assert.equal((await (await f.get('/agent/command', true)).json()).state, 'command_available');
+});
+
+test('an unrecorded dispatch never releases the command; the incident then requires manual review', async (t) => {
+  const f = await fixture(t);
+  await gracefulCommand(f);
+  f.now += 16;
+  f.failDispatchPersist = true;
+  const first = await f.get('/agent/command', true);
+  assert.equal(first.status, 503);
+  assert.equal((await first.json()).command, undefined);
+  f.failDispatchPersist = false;
+  f.now += 16;
+  const second = await f.get('/agent/command', true);
+  assert.deepEqual(await second.json(), { state: 'no_command' });
+  const incident = await f.incident();
+  assert.equal(incident.phase, 'blocked');
+  assert.equal(incident.reason, 'command_delivery_unknown_manual_review');
+  assert.equal((await f.tick()).state, 'blocked');
 });

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ invoke: vi.fn(), insert: vi.fn(), fail: false, order: [] as string[] }));
 vi.mock("@/hooks/useMplanipretLang", () => ({ useMplanipretLang: () => ({ lang: "fr" }) }));
@@ -39,7 +39,7 @@ describe("saved feedback reply flow", () => {
     const input = await screen.findByRole("textbox", { name: "Ajouter un commentaire" });
     await screen.findByText("Mes signalements");
     fireEvent.change(input, { target: { value: "Votre problème a été corrigé." } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    await act(async () => { fireEvent.keyDown(input, { key: "Enter" }); });
   }
   it("saves the reply before notifying, using the persisted ID", async () => {
     await reply();

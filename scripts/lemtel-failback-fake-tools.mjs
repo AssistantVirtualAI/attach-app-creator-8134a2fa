@@ -34,7 +34,7 @@ export function world({ sql = [], clientSql = [], files = {}, containers = {}, p
   const tool = (name, body) => { writeFileSync(join(bin, name), `#!/bin/bash\n${body}\n`); chmodSync(join(bin, name), 0o755); };
   writeFileSync(join(bin, 'docker'), DOCKER); chmodSync(join(bin, 'docker'), 0o755);
   tool('systemctl', `echo "systemctl $*" >> "${fake}/log"; case "$1" in is-active) exit 0;; esac; exit 0`);
-  tool('ip', `case "$*" in *docker0*) echo "4: docker0    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0";; *) echo "lemtel-ha0 UNKNOWN 10.253.47.1/30 10.253.47.2/30";; esac`);
+  tool('ip', `case "$*" in *docker0*) echo "4: docker0    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0";; *br-abcdef012345*) echo "7: br-abcdef012345    inet 172.19.0.1/16 scope global br-abcdef012345";; *) echo "lemtel-ha0 UNKNOWN 10.253.47.1/30 10.253.47.2/30";; esac`);
   tool('ss', `cat "${fake}/ss" 2>/dev/null`);
   writeFileSync(join(fake, 'ss'), ss);
   tool('curl', `echo "curl $*" >> "${fake}/log"; printf '%s' '${curl}'`);

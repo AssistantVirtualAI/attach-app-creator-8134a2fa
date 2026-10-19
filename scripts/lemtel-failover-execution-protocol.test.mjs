@@ -673,3 +673,13 @@ test('a sealed configuration and drill approval can stay valid for a permanent a
   await install(30, 91);
   assert.equal((await f.tick()).reason, 'production_drill_or_serialization_not_verified', 'drill approval longer than 90 days is refused');
 });
+
+test('standby readiness requires every staged runtime image locally, and the runtime start never pulls', () => {
+  const start = read('lemtel-ha-hostinger-current-topology-runtime-start.sh');
+  assert.match(agent, /def runtime_images_present\(env\)/u);
+  assert.match(agent, /stage = stage and runtime_images_present\(local_env\)/u);
+  assert.match(agent, /'config', '--images'/u);
+  assert.match(start, /up --detach --force-recreate --no-build --pull never --no-deps/u);
+  assert.match(start, /fail runtime_image_missing/u);
+  assert.ok(start.indexOf('fail runtime_image_missing') < start.indexOf('docker network create'), 'image check precedes any runtime change');
+});

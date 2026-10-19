@@ -41,6 +41,10 @@ PROMOTION = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topol
 RUNTIME = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-runtime-start.sh'
 MAX_BODY = 65536
 STAGE_DIR = '/opt/lemtel-ha/runtime-stage'
+STAGE_COMPOSE = ['/usr/bin/docker', 'compose', '--project-name', 'lemtel-ha-hostinger-promoted',
+                 '--project-directory', STAGE_DIR, '--env-file', STAGE_DIR + '/.env',
+                 '-f', STAGE_DIR + '/docker-compose.yml', '-f', STAGE_DIR + '/docker-compose.caddy.yml',
+                 '-f', STAGE_DIR + '/docker-compose.lemtel-private.yml', '-f', STAGE_DIR + '/docker-compose.lemtel-db-init.yml']
 
 class Blocked(Exception):
     pass
@@ -175,6 +179,18 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *_args, **_kwargs):
         deny('arbiter_redirect_refused')
 
+def runtime_images_present(env):
+    # Every image of the staged runtime must already be local: a failover must never depend on a
+    # registry download in the middle of an outage (the runtime start uses --pull never).
+    try:
+        listed = run_command(STAGE_COMPOSE + ['config', '--images'], env, 30)
+        images = sorted(set(line.strip() for line in listed.stdout.decode().splitlines() if line.strip()))
+        if listed.returncode != 0 or len(images) < 10:
+            return False
+        return all(run_command(['/usr/bin/docker', 'image', 'inspect', image], env, 15).returncode == 0 for image in images)
+    except Exception:
+        return False
+
 def standby_readiness(cfg):
     # Read-only local facts the arbiter requires before it may ever fence the writer:
     # the standby PostgreSQL answers and is still in recovery, and the runtime stage is present.
@@ -186,8 +202,10 @@ def standby_readiness(cfg):
         in_recovery = result.returncode == 0 and result.stdout.strip() == b't'
     except Exception:
         in_recovery = False
+    local_env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'}
     stage = all(os.path.isfile(os.path.join(STAGE_DIR, name)) and not os.path.islink(os.path.join(STAGE_DIR, name))
-                for name in ('docker-compose.yml', 'volumes/pooler/pooler.exs'))
+                for name in ('docker-compose.yml', '.env', 'volumes/pooler/pooler.exs'))
+    stage = stage and runtime_images_present(local_env)
     payload = {'format': 'lemtel_standby_readiness_v1', 'target_role': 'hostinger_standby',
                'observed_at': int(time.time()), 'ready': bool(in_recovery and stage),
                'standby_in_recovery': bool(in_recovery), 'runtime_stage_present': bool(stage)}

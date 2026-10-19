@@ -48,6 +48,8 @@ if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_dete
 compose=(docker compose --project-name lemtel-ha-hostinger-promoted --env-file .env -f docker-compose.yml -f docker-compose.caddy.yml -f docker-compose.lemtel-private.yml -f docker-compose.lemtel-db-init.yml)
 cd "$stage_dir"
 expected='api-gw,auth,caddy,db,functions,imgproxy,meta,realtime,rest,storage,studio,supavisor'
+# Images are pre-pulled while healthy; an outage must never wait on a registry download.
+while IFS= read -r image; do [ -n "$image" ] || continue; docker image inspect "$image" >/dev/null 2>&1 || fail runtime_image_missing; done < <("${compose[@]}" config --images 2>/dev/null | sort -u)
 actual="$("${compose[@]}" config --services | sort | paste -sd, -)"
 [ "$actual" = "$expected" ] || fail runtime_service_inventory_mismatch
 mapfile -t existing < <(docker ps --format '{{.Names}}' --filter label=com.docker.compose.project=lemtel-ha-hostinger-promoted)
@@ -68,7 +70,7 @@ docker network connect --alias db "$network" "$container"; database_connected=tr
 ln -s "$storage_receiver" "$storage_mount"; storage_link=true
 services=(api-gw auth functions imgproxy meta realtime rest storage studio supavisor caddy)
 runtime_attempted=true
-"${compose[@]}" up --detach --force-recreate --no-build --no-deps "${services[@]}" >/dev/null
+"${compose[@]}" up --detach --force-recreate --no-build --pull never --no-deps "${services[@]}" >/dev/null
 for service in "${services[@]}"; do id="$("${compose[@]}" ps --quiet "$service")"; [ -n "$id" ] || fail "runtime_service_missing_${service}"; [ "$(docker inspect --format '{{.State.Running}}' "$id")" = true ] || fail "runtime_service_not_running_${service}"; done
 caddy_id="$("${compose[@]}" ps --quiet caddy)"; docker port "$caddy_id" | grep -q . || fail runtime_public_listener_missing
 [ -z "$(docker port "$container" 2>/dev/null || true)" ] || fail promoted_database_published_port

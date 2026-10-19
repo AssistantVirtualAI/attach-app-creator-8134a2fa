@@ -197,7 +197,10 @@ export async function registerPushListeners(extension?: string) {
           void import("@/lib/planipret/quickReply").then(async (m) => {
             const r = await m.handleQuickReplyAction(event.actionId, data, (event as any).inputValue);
             if (r === "open") {
-              try { window.dispatchEvent(new CustomEvent("pp:quick-reply-open", { detail: data })); } catch { /* ignore */ }
+              // Tap ou « Personnalisé » sans texte : ouvrir le fil texto du client.
+              const route = `/mplanipret/messages?tab=sms&to=${encodeURIComponent(data.to || "")}`;
+              window.history.pushState(window.history.state, "", route);
+              window.dispatchEvent(new PopStateEvent("popstate"));
               return;
             }
             const lang = localStorage.getItem("mplanipret-lang") === "en" ? "en" : "fr";

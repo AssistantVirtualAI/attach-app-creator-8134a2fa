@@ -65,7 +65,7 @@ test('embedded Python parses and manifest pins every installed source',()=>{
 });
 test('systemd schedule is bounded and carries no credential',()=>{
   assert.match(service,/^User=root$/mu); assert.match(service,/^UMask=0077$/mu); assert.match(service,/^ExecStart=\/usr\/local\/libexec\/lemtel-do-writer-resource-publisher\/publish\.sh$/mu);
-  assert.doesNotMatch(service,/Environment|SECRET|TOKEN|KEY|password/iu); assert.match(timer,/^OnUnitActiveSec=2min$/mu); assert.match(timer,/^RandomizedDelaySec=20s$/mu); assert.match(timer,/^Persistent=true$/mu);
+  assert.doesNotMatch(service,/Environment|SECRET|TOKEN|KEY|password/iu); assert.match(timer,/^OnUnitActiveSec=60s$/mu); assert.match(timer,/^RandomizedDelaySec=10s$/mu); assert.match(timer,/^Persistent=false$/mu);
 });
 test('package is deterministic and excludes all runtime configuration',()=>{
   const temp=mkdtempSync(join(tmpdir(),'lemtel-resource-publisher-test-')); try { const a=join(temp,'a.tar'), b=join(temp,'b.tar'), rev='b570841b77f8f283f38828fb140a429cdb969298'; assembleDoWriterResourcePublisherActivationPackage({sourceRevision:rev,output:a}); assembleDoWriterResourcePublisherActivationPackage({sourceRevision:rev,output:b}); assert.equal(sha(a),sha(b)); const entries=execFileSync('/usr/bin/tar',['-tf',a],{encoding:'utf8'}); for(const forbidden of ['.env','secret','hostinger','traffic','cloudflare','telephony']) assert.doesNotMatch(entries,new RegExp(forbidden,'iu')); } finally { rmSync(temp,{recursive:true,force:true}); } });
@@ -89,4 +89,15 @@ test('timer enable is quiet so the strict empty-output guard accepts a valid act
     const silent=run(['--quiet','enable']); assert.equal(silent.status,0); assert.equal(silent.stdout,''); assert.equal(silent.stderr,'');
     assert.ok(lstatSync(join(temp,'etc/systemd/system/timers.target.wants/lemtel-do-writer-resource-publisher.timer')).isSymbolicLink());
   } finally { rmSync(temp,{recursive:true,force:true}); }
+});
+test('timer starts publishing without prior service history and stays inside the freshness window',()=>{
+  // OnUnitActiveSec alone never elapses when the service unit has no activation since it was (re)created,
+  // and OnBootSec is already consumed when the timer triggered earlier in the same boot (live outage 2026-10-18).
+  assert.match(timer,/^OnActiveSec=30s$/mu);
+  const seconds=(name)=>{ const match=timer.match(new RegExp(`^${name}=(\\d+)s$`,'mu')); assert.ok(match,name); return Number(match[1]); };
+  const interval=seconds('OnUnitActiveSec'), jitter=seconds('RandomizedDelaySec');
+  // observedAt is floored to the minute (up to 59 s), the admin projection and the UI reject observations older than 180 s.
+  assert.ok(59+interval+jitter+15<180,'worst-case observation age must stay under the 180 s freshness window');
+  const admin=readFileSync(resolve(root,'infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts'),'utf8');
+  assert.match(admin,/now - observed > 180_000/u);
 });

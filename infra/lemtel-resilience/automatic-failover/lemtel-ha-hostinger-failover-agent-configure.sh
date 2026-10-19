@@ -25,13 +25,18 @@ if len(data) > 4096: fail("configuration_too_large")
 lines = [line for line in data.decode("ascii").splitlines() if line.strip()]
 patterns = {"FAILOVER_MODE": r"active", "ARBITER_URL": r"https://lemtel-failover-arbiter\.[a-z0-9-]+\.workers\.dev",
             "AGENT_SHARED_SECRET": r"[A-Za-z0-9_-]{43}", "DO_WRITER_DROPLET_ID": r"[1-9][0-9]{0,19}",
-            "LEMTEL_HA_LOCAL_POSTGRES_CONTAINER": r"lemtel-postgres-hostinger-standby", "PROMOTION_EXECUTION_MODE": r"review"}
+            "LEMTEL_HA_LOCAL_POSTGRES_CONTAINER": r"lemtel-postgres-hostinger-standby", "PROMOTION_EXECUTION_MODE": r"review|execute"}
+OPTIONAL = {"EXECUTION_ACK": r"I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER"}
 seen = {}
 for line in lines:
     key, sep, value = line.partition("=")
-    if not sep or key not in patterns or key in seen or not re.fullmatch(patterns[key], value): fail("configuration_invalid")
+    allowed = {**patterns, **OPTIONAL}
+    if not sep or key not in allowed or key in seen or not re.fullmatch(allowed[key], value): fail("configuration_invalid")
     seen[key] = value
-if set(seen) != set(patterns): fail("configuration_incomplete")
+if set(seen) - set(OPTIONAL) != set(patterns): fail("configuration_incomplete")
+# execute (the agent really promotes) always carries its acknowledgement; review never does.
+if (seen["PROMOTION_EXECUTION_MODE"] == "execute") != ("EXECUTION_ACK" in seen): fail("configuration_invalid")
+keys = list(patterns) + [key for key in OPTIONAL if key in seen]
 backup = None
 if os.path.lexists(CONFIG):
     if os.path.islink(CONFIG): fail("existing_config_is_symlink")
@@ -42,7 +47,7 @@ if os.path.lexists(CONFIG):
 tmp = CONFIG + ".tmp.%d" % os.getpid()
 fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
 with os.fdopen(fd, "w") as handle:
-    handle.write("".join("%s=%s\n" % (key, seen[key]) for key in patterns)); handle.flush(); os.fsync(handle.fileno())
+    handle.write("".join("%s=%s\n" % (key, seen[key]) for key in keys)); handle.flush(); os.fsync(handle.fileno())
 os.chown(tmp, 0, 0); os.chmod(tmp, 0o600); os.replace(tmp, CONFIG)
 def restore():
     if backup: os.replace(backup, CONFIG)
@@ -56,6 +61,6 @@ except Exception:
     ok = False
 if not ok:
     restore(); fail("agent_preflight_refused_previous_state_restored")
-print("agent_config_written=true\nagent_preflight=ready_no_action\npromotion_execution_mode=review\nagent_enabled=false\nagent_started=false")
+print("agent_config_written=true\nagent_preflight=ready_no_action\npromotion_execution_mode=%s\nagent_enabled=false\nagent_started=false" % seen["PROMOTION_EXECUTION_MODE"])
 print("standby_postgres_touched=false\nprevious_config_backed_up=%s\nagent_config_status=complete" % ("true" if backup else "false"))
 '

@@ -8,7 +8,7 @@ const record = JSON.stringify({ format: 'lemtel_failover_sealed_state_v1', versi
   config_revision: 'lemtel-failover-drill-202610190844', issued_at: 1, expires_at: 2, iv: 'x', ciphertext: 'y' });
 
 function world({ mode = 'disabled', power = 'active', incident = record, extraBinding = false } = {}) {
-  const kv = new Map(incident === null ? [] : [[INCIDENT_KEY, incident]]);
+  const kv = new Map(incident === null ? [] : [[INCIDENT_KEY, incident], ['lemtel_failover_execution_v1:status', '{"state":"blocked"}']]);
   const calls = [];
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   const fetchImpl = async (url, init = {}) => {
@@ -42,6 +42,7 @@ test('archives the sealed incident unchanged under a timestamped key, then remov
   assert.equal(result.archiveKey, `${ARCHIVE_PREFIX}20261019T093000Z`);
   assert.equal(w.kv.get(result.archiveKey), record);
   assert.equal(w.kv.has(INCIDENT_KEY), false);
+  assert.equal(w.kv.has('lemtel_failover_execution_v1:status'), false, 'stale status removed');
   assert.ok(lines.includes('incident_archived=true'));
   assert.ok(w.calls.findIndex((c) => c.startsWith('PUT')) < w.calls.findIndex((c) => c.startsWith('DELETE')), 'copy before delete');
 });

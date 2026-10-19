@@ -62,6 +62,9 @@ export async function archiveIncident({ env = process.env, fetchImpl = globalThi
   gate(check.status === 200 && await check.text() === raw, 'archive_verify_failed');
   const del = await call(value(INCIDENT_KEY), { method: 'DELETE', headers: auth }, 'incident_delete_failed');
   gate(del.ok, 'incident_delete_failed');
+  // The last stored status belongs to the archived incident: drop it so /status no longer shows a stale state.
+  const status = await call(value('lemtel_failover_execution_v1:status'), { method: 'DELETE', headers: auth }, 'status_reset_failed');
+  gate(status.ok || status.status === 404, 'status_reset_failed');
   log(`incident_revision=${metadata.config_revision}`);
   log(`incident_archived_as=${archiveKey}`);
   log('incident_archived=true');

@@ -62,12 +62,27 @@ docker inspect "$container" >/dev/null 2>&1 || fail database_container_missing
 # 1. Replication rule (inside the container's hba file, exactly like the DigitalOcean writer), then reload.
 hba="$(psql "SELECT current_setting('hba_file')")"
 [[ "$hba" =~ ^/[A-Za-z0-9/._-]+$ ]] || fail hba_path_invalid
-# The relay always reaches the database on Docker's DEFAULT bridge network, so PostgreSQL sees the docker0 address.
-# (After promotion the container is also on the runtime network; its gateway must not be used: first drill, 2026-10-19.)
-bridge_ip="$(docker inspect --format '{{with index .NetworkSettings.Networks "bridge"}}{{.IPAddress}}{{end}}' "$container")"
-[[ "$bridge_ip" =~ ^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || fail database_not_on_default_bridge
-gateway="$(ip -4 -o address show docker0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)"
-[[ "$gateway" =~ ^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || fail bridge_gateway_unresolved
+# The relay reaches the database through ONE Docker network, chosen here and pinned in the relay; PostgreSQL then sees
+# that network's gateway (the host side of the bridge). The default bridge is preferred when the container is on it.
+private='^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$'
+relay_net=''; relay_ip=''; gateway=''
+while read -r net ip; do
+  [ -n "$net" ] && [[ "$ip" =~ $private ]] || continue
+  gw="$(docker network inspect --format '{{range .IPAM.Config}}{{println .Gateway}}{{end}}' "$net" 2>/dev/null | grep -E "$private" | head -1 || true)"
+  if [ -z "$gw" ]; then
+    ifname="$(docker network inspect --format '{{index .Options "com.docker.network.bridge.name"}}' "$net" 2>/dev/null || true)"
+    [ -n "$ifname" ] && [ "$ifname" != '<no value>' ] || ifname="br-$(docker network inspect --format '{{.Id}}' "$net" 2>/dev/null | cut -c1-12)"
+    [ "$net" = bridge ] && ifname=docker0
+    gw="$(ip -4 -o address show "$ifname" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)"
+  fi
+  [[ "$gw" =~ $private ]] || continue
+  if [ -z "$relay_net" ] || [ "$net" = bridge ]; then relay_net="$net"; relay_ip="$ip"; gateway="$gw"; fi
+done < <(docker inspect --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{$v.IPAddress}}{{println}}{{end}}' "$container")
+if ! [[ "$relay_net" =~ ^[A-Za-z0-9_.-]+$ ]] || [ -z "$gateway" ]; then
+  # Diagnostic only: network names and private addresses (no secret).
+  printf 'container_networks=%s\n' "$(docker inspect --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}:{{$v.IPAddress}};{{end}}' "$container" | tr -cd 'A-Za-z0-9_.:;-')" >&2
+  fail database_network_unresolved
+fi
 rule="host replication lemtel_ha_replication ${gateway}/32 scram-sha-256"
 hba_added=false
 if ! docker exec -u postgres "$container" grep -Fqx "$rule" "$hba"; then
@@ -94,7 +109,7 @@ install -d -m 0755 "$(dirname "$relay_script")" "$(dirname "$relay_unit")"
 cat > "$relay_script.tmp" <<RELAY
 #!/usr/bin/env bash
 set -euo pipefail
-ip="\$(docker inspect --format '{{with index .NetworkSettings.Networks "bridge"}}{{.IPAddress}}{{end}}' $container)"
+ip="\$(docker inspect --format '{{with index .NetworkSettings.Networks "$relay_net"}}{{.IPAddress}}{{end}}' $container)"
 [ -n "\$ip" ] || exit 1
 exec /usr/bin/socat "TCP-LISTEN:5432,bind=${hostinger_tunnel},reuseaddr,fork,range=${do_tunnel}/32" "TCP:\${ip}:5432"
 RELAY
@@ -126,5 +141,5 @@ if ss -H -ltn "sport = :5432" | awk '{print $4}' | grep -Fvx "${hostinger_tunnel
 
 printf 'hostinger_writer_replication_format=lemtel_hostinger_writer_replication_v1\n'
 printf 'hba_rule=%s\n' "$([ "$hba_added" = true ] && echo added || echo already_present)"
-printf 'replication_slot=%s\nrelay=%s:5432_from_%s_only\n' "$slot" "$hostinger_tunnel" "$do_tunnel"
+printf 'replication_slot=%s\nrelay=%s:5432_from_%s_only\nrelay_network=%s\nrelay_source=%s\n' "$slot" "$hostinger_tunnel" "$do_tunnel" "$relay_net" "$gateway"
 printf 'public_database_listener_enabled=false\ndns_change_executed=false\nhostinger_writer_replication_status=complete\n'

@@ -111,6 +111,7 @@ test('step 1: replication rule, slot and a relay bound to the tunnel accepting o
   const relay = readFileSync(join(w.root, 'usr/local/libexec/lemtel-ha-hostinger-postgres-wireguard-relay'), 'utf8');
   assert.match(relay, /TCP-LISTEN:5432,bind=10\.253\.47\.1,reuseaddr,fork,range=10\.253\.47\.2\/32/u);
   assert.match(relay, /index \.NetworkSettings\.Networks "bridge"/u, 'relay pinned to the default bridge network');
+  assert.match(w.read('log'), /docker network inspect/u);
   assert.match(w.log(), /sql .*address = '172\.17\.0\.1'/u, 'hba rule for the docker0 address');
   assert.match(readFileSync(join(w.root, 'etc/systemd/system/lemtel-ha-hostinger-postgres-wireguard-relay.service'), 'utf8'), /Requires=wg-quick@lemtel-ha0/u);
 });
@@ -267,4 +268,22 @@ test('storage: applied only when the received files match the Hostinger manifest
   symlinkSync('/etc/passwd', join(src, 'evil'));
   const linked = execFileSync('tar', ['-C', src, '-cf', '-', '.']);
   assert.equal(reason(w.run(STORAGE, [], env, linked)), 'unexpected_file_type');
+});
+
+test('step 1 after promotion: database only on the runtime network -> relay pinned to it, rule for its gateway', () => {
+  const w = hWriter();
+  writeFileSync(join(w.fake, 'containers/lemtel-postgres-hostinger-standby/netips'), 'lemtel-ha-hostinger-promoted_default 172.19.0.4\n');
+  const r = w.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /relay_network=lemtel-ha-hostinger-promoted_default\nrelay_source=172\.19\.0\.1/u);
+  assert.match(readFileSync(join(w.root, 'usr/local/libexec/lemtel-ha-hostinger-postgres-wireguard-relay'), 'utf8'), /Networks "lemtel-ha-hostinger-promoted_default"/u);
+  assert.match(w.log(), /address = '172\.19\.0\.1'/u);
+});
+test('step 1 prefers the default bridge when the database is on both networks', () => {
+  const w = hWriter();
+  writeFileSync(join(w.fake, 'containers/lemtel-postgres-hostinger-standby/netips'), 'lemtel-ha-hostinger-promoted_default 172.19.0.4\nbridge 172.17.0.3\n');
+  writeFileSync(join(w.fake, 'net-bridge-gw'), '172.17.0.1\n');
+  const r = w.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /relay_network=bridge\nrelay_source=172\.17\.0\.1/u);
 });

@@ -15,6 +15,7 @@ case "$1" in
       *Config.Env*) cat "$C/$c/env" 2>/dev/null ;;
       *Aliases*) cat "$C/$c/networks" 2>/dev/null ;;
       *Gateway*) echo 172.17.0.1 ;;
+      *'$k'*) cat "$C/$c/netips" 2>/dev/null || echo "bridge 172.17.0.5" ;;
       *IPAddress*) echo 172.17.0.5 ;;
       *) echo '{}' ;;
     esac ;;
@@ -24,7 +25,11 @@ case "$1" in
     if [[ "$*" == *" -aq"* ]] || [[ "$*" == *" -a -q"* ]]; then cat "$F/project-$p-all" 2>/dev/null; else cat "$F/project-$p-running" 2>/dev/null; fi ;;
   port) exit 0 ;;
   network)
-    case "$2" in ls) cat "$F/project-networks" 2>/dev/null ;; *) : ;; esac ;;
+    case "$2" in
+      ls) cat "$F/project-networks" 2>/dev/null ;;
+      inspect) n="${@: -1}"; case "$*" in *IPAM*) cat "$F/net-$n-gw" 2>/dev/null ;; *bridge.name*) cat "$F/net-$n-if" 2>/dev/null || echo '<no value>' ;; *.Id*) echo abcdef0123456789 ;; esac ;;
+      *) : ;;
+    esac ;;
   update|cp) exit 0 ;;
   stop) for c in "${@:2}"; do [ -d "$C/$c" ] && echo false > "$C/$c/running"; [[ "$c" == --* ]] || true; done
         for id in "${@:2}"; do grep -qx "$id" "$F"/project-*-running 2>/dev/null && sed -i "/^$id$/d" "$F"/project-*-running; done; exit 0 ;;

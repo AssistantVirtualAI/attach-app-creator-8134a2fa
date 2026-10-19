@@ -170,10 +170,13 @@ const JSSIP_MODULE_INFO = (() => {
   }
 })();
 
-const pcConfig = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+// Legacy default only. A Lemtel-provisioned config (portal "Connexion FusionPBX") replaces the ICE servers
+// and policy at init(); the object is mutated in place so every call/answer path uses the same values.
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+const pcConfig: { iceServers: RTCIceServer[]; sdpSemantics: any; iceTransportPolicy: RTCIceTransportPolicy } = {
+  iceServers: DEFAULT_ICE_SERVERS,
   sdpSemantics: 'unified-plan' as any,
-  iceTransportPolicy: 'all' as RTCIceTransportPolicy,
+  iceTransportPolicy: 'all',
 };
 
 const sessionDescriptionHandlerOptions = {
@@ -248,6 +251,12 @@ export interface SoftphoneConfig {
   password: string;
   authUsername?: string;
   mock?: boolean;
+  /** Lemtel provisioning (portal): ICE servers incl. short-lived TURN credentials, policy and REGISTER expiry. */
+  iceServers?: Array<{ urls: string[]; username?: string; credential?: string }>;
+  iceTransportPolicy?: RTCIceTransportPolicy;
+  registerExpires?: number;
+  /** true when every value comes from the Lemtel portal: no hardcoded endpoint may be added. */
+  provisioned?: boolean;
 }
 
 type Listener = (snap: SoftphoneSnapshot) => void;
@@ -620,11 +629,17 @@ class JsSipProvider {
       : 'Running in browser — WSS may be blocked by CORS/mixed-content');
 
     try {
-                              const fallbackUrls = Array.from(new Set([
-        'wss://node.lemtelcloud.net:7443',
-        'wss://pbxnode.lemtel.tel:7443',
-        'wss://170.39.199.132:7443',
-      ].filter(Boolean)));
+      // Provisioned (portal) config: ONLY the portal's WSS endpoints. Legacy installs keep their historical list.
+      const candidateUrls: string[] = cfg.provisioned
+        ? (cfg.wssUrls?.length ? cfg.wssUrls : [cfg.wssUrl])
+        : [
+          'wss://node.lemtelcloud.net:7443',
+          'wss://pbxnode.lemtel.tel:7443',
+          'wss://170.39.199.132:7443',
+        ];
+      const fallbackUrls = Array.from(new Set(candidateUrls.filter((u) => typeof u === 'string' && u.startsWith('wss://'))));
+      pcConfig.iceServers = cfg.iceServers?.length ? cfg.iceServers : DEFAULT_ICE_SERVERS;
+      pcConfig.iceTransportPolicy = cfg.iceTransportPolicy ?? 'all';
       this.wssAttempted = fallbackUrls;
 
       this.logEvent('info', `Init sip:${cfg.extension}@${cfg.sipDomain} via ${fallbackUrls.length} WSS endpoint(s): ${fallbackUrls.join(', ')}`);
@@ -655,7 +670,7 @@ class JsSipProvider {
         contact_params: `+sip.instance="<urn:uuid:DESKTOP-${deviceId}>";+lemtel.device="desktop"`,
         register: true,
         session_timers: false,
-        register_expires: 300,
+        register_expires: cfg.registerExpires ?? 300,
         no_answer_timeout: 60,
         // Disable JsSIP's built-in connection_recovery — it conflicts with our
         // single-flight watchdog (scheduleRecovery/kickReconnect) and causes

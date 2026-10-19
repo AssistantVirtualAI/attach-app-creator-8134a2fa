@@ -21,7 +21,7 @@ const STARTUP_TASKS: Task[] = [
   { key: 'me',                 run: () => mobileApi.me() },
   { key: 'domainStats:today',  run: () => mobileApi.domainStats('today') },
   { key: 'mobile.calls.7',     run: () => mobileApi.calls({ rangeDays: 7, limit: 10 }) },
-  { key: 'mobile.sipCreds',    run: () => mobileApi.webphoneToken() },
+  // SIP credentials are never prefetched: they come only from lemtel-softphone-provisioning at SIP start.
 ];
 
 let started = false;

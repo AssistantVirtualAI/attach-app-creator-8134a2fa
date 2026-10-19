@@ -3,7 +3,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { supabase, clearRecordingAudioCache } from './mobileSupabase';
 import { clearRecordingCache } from './recordingCache';
-import { clearIceServerCache } from './sip/iceServers';
+import { clearIceServerCache, setProvisionedIceServers } from './sip/iceServers';
+import { fetchLemtelProvisioning, LemtelProvisioningError, toLemtelSipSettings } from './lemtelSoftphoneProvisioning';
 import { setAuthToken } from './mobileApi';
 
 export type Creds = {
@@ -240,42 +241,44 @@ export async function ensureStoredOrganizationId(): Promise<string | null> {
 }
 
 /**
- * Hydrate full SIP credentials from softphone-credentials edge function.
- * Used after email-only login (no extension) and on boot for legacy sessions
- * missing extension/sipDomain/wssUrl/sipPassword. Returns the updated creds
- * (or null if hydration failed / user has no softphone account).
+ * Hydrate the SIP connection from the Lemtel portal (lemtel-softphone-provisioning) — the SAME contract
+ * Desktop uses (src/lib/lemtelSoftphoneProvisioning.ts is byte-identical in both apps). The portal's
+ * "Connexion FusionPBX" is the only authority: domain, WSS, credentials and short-lived TURN all come from it.
+ * Returns the updated creds, or null when telephony is not ready (reason in getLastProvisioningStatus()).
  */
+let lastProvisioningStatus: string = 'unknown';
+export function getLastProvisioningStatus(): string { return lastProvisioningStatus; }
 export async function hydrateSoftphoneCredentials(platform: 'mobile' | 'desktop' = 'mobile'): Promise<Creds | null> {
   const c = await Store.get();
   const epoch = credentialEpoch;
   if (!c?.accessToken) return null;
   try {
-    const res = await fetch(`${SUPABASE_URL_DEF}/functions/v1/softphone-credentials?platform=${platform}`, {
-      headers: { apikey: SUPABASE_ANON_DEF, Authorization: `Bearer ${c.accessToken}` },
-    });
-    if (!res.ok) return null;
-    const d = await res.json().catch(() => null) as any;
+    const p = await fetchLemtelProvisioning(SUPABASE_URL_DEF, SUPABASE_ANON_DEF, c.accessToken, platform);
     if (epoch !== credentialEpoch) return null;
-    if (!d || d.error || !d.extension) return null;
+    lastProvisioningStatus = p.status;
+    if (p.status !== 'ready') {
+      // Never keep a stale password once the portal withdraws or rotates access.
+      if (c.sipPassword) await Store.set({ ...c, sipPassword: undefined }, epoch);
+      setProvisionedIceServers(null);
+      return null;
+    }
+    const s = toLemtelSipSettings(p);
+    setProvisionedIceServers(s.iceServers, s.iceTransportPolicy);
     const next: Creds = {
       ...c,
-      extension: d.extension || c.extension || '',
-      displayName: d.display_name || d.displayName || c.displayName,
-      sipDomain: d.sip_domain || d.sipDomain || c.sipDomain,
-      wssUrl: d.wss_url || d.wssUrl || c.wssUrl,
-      wssUrls: d.wss_urls || d.wssUrls || c.wssUrls,
-      sipPassword: d.sip_password || d.password || c.sipPassword,
-      authUsername: d.auth_username || d.authUsername || d.extension || c.authUsername,
-      passwordSource: d.password_source || d.passwordSource || c.passwordSource,
-      organizationId: d.organization_id || c.organizationId,
-      organizationName: d.organization_name || c.organizationName,
-      fusionpbxDomainUuid: d.fusionpbx_domain_uuid || c.fusionpbxDomainUuid,
-      domainUuid: d.fusionpbx_domain_uuid || c.domainUuid,
-      role: d.role || c.role,
-      dataScope: d.data_scope || c.dataScope,
-      portalUrl: d.portal_url || c.portalUrl,
+      extension: s.extension,
+      displayName: s.displayName || c.displayName,
+      sipDomain: s.sipDomain,
+      wssUrl: s.wssUrl,
+      wssUrls: s.wssUrls,
+      sipPassword: s.password,
+      authUsername: s.authUsername,
+      passwordSource: 'lemtel_portal',
     };
     await Store.set(next, epoch);
     return epoch === credentialEpoch ? next : null;
-  } catch { return null; }
+  } catch (e) {
+    lastProvisioningStatus = e instanceof LemtelProvisioningError ? e.code : 'provisioning_failed';
+    return null;
+  }
 }

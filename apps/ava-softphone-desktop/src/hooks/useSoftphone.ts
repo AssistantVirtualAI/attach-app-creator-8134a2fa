@@ -2,6 +2,11 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { sipProvider, SoftphoneSnapshot, SoftphoneConfig } from '@/lib/sip/jssipProvider';
 import { ringtone } from '@/lib/sip/ringtonePlayer';
 import { supabase, SB_URL, SB_KEY } from '@/lib/supabaseClient';
+import { LEGACY_BACKEND_URL } from '@/lib/backendOrigin';
+import { fetchLemtelProvisioning, lemtelProvisioningMessage, LemtelProvisioningError, toLemtelSipSettings } from '@/lib/lemtelSoftphoneProvisioning';
+
+/** Lemtel self-hosted origin (cutover build): the portal is the only telephony authority. */
+export const LEMTEL_PROVISIONED_ORIGIN = SB_URL !== LEGACY_BACKEND_URL;
 import type { RecordingPolicy } from '../lib/lemtelTelephonyPolicy';
 
 interface UseSoftphoneArgs {
@@ -126,6 +131,28 @@ export function useSoftphone(args: UseSoftphoneArgs) {
           setCredError('No session token. Re-sign-in.');
           return;
         }
+        if (LEMTEL_PROVISIONED_ORIGIN) {
+          // Same contract as Mobile: lemtel-softphone-provisioning (portal "Connexion FusionPBX").
+          let provisioning;
+          try {
+            provisioning = await fetchLemtelProvisioning(SB_URL, SB_KEY, token, 'desktop');
+          } catch (e) {
+            if (cancelled || !allowRef.current) return;
+            setCredError(lemtelProvisioningMessage(e instanceof LemtelProvisioningError ? e.code : 'provisioning_failed'));
+            return;
+          }
+          if (cancelled || !allowRef.current) return;
+          if (provisioning.status !== 'ready') { setCredError(lemtelProvisioningMessage(provisioning.status)); return; }
+          const s = toLemtelSipSettings(provisioning);
+          const cfg: SoftphoneConfig = {
+            extension: s.extension, displayName: s.displayName, sipDomain: s.sipDomain, wssUrl: s.wssUrl, wssUrls: s.wssUrls,
+            password: s.password, authUsername: s.authUsername, iceServers: s.iceServers, iceTransportPolicy: s.iceTransportPolicy,
+            registerExpires: s.registerExpires, provisioned: true,
+          };
+          setConfig(cfg);
+          await sipProvider.init(cfg);
+          return;
+        }
         const fetched = await fetchSoftphoneCredentials(token);
         // Phase 21B.1: re-check after the async credential fetch.
         if (cancelled || !allowRef.current) return;
@@ -176,6 +203,8 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     window.electronAPI?.updateTrayStatus?.(trayState);
 
     (async () => {
+      // Legacy presence table only exists on the historical backend; Lemtel presence is server-side.
+      if (LEMTEL_PROVISIONED_ORIGIN) return;
       try {
         await supabase
           .from('pbx_softphone_users')

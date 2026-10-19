@@ -36,7 +36,7 @@ import { useRealtimeCDR } from './hooks/useRealtimeCDR';
 import { useDeviceNotifications } from './hooks/useDeviceNotifications';
 import { initBackgroundSync } from './lib/backgroundSync';
 import { useNotificationCounts } from './hooks/useNotificationCounts';
-import { useStoredCreds, Creds, ensureStoredOrganizationId, hydrateSoftphoneCredentials, restoreSupabaseSession, getCredentialEpoch, isCurrentCredentialEpoch } from './lib/creds';
+import { useStoredCreds, Creds, ensureStoredOrganizationId, hydrateSoftphoneCredentials, getLastProvisioningStatus, restoreSupabaseSession, getCredentialEpoch, isCurrentCredentialEpoch } from './lib/creds';
 import { reconcileLemtelMobileAuthority } from './lib/lemtelAuthorityReconciliation';
 import { gradients, colors } from './lib/theme';
 import { ThemeProvider } from './lib/ThemeContext';
@@ -54,7 +54,8 @@ import { configureMobileApi, setAuthToken } from './lib/mobileApi';
 // Initialize immediately so API calls never go out without credentials
 configureMobileApi({ accessToken: null });
 import { configureAudit, audit } from './lib/audit';
-import { edgeCall, supabase } from './lib/mobileSupabase';
+import { supabase } from './lib/mobileSupabase';
+import { lemtelProvisioningMessage } from './lib/lemtelSoftphoneProvisioning';
 import { useLemtelMobileClientConfig } from './hooks/useLemtelMobileClientConfig';
 import { CapacitorPjsip, stopAndroidSipService } from './lib/sip/nativeSipProvider';
 import PerfOverlay from './components/PerfOverlay';
@@ -231,6 +232,8 @@ function AuthenticatedShell({
   const passwordHealRef = useRef('');
   const hydratedTokenRef = useRef('');
   const [sipReady, setSipReady] = useState(false);
+  // Portal decision for this user's telephony (lemtel-softphone-provisioning), shown when SIP cannot start.
+  const [provisioningStatus, setProvisioningStatus] = useState<string>('unknown');
 
   // Hydrate SIP credentials BEFORE starting JsSIP
   useEffect(() => {
@@ -244,6 +247,7 @@ function AuthenticatedShell({
     hydrateSoftphoneCredentials('mobile').then((next) => {
       if (cancelled || !isCurrentCredentialEpoch(epoch)) return;
       if (next && next.userId === creds.userId) setCreds(next);
+      setProvisioningStatus(next ? 'ready' : getLastProvisioningStatus());
       hydratedTokenRef.current = creds.accessToken || '';
       setSipReady(true);
     }).catch(() => { if (!cancelled && isCurrentCredentialEpoch(epoch)) setSipReady(true); });
@@ -339,13 +343,9 @@ function AuthenticatedShell({
     const key = `${creds.userId || creds.email}:${creds.extension}:${softphone.sipError}`;
     if (passwordHealRef.current === key) return;
     passwordHealRef.current = key;
-    // 403/401 on REGISTER means the PBX rejected our creds. Force-push the
-    // canonical local password back into FusionPBX (an earlier repair-routing
-    // POST on Android could overwrite the extension row and blank the
-    // password). This fixes iOS too because both platforms share the same
-    // FusionPBX extension record.
-    edgeCall('softphone-sync-password', creds.accessToken, { force_local_to_pbx: true })
-      .then(() => hydrateSoftphoneCredentials('mobile'))
+    // 403/401 on REGISTER: the portal may have rotated the credential. Re-read it ONCE from the
+    // Lemtel portal (same contract as Desktop). A client never writes a password into FusionPBX.
+    hydrateSoftphoneCredentials('mobile')
       .then((next) => { if (next) setCreds(next); })
       .catch((e) => console.warn('[SIP] password auto-sync failed', e?.message || e));
   }, [sipAllowed, creds.accessToken, creds.email, creds.extension, creds.userId, setCreds, softphone.sipError]);
@@ -622,6 +622,11 @@ function AuthenticatedShell({
       />
 
       <MicPermissionWarning />
+      {sipAllowed && sipReady && provisioningStatus !== 'ready' && provisioningStatus !== 'unknown' && (
+        <div role="status" data-testid="lemtel-provisioning-status" style={{ margin: '6px 14px', padding: '8px 12px', borderRadius: 12, fontSize: 13, background: 'rgba(255,190,80,.12)', border: '1px solid rgba(255,190,80,.35)' }}>
+          {lemtelProvisioningMessage(provisioningStatus, (typeof navigator !== 'undefined' && navigator.language?.startsWith('en')) ? 'en' : 'fr')}
+        </div>
+      )}
 
 
 

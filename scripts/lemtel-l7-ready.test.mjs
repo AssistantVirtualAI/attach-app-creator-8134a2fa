@@ -16,7 +16,10 @@ const packager=readFileSync(packagePath,'utf8');
 const escaped=(value)=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
 test('L7 readiness is writer-only and exposes only the minimal healthy JSON marker',()=>{
-  for (const expected of ['digitalocean_promoted_writer','database_not_writer','database_streaming_absent','storage_attestation_stale','lemtel-ha-do-writer-storage-sync.timer',"marker_name='lemtel-lb-ready.json'","legacy_marker_name='lemtel-lb-ready'",'observed_at="$(date -u +%s)"','lemtel_do_writer_l7_ready_v1','"writer_role":"do_writer"','"definitive":true','"status":"healthy"','automatic_traffic_failover_enabled=false']) assert.match(refresh,new RegExp(escaped(expected)));
+  for (const expected of ['digitalocean_promoted_writer','database_not_writer',"marker_name='lemtel-lb-ready.json'","legacy_marker_name='lemtel-lb-ready'",'observed_at="$(date -u +%s)"','lemtel_do_writer_l7_ready_v1','"writer_role":"do_writer"','"definitive":true','"status":"healthy"','automatic_traffic_failover_enabled=false']) assert.match(refresh,new RegExp(escaped(expected)));
+  // The writer marker must never depend on the standby side: a Hostinger, tunnel or Storage-copy outage
+  // would otherwise make a healthy writer look dead to the arbiter and to the Cloudflare monitor.
+  for (const forbidden of ['wg show','wg-quick@lemtel-ha0','pg_stat_replication','storage_attestation','storage-sync.timer']) assert.ok(!refresh.includes(forbidden), forbidden);
   assert.doesNotMatch(refresh,/printf 'ready\\n'/);
   assert.doesNotMatch(refresh,/FUSIONPBX|SIP_|WSS|TURN|POSTGRES_PASSWORD|SERVICE_ROLE|Bearer/i);
   assert.match(refresh,/resolve_runtime_container/);

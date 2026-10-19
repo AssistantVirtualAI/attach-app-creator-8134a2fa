@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Publishes a minimal, non-sensitive Caddy JSON marker only while the DO writer passes local checks.
+# Publishes a minimal, non-sensitive Caddy JSON marker only while the DO writer itself can serve:
+# Caddy, PostgreSQL (as writer) and Auth are running and the public Auth route answers.
+# Standby-side signals (WireGuard, streaming replica, Storage copy) are deliberately NOT part of this
+# marker: the failover arbiter and the Cloudflare monitor treat a missing marker as "DO is down", so a
+# Hostinger or tunnel outage must never make a healthy writer look dead. Standby readiness reaches the
+# arbiter separately, signed by the Hostinger agent.
 # No routing, provider action, promotion, database mutation or telephony action is performed.
 set -euo pipefail
 
@@ -15,7 +20,6 @@ fail() {
 [ "${LEMTEL_HA_ROLE:-}" = 'digitalocean_promoted_writer' ] || fail invalid_role
 
 caddy_container='supabase-caddy'
-storage_timer='lemtel-ha-do-writer-storage-sync.timer'
 resolve_runtime_container() {
   local image_pattern="$1"
   local -a candidates=()
@@ -26,8 +30,6 @@ db_container="$(resolve_runtime_container '(^|/)postgres(:|$)|supabase/postgres(
 auth_container="$(resolve_runtime_container '(^|/)gotrue(:|$)|supabase/gotrue(:|$)' || true)"
 [ -n "$db_container" ] || fail database_container_unresolved
 [ -n "$auth_container" ] || fail auth_container_unresolved
-storage_attestation='/var/lib/lemtel-ha/storage-sync-manifests/last-success'
-max_storage_freshness_seconds=900
 marker_name='lemtel-lb-ready.json'
 legacy_marker_name='lemtel-lb-ready'
 marker_path=''
@@ -41,7 +43,6 @@ clear_marker() {
 
 command -v docker >/dev/null 2>&1 || fail docker_missing
 command -v curl >/dev/null 2>&1 || fail curl_missing
-command -v wg >/dev/null 2>&1 || fail wireguard_missing
 for container in "$caddy_container" "$db_container" "$auth_container"; do
   docker inspect "$container" >/dev/null 2>&1 || fail container_missing
   [ "$(docker inspect --format '{{.State.Running}}' "$container")" = true ] || fail container_not_running
@@ -51,20 +52,8 @@ caddy_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/
 [ -n "$caddy_mount" ] || fail caddy_mount_missing
 marker_path="$caddy_mount/$marker_name"
 
-systemctl is-active --quiet "$storage_timer" || fail storage_timer_inactive
-systemctl is-enabled --quiet "$storage_timer" || fail storage_timer_disabled
-systemctl is-active --quiet wg-quick@lemtel-ha0 || fail wireguard_inactive
-handshake="$(wg show lemtel-ha0 latest-handshakes | awk 'NR == 1 { print $2 }')"
-[ "${handshake:-0}" -gt 0 ] || fail wireguard_handshake_missing
-
-writer_state="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_is_in_recovery()::text, (SELECT count(*) FROM pg_stat_replication WHERE state = '\''streaming'\'')"' 2>/dev/null || true)"
-IFS='|' read -r in_recovery streaming_count <<< "$writer_state"
-[ "$in_recovery" = false ] || fail database_not_writer
-[[ "$streaming_count" =~ ^[0-9]+$ ]] && [ "$streaming_count" -ge 1 ] || fail database_streaming_absent
-
-[ -s "$storage_attestation" ] || fail storage_attestation_missing
-storage_age_seconds="$(( $(date +%s) - $(stat -c %Y "$storage_attestation") ))"
-[ "$storage_age_seconds" -ge 0 ] && [ "$storage_age_seconds" -le "$max_storage_freshness_seconds" ] || fail storage_attestation_stale
+writer_state="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_is_in_recovery()::text"' 2>/dev/null || true)"
+[ "$writer_state" = false ] || fail database_not_writer
 
 auth_url="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$auth_container" | sed -n 's/^API_EXTERNAL_URL=//p' | sed -n '1p')"
 case "$auth_url" in https://*) ;; *) fail auth_external_url_invalid ;; esac

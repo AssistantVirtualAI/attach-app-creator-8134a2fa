@@ -32,12 +32,14 @@ export default function PpCallPill({
       const shrunk = !!vv && window.innerHeight - vv.height > 120;
       setKeyboardOpen(typing || shrunk);
     };
+    const late = () => setTimeout(check, 50);
     check();
     document.addEventListener("focusin", check);
-    document.addEventListener("focusout", () => setTimeout(check, 50));
+    document.addEventListener("focusout", late);
     window.visualViewport?.addEventListener("resize", check);
     return () => {
       document.removeEventListener("focusin", check);
+      document.removeEventListener("focusout", late);
       window.visualViewport?.removeEventListener("resize", check);
     };
   }, []);

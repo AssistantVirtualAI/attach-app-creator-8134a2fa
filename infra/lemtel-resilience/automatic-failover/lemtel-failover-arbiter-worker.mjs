@@ -1,4 +1,5 @@
 // Prepared protocol only: no deployment, secrets, bindings or production approvals included.
+// Command transport: GET /agent/command (Bearer AGENT_SHARED_SECRET), one-time, intent recorded before output.
 // KV is NOT a transactional lock. Strong serialization is exclusively the singleton Durable Object below.
 const VERSION = 'lemtel_failover_execution_v1';
 const STATUS_KEY = `${VERSION}:status`;
@@ -36,7 +37,7 @@ const SAFE_REASONS = new Set([...SAFE_STATES, 'not_found', 'method_not_allowed',
   'writer_healthy', 'promotion_command_expired', 'unknown_phase', 'state_or_protocol_error_manual_review',
   'promotion_command_expired_or_configuration_changed', 'promotion_command_invalid',
   'command_delivery_unknown_manual_review', 'serializer_lease_unavailable',
-  'serializer_lease_expired', 'serializer_incident_refused']);
+  'serializer_lease_expired', 'serializer_incident_refused', 'command_dispatched_to_agent']);
 function status(state, reason = state) {
   state = SAFE_STATES.has(state) ? state : 'blocked';
   reason = SAFE_REASONS.has(reason) ? reason : 'state_or_protocol_error_manual_review';
@@ -129,7 +130,7 @@ function serializerOrigin() { return ['https:', '', 'serializer.invalid'].join('
 function serializerExecutionKey(value) { return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27,36}$/u.test(value); }
 function serializerCapability(value) { return serializerExecutionKey(value); }
 function serializerIncident(value) { return typeof value === 'string' && /^[a-z0-9-]{8,80}$/u.test(value); }
-function serializerIntent(value) { return value === 'shutdown' || value === 'power_off' || value === 'promotion'; }
+function serializerIntent(value) { return value === 'shutdown' || value === 'power_off' || value === 'promotion' || value === 'dispatch'; }
 function serializerLeaseRecord(value) {
   return exactKeys(value, ['format', 'execution_key', 'config_revision', 'capability', 'expires_at']) &&
     value.format === SERIALIZER_FORMAT && serializerExecutionKey(value.execution_key) && revision(value.config_revision) &&
@@ -560,6 +561,44 @@ async function issueCommand(env, cfg, incident, now, lease) {
   await persist(env, incident);
   return storeStatus(env, status(incident.phase, 'manual_promotion_action_required'));
 }
+async function sameSecret(presented, expected) {
+  // Compare fixed-length digests so the comparison cost does not depend on the shared secret.
+  if (typeof presented !== 'string' || typeof expected !== 'string' || presented.length > 4096) return false;
+  const [a, b] = await Promise.all([digest(`agent-auth\n${presented}`), digest(`agent-auth\n${expected}`)]);
+  let difference = a.length ^ b.length;
+  for (let index = 0; index < Math.min(a.length, b.length); index += 1) difference |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  return difference === 0;
+}
+// Authenticated one-time mailbox for the single Hostinger agent.
+// Delivery rules: the dispatch intent is recorded once in the Durable Object ledger and the incident is
+// persisted as dispatched BEFORE the command leaves the Worker. A lost reply, an unknown outcome or an
+// expired command is never re-delivered: it becomes a manual review. The agent keeps its own one-time ledger.
+async function agentCommand(request, env, cfg, now) {
+  const presented = (request.headers.get('authorization') || '').replace(/^Bearer /u, '');
+  if (!/^Bearer /u.test(request.headers.get('authorization') || '') ||
+      !await sameSecret(presented, env.AGENT_SHARED_SECRET)) return json(status('blocked', 'unauthorized'), 401);
+  const lease = await acquireLease(env);
+  if (!lease) return json(status('blocked', 'serializer_lease_unavailable'), 503);
+  const raw = await env.STATE.get(INCIDENT_KEY);
+  if (!raw) return json({ state: 'no_command' });
+  const incident = (await openState(env, 'incident', raw, now)).payload;
+  if (incident.version !== VERSION || incident.config_revision !== env.CONFIG_REVISION ||
+      incident.phase !== 'promotion_command_ready' || !incident.command?.payload) return json({ state: 'no_command' });
+  if (incident.command.payload.expires_at <= now || !protectedStillValid(env)) return json({ state: 'no_command' });
+  if (!await recordSerializedIntent(env, lease, incident.incident_id, 'dispatch')) {
+    await blockIncident(env, incident, 'command_delivery_unknown_manual_review');
+    return json({ state: 'no_command' });
+  }
+  if (!validLease(lease, env)) {
+    await blockIncident(env, incident, 'command_delivery_unknown_manual_review');
+    return json({ state: 'no_command' });
+  }
+  incident.phase = 'promotion_command_dispatched';
+  incident.dispatched_at = now;
+  await persist(env, incident); // Throws before any command is returned if the state cannot be recorded.
+  await storeStatus(env, status('manual_promotion_action_required', 'command_dispatched_to_agent'));
+  return json({ state: 'command_available', command: incident.command });
+}
 async function tick(env) {
   if (env.FAILOVER_MODE === 'bootstrap') return status('bootstrap', 'configuration_injection_only');
   if (env.FAILOVER_MODE !== 'active') return status('disabled_or_dry_run');
@@ -627,11 +666,17 @@ export default {
     if (path === BOOTSTRAP_KEY_PATH || path === BOOTSTRAP_PATH) return json(status('blocked', 'not_found'), 404);
     // Disabled/unknown modes cannot contact a Durable Object, KV, provider, or command channel.
     if (env.FAILOVER_MODE !== 'active') return json(status('disabled_or_dry_run'));
-    // No HTTP route exposes a promotion command. HTTP is status-only in active mode.
+    // HTTP never starts an incident or a fence. The only command surface is the authenticated agent mailbox.
     if (request.method !== 'GET') return json(status('blocked', 'method_not_allowed'), 405);
-    if (path !== '/healthz' && path !== '/status') return json(status('blocked', 'not_found'), 404);
+    if (path !== '/healthz' && path !== '/status' && path !== '/agent/command') return json(status('blocked', 'not_found'), 404);
     const cfg = await config(env, now);
     if (cfg.runtime) env = cfg.runtime;
+    if (path === '/agent/command') {
+      // Any missing gate hides the mailbox entirely: same answer as an unknown route, no state written.
+      if (cfg.denied || !serializerStub(env) || await readiness(env, cfg, now)) return json(status('blocked', 'not_found'), 404);
+      try { return await agentCommand(request, env, cfg, now); }
+      catch { return json(status('blocked', 'state_or_protocol_error_manual_review'), 503); }
+    }
     // Do not mint a lease for a read-only status request, but missing/invalid binding remains fail-closed.
     if (!serializerStub(env)) {
       const saved = await storeStatus(env, status('blocked', 'serializer_lease_unavailable'));

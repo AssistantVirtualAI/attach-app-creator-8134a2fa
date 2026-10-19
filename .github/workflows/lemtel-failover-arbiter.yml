@@ -1,0 +1,41 @@
+name: Lemtel resilience — failover arbiter and agent mailbox
+
+on:
+  pull_request:
+    paths:
+      - "infra/lemtel-resilience/automatic-failover/**"
+      - "infra/lemtel-resilience/hostinger-standby-signed-observability/**"
+      - "scripts/lemtel-failover-execution-protocol.test.mjs"
+      - "scripts/lemtel-durable-object-serialization.test.mjs"
+      - "scripts/lemtel-sealed-arbiter-bootstrap.test.mjs"
+      - "scripts/lemtel-serializer-test-helpers.mjs"
+      - "scripts/lemtel-hostinger-standby-deploy*"
+      - ".github/workflows/lemtel-failover-arbiter.yml"
+  push:
+    branches: [lemtel/integration]
+    paths:
+      - "infra/lemtel-resilience/automatic-failover/**"
+      - "infra/lemtel-resilience/hostinger-standby-signed-observability/**"
+      - "scripts/lemtel-failover-execution-protocol.test.mjs"
+      - "scripts/lemtel-durable-object-serialization.test.mjs"
+      - "scripts/lemtel-sealed-arbiter-bootstrap.test.mjs"
+      - "scripts/lemtel-serializer-test-helpers.mjs"
+      - "scripts/lemtel-hostinger-standby-deploy*"
+      - ".github/workflows/lemtel-failover-arbiter.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  arbiter-protocol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Arbiter Worker, Durable Object serializer, sealed bootstrap and agent mailbox
+        run: node --test scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-durable-object-serialization.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs
+      - name: Hostinger signed-observation deployers (offline fakes)
+        run: node --test scripts/lemtel-hostinger-standby-deploy.test.mjs

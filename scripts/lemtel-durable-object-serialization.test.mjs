@@ -63,6 +63,9 @@ test('missing or invalid Durable Object binding blocks active work before any he
   assert.match(source, /serializer_lease_unavailable/u);
   assert.match(source, /const lease = await acquireLease\(env\);[\s\S]*?const denied = await readiness/u);
   assert.match(source, /if \(env\.FAILOVER_MODE !== 'active'\) return json\(status\('disabled_or_dry_run'\)\)/u);
-  assert.doesNotMatch(source, /agent\/command/u);
+  // The agent mailbox takes the singleton lease before reading the incident and records the dispatch
+  // intent and the dispatched state before a command can leave the Worker.
+  assert.match(source, /async function agentCommand[\s\S]*?const lease = await acquireLease\(env\);[\s\S]*?STATE\.get\(INCIDENT_KEY\)/u);
+  assert.match(source, /recordSerializedIntent\(env, lease, incident\.incident_id, 'dispatch'\)[\s\S]*?await persist\(env, incident\);[\s\S]*?state: 'command_available'/u);
   assert.equal(typeof LemtelFailoverSerializer, 'function');
 });

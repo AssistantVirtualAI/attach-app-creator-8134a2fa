@@ -124,7 +124,7 @@ Le Worker brûle localement nonce et révision, écrit leurs marqueurs avant le 
 
 En active, le Worker exige le marqueur de bootstrap, déchiffre chaque fois la config, vérifie la révision et la concordance exacte dates internes/record puis revalide tous les champs. Aucune config absente, plaintext, altérée, expirée ou indéchiffrable ne déclenche de fetch fournisseur/santé. Un lease Durable Object valide est requis avant toute observation, lecture fournisseur, fencing ou préparation de promotion, et revérifié avant chaque POST destructif. Les erreurs ne reflètent jamais secret, noms de champs sensibles, token, ID, URL ou exception brute.
 
-Les endpoints bootstrap et de statut ne retournent jamais de valeur opérationnelle. **Aucune commande n’est accessible par HTTP** : toute ancienne route de commande retourne `404`, y compris avec authentification. Les structures scellées de reçu/commande ne sont jamais en clair dans KV et ne sont jamais retournées dans le statut. Un futur transport de commande, l’adaptation de l’agent et sa revue sont des travaux séparés non préparés ici.
+Les endpoints bootstrap et de statut ne retournent jamais de valeur opérationnelle. En mode `bootstrap`, désactivé ou bloqué, **aucune commande n’est accessible par HTTP** : `/agent/command` retourne `404`. Les structures scellées de reçu/commande ne sont jamais en clair dans KV et ne sont jamais retournées dans le statut. En mode actif avec toutes les gates, la commande n’est remise qu’à l’agent authentifié, une seule fois (voir [protocole d’exécution](AUTOMATIC_FAILOVER_EXECUTION_PROTOCOL.md)).
 
 ## Gates restantes : aucune activation déduite du bootstrap
 

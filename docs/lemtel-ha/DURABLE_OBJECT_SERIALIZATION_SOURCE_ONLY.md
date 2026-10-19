@@ -36,7 +36,7 @@ L’ancien champ de configuration `ARBITER_SERIALIZATION_ACK` est supprimé : un
 
 ## Surface HTTP volontairement réduite
 
-Le Worker ne route **aucune commande par HTTP**. En mode actif, seuls `GET /healthz` et `GET /status` peuvent répondre, après les gates existantes ; toute ancienne route de commande renvoie `404`, sans lecture de commande ni changement d’état. Les méthodes mutantes restent refusées. Le Durable Object ne possède pas de route publique : ses requêtes internes ne sont accessibles qu’au travers du binding.
+En mode actif, `GET /healthz` et `GET /status` répondent après les gates existantes. `GET /agent/command` (boîte à commande de l’agent) prend le lease du singleton **avant** de lire l’incident, puis inscrit l’intention `dispatch` dans le ledger avant toute sortie de commande ; sans gate complète elle renvoie `404`, sans lecture ni changement d’état. Les méthodes mutantes restent refusées. Le Durable Object ne possède pas de route publique : ses requêtes internes ne sont accessibles qu’au travers du binding.
 
 L’agent Hostinger et ses modèles restent **sans modification, non installés et non exécutés**. Ils ne doivent pas être rendus compatibles par contournement. Une future révision distincte devra revoir un transport non-HTTP de commande, l’agent, le runtime et toutes les gates avant toute activation ; elle n’est ni préparée ni autorisée ici.
 

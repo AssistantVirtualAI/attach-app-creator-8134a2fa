@@ -148,7 +148,13 @@ systemctl enable "$relay_unit_name" >/dev/null 2>&1
 systemctl restart "$relay_unit_name"
 ok=false
 for _ in 1 2 3 4 5 6 7 8 9 10; do relay_listening && { ok=true; break; }; sleep 1; done
-[ "$ok" = true ] || fail relay_not_listening
+if [ "$ok" != true ]; then
+  # Diagnostic only (private addresses, unit state, socat errors; no secret): the cause is printed, not guessed.
+  printf 'relay_unit_state=%s\n' "$(systemctl is-active "$relay_unit_name" 2>/dev/null || true)" >&2
+  journalctl -u "$relay_unit_name" -n 12 --no-pager -o cat 2>/dev/null | sed 's/^/relay_log: /' | tail -12 >&2 || true
+  printf 'port_5432_listeners=%s\n' "$(ss -H -ltn "sport = :5432" 2>/dev/null | awk '{print $4}' | paste -sd, -)" >&2
+  fail relay_not_listening
+fi
 # Nothing else may listen on :5432 (in particular no public address).
 if ss -H -ltn "sport = :5432" | awk '{print $4}' | grep -Fvx "${hostinger_tunnel}:5432" | grep -q .; then fail unexpected_postgres_listener; fi
 

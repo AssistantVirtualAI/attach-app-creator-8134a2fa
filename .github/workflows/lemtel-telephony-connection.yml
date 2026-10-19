@@ -12,6 +12,8 @@ on:
       - 'apps/ava-softphone-mobile/src/lib/lemtelSoftphoneProvisioning*'
       - 'src/pages/lemtel/onboarding/**'
       - 'scripts/lemtel-softphone-provisioning-contract.test.mjs'
+      - 'scripts/lemtel-telephony-connection-deploy.test.mjs'
+      - 'infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-telephony-connection-deploy.sh'
       - '.github/workflows/lemtel-telephony-connection.yml'
   push:
     branches: [lemtel/integration]
@@ -36,7 +38,7 @@ jobs:
         with:
           deno-version: v2.5.4
       - name: Mobile and Desktop share one provisioning contract
-        run: node --test scripts/lemtel-softphone-provisioning-contract.test.mjs
+        run: node --test scripts/lemtel-softphone-provisioning-contract.test.mjs scripts/lemtel-telephony-connection-deploy.test.mjs
       - name: Edge Functions (offline, fake PBX over WSS, in-memory database)
         run: |
           deno check --node-modules-dir=auto infra/lemtel-self-hosted/functions/lemtel-pbx-connection-admin/index.ts infra/lemtel-self-hosted/functions/lemtel-softphone-provisioning/index.ts infra/lemtel-self-hosted/functions/lemtel-failover-status/index.ts

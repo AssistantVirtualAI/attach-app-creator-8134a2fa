@@ -6,10 +6,9 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), warning: vi.fn(), success: v
 vi.mock("@/integrations/supabase/client", () => {
   const report = { id: "report-1", reporter_id: "reporter", title: "Signalement de test", status: "new", severity: "normal", source: "portal", created_at: "2026-10-19T12:00:00Z", screenshots: [] };
   function from(table: string) {
-    let inserted = false;
     const query: any = {
       select: () => query, eq: () => query, order: () => query,
-      insert: (payload: unknown) => { inserted = true; state.insert(payload); return query; },
+      insert: (payload: unknown) => { state.insert(payload); return query; },
       single: async () => {
         state.order.push("persist");
         return state.fail ? { error: { message: "refused" } } : { data: { id: "comment-1" } };
@@ -38,7 +37,7 @@ describe("saved feedback reply flow", () => {
     render(<PlanipretFeedback />);
     fireEvent.click(await screen.findByRole("button", { name: "0" }));
     const input = await screen.findByRole("textbox", { name: "Ajouter un commentaire" });
-    await waitFor(() => expect(screen.getByText("Admin", { exact: false })).toBeDefined());
+    await screen.findByText("Mes signalements");
     fireEvent.change(input, { target: { value: "Votre problème a été corrigé." } });
     fireEvent.keyDown(input, { key: "Enter" });
   }

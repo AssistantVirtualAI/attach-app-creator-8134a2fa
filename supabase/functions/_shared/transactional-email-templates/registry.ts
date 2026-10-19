@@ -18,8 +18,10 @@ export interface TemplateEntry {
  *   // then add to TEMPLATES: 'welcome': welcomeTemplate
  */
 import { template as planipretMonthlyBilling } from './planipret-monthly-billing.tsx'
+import { template as planipretFeedbackReply } from './planipret-feedback-reply.tsx'
 
 export const TEMPLATES: Record<string, TemplateEntry> = {
+  'planipret-feedback-reply': planipretFeedbackReply,
   'planipret-monthly-billing': planipretMonthlyBilling,
   // Add templates here as they are created, e.g.:
   // 'welcome': welcomeTemplate,

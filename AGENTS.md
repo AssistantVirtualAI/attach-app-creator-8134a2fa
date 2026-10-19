@@ -1,12 +1,12 @@
 # Project Architecture Rules
 
-- Planipret missed-call and SMS-thread read/hidden state use mirrored frontend-only, per-user device storage; acknowledging never deletes history or call/notification records.
+- Planipret read/hidden SMS and missed-call state is mirrored, local per user/device; never delete history or call/notification records.
 
-- Planipret transcript diagnostics use one mirrored frontend evidence mapper and notice; native/CDR absence never proves missing audio, and provider hints never replace the actual fallback outcome.
+- Planipret transcript diagnostics share a mirrored evidence mapper/notice; native/CDR absence never proves missing audio, provider hints never replace fallback outcomes.
 
 - Planipret APNs alert, background and VoIP pushes use one server-only persisted provider-token cache with atomic renewal and local single-flight reuse; independent worker signing triggers Apple's refresh limits.
 
-- Planipret call and recording transcripts share the speaker-message renderer in both web source trees; speaker identity comes only from explicit source labels, never inferred dialogue turns.
+- Both web trees share the call/recording speaker renderer; identity uses explicit source labels, never inferred turns.
 - Planipret pending-commission presentation and its scoped stylesheet stay byte-identical in both web source trees so portal and mobile expose the same scoped financial view; category totals remain official while monthly tables are labeled as allocated amounts.
 - Portal and mobile paid and pending commissions use separate status panels with independent retained filters; switching panels must never merge their financial sources or widen broker access.
 - Paid commission summaries, deposits and broker charts share the complete paid-deposit collector, while pending uses its own endpoint; failures never become zero totals and selected-broker admin reads use a server-validated broker-owned credential.
@@ -26,3 +26,5 @@
 - Broker telecom changes (portal, app, NetSapiens `subscriber` model) push to Maestro's widget webhook only through `_shared/maestro-widget-sync.ts` (non-blocking, debounced, redacted); omitting external_user_id means release, so never send a partial payload.
 
 - Call handoff is JWT-owned or Maestro-machine-key mapped server-side to one broker extension, targets only canonical <ext>x / <ext>M after registration verification, transfers only the remote leg and never hangs up the source (NS owns answer/rollback semantics); Maestro call events remain allowlisted, non-blocking and disabled unless PP_WIDGET_CALL_EVENTS=1.
+
+- Feedback reply alerts derive the reporter from the saved admin-authored comment server-side; reuse push and a fixed email template with comment-ID keys, never browser recipients.

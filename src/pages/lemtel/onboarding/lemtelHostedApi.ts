@@ -175,7 +175,8 @@ export type PortalInvitation = {
   providerAcceptedAt?: string;
   deliveredAt?: string;
 };
-export type PortalActivity = { id: string; at: string; action: string };
+export type PortalActivity = { id: string; at: string; action: string; actor?: { name: string; email: string }; subject?: { name: string; email: string } };
+export type PortalArchivedOrganization = { id: string; displayName: string; slug: string; defaultLocale: LemtelLocale };
 export type PortalDomain = { id: string; hostname: string; status: "active" | "suspended"; verificationStatus: "verified" | "unverified"; createdAt?: string };
 export type PortalClientConnection = {
   userId: string;
@@ -413,6 +414,9 @@ export const portalApi = {
     invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "restore_member", organizationId, recipientUserId }, { write: true }),
   updateMemberProfile: (organizationId: string, recipientUserId: string, profile: { fullName: string; locale: LemtelLocale }) =>
     invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "update_member_profile", organizationId, recipientUserId, profile }, { write: true }),
+  listArchivedOrganizations: () => invoke<{ organizations: PortalArchivedOrganization[] }>("lemtel-onboarding-admin", { action: "list_archived_organizations" }),
+  restoreOrganization: (organizationId: string) =>
+    invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "restore_organization", organizationId, confirmation: "RESTORE" }, { write: true }),
   deleteDomain: (organizationId: string, domainId: string) =>
     invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "delete_domain", organizationId, domainId, confirmation: "DELETE_DOMAIN" }, { write: true }),
   revokeAccess: (organizationId: string, recipientUserId: string) =>

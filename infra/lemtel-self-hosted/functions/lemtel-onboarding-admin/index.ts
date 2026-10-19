@@ -59,7 +59,9 @@ type RequestBody =
   | { action: "remove_member"; organizationId: string; recipientUserId: string; confirmation: "REMOVE_MEMBER" }
   | { action: "restore_member"; organizationId: string; recipientUserId: string }
   | { action: "update_member_profile"; organizationId: string; recipientUserId: string; profile: { fullName: string; locale: Locale } }
-  | { action: "delete_domain"; organizationId: string; domainId: string; confirmation: "DELETE_DOMAIN" };
+  | { action: "delete_domain"; organizationId: string; domainId: string; confirmation: "DELETE_DOMAIN" }
+  | { action: "list_archived_organizations" }
+  | { action: "restore_organization"; organizationId: string; confirmation: "RESTORE" };
 
 const fail = (error: string, status: number): Failure => ({ error, status });
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -260,6 +262,17 @@ export function validateBody(raw: unknown): RequestBody | Failure {
     if (raw.action === "restore_member") return { action: "restore_member", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId };
     if (raw.confirmation !== "REMOVE_MEMBER") return fail("remove_confirmation_required", 400);
     return { action: "remove_member", organizationId: parsedOrganizationId, recipientUserId: parsedRecipientUserId, confirmation: "REMOVE_MEMBER" };
+  }
+  if (raw.action === "list_archived_organizations") {
+    if (!exactKeys(raw, ["action"])) return fail("invalid_body", 400);
+    return { action: "list_archived_organizations" };
+  }
+  if (raw.action === "restore_organization") {
+    if (!exactKeys(raw, ["action", "organizationId", "confirmation"])) return fail("invalid_body", 400);
+    const parsedOrganizationId = organizationId(raw.organizationId);
+    if (isFailure(parsedOrganizationId)) return parsedOrganizationId;
+    if (raw.confirmation !== "RESTORE") return fail("restore_confirmation_required", 400);
+    return { action: "restore_organization", organizationId: parsedOrganizationId, confirmation: "RESTORE" };
   }
   if (raw.action === "update_member_profile") {
     if (!exactKeys(raw, ["action", "organizationId", "recipientUserId", "profile"]) || !plainObject(raw.profile) || !exactKeys(raw.profile, ["fullName", "locale"])) return fail("invalid_body", 400);
@@ -680,8 +693,16 @@ async function listInvitations(admin: any, organizationId: string) {
 }
 
 async function listActivity(admin: any, organizationId: string) {
-  const { data, error } = await admin.from("lemtel_onboarding_audit").select("id,created_at,action").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100);
-  return error ? fail("activity_lookup_failed", 503) : { events: (data ?? []).map((row: any) => ({ id: row.id, at: row.created_at, action: row.action })) };
+  const { data, error } = await admin.from("lemtel_onboarding_audit").select("id,created_at,action,actor_id,subject_user_id").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300);
+  if (error) return fail("activity_lookup_failed", 503);
+  const rows = data ?? [];
+  const directory = await usersById(admin, rows.flatMap((row: any) => [row.actor_id, row.subject_user_id]).filter(Boolean).map(String));
+  // Display names and emails of the people involved only; never metadata, tokens or message content.
+  const who = (id: unknown) => {
+    const user = id ? directory.get(String(id)) : undefined;
+    return user ? { name: String(user.user_metadata?.full_name || user.email || ""), email: String(user.email ?? "") } : undefined;
+  };
+  return { events: rows.map((row: any) => ({ id: row.id, at: row.created_at, action: row.action, ...(who(row.actor_id) ? { actor: who(row.actor_id) } : {}), ...(who(row.subject_user_id) ? { subject: who(row.subject_user_id) } : {}) })) };
 }
 
 async function listDomains(admin: any, organizationId: string) {
@@ -1296,6 +1317,23 @@ export async function handler(req: Request): Promise<Response> {
     if (error) return respond({ error: "organization_update_failed" }, 503);
     if (!data?.id) return respond({ error: "organization_not_found" }, 404);
     await audit(admin, request.organizationId, actor, "organization_updated", null, { default_locale: request.organization.defaultLocale });
+    return respond({ ok: true });
+  }
+  if (request.action === "list_archived_organizations") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const { data, error } = await admin.from("lemtel_organizations").select("id,display_name,slug,default_locale").eq("status", "archived").order("display_name");
+    if (error) return respond({ error: "organization_lookup_failed" }, 503);
+    return respond({ organizations: (data ?? []).map((row: any) => ({ id: row.id, displayName: row.display_name, slug: row.slug, defaultLocale: row.default_locale === "en" ? "en" : "fr" })) });
+  }
+  if (request.action === "restore_organization") {
+    if (!(await platformAdmin(admin, actor))) return respond({ error: "forbidden" }, 403);
+    const { data, error } = await admin.from("lemtel_organizations")
+      .update({ status: "active" })
+      .eq("id", request.organizationId).eq("status", "archived")
+      .select("id").maybeSingle();
+    if (error) return respond({ error: "organization_restore_failed" }, 503);
+    if (!data?.id) return respond({ error: "organization_not_found" }, 404);
+    await audit(admin, request.organizationId, actor, "organization_restored", null, {});
     return respond({ ok: true });
   }
   if (request.action === "archive_organization") {

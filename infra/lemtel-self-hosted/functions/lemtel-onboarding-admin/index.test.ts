@@ -260,6 +260,9 @@ Deno.test("remove, restore and domain deletion require exact, confirmed bodies",
     { action: "update_member_profile", organizationId: ORG, recipientUserId: MEMBER, profile: { fullName: "Ana Roy", locale: "en" } });
   assert("error" in (validateBody({ action: "update_member_profile", organizationId: ORG, recipientUserId: MEMBER, profile: { fullName: "<b>", locale: "en" } }) as object));
   assert("error" in (validateBody({ action: "update_member_profile", organizationId: ORG, recipientUserId: MEMBER, profile: { fullName: "Ana", locale: "es" } }) as object));
+  assertEquals(validateBody({ action: "list_archived_organizations" }), { action: "list_archived_organizations" });
+  assertEquals(validateBody({ action: "restore_organization", organizationId: ORG, confirmation: "RESTORE" }), { action: "restore_organization", organizationId: ORG, confirmation: "RESTORE" });
+  assert("error" in (validateBody({ action: "restore_organization", organizationId: ORG }) as object));
 });
 
 Deno.test("removing a member deletes the membership and sessions, then the account when it belongs nowhere else", async () => {

@@ -1,0 +1,13 @@
+[Unit]
+Description=Schedule Lemtel Hostinger standby signed resource publication
+
+[Timer]
+OnActiveSec=30s
+OnBootSec=60s
+OnUnitActiveSec=60s
+RandomizedDelaySec=10s
+Persistent=false
+Unit=lemtel-hostinger-standby-resource-publisher.service
+
+[Install]
+WantedBy=timers.target

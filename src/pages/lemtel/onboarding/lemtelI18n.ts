@@ -43,6 +43,7 @@ const fr = {
     resources: {
       title: "Ressources des nœuds", subtitle: "CPU, charge, mémoire et disque : uniquement des observations Lemtel redacted et vérifiées.", loading: "Lecture des ressources…", unavailable: "Statut indisponible", redacted: "Source Lemtel redacted",
       doWriter: "DigitalOcean — writer", hostingerUnknown: "Hostinger — statut inconnu", observed: "Observation attestée", noObservation: "Aucune observation", hostingerPending: "Enrôlement sécurisé requis",
+      hostingerStandby: "Hostinger — standby", signedNotEnrolled: "Publication signée — non enrôlée", signedObservation: "Observation signée", resourcesObserved: "Ressources observées", signedDetail: "Mesures signées par le publisher Hostinger avec un secret propre à son rôle. Ce n’est pas encore un enrôlement cryptographique du serveur.", nodeStatusNotConfigured: "Statut du nœud (publieur, runtime, réplication, stockage) : non configuré. Seules les ressources ci-dessous sont observées.",
       lastObservation: "Dernière observation", noObservationDetail: "Aucun relevé de nœud autoritaire n’a été reçu. Aucun état, compteur ou graphique n’est déduit.", unavailableDetail: "La lecture des indicateurs est indisponible. Les données précédentes ne sont pas conservées.", hostingerDetail: "Le statut et les métriques Hostinger resteront inconnus jusqu’à l’enrôlement sécurisé et la première publication redacted attestée.",
       signals: { publisher: "Publieur Lemtel", runtime: "Runtime", replication: "Réplication", storage: "Storage" }, states: { healthy: "Sain", degraded: "Dégradé", unknown: "Inconnu" },
       resourceMetrics: "Métriques de ressources", metrics: { cpu: "CPU", memory: "Mémoire", disk: "Disque", load: "Charge 1 / 5 / 15", unavailable: "Aucune observation" },
@@ -54,7 +55,7 @@ const fr = {
       collecting: "Collecte active", pending: "Collecte en attente", loading: "Lecture du trafic…", unavailable: "Le trafic est temporairement indisponible. Aucun chiffre n’est déduit.",
       doWriter: "DigitalOcean — writer", hostingerStandby: "Hostinger — standby", rx: "Reçus", tx: "Transmis", tcp: "TCP établies (total)",
       latest: "Dernier intervalle", seconds: "s", chart: "Volumes reçus et transmis sur 24 h", chartPending: "La courbe s’affichera après au moins deux buckets observés.",
-      noRoleData: "Aucun relevé reçu pour ce rôle.", hostingerSecurePending: "Enrôlement sécurisé requis", hostingerSecureDetail: "Le trafic Hostinger restera masqué jusqu’à une publication redacted provenant d’un publisher Hostinger enrôlé et attesté.", note: "Compteurs hôte agrégés, hors loopback : ce n’est pas du trafic client ni une mesure de facturation. Les trous restent sans données.",
+      noRoleData: "Aucun relevé reçu pour ce rôle.", hostingerSecurePending: "Enrôlement sécurisé requis", hostingerSigned: "Publication signée — non enrôlée", hostingerSecureDetail: "Le trafic Hostinger restera masqué jusqu’à une publication redacted provenant d’un publisher Hostinger enrôlé et attesté.", note: "Compteurs hôte agrégés, hors loopback : ce n’est pas du trafic client ni une mesure de facturation. Les trous restent sans données.",
       axis: "Octets par bucket", zero: "0 octet", unit: "octets", description: "Deux courbes : reçus en cyan, transmis en violet et pointillés. Les intervalles manquants ne sont pas interpolés.",
     },
   },
@@ -118,6 +119,7 @@ const en: typeof fr = {
     resources: {
       title: "Node resources", subtitle: "CPU, load, memory and disk: only verified, redacted Lemtel observations.", loading: "Loading resources…", unavailable: "Status unavailable", redacted: "Redacted Lemtel source",
       doWriter: "DigitalOcean — writer", hostingerUnknown: "Hostinger — status unknown", observed: "Attested observation", noObservation: "No observation", hostingerPending: "Secure enrollment required",
+      hostingerStandby: "Hostinger — standby", signedNotEnrolled: "Signed publication — not enrolled", signedObservation: "Signed observation", resourcesObserved: "Resources observed", signedDetail: "Measurements signed by the Hostinger publisher with a role-bound secret. This is not yet a cryptographic enrollment of the server.", nodeStatusNotConfigured: "Node status (publisher, runtime, replication, storage): not configured. Only the resources below are observed.",
       lastObservation: "Last observation", noObservationDetail: "No authoritative node measurement has been received. No status, counter or chart is inferred.", unavailableDetail: "The indicator read is unavailable. Earlier data is not retained.", hostingerDetail: "Hostinger status and metrics remain unknown until secure enrollment and the first attested redacted publication.",
       signals: { publisher: "Lemtel publisher", runtime: "Runtime", replication: "Replication", storage: "Storage" }, states: { healthy: "Healthy", degraded: "Degraded", unknown: "Unknown" },
       resourceMetrics: "Resource metrics", metrics: { cpu: "CPU", memory: "Memory", disk: "Disk", load: "Load 1 / 5 / 15", unavailable: "No observation" },
@@ -129,7 +131,7 @@ const en: typeof fr = {
       collecting: "Collecting", pending: "Collection pending", loading: "Loading traffic…", unavailable: "Traffic is temporarily unavailable. No numbers are inferred.",
       doWriter: "DigitalOcean — writer", hostingerStandby: "Hostinger — standby", rx: "Received", tx: "Transmitted", tcp: "Established TCP (total)",
       latest: "Latest interval", seconds: "s", chart: "Received and transmitted volumes over 24 h", chartPending: "The chart will appear after at least two observed buckets.",
-      noRoleData: "No sample received for this role.", hostingerSecurePending: "Secure enrollment required", hostingerSecureDetail: "Hostinger traffic remains hidden until a redacted publication comes from an enrolled, attested Hostinger publisher.", note: "Aggregate host counters excluding loopback: not customer traffic or a billing measure. Gaps remain without data.",
+      noRoleData: "No sample received for this role.", hostingerSecurePending: "Secure enrollment required", hostingerSigned: "Signed publication — not enrolled", hostingerSecureDetail: "Hostinger traffic remains hidden until a redacted publication comes from an enrolled, attested Hostinger publisher.", note: "Aggregate host counters excluding loopback: not customer traffic or a billing measure. Gaps remain without data.",
       axis: "Bytes per bucket", zero: "0 bytes", unit: "bytes", description: "Two lines: received in cyan, transmitted in purple and dashed. Missing intervals are not interpolated.",
     },
   },

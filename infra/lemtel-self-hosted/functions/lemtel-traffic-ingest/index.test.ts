@@ -4,19 +4,20 @@ import { createTrafficHandler, validateEnvelope, type TrafficEnvelope } from "./
 const now = Date.UTC(2026, 9, 15, 12, 0, 30);
 // Synthetic local fixture only; never printed and not a provisioned secret.
 const fixtureSecret = "a".repeat(64);
+const hostingerFixtureSecret = "c".repeat(64);
 const sample: TrafficEnvelope = { nodeRole: "do_writer", observedAt: "2026-10-15T12:00:00Z", periodSeconds: 60, rxBytes: 1234, txBytes: 5678, tcpEstablished: 12 };
-async function request(text = JSON.stringify(sample), options: { proof?: string; origin?: string; method?: string } = {}) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(fixtureSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+async function request(text = JSON.stringify(sample), options: { proof?: string; origin?: string; method?: string; secret?: string } = {}) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(options.secret ?? fixtureSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text))), (byte) => byte.toString(16).padStart(2, "0")).join("");
   return new Request("https://local.invalid/functions/v1/lemtel-traffic-ingest", {
     method: options.method ?? "POST", headers: { "Content-Type": "application/json", "X-Lemtel-Traffic-Signature": options.proof ?? `sha256=${signature}`, ...(options.origin ? { Origin: options.origin } : {}) },
     body: options.method === "OPTIONS" || options.method === "GET" ? undefined : text,
   });
 }
-function fixture(outcome: "inserted" | "duplicate" | "failed" = "inserted", secret: string | undefined = fixtureSecret) {
+function fixture(outcome: "inserted" | "duplicate" | "failed" = "inserted", secret: string | undefined = fixtureSecret, hostingerSecret: string | undefined = hostingerFixtureSecret) {
   const received: TrafficEnvelope[] = [];
   return { received, handler: createTrafficHandler({ now: () => now,
-    env: (name) => name === "LEMTEL_TRAFFIC_COLLECTOR_SECRET" ? secret : name === "SUPABASE_URL" ? "https://local.invalid" : "synthetic-service-key",
+    env: (name) => name === "LEMTEL_TRAFFIC_COLLECTOR_SECRET" ? secret : name === "LEMTEL_HOSTINGER_STANDBY_PUBLISHER_SECRET" ? hostingerSecret : name === "SUPABASE_URL" ? "https://local.invalid" : "synthetic-service-key",
     persist: async (_url, _key, envelope) => { received.push(envelope); return outcome; },
   }) };
 }
@@ -24,10 +25,18 @@ function fixture(outcome: "inserted" | "duplicate" | "failed" = "inserted", secr
 Deno.test("HMAC ingress persists only both bounded role envelopes and returns no content", async () => {
   for (const nodeRole of ["do_writer", "hostinger_standby"] as const) {
     const f = fixture();
-    const response = await f.handler(await request(JSON.stringify({ ...sample, nodeRole })));
+    const response = await f.handler(await request(JSON.stringify({ ...sample, nodeRole }), { secret: nodeRole === "do_writer" ? fixtureSecret : hostingerFixtureSecret }));
     assert.equal(response.status, 204); assert.equal(await response.text(), "");
     assert.deepEqual(f.received, [{ ...sample, nodeRole }]);
   }
+});
+Deno.test("secrets are role-bound: neither role can write the other's rows", async () => {
+  const hostingerBody = JSON.stringify({ ...sample, nodeRole: "hostinger_standby" });
+  const shared = fixture(); assert.equal((await shared.handler(await request(hostingerBody, { secret: fixtureSecret }))).status, 401); assert.equal(shared.received.length, 0);
+  const crossed = fixture(); assert.equal((await crossed.handler(await request(undefined, { secret: hostingerFixtureSecret }))).status, 401); assert.equal(crossed.received.length, 0);
+  const absent = fixture("inserted", fixtureSecret, ""); assert.equal((await absent.handler(await request(hostingerBody, { secret: hostingerFixtureSecret }))).status, 503); assert.equal(absent.received.length, 0);
+  const reused = fixture("inserted", fixtureSecret, fixtureSecret); assert.equal((await reused.handler(await request(hostingerBody, { secret: fixtureSecret }))).status, 503); assert.equal(reused.received.length, 0);
+  const doStillWorks = fixture("inserted", fixtureSecret, ""); assert.equal((await doStillWorks.handler(await request())).status, 204);
 });
 Deno.test("missing/bogus/non-HMAC proofs fail closed without persistence", async () => {
   for (const proof of ["", "Bearer synthetic", "sha256=" + "0".repeat(64), "sha256=" + "A".repeat(64)]) {

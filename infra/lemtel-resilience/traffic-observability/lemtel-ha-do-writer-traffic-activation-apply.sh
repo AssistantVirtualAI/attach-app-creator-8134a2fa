@@ -58,7 +58,7 @@ ROUTE_LOCK = Path('/run/lock/lemtel-traffic-ingress-route.lock')
 CANONICAL_HOST = 'lemtel.assistantvirtualai.com'
 INGRESS_PATH = '/functions/v1/lemtel-traffic-ingest'
 KEY = 'LEMTEL_TRAFFIC_COLLECTOR_SECRET'
-INGRESS_SOURCE_SHA256 = '62908084ed504ac312e25a408e6a263f93bf62064eff90dc0df68c4f95b30c9e'
+INGRESS_SOURCE_SHA256 = '746d23fb35ed31a17c2bdfb19c79d0e21341b405c876c9d15e7b82140506479f'
 HELPERS = {
     'lemtel-ha-do-writer-traffic-runtime-preflight.sh': '7c3301b8b45fc684e703166f2c141e97f3e6aeebb92e60252f14fb7e2ec56744',
     'lemtel-ha-do-writer-traffic-ingress-route-apply.sh': 'e6862ae72055798259527a89dfa8c97118f273827fe6d0ae53ba7556ab715157',

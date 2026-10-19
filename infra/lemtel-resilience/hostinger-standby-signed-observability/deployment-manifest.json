@@ -1,0 +1,103 @@
+{
+  "package_version": "lemtel_hostinger_standby_signed_observability_source_v1",
+  "scope": "offline_hostinger_standby_role_bound_signed_observations_only",
+  "trust_model": "signed_publication_not_enrolled",
+  "deployment_authorized": false,
+  "schema_apply_authorized": false,
+  "publisher_install_authorized": false,
+  "publisher_timer_enable_authorized": false,
+  "secure_enrollment_claimed": false,
+  "hostinger_runtime_started": false,
+  "postgres_promotion_executed": false,
+  "cloudflare_or_dns_changed": false,
+  "fencing_executed": false,
+  "automatic_failover_enabled": false,
+  "telephony_contacted": false,
+  "role_bound_secret_env": "LEMTEL_HOSTINGER_STANDBY_PUBLISHER_SECRET",
+  "sources": [
+    {
+      "path": "infra/lemtel-self-hosted/migrations/0023_lemtel_hostinger_standby_resource_current.sql",
+      "sha256": "a79d318c65229cf37a56be0cc8b7dbfa519ad770836387f8bf36240ff62bdb70"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-hostinger-standby-resource-ingest/index.ts",
+      "sha256": "2511cad7199e94abe6a5b7ac086b8bf0b056379f8c97910e4d1aba903b2c102c"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.ts",
+      "sha256": "746d23fb35ed31a17c2bdfb19c79d0e21341b405c876c9d15e7b82140506479f"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
+      "sha256": "e0c76bb5bf849f53f6fd15775e72f3b7e031ff5fed39bd197a1f2c272c7b3f0b"
+    },
+    {
+      "path": "infra/lemtel-resilience/hostinger-standby-signed-observability/lemtel-hostinger-standby-resource-publish.sh",
+      "sha256": "a3621e710f28f05ffd8bf9ab1aaa7b2ef5870c9bd3a0475e6398e23824410531"
+    },
+    {
+      "path": "infra/lemtel-resilience/hostinger-standby-signed-observability/systemd/lemtel-hostinger-standby-resource-publisher.service",
+      "sha256": "e18de2d77f28df3ce3eba6c72d7ed4ccafbf56ad45f7ec09a7eef9f8cf5d5978"
+    },
+    {
+      "path": "infra/lemtel-resilience/hostinger-standby-signed-observability/systemd/lemtel-hostinger-standby-resource-publisher.timer",
+      "sha256": "74cad4c0cb14fb76c25a6b289a859cf264bc1e843452c2ce91a5942cc3e43926"
+    },
+    {
+      "path": "infra/lemtel-resilience/traffic-observability/lemtel-traffic-collect.sh",
+      "sha256": "282cc7c32fadf9c2cca5ed42aafc6cfe438fa77e1253663b748fcd24af5c27f6"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/LemtelNodeResourcePanel.tsx",
+      "sha256": "870e5708bf8f068f12c0497200d8d05e28fabfe3561ce285edf55d203468980b"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/LemtelTrafficPanel.tsx",
+      "sha256": "6f26d2631a75e05968a66fe6cf5d447dbcb2df1b6bbc0c7b9e60251785e0ed92"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/LemtelOperationalStatus.tsx",
+      "sha256": "b2676284c4fc0a00cd0c594517a5057535649888df1173ddf91998f7fce1070d"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/lemtelHostedApi.ts",
+      "sha256": "33c21c4fed2350b77d15afc984fb77dbe06c54a35bb46d2be47b12c360d6f01c"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/lemtelI18n.ts",
+      "sha256": "1f4cb130c297780a96163e78abc8c1981d5807f046d0b3dfc23c8d25e6e7da13"
+    }
+  ],
+  "validation_sources": [
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-hostinger-standby-resource-ingest/index.test.ts",
+      "sha256": "ede549a8c3da29ac94328a670da4a5c8c3a951071d98c9f49a755b106b78c6d2"
+    },
+    {
+      "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.test.ts",
+      "sha256": "7310290d5d621af92ec52267a4defb3734fd2fe7664bef96476d7ccb7069862b"
+    },
+    {
+      "path": "src/pages/lemtel/onboarding/__tests__/LemtelTrafficObservability.test.tsx",
+      "sha256": "1b7a0e0f1a28e5f5ab2a574c81c962bd0e8212f3607ec5b6be58cec4327c5a9a"
+    }
+  ],
+  "explicitly_excluded": [
+    "secure_enrollment",
+    "do_writer_secret_reuse",
+    "hostinger_runtime",
+    "postgres_promotion",
+    "replication_change",
+    "routing",
+    "dns",
+    "cloudflare",
+    "fencing",
+    "automatic_failover",
+    "telephony",
+    "fusionpbx",
+    "planipret",
+    "ip_address",
+    "hostname",
+    "customer_data"
+  ]
+}

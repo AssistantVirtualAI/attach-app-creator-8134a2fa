@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1.0.14";
-import { noObservationNodeStatus, platformOverview, provisionMany, redactedOperationalStatusFromRow, validateBody } from "./index.ts";
+import { noObservationNodeStatus, platformOverview, provisionMany, redactedHostingerStandbyResources, redactedOperationalStatusFromRow, validateBody } from "./index.ts";
 import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
 
 Deno.test("portal list action accepts only its exact body", () => {
@@ -190,4 +190,16 @@ Deno.test("invalid mail preflight stops before any account or delivery mutation"
   const result = await provisionMany({} as any, "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", [{ email: "member@example.test", displayName: "Member", role: "member", locale: "fr" }], () => ({ error: "email_delivery_unavailable", status: 503 }));
   assertEquals(result, [{ email: "member@example.test", deliveryStatus: "needs_attention", error: "email_delivery_unavailable" }]);
   assert(!JSON.stringify(result).match(/password|synthetic-provider-key/i));
+});
+
+Deno.test("Hostinger standby resources are labelled as signed, not enrolled, and only fresh bounded rows are shown", () => {
+  const now = Date.UTC(2026, 9, 19, 2, 30, 30);
+  const row = { observed_at: "2026-10-19T02:30:00Z", cpu_percent: 7, memory_percent: 51, disk_percent: 22, load1_milli: 40, load5_milli: 30, load15_milli: 20 };
+  const observed = redactedHostingerStandbyResources(row, now);
+  assertEquals(observed, { schemaVersion: "lemtel-hostinger-standby-resources/v1", trust: "signed_publication_not_enrolled", observation: "observed", observedAt: "2026-10-19T02:30:00.000Z", resources: { cpuPercent: 7, memoryPercent: 51, diskPercent: 22, load1Milli: 40, load5Milli: 30, load15Milli: 20 } });
+  for (const stale of [undefined, null, {}, { ...row, observed_at: "2026-10-19T02:27:00Z" }, { ...row, cpu_percent: 101 }, { ...row, load5_milli: 1.5 }]) {
+    assertEquals(redactedHostingerStandbyResources(stale, now), { schemaVersion: "lemtel-hostinger-standby-resources/v1", trust: "signed_publication_not_enrolled", observation: "no_observation" });
+  }
+  assert(!("error" in validateBody({ action: "get_hostinger_standby_resources" })));
+  assert("error" in validateBody({ action: "get_hostinger_standby_resources", role: "do_writer" }));
 });

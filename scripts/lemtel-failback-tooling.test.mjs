@@ -110,6 +110,8 @@ test('step 1: replication rule, slot and a relay bound to the tunnel accepting o
   assert.match(w.log(), /pg_create_physical_replication_slot\('lemtel_do_standby', true\)/u);
   const relay = readFileSync(join(w.root, 'usr/local/libexec/lemtel-ha-hostinger-postgres-wireguard-relay'), 'utf8');
   assert.match(relay, /TCP-LISTEN:5432,bind=10\.253\.47\.1,reuseaddr,fork,range=10\.253\.47\.2\/32/u);
+  assert.match(relay, /index \.NetworkSettings\.Networks "bridge"/u, 'relay pinned to the default bridge network');
+  assert.match(w.log(), /sql .*address = '172\.17\.0\.1'/u, 'hba rule for the docker0 address');
   assert.match(readFileSync(join(w.root, 'etc/systemd/system/lemtel-ha-hostinger-postgres-wireguard-relay.service'), 'utf8'), /Requires=wg-quick@lemtel-ha0/u);
 });
 test('step 1 refuses on a standby (before promotion) and with any other :5432 listener', () => {

@@ -22,7 +22,7 @@ function equal(actual: unknown, expected: unknown) {
 }
 Deno.test("admin reply targets only reporter with stable comment ID keys", async () => {
   const f = fixture(); const res = await f.run(); equal(res.status, 200);
-  equal(f.calls, [["email_lookup", "reporter"], ["push", "reporter", rid, `feedback-reply:${cid}`], ["email", "reporter@example.test", rid, `feedback-reply:${cid}`]].sort(() => 0));
+  equal(f.calls, [["push", "reporter", rid, `feedback-reply:${cid}`], ["email_lookup", "reporter"], ["email", "reporter@example.test", rid, `feedback-reply:${cid}`]]);
   const data = await res.json(); equal(data.email_status, "sent"); equal(data.push_status, "accepted");
 });
 Deno.test("retries reuse both channel keys", async () => {

@@ -638,3 +638,38 @@ test('agent poll records signed readiness; forged, malformed or stale readiness 
   await poll(f.readinessHeader(f.readinessPayload({ observed_at: f.now - 30, ready: false })));
   assert.equal((await f.open(f.values.get(readinessKey))).ready, true);
 });
+
+test('a sealed configuration and drill approval can stay valid for a permanent arbiter (up to 90 days), not beyond', async (t) => {
+  const f = await fixture(t);
+  const day = 86400;
+  const seal = async (kind, payload, expires) => {
+    const metadata = { format: 'lemtel_failover_sealed_state_v1', version: 1, algorithm: 'AES-256-GCM', kind,
+      config_revision: f.env.CONFIG_REVISION, issued_at: f.now, expires_at: expires };
+    const session = await sessionPromise;
+    const aes = await crypto.subtle.importKey('raw', decode(session.secretBindings.CONFIG_STATE_ENCRYPTION_KEY), 'AES-GCM', false, ['encrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128,
+      additionalData: encode(protocol.stateContext, metadata) }, aes, new TextEncoder().encode(JSON.stringify(payload)));
+    return JSON.stringify({ ...metadata, iv: Buffer.from(iv).toString('base64url'), ciphertext: Buffer.from(ciphertext).toString('base64url') });
+  };
+  const install = async (configDays, drillDays) => {
+    f.values.clear();
+    f.values.set(`${prefix}:bootstrap-consumed:${f.env.CONFIG_REVISION}`, JSON.stringify({ format: 'lemtel_bootstrap_consumed_v1', version: 1 }));
+    const expires = f.now + configDays * day;
+    f.values.set(`${prefix}:sealed-config:${f.env.CONFIG_REVISION}`, await seal('configuration', { format: 'lemtel_failover_protected_config_v1',
+      config_revision: f.env.CONFIG_REVISION, issued_at: f.now, expires_at: expires, configuration: f.configuration }, expires));
+    const payload = { format: 'lemtel_production_destructive_drill_v1', config_revision: f.env.CONFIG_REVISION,
+      writer_role: 'do_writer', target_role: 'hostinger_standby', writer_droplet_id: writerID,
+      destructive_drill_validated: true, serialized_execution_verified: true, validated_at: f.now, expires_at: f.now + drillDays * day };
+    f.values.set(drillKey, await seal('drill', { payload, signature: signature(f.configuration.DRILL_APPROVAL_SECRET, 'lemtel-production-drill-v1', payload) },
+      f.now + Math.min(drillDays, 90) * day));
+  };
+  f.health = 'healthy'; f.autoReady = false;
+  await install(30, 30);
+  f.now += 7 * day;
+  assert.equal((await f.tick(0)).state, 'healthy', 'still operating a week after bootstrap');
+  await install(91, 30);
+  assert.equal((await f.tick()).state, 'blocked', 'configuration longer than 90 days is refused');
+  await install(30, 91);
+  assert.equal((await f.tick()).reason, 'production_drill_or_serialization_not_verified', 'drill approval longer than 90 days is refused');
+});

@@ -140,7 +140,13 @@ could never observe again.
 - Record from an earlier revision that is decryptable, in `observation` or `incident_suspected`, with no
   `fencing_started_at`, no `action_id` and no `command`: nothing destructive happened, so it is superseded by a
   fresh observation record (failure cycles restart at 0).
-- Anything else (blocked, fencing, command prepared or dispatched, unreadable): the record is left untouched,
+- Record from an earlier revision that can no longer be decrypted (every sealed bootstrap rotates the state
+  key, so this is the normal case after a re-bootstrap): superseded only with provider proof that no fence
+  happened since that revision was issued: the writer droplet is `active` and its complete DigitalOcean action
+  history (paged, at most 200 actions) holds no `shutdown`/`power_off` started at or after the record's
+  `issued_at` (minus 60 s). Every fence, and therefore every promotion command, goes through such an action.
+  The arbiter DO token therefore needs read access to the droplet's actions.
+- Anything else (blocked, fencing, command prepared or dispatched, no proof, provider error): the record is left untouched,
   no observation and no provider call happen, the status is `previous_revision_incident_manual_review`, and the
   agent mailbox answers `no_command`. A new configuration can never erase an in-flight fence.
 
@@ -149,3 +155,8 @@ could never observe again.
 The Hostinger agent sends `User-Agent: lemtel-hostinger-failover-agent/1`. Cloudflare's edge refuses the default
 `Python-urllib/3.x` signature with HTTP 403 before the request reaches the Worker, which left the mailbox and
 the signed standby readiness unreachable (agent `error_class=HTTPError_403`, no `/agent/command` in the tail).
+
+## Disabled arbiter seen by the agent
+
+A disabled arbiter answers every route with its status object (`disabled_or_dry_run`). The agent reports
+`arbiter_disabled_no_action` and does nothing, instead of the misleading `command_schema_invalid`.

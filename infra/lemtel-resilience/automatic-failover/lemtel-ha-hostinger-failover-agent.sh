@@ -342,6 +342,10 @@ def main():
     if isinstance(reply, dict) and reply == {'state': 'no_command'}:
         print('hostinger_failover_agent_status=no_command')
         return
+    # A disabled arbiter answers every route with its status object: nothing to do, and not a schema error.
+    if isinstance(reply, dict) and reply.get('state') == 'disabled_or_dry_run' and reply.get('reason') == 'disabled_or_dry_run':
+        print('hostinger_failover_agent_status=arbiter_disabled_no_action')
+        return
     exact_fields(reply, ('state', 'command'))
     if reply['state'] != 'command_available':
         deny('no_valid_command')

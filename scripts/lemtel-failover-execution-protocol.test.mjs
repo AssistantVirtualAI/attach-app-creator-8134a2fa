@@ -39,7 +39,7 @@ async function fixture(t) {
   const values = new Map();
   const f = { now: Math.floor(Date.UTC(2030, 0, 1) / 1000), values, calls: [],
     health: 'unhealthy', power: 'active', actionStatus: 'in-progress', actionType: 'shutdown',
-    actionID: 11, failPost: false, failPoll: false, failIntent: false };
+    actionID: 11, failPost: false, failPoll: false, failIntent: false, history: [] };
   const aes = await crypto.subtle.importKey('raw', decode(session.secretBindings.CONFIG_STATE_ENCRYPTION_KEY),
     'AES-GCM', false, ['encrypt', 'decrypt']);
   f.open = async (raw) => {
@@ -149,6 +149,13 @@ async function fixture(t) {
         resource_type: 'droplet', status: f.actionStatus } }, 201);
     }
     if (f.failPoll) throw new Error('synthetic_unknown_power_state');
+    const history = /\/droplets\/(\d+)\/actions\?page=(\d+)&per_page=(\d+)$/u.exec(url);
+    if (history) {
+      assert.equal(history[1], writerID);
+      const size = Number(history[3]), page = Number(history[2]);
+      return response({ actions: f.history.slice((page - 1) * size, page * size),
+        meta: { total: f.historyTotal ?? f.history.length } });
+    }
     if (url.endsWith(`/actions/${f.actionID}`)) return response({ action: { id: f.actionID, type: f.actionType,
       resource_id: Number(writerID), resource_type: 'droplet', status: f.actionStatus } });
     assert.equal(url, `${f.configuration.DO_API_BASE_URL}/droplets/${writerID}`);
@@ -730,18 +737,16 @@ test('a new sealed configuration supersedes a non-destructive incident left by a
   }
 });
 
-test('an earlier-revision incident that reached any destructive step, or cannot be read, is never superseded', async (t) => {
+test('a readable earlier-revision incident that reached any destructive step is never superseded', async (t) => {
   const cases = [
     { phase: 'blocked', reason: 'hard_fence_failed', failure_cycles: 3, last_cycle_at: 1 },
     { phase: 'fence_wait_graceful', failure_cycles: 3, last_cycle_at: 1, fencing_started_at: 1, action_id: 12 },
     { phase: 'promotion_command_dispatched', failure_cycles: 3, last_cycle_at: 1 },
     { phase: 'incident_suspected', failure_cycles: 3, last_cycle_at: 1, fencing_started_at: 1 },
   ];
-  for (const previous of [...cases, 'unreadable']) {
+  for (const previous of cases) {
     const f = await fixture(t);
-    const raw = previous === 'unreadable'
-      ? JSON.stringify({ ...JSON.parse(await sealForRevision(f, 'synthetic-config-v0', cases[0])), ciphertext: 'AAAAAAAAAAAAAAAAAAAAAAAA' })
-      : await sealForRevision(f, 'synthetic-config-v0', previous);
+    const raw = await sealForRevision(f, 'synthetic-config-v0', previous);
     f.values.set(incidentKey, raw);
     const result = await f.tick();
     assert.equal(result.reason, 'previous_revision_incident_manual_review');
@@ -757,4 +762,57 @@ test('an earlier-revision incident that reached any destructive step, or cannot 
 test('agent poll sends an explicit User-Agent (the edge refuses the default Python-urllib signature with 403)', () => {
   assert.match(agent, /^AGENT_USER_AGENT = 'lemtel-hostinger-failover-agent\/1'$/mu);
   assert.match(agent, /'User-Agent': AGENT_USER_AGENT,/u);
+});
+
+// A re-bootstrap rotates the state key: records of earlier revisions can no longer be decrypted.
+async function unreadablePrevious(f, issuedAt) {
+  const sealed = JSON.parse(await sealForRevision(f, 'synthetic-config-v0', { phase: 'observation', failure_cycles: 0, last_cycle_at: 1 }));
+  const raw = JSON.stringify({ ...sealed, issued_at: issuedAt, ciphertext: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAA' });
+  f.values.set(incidentKey, raw);
+  return raw;
+}
+const historyAction = (id, type, startedAt) => ({ id, type, status: 'completed', resource_id: Number(writerID),
+  resource_type: 'droplet', started_at: new Date(startedAt * 1000).toISOString() });
+const isL7 = (f) => f.calls.some((call) => call.url === f.configuration.DO_WRITER_L7_URL);
+
+test('an unreadable earlier-revision incident is superseded only with provider proof that no fence happened since', async (t) => {
+  const f = await fixture(t);
+  const issued = f.now - 7200;
+  await unreadablePrevious(f, issued);
+  f.history = [historyAction(1, 'power_on', issued + 10), historyAction(2, 'snapshot', issued - 9000),
+    historyAction(3, 'shutdown', issued - 4000), ...Array.from({ length: 12 }, (_, i) => historyAction(10 + i, 'enable_backups', issued - 99999))];
+  f.health = 'healthy';
+  assert.equal((await f.tick()).state, 'healthy');
+  assert.equal(JSON.parse(f.values.get(incidentKey)).config_revision, f.env.CONFIG_REVISION);
+  assert.equal((await f.incident()).failure_cycles, 0);
+  assert.equal(f.calls.filter((call) => /\/actions\?page=/u.test(call.url)).length, 2, 'the whole history is paged');
+  assert.deepEqual(f.posts(), []);
+});
+
+test('an unreadable earlier-revision incident blocks without any proof: fence since, writer off, paging gaps or provider errors', async (t) => {
+  const scenarios = {
+    shutdown_since: (f, issued) => { f.history = [historyAction(1, 'shutdown', issued + 30)]; },
+    power_off_on_page_two: (f, issued) => { f.history = [...Array.from({ length: 10 }, (_, i) => historyAction(i + 1, 'power_on', issued + 5)),
+      historyAction(99, 'power_off', issued + 40)]; },
+    writer_off: (f) => { f.power = 'off'; },
+    history_too_long: (f) => { f.historyTotal = 201; },
+    history_incomplete: (f) => { f.historyTotal = 5; f.history = [historyAction(1, 'power_on', 1)]; },
+    malformed_action: (f, issued) => { f.history = [{ ...historyAction(1, 'power_on', issued), started_at: 'unknown' }]; },
+    provider_error: (f) => { f.failPoll = true; },
+  };
+  for (const [name, arrange] of Object.entries(scenarios)) {
+    const f = await fixture(t);
+    const issued = f.now - 7200;
+    const raw = await unreadablePrevious(f, issued);
+    arrange(f, issued);
+    assert.equal((await f.tick()).reason, 'previous_revision_incident_manual_review', name);
+    assert.equal(f.values.get(incidentKey), raw, `${name}: the earlier record stays untouched`);
+    assert.equal(isL7(f), false, `${name}: no observation`);
+    assert.deepEqual(f.posts(), [], `${name}: no provider action`);
+  }
+});
+
+test('agent treats a disabled arbiter as no action, not as a malformed command', () => {
+  assert.match(agent, /reply\.get\('state'\) == 'disabled_or_dry_run' and reply\.get\('reason'\) == 'disabled_or_dry_run'/u);
+  assert.ok(agent.indexOf('arbiter_disabled_no_action') < agent.indexOf("exact_fields(reply, ('state', 'command'))"));
 });

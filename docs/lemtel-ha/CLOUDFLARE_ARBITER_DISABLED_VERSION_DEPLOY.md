@@ -66,11 +66,11 @@ Le multipart contient un `main_module` explicite, `lemtel-failover-arbiter-worke
   { "name": "STATE", "type": "inherit" },
   { "name": "FAILOVER_MODE", "type": "inherit" },
   { "name": "CONFIG_REVISION", "type": "inherit" },
-  { "name": "ARBITER_SERIALIZATION_ACK", "type": "inherit" }
+  { "name": "ARBITER_SERIALIZER", "type": "inherit" }
 ]
 ```
 
-Le mode `strict` fait échouer le téléversement si un de ces héritages ne peut pas être résolu. La prélecture distante bloque aussi si un binding ajouté ou manquant rend l’héritage ambigu, ou si la valeur distante du mode n’est pas exactement `disabled`. Aucun autre binding n’est envoyé. Le script n’envoie ni migration, ni binding Durable Object, ni secret HMAC, ni secret de bootstrap, ni création de Worker, ni configuration de route, DNS ou load balancer. Il ne contacte pas d’hébergeur et n’exécute ni démarrage, ni promotion, ni fencing.
+Le mode `strict` fait échouer le téléversement si un de ces héritages ne peut pas être résolu. La prélecture distante bloque aussi si un binding ajouté ou manquant rend l’héritage ambigu, ou si la valeur distante du mode n’est pas exactement `disabled`. Aucun autre binding n’est envoyé. Depuis le provisionnement du sérialiseur (`ARBITER_SERIALIZER`, migration `lemtel-arbiter-serializer-v1`), la prélecture exige ce binding `durable_object_namespace` sur la classe `LemtelFailoverSerializer` du même Worker et refuse l’ancien `ARBITER_SERIALIZATION_ACK`. Le script n’hérite que ce binding existant : il n’envoie ni migration, ni nouveau binding Durable Object, ni secret HMAC, ni secret de bootstrap, ni création de Worker, ni configuration de route, DNS ou load balancer. Il ne contacte pas d’hébergeur et n’exécute ni démarrage, ni promotion, ni fencing.
 
 Le contrat multipart (`metadata`, `main_module`, module JavaScript et `compatibility_date`) est décrit dans la [documentation Cloudflare sur les métadonnées multipart](https://developers.cloudflare.com/workers/configuration/multipart-upload-metadata/). Le téléversement de version et le déploiement sont volontairement deux appels distincts, conformément à la [documentation Cloudflare Versions & Deployments](https://developers.cloudflare.com/workers/versions-and-deployments/).
 

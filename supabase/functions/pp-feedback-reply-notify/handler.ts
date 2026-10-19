@@ -41,16 +41,20 @@ export function createHandler(deps: Dependencies) {
       if (report.reporter_id === uid) return json({ skipped: "self_reply" });
       if (!(await deps.isMember(report.reporter_id))) return json({ error: "not_authorized" }, 403);
       const key = `feedback-reply:${comment.id}`;
-      const address = await deps.email(report.reporter_id);
       // Failure in one channel must not prevent the other channel.
       const [push, email] = await Promise.allSettled([
         deps.push(report.reporter_id, report.id, key),
-        address ? deps.sendEmail(address, report.id, key) : Promise.resolve({ sent: false }),
+        (async () => {
+          const address = await deps.email(report.reporter_id);
+          if (!address) return "no_email";
+          const result = await deps.sendEmail(address, report.id, key);
+          return result.sent ? "sent" : "suppressed";
+        })(),
       ]);
       return json({
         notification_logged: push.status === "fulfilled" && push.value.logged,
         push_status: push.status === "rejected" ? "failed" : push.value.delivered > 0 ? "accepted" : "unconfirmed",
-        email_status: email.status === "rejected" ? "failed" : email.value.sent ? "sent" : address ? "suppressed" : "no_email",
+        email_status: email.status === "rejected" ? "failed" : email.value,
       });
     } catch {
       return json({ error: "notification_unavailable" }, 503);

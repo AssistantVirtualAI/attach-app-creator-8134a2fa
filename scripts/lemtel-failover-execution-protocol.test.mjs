@@ -704,3 +704,57 @@ test('Workers-compatible requests: never redirect "error" (rejected by the Worke
   for (let cycle = 0; cycle < 4; cycle += 1) assert.equal((await f.tick()).reason, 'l7_health_ambiguous_no_fencing');
   assert.deepEqual(f.posts(), []);
 });
+
+async function sealForRevision(f, revision, payload) {
+  const current = f.env;
+  f.env = { ...current, CONFIG_REVISION: revision };
+  try { return await f.seal('incident', { version: prefix, config_revision: revision, ...payload }); }
+  finally { f.env = current; }
+}
+
+test('a new sealed configuration supersedes a non-destructive incident left by an earlier revision', async (t) => {
+  for (const previous of [{ phase: 'observation', failure_cycles: 0, last_cycle_at: 1 },
+    { phase: 'incident_suspected', failure_cycles: 2, last_cycle_at: 1, incident_id: crypto.randomUUID() }]) {
+    const f = await fixture(t);
+    f.values.set(incidentKey, await sealForRevision(f, 'synthetic-config-v0', previous));
+    f.health = 'healthy';
+    assert.equal((await f.tick()).state, 'healthy');
+    const incident = await f.incident();
+    assert.equal(JSON.parse(f.values.get(incidentKey)).config_revision, f.env.CONFIG_REVISION);
+    assert.equal(incident.config_revision, f.env.CONFIG_REVISION);
+    assert.equal(incident.failure_cycles, 0);
+    f.health = 'unhealthy';
+    assert.equal((await f.tick()).state, 'incident_suspected');
+    assert.equal((await f.incident()).failure_cycles, 1, 'failure cycles never carry over from an earlier revision');
+    assert.deepEqual(f.posts(), []);
+  }
+});
+
+test('an earlier-revision incident that reached any destructive step, or cannot be read, is never superseded', async (t) => {
+  const cases = [
+    { phase: 'blocked', reason: 'hard_fence_failed', failure_cycles: 3, last_cycle_at: 1 },
+    { phase: 'fence_wait_graceful', failure_cycles: 3, last_cycle_at: 1, fencing_started_at: 1, action_id: 12 },
+    { phase: 'promotion_command_dispatched', failure_cycles: 3, last_cycle_at: 1 },
+    { phase: 'incident_suspected', failure_cycles: 3, last_cycle_at: 1, fencing_started_at: 1 },
+  ];
+  for (const previous of [...cases, 'unreadable']) {
+    const f = await fixture(t);
+    const raw = previous === 'unreadable'
+      ? JSON.stringify({ ...JSON.parse(await sealForRevision(f, 'synthetic-config-v0', cases[0])), ciphertext: 'AAAAAAAAAAAAAAAAAAAAAAAA' })
+      : await sealForRevision(f, 'synthetic-config-v0', previous);
+    f.values.set(incidentKey, raw);
+    const result = await f.tick();
+    assert.equal(result.reason, 'previous_revision_incident_manual_review');
+    assert.equal(f.values.get(incidentKey), raw, 'the earlier record stays untouched for reconciliation');
+    assert.deepEqual(f.calls, [], 'no observation and no provider call');
+    f.now += 60; // past the tick's serializer lease
+    const mailbox = await f.get('/agent/command', true);
+    assert.deepEqual(await mailbox.json(), { state: 'no_command' });
+    assert.equal(f.values.get(incidentKey), raw);
+  }
+});
+
+test('agent poll sends an explicit User-Agent (the edge refuses the default Python-urllib signature with 403)', () => {
+  assert.match(agent, /^AGENT_USER_AGENT = 'lemtel-hostinger-failover-agent\/1'$/mu);
+  assert.match(agent, /'User-Agent': AGENT_USER_AGENT,/u);
+});

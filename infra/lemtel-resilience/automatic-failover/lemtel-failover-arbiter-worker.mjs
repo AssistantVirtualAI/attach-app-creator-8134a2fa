@@ -46,7 +46,10 @@ const SAFE_REASONS = new Set([...SAFE_STATES, 'not_found', 'method_not_allowed',
   'promotion_command_expired_or_configuration_changed', 'promotion_command_invalid',
   'command_delivery_unknown_manual_review', 'serializer_lease_unavailable',
   'serializer_lease_expired', 'serializer_incident_refused', 'command_dispatched_to_agent',
-  'standby_not_ready_no_fencing']);
+  'standby_not_ready_no_fencing', 'previous_revision_incident_manual_review']);
+// Phases in which nothing destructive was requested yet: a record left in one of these by an earlier
+// sealed configuration can be superseded by a new configuration without any reconciliation.
+const NON_DESTRUCTIVE_PHASES = new Set(['observation', 'incident_suspected']);
 // Diagnostics for Workers Logs / tail: step, error class and a short message with anything token-like removed.
 // Never logs configuration, request bodies, signatures, identifiers or secrets.
 function diag(step, error) {
@@ -304,11 +307,11 @@ async function sealState(env, kind, payload, issued_at, expires_at) {
     additionalData: encoded(STATE_CONTEXT, metadata) }, await stateKey(env), new TextEncoder().encode(JSON.stringify(payload)));
   return { ...metadata, iv: base64url(iv), ciphertext: base64url(ciphertext) };
 }
-async function openState(env, kind, raw, now) {
+async function openState(env, kind, raw, now, expectedRevision = env.CONFIG_REVISION) {
   const record = JSON.parse(raw);
   if (!exactKeys(record, ['format', 'version', 'algorithm', 'kind', 'config_revision', 'issued_at', 'expires_at', 'iv', 'ciphertext']) ||
       record.format !== SEALED_FORMAT || record.version !== 1 || record.algorithm !== 'AES-256-GCM' ||
-      record.kind !== kind || record.config_revision !== env.CONFIG_REVISION ||
+      record.kind !== kind || !revision(expectedRevision) || record.config_revision !== expectedRevision ||
       !validTimeWindow(record.issued_at, record.expires_at, now, CONFIG_TTL)) throw new Error('invalid');
   const { iv, ciphertext, ...metadata } = record;
   const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(iv, 12), tagLength: 128,
@@ -645,7 +648,7 @@ async function agentCommand(request, env, cfg, now) {
   const lease = await acquireLease(env);
   if (!lease) return json(status('blocked', 'serializer_lease_unavailable'), 503);
   const raw = await env.STATE.get(INCIDENT_KEY);
-  if (!raw) return json({ state: 'no_command' });
+  if (!raw || JSON.parse(raw)?.config_revision !== env.CONFIG_REVISION) return json({ state: 'no_command' });
   const incident = (await openState(env, 'incident', raw, now)).payload;
   if (incident.version !== VERSION || incident.config_revision !== env.CONFIG_REVISION ||
       incident.phase !== 'promotion_command_ready' || !incident.command?.payload) return json({ state: 'no_command' });
@@ -664,6 +667,25 @@ async function agentCommand(request, env, cfg, now) {
   await storeStatus(env, status('manual_promotion_action_required', 'command_dispatched_to_agent'));
   return json({ state: 'command_available', command: incident.command });
 }
+// The incident record survives a new sealed configuration (re-bootstrap = new CONFIG_REVISION).
+// A record from the current revision is used as is. A record from an earlier revision is superseded
+// only if it provably never reached a destructive step (decrypted, non-destructive phase, no fence
+// action, no command). Anything else (blocked, fencing, command, unreadable) stays untouched in KV
+// and is reported for manual reconciliation: a new configuration never erases an in-flight fence.
+async function loadIncident(env, raw, now) {
+  const fresh = () => ({ version: VERSION, config_revision: env.CONFIG_REVISION,
+    phase: 'observation', failure_cycles: 0, last_cycle_at: 0 });
+  if (!raw) return { incident: fresh() };
+  const recordRevision = JSON.parse(raw)?.config_revision;
+  if (recordRevision === env.CONFIG_REVISION) return { incident: (await openState(env, 'incident', raw, now)).payload };
+  try {
+    const previous = (await openState(env, 'incident', raw, now, recordRevision)).payload;
+    if (previous.version === VERSION && previous.config_revision === recordRevision &&
+        NON_DESTRUCTIVE_PHASES.has(previous.phase) && previous.fencing_started_at === undefined &&
+        previous.action_id === undefined && previous.command === undefined) return { incident: fresh() };
+  } catch (error) { diag('previous_incident', error); }
+  return { denied: status('blocked', 'previous_revision_incident_manual_review') };
+}
 async function tick(env) {
   if (env.FAILOVER_MODE === 'bootstrap') return status('bootstrap', 'configuration_injection_only');
   if (env.FAILOVER_MODE !== 'active') return status('disabled_or_dry_run');
@@ -677,9 +699,9 @@ async function tick(env) {
     if (!lease) return await storeStatus(env, status('blocked', 'serializer_lease_unavailable'));
     const denied = await readiness(env, cfg, now);
     if (denied) return await storeStatus(env, denied);
-    const raw = await env.STATE.get(INCIDENT_KEY);
-    let incident = raw ? (await openState(env, 'incident', raw, now)).payload : { version: VERSION, config_revision: env.CONFIG_REVISION,
-      phase: 'observation', failure_cycles: 0, last_cycle_at: 0 };
+    const loaded = await loadIncident(env, await env.STATE.get(INCIDENT_KEY), now);
+    if (loaded.denied) return await storeStatus(env, loaded.denied);
+    const incident = loaded.incident;
     if (incident.version !== VERSION || incident.config_revision !== env.CONFIG_REVISION) {
       return await storeStatus(env, status('blocked', 'incident_configuration_mismatch'));
     }

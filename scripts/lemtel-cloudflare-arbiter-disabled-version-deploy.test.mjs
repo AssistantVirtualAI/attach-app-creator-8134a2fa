@@ -231,3 +231,26 @@ for (const [label, serializer, code] of [
     assert.equal(requests[0].init.method, 'GET');
   });
 }
+
+test('after a sealed bootstrap the state key secret is strictly inherited; any other extra binding is refused', async () => {
+  const requests = [];
+  const settings = (extra) => ({ success: true, result: { bindings: [
+    { name: 'STATE', type: 'kv_namespace' }, { name: 'FAILOVER_MODE', type: 'plain_text', text: 'disabled' },
+    { name: 'CONFIG_REVISION', type: 'plain_text', text: 'lemtel-failover-20261019a' },
+    { name: 'ARBITER_SERIALIZER', type: 'durable_object_namespace', class_name: 'LemtelFailoverSerializer' }, extra] } });
+  await runDeployment({ env: environment(), readFile: sourceReader(), fetchImpl: async (url, init) => {
+    requests.push({ url, init });
+    if (requests.length === 1) return new Response(JSON.stringify(settings({ name: 'CONFIG_STATE_ENCRYPTION_KEY', type: 'secret_text' })), { status: 200 });
+    if (requests.length === 2) return new Response(JSON.stringify({ success: true, result: { id: '11111111-2222-3333-4444-555555555555' } }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, result: { id: 'd' } }), { status: 200 });
+  } });
+  const metadata = JSON.parse(await requests[1].init.body.get('metadata').text());
+  assert.deepEqual(metadata.bindings.map((b) => b.name), ['STATE', 'FAILOVER_MODE', 'CONFIG_REVISION', 'ARBITER_SERIALIZER', 'CONFIG_STATE_ENCRYPTION_KEY']);
+  assert.ok(metadata.bindings.every((b) => b.type === 'inherit'));
+  for (const extra of [{ name: 'CONFIG_STATE_ENCRYPTION_KEY', type: 'plain_text', text: 'x' }, { name: 'BOOTSTRAP_AUTH_SECRET', type: 'secret_text' }]) {
+    const calls = [];
+    await assert.rejects(runDeployment({ env: environment(), readFile: sourceReader(), fetchImpl: async (url, init) => {
+      calls.push(init); return new Response(JSON.stringify(settings(extra)), { status: 200 }); } }), assertGate('remote_bindings_not_allowlisted'));
+    assert.equal(calls.length, 1);
+  }
+});

@@ -59,8 +59,21 @@ functions_dir="$T$(docker inspect --format '{{range .Mounts}}{{if eq .Destinatio
 caddy_dir="$T$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy"}}{{.Source}}{{end}}{{end}}' "$caddy")"
 [ -d "$functions_dir" ] && [ -d "$functions_dir/_shared" ] || fail functions_mount_missing
 [ -d "$caddy_dir/lemtel-portal" ] && [ -f "$caddy_dir/Caddyfile" ] || fail portal_directory_missing
-[ "$(grep -c '# LEMTEL_OPERATIONS_PORTAL_V1' "$caddy_dir/Caddyfile")" = 1 ] || fail portal_route_missing_or_ambiguous
 command -v python3 >/dev/null 2>&1 || fail python3_missing
+# Same route validator as the production static refresh: the ownership comment may repeat; the functional handler
+# '@lemtel_operations_portal' must be unique and serve /etc/caddy/lemtel-portal.
+python3 - "$caddy_dir/Caddyfile" '# LEMTEL_OPERATIONS_PORTAL_V1' <<'PY' || fail portal_route_missing_or_ambiguous
+import re,sys
+text=open(sys.argv[1],encoding='utf-8').read(); marker=re.escape(sys.argv[2])
+try:
+  if len(re.findall(r'(?m)^\s*'+marker+r'\s*$',text))<1: raise ValueError
+  blocks=re.findall(r'(?ms)^\s*handle\s+@lemtel_operations_portal\s*\{\s*(.*?)^\s*\}',text)
+  if len(blocks)!=1: raise ValueError
+  block=blocks[0]
+  for line in (r'^\s*uri\s+strip_prefix\s+/lemtel-portal\s*$',r'^\s*root\s+\*\s+/etc/caddy/lemtel-portal\s*$',r'^\s*try_files\s+\{path\}\s+/lemtel-portal\.html\s*$',r'^\s*file_server\s*$'):
+    if len(re.findall(line,block,re.M))!=1: raise ValueError
+except Exception: raise SystemExit(1)
+PY
 compose() { (cd "$dir" && docker compose --project-name "$project" --env-file .env $(printf -- '-f %s ' "${COMPOSE_FILES[@]}") "$@"); }
 compose config --services >/dev/null 2>&1 || fail compose_config_invalid_before_change
 compose config --services | grep -qx "$service" || fail functions_service_not_in_compose

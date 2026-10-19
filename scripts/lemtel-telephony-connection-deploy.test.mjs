@@ -10,14 +10,15 @@ import { createHash } from 'node:crypto';
 const SCRIPT = resolve(import.meta.dirname, '../infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-telephony-connection-deploy.sh');
 const reason = (r) => (r.stderr.match(/reason=([a-z0-9_]+)/u) || [])[1];
 
-function world({ privateCompose = 'services:\n  kong:\n    environment:\n      KONG_X: y\n', fenced = false, recovery = 'false', composeBreaks = false } = {}) {
+const CADDY_OK = 'site {\n  # LEMTEL_OPERATIONS_PORTAL_V1\n  handle @lemtel_operations_portal {\n    uri strip_prefix /lemtel-portal\n    root * /etc/caddy/lemtel-portal\n    try_files {path} /lemtel-portal.html\n    file_server\n  }\n}\nprobe {\n  # LEMTEL_OPERATIONS_PORTAL_V1\n}\n';
+function world({ caddyfile = CADDY_OK, privateCompose = 'services:\n  kong:\n    environment:\n      KONG_X: y\n', fenced = false, recovery = 'false', composeBreaks = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'lemtel-tc-'));
   const bin = join(root, 'bin'), fake = join(root, 'fake'), dir = join(root, 'srv/supabase'), fns = join(root, 'srv/supabase/volumes/functions'), caddy = join(root, 'srv/supabase/volumes/proxy/caddy');
   for (const d of [bin, fake, join(fns, '_shared'), join(fns, 'lemtel-onboarding-admin'), join(caddy, 'lemtel-portal/assets'), join(root, 'run'), join(root, 'var/lib/lemtel-ha')]) mkdirSync(d, { recursive: true });
   writeFileSync(join(dir, '.env'), 'POSTGRES_PASSWORD=x\n');
   for (const f of ['docker-compose.yml', 'docker-compose.caddy.yml', 'docker-compose.lemtel-db-init.yml']) writeFileSync(join(dir, f), 'services: {}\n');
   writeFileSync(join(dir, 'docker-compose.lemtel-private.yml'), privateCompose);
-  writeFileSync(join(caddy, 'Caddyfile'), 'x\n# LEMTEL_OPERATIONS_PORTAL_V1\n');
+  writeFileSync(join(caddy, 'Caddyfile'), caddyfile);
   writeFileSync(join(caddy, 'lemtel-portal/lemtel-portal.html'), 'OLD');
   if (fenced) writeFileSync(join(root, 'fence-status'), 'boot_fence=fenced\n');
   const bundle = join(root, 'bundle'); mkdirSync(bundle);
@@ -123,4 +124,11 @@ test('a compose file broken by the change is rolled back (env, override, functio
   assert.doesNotMatch(readFileSync(join(w.dir, 'docker-compose.lemtel-private.yml'), 'utf8'), /LEMTEL_PBX/u);
   assert.equal(existsSync(join(w.fns, 'lemtel-pbx-connection-admin/index.ts')), false);
   assert.equal(readFileSync(join(w.caddy, 'lemtel-portal/lemtel-portal.html'), 'utf8'), 'OLD');
+});
+
+test('portal route: repeated ownership comments are fine, a missing or duplicated handler is refused', () => {
+  assert.equal(world().run('check').status, 0, 'production layout: the comment appears twice');
+  assert.equal(reason(world({ caddyfile: '# LEMTEL_OPERATIONS_PORTAL_V1\n' }).run('check')), 'portal_route_missing_or_ambiguous');
+  const twice = CADDY_OK.replace('probe {', 'probe {\n  handle @lemtel_operations_portal {\n    uri strip_prefix /lemtel-portal\n    root * /etc/caddy/lemtel-portal\n    try_files {path} /lemtel-portal.html\n    file_server\n  }');
+  assert.equal(reason(world({ caddyfile: twice }).run('check')), 'portal_route_missing_or_ambiguous');
 });

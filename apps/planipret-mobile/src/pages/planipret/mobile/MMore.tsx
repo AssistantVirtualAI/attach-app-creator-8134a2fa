@@ -33,6 +33,8 @@ import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { startMs365Authorize } from "@/lib/planipret/ms365Start";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
+import { MessageSquareText } from "lucide-react";
+import QuickReplySettings from "@/components/planipret/mobile/QuickReplySettings";
 import { Radio, Wallet, Users as UsersIcon, ListChecks, Megaphone } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
@@ -46,6 +48,7 @@ export default function MMore() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [editOpen, setEditOpen] = useState(false);
+  const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   // DND: only the confirmed profile value is the source of truth; no optimistic success.
   const { busy: dndBusy, pending: dndPending, toggle: toggleDnd } = useDndToggle(profile, reloadProfile, {
@@ -358,6 +361,8 @@ export default function MMore() {
           right={<span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>{profile?.ns_extension ?? profile?.extension ?? "—"}</span>} chevron />
         <Row icon={<Voicemail className="w-4 h-4" />} label={t("more.voicemail")}
           onClick={() => navigate("/mplanipret/calls?tab=voicemails")} chevron />
+        <Row icon={<MessageSquareText className="w-4 h-4" />} label={localStorage.getItem("mplanipret-lang") === "en" ? "Quick replies" : "Réponses rapides"}
+          onClick={() => setQuickRepliesOpen(true)} chevron />
         <Row
           icon={<Radio className="w-4 h-4" style={{ color: sipStatusColor[sipSnap.status] }} />}
           label={t("screens.more.sipStateLabel")}
@@ -368,6 +373,9 @@ export default function MMore() {
         />
       </Section>
 
+      {quickRepliesOpen && (
+        <QuickReplySettings lang={localStorage.getItem("mplanipret-lang") === "en" ? "en" : "fr"} onClose={() => setQuickRepliesOpen(false)} />
+      )}
       <Section title={t("more.sections.availability")}>
         <Row
           icon={<BellOff className="w-4 h-4" style={profile?.dnd_enabled ? { color: "var(--pp-color-danger)" } : undefined} />}

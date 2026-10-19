@@ -52,6 +52,9 @@ fi
 if [ "$mode" = remove ]; then
   # Used when Hostinger becomes a standby again: no host :5432 listener may remain.
   systemctl disable --now "$relay_unit_name" >/dev/null 2>&1 || true
+  if command -v ufw >/dev/null 2>&1; then
+    ufw delete allow in on lemtel-ha0 from "$do_tunnel" to "$hostinger_tunnel" port 5432 proto tcp >/dev/null 2>&1 || true
+  fi
   rm -f -- "$relay_unit" "$relay_script"
   systemctl daemon-reload >/dev/null 2>&1 || true
   relay_listening && fail relay_still_listening
@@ -96,15 +99,20 @@ if ! [[ "$relay_net" =~ ^[A-Za-z0-9_.-]+$ ]] || [ -z "$gateway" ]; then
   printf 'container_networks=%s\n' "$(docker inspect --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}:{{$v.IPAddress}};{{end}}' "$container" | tr -cd 'A-Za-z0-9_.:;-')" >&2
   fail database_network_unresolved
 fi
-rule="host replication lemtel_ha_replication ${gateway}/32 scram-sha-256"
+# Two rules for the relay source only: the replication stream, and the plain 'postgres' database login DigitalOcean
+# uses to prove Hostinger is the writer and that the slot exists before it replaces anything.
 hba_added=false
-if ! docker exec -u postgres "$container" grep -Fqx "$rule" "$hba"; then
-  docker exec -u 0 "$container" sh -eu -c "printf '%s\n' '$rule' >> '$hba'"
-  hba_added=true
-fi
+for rule in "host replication lemtel_ha_replication ${gateway}/32 scram-sha-256" "host postgres lemtel_ha_replication ${gateway}/32 scram-sha-256"; do
+  if ! docker exec -u postgres "$container" grep -Fqx "$rule" "$hba"; then
+    docker exec -u 0 "$container" sh -eu -c "printf '%s\n' '$rule' >> '$hba'"
+    hba_added=true
+  fi
+done
 [ "$(psql 'SELECT pg_reload_conf()')" = t ] || fail hba_reload_failed
-active_rules="$(psql "SELECT count(*) FROM pg_hba_file_rules WHERE 'replication' = ANY(database) AND 'lemtel_ha_replication' = ANY(user_name) AND address = '$gateway' AND error IS NULL" || true)"
-[[ "$active_rules" =~ ^[0-9]+$ ]] && [ "$active_rules" -ge 1 ] || fail hba_rule_not_active
+for db_name in replication postgres; do
+  active_rules="$(psql "SELECT count(*) FROM pg_hba_file_rules WHERE '$db_name' = ANY(database) AND 'lemtel_ha_replication' = ANY(user_name) AND address = '$gateway' AND error IS NULL" || true)"
+  [[ "$active_rules" =~ ^[0-9]+$ ]] && [ "$active_rules" -ge 1 ] || fail "hba_rule_not_active_$db_name"
+done
 
 # 2. Physical slot so the DigitalOcean rebuild never misses WAL.
 if [ "$(psql "SELECT count(*) FROM pg_replication_slots WHERE slot_name = '$slot'")" = 0 ]; then
@@ -157,10 +165,21 @@ if [ "$ok" != true ]; then
   printf 'port_5432_listeners=%s\n' "$(ss -H -ltn "sport = :5432" 2>/dev/null | awk '{print $4}' | paste -sd, -)" >&2
   fail relay_not_listening
 fi
+# 4. Host firewall: the relay is reachable ONLY from the DigitalOcean tunnel peer, on the tunnel interface (same narrow
+# rule the DigitalOcean relay uses). Without it an active ufw silently drops DigitalOcean's packets.
+ufw_rule_present() { ufw status numbered 2>/dev/null | grep -F '5432/tcp' | grep -F 'lemtel-ha0' | grep -F "$do_tunnel" | grep -Fq 'ALLOW IN'; }
+firewall=none
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | head -1 | grep -qx 'Status: active'; then
+  ufw_rule_present || ufw allow in on lemtel-ha0 from "$do_tunnel" to "$hostinger_tunnel" port 5432 proto tcp \
+    comment 'Lemtel failback relay (DigitalOcean standby only)' >/dev/null || fail firewall_rule_not_added
+  ufw_rule_present || fail firewall_rule_not_active
+  firewall=ufw_rule_present
+fi
 # Nothing else may listen on :5432 (in particular no public address).
 if ss -H -ltn "sport = :5432" | awk '{print $4}' | grep -Fvx "${hostinger_tunnel}:5432" | grep -q .; then fail unexpected_postgres_listener; fi
 
 printf 'hostinger_writer_replication_format=lemtel_hostinger_writer_replication_v1\n'
 printf 'hba_rule=%s\n' "$([ "$hba_added" = true ] && echo added || echo already_present)"
 printf 'replication_slot=%s\nrelay=%s:5432_from_%s_only\nrelay_network=%s\nrelay_source=%s\n' "$slot" "$hostinger_tunnel" "$do_tunnel" "$relay_net" "$gateway"
+printf 'firewall=%s\n' "$firewall"
 printf 'public_database_listener_enabled=false\ndns_change_executed=false\nhostinger_writer_replication_status=complete\n'

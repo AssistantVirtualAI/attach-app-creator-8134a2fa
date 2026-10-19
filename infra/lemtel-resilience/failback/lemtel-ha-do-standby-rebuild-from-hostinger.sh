@@ -57,9 +57,20 @@ pgpass="$work/pgpass"
 printf '%s\n' "${hostinger_tunnel}:5432:*:lemtel_ha_replication:${password}" > "$pgpass"; chmod 0600 "$pgpass"
 unset password
 cleanup_secret() { rm -f -- "$pgpass" "$work/env"; }
-client() { docker run --rm --network host -v "${pgpass#$T}:/run/lemtel-ha/pgpass:ro" -e PGPASSFILE=/run/lemtel-ha/pgpass "$@"; }
-remote_recovery="$(client --entrypoint psql "$image" -X -At -h "$hostinger_tunnel" -U lemtel_ha_replication -d postgres -c 'SELECT pg_is_in_recovery()' 2>/dev/null || true)"
-[ "$remote_recovery" = f ] || { cleanup_secret; fail hostinger_not_reachable_as_writer; }
+client() { docker run --rm --network host -v "${pgpass#$T}:/run/lemtel-ha/pgpass:ro" -e PGPASSFILE=/run/lemtel-ha/pgpass -e PGCONNECT_TIMEOUT=10 "$@"; }
+probe_err="$work/probe.err"
+remote_recovery="$(client --entrypoint psql "$image" -X -At -h "$hostinger_tunnel" -U lemtel_ha_replication -d postgres -c 'SELECT pg_is_in_recovery()' 2>"$probe_err" || true)"
+if [ "$remote_recovery" != f ]; then
+  # Name the cause from libpq's message class (never the message itself, never a secret).
+  cause=hostinger_not_reachable_as_writer
+  if grep -qi 'timeout expired\|timed out' "$probe_err"; then cause=hostinger_relay_unreachable_check_firewall_or_tunnel
+  elif grep -qi 'connection refused' "$probe_err"; then cause=hostinger_relay_not_listening_run_step_1
+  elif grep -qi 'no pg_hba.conf entry' "$probe_err"; then cause=hostinger_hba_refuses_do_run_step_1
+  elif grep -qi 'password authentication failed' "$probe_err"; then cause=replication_password_mismatch
+  elif [ "$remote_recovery" = t ]; then cause=hostinger_is_still_a_standby; fi
+  rm -f -- "$probe_err"; cleanup_secret; fail "$cause"
+fi
+rm -f -- "$probe_err"
 remote_slot="$(client --entrypoint psql "$image" -X -At -h "$hostinger_tunnel" -U lemtel_ha_replication -d postgres -c "SELECT count(*) FROM pg_replication_slots WHERE slot_name = '$slot' AND NOT active" 2>/dev/null || true)"
 [ "$remote_slot" = 1 ] || { cleanup_secret; fail hostinger_slot_missing_run_step_1; }
 client --entrypoint psql "$image" -X -At "host=$hostinger_tunnel user=lemtel_ha_replication replication=true dbname=postgres" -c 'IDENTIFY_SYSTEM' >/dev/null 2>&1 \

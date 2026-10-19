@@ -64,7 +64,7 @@ test('step 2 refuses before any change: not fenced, runtime running, Hostinger n
   const cases = [
     [{ files: { 'var/lib/lemtel-ha/boot-fence/fenced': undefined } }, DO_ENV, 'do_not_fenced_run_only_after_failover'],
     [{ runtimeRunning: true }, DO_ENV, 'do_runtime_still_running'],
-    [{ clientSql: [['pg_is_in_recovery', 't'], ['pg_replication_slots', '1']] }, DO_ENV, 'hostinger_not_reachable_as_writer'],
+    [{ clientSql: [['pg_is_in_recovery', 't'], ['pg_replication_slots', '1']] }, DO_ENV, 'hostinger_is_still_a_standby'],
     [{ clientSql: [['pg_is_in_recovery', 'f'], ['pg_replication_slots', '0']] }, DO_ENV, 'hostinger_slot_missing_run_step_1'],
     [{}, { ...DO_ENV, LEMTEL_HA_ACK: 'yes' }, 'acknowledgement_required'],
   ];
@@ -326,4 +326,34 @@ test('step 1 relay uses an IPv4 listener and an addr:mask range (socat rejects a
   const relay = readFileSync(join(w.root, 'usr/local/libexec/lemtel-ha-hostinger-postgres-wireguard-relay'), 'utf8');
   assert.match(relay, /"TCP4-LISTEN:5432,bind=10\.253\.47\.1,reuseaddr,fork,range=10\.253\.47\.2:255\.255\.255\.255" "TCP4:\$\{ip\}:5432"/u);
   assert.doesNotMatch(relay, /range=[0-9.]+\/32/u);
+});
+
+test('step 1 opens the host firewall only for the DigitalOcean tunnel peer, and step 3 removes it', () => {
+  const w = hWriter(); w.flag('ufw-active');
+  const r = w.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /firewall=ufw_rule_present/u);
+  assert.match(w.log(), /ufw allow in on lemtel-ha0 from 10\.253\.47\.2 to 10\.253\.47\.1 port 5432 proto tcp comment/u);
+  const again = w.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' });
+  assert.equal((again.stdout.match(/firewall=ufw_rule_present/gu) || []).length, 1);
+  assert.equal((w.log().match(/ufw allow/gu) || []).length, 1, 'idempotent: the rule is added once');
+  assert.match(w.log(), /sql .*'postgres' = ANY\(database\)/u, 'the plain postgres login rule is verified too');
+  writeFileSync(join(w.fake, 'ss'), ''); // relay stopped
+  assert.equal(w.run(H_REPL, ['remove']).status, 0);
+  assert.match(w.log(), /ufw delete allow in on lemtel-ha0 from 10\.253\.47\.2 to 10\.253\.47\.1 port 5432 proto tcp/u);
+  const off = hWriter();
+  assert.match(off.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' }).stdout, /firewall=none/u);
+});
+test('step 2 names the real cause when Hostinger cannot be reached (timeout, hba, password), before changing anything', () => {
+  for (const [msg, cause] of [['psql: error: connection to server at "10.253.47.1", port 5432 failed: timeout expired', 'hostinger_relay_unreachable_check_firewall_or_tunnel'],
+    ['psql: error: ... FATAL:  no pg_hba.conf entry for host "10.0.0.1"', 'hostinger_hba_refuses_do_run_step_1'],
+    ['psql: error: ... FATAL:  password authentication failed for user "lemtel_ha_replication"', 'replication_password_mismatch'],
+    ['psql: error: ... Connection refused', 'hostinger_relay_not_listening_run_step_1']]) {
+    const w = doWorld();
+    writeFileSync(join(w.fake, 'client-stderr'), msg);
+    const r = w.run(REBUILD_DO, [], DO_ENV);
+    assert.equal(reason(r), cause, r.stderr);
+    assert.doesNotMatch(w.log(), /docker stop/u);
+    assert.ok(!r.stderr.includes('password authentication failed'), 'the raw libpq message is never printed');
+  }
 });

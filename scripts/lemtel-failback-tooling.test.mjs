@@ -109,7 +109,7 @@ test('step 1: replication rule, slot and a relay bound to the tunnel accepting o
   assert.match(w.read('hba-writes'), /hba-append/u);
   assert.match(w.log(), /pg_create_physical_replication_slot\('lemtel_do_standby', true\)/u);
   const relay = readFileSync(join(w.root, 'usr/local/libexec/lemtel-ha-hostinger-postgres-wireguard-relay'), 'utf8');
-  assert.match(relay, /TCP-LISTEN:5432,bind=10\.253\.47\.1,reuseaddr,fork,range=10\.253\.47\.2\/32/u);
+  assert.match(relay, /TCP4-LISTEN:5432,bind=10\.253\.47\.1,reuseaddr,fork,range=10\.253\.47\.2:255\.255\.255\.255/u);
   assert.match(relay, /index \.NetworkSettings\.Networks "bridge"/u, 'relay pinned to the default bridge network');
   assert.match(w.read('log'), /docker network inspect/u);
   assert.match(w.log(), /sql .*address = '172\.17\.0\.1'/u, 'hba rule for the docker0 address');
@@ -318,4 +318,12 @@ test('no superuser session -> refused BEFORE any change (no hba write, no relay,
   assert.doesNotMatch(h.log(), /docker stop/u);
   const ok = hWriter(); ok.flag('no-loopback-superuser'); ok.flag('postgres-is-superuser');
   assert.equal(ok.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' }).status, 0, 'a real superuser socket session is accepted');
+});
+
+test('step 1 relay uses an IPv4 listener and an addr:mask range (socat rejects a family-less CIDR range)', () => {
+  const w = hWriter();
+  assert.equal(w.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' }).status, 0);
+  const relay = readFileSync(join(w.root, 'usr/local/libexec/lemtel-ha-hostinger-postgres-wireguard-relay'), 'utf8');
+  assert.match(relay, /"TCP4-LISTEN:5432,bind=10\.253\.47\.1,reuseaddr,fork,range=10\.253\.47\.2:255\.255\.255\.255" "TCP4:\$\{ip\}:5432"/u);
+  assert.doesNotMatch(relay, /range=[0-9.]+\/32/u);
 });

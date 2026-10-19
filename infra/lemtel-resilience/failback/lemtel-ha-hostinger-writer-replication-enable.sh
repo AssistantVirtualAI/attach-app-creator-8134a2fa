@@ -124,7 +124,9 @@ cat > "$relay_script.tmp" <<RELAY
 set -euo pipefail
 ip="\$(docker inspect --format '{{with index .NetworkSettings.Networks "$relay_net"}}{{.IPAddress}}{{end}}' $container)"
 [ -n "\$ip" ] || exit 1
-exec /usr/bin/socat "TCP-LISTEN:5432,bind=${hostinger_tunnel},reuseaddr,fork,range=${do_tunnel}/32" "TCP:\${ip}:5432"
+# IPv4 listener with an explicit family: socat refuses a CIDR range of "unspecified address family" and
+# accepts <addr>:<mask> everywhere. Only the DigitalOcean tunnel peer may connect.
+exec /usr/bin/socat "TCP4-LISTEN:5432,bind=${hostinger_tunnel},reuseaddr,fork,range=${do_tunnel}:255.255.255.255" "TCP4:\${ip}:5432"
 RELAY
 chmod 0755 "$relay_script.tmp"; mv -f "$relay_script.tmp" "$relay_script"
 cat > "$relay_unit.tmp" <<UNIT

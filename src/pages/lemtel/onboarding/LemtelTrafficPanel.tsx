@@ -30,15 +30,15 @@ export default function LemtelTrafficPanel({ t, lang, trend, loading, unavailabl
     <div className="grid md:grid-cols-2 gap-5">
       {ROLES.map((nodeRole) => {
         const hostinger = nodeRole === "hostinger_standby";
-        // Current traffic rows do not identify a secure Hostinger enrollment source.
-        // Refuse to render them until a future server contract supplies that evidence.
-        const role = !unavailable && !hostinger ? trend?.roles.find((entry) => entry.nodeRole === nodeRole) : undefined;
+        // Hostinger rows are accepted server-side only with the role-bound Hostinger secret: a signed publication,
+        // not a secure enrollment. They are rendered with that explicit label, never as an enrolled source.
+        const role = !unavailable ? trend?.roles.find((entry) => entry.nodeRole === nodeRole) : undefined;
         const latest = role?.latest;
         const Icon = nodeRole === "do_writer" ? Server : Cloud;
         const label = nodeRole === "do_writer" ? text.doWriter : text.hostingerStandby;
         const collecting = role?.collectorState === "collecting";
         return <article key={nodeRole} className="lt-card p-5 min-w-0 overflow-hidden" aria-label={label}>
-          <div className="flex flex-wrap justify-between gap-3 items-center mb-5"><h3 className="flex items-center gap-2 font-semibold"><span className="rounded-xl p-2" style={{ background: "hsl(var(--lt-cyan) / .10)", color: RX }}><Icon className="w-5 h-5" aria-hidden="true" /></span>{label}</h3><span className={`lt-chip ${collecting ? "lt-chip-ok" : "lt-chip-warn"}`}>{hostinger ? text.hostingerSecurePending : collecting ? text.collecting : text.pending}</span></div>
+          <div className="flex flex-wrap justify-between gap-3 items-center mb-5"><h3 className="flex items-center gap-2 font-semibold"><span className="rounded-xl p-2" style={{ background: "hsl(var(--lt-cyan) / .10)", color: RX }}><Icon className="w-5 h-5" aria-hidden="true" /></span>{label}</h3><span className={`lt-chip ${hostinger ? (latest ? "lt-chip-cyan" : "lt-chip-warn") : collecting ? "lt-chip-ok" : "lt-chip-warn"}`}>{hostinger ? (latest ? text.hostingerSigned : text.hostingerSecurePending) : collecting ? text.collecting : text.pending}</span></div>
           <dl className="grid grid-cols-2 gap-4 mb-4">
             <div><dt className="text-xs lt-ink-2 flex gap-1 items-center"><ArrowDownLeft className="w-3 h-3" aria-hidden="true" />{text.rx}</dt><dd className="text-2xl font-semibold mt-1 break-words" style={{ color: RX }}>{bytes(latest?.rxBytes, lang, text.unit)}</dd></div>
             <div><dt className="text-xs lt-ink-2 flex gap-1 items-center"><ArrowUpRight className="w-3 h-3" aria-hidden="true" />{text.tx}</dt><dd className="text-2xl font-semibold mt-1 break-words" style={{ color: TX }}>{bytes(latest?.txBytes, lang, text.unit)}</dd></div>

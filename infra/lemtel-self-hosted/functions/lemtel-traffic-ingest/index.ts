@@ -9,6 +9,7 @@ export type TrafficEnvelope = {
   txBytes: number;
   tcpEstablished: number;
 };
+export const HOSTINGER_STANDBY_TRAFFIC_SECRET_ENV = "LEMTEL_HOSTINGER_STANDBY_PUBLISHER_SECRET";
 const HEADERS = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const MAX_BODY_BYTES = 512;
 const empty = (status: number) => new Response(null, { status, headers: HEADERS });
@@ -81,8 +82,12 @@ export function createTrafficHandler(dependencies: Dependencies) {
       if (text === null) return empty(413);
       const envelope = validateEnvelope(text, dependencies.now());
       if (!envelope) return empty(400);
+      // Role-bound secrets: the DO collector secret can only write do_writer rows, and the Hostinger standby
+      // publisher secret can only write hostinger_standby rows (signed publication, not a secure enrollment).
+      const roleSecret = envelope.nodeRole === "do_writer" ? secret : dependencies.env(HOSTINGER_STANDBY_TRAFFIC_SECRET_ENV);
+      if (!roleSecret || !/^[a-f0-9]{64}$/.test(roleSecret) || (envelope.nodeRole === "hostinger_standby" && roleSecret === secret)) return empty(503);
       const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+      const key = await crypto.subtle.importKey("raw", encoder.encode(roleSecret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
       const proof = Uint8Array.from(signature.slice(7).match(/../g)!, (byte) => parseInt(byte, 16));
       if (!await crypto.subtle.verify("HMAC", key, proof, encoder.encode(text))) return empty(401);
       const url = dependencies.env("SUPABASE_URL");

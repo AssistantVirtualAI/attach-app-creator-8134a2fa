@@ -26,19 +26,19 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "b1488d3a44b936f89faac3dce9552af4ef239928101d58e16d61a4195e9e3765"
+      "sha256": "e0c76bb5bf849f53f6fd15775e72f3b7e031ff5fed39bd197a1f2c272c7b3f0b"
     },
     {
       "path": "src/pages/lemtel/onboarding/lemtelHostedApi.ts",
-      "sha256": "685d16bda1a7a183a2dd4a43da9e76b6edcd82b0639c3217800bfbb371ac70cc"
+      "sha256": "33c21c4fed2350b77d15afc984fb77dbe06c54a35bb46d2be47b12c360d6f01c"
     },
     {
       "path": "src/pages/lemtel/onboarding/LemtelNodeResourcePanel.tsx",
-      "sha256": "b883d1abafe5b48df121c6d6e19c1a076e0c87a77068ecdb2b0d6f66d82553c3"
+      "sha256": "870e5708bf8f068f12c0497200d8d05e28fabfe3561ce285edf55d203468980b"
     },
     {
       "path": "src/pages/lemtel/onboarding/LemtelOperationalStatus.tsx",
-      "sha256": "fe122615fb3cfb753011cd0f4a2e3f603e84ee8c4be518a98832166254539394"
+      "sha256": "b2676284c4fc0a00cd0c594517a5057535649888df1173ddf91998f7fce1070d"
     }
   ],
   "explicitly_excluded": [

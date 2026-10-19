@@ -1,12 +1,13 @@
 import { Activity, Cloud, Cpu, Database, HardDrive, MemoryStick, Server, ShieldCheck } from "lucide-react";
 import type { Lang, LemtelDict } from "./lemtelI18n";
-import type { LemtelDoWriterResources, LemtelNodeStatus, LemtelTrafficNodeRole } from "./lemtelHostedApi";
+import type { LemtelDoWriterResources, LemtelHostingerStandbyResources, LemtelNodeStatus, LemtelTrafficNodeRole } from "./lemtelHostedApi";
 
 type Props = {
   t: LemtelDict;
   lang: Lang;
   status: LemtelNodeStatus | null;
   writerResources: LemtelDoWriterResources | null;
+  hostingerResources?: LemtelHostingerStandbyResources | null;
   loading: boolean;
   unavailable: boolean;
 };
@@ -54,7 +55,7 @@ function normalizeNodeStatus(value: LemtelNodeStatus | null) {
  * held at unknown until a future signed-enrollment contract identifies the source.
  * Existing replication and traffic projections cannot substitute for that proof.
  */
-export default function LemtelNodeResourcePanel({ t, lang, status, writerResources, loading, unavailable }: Props) {
+export default function LemtelNodeResourcePanel({ t, lang, status, writerResources, hostingerResources = null, loading, unavailable }: Props) {
   const text = t.operations.resources;
   const trustedRoles = normalizeNodeStatus(status);
   return <section aria-label={text.title} className="mb-5">
@@ -71,8 +72,16 @@ export default function LemtelNodeResourcePanel({ t, lang, status, writerResourc
         // No Hostinger data is displayable under the current projection: it does not certify secure enrollment.
         const entry = hostinger ? undefined : trustedRoles?.find((candidate) => candidate.nodeRole === nodeRole);
         const observed = Boolean(entry?.observedAt && !unavailable);
-        const resource = !hostinger && writerResources?.observation === "observed" ? completeResources(writerResources.resources) : undefined;
-        const label = hostinger ? text.hostingerUnknown : text.doWriter;
+        // Hostinger values come only from the role-bound signed publication and are always labelled "not enrolled".
+        const source = hostinger ? (hostingerResources?.trust === "signed_publication_not_enrolled" ? hostingerResources : null) : writerResources;
+        const resource = source?.observation === "observed" ? completeResources(source.resources) : undefined;
+        const resourceAt = resource ? source?.observedAt : undefined;
+        const label = hostinger ? (resource ? text.hostingerStandby : text.hostingerUnknown) : text.doWriter;
+        const slotDetail = resource ? (hostinger ? text.signedObservation : text.observed) : text.metrics.unavailable;
+        const subtitle = observed ? `${text.lastObservation} · ${safeDate(entry?.observedAt, lang)}` : resource ? `${text.resourcesObserved} · ${safeDate(resourceAt, lang)}` : hostinger ? text.hostingerDetail : text.noObservation;
+        const chip = hostinger ? (resource ? text.signedNotEnrolled : text.hostingerPending) : observed || resource ? text.observed : text.noObservation;
+        const chipTone = hostinger ? (resource ? "lt-chip-cyan" : "lt-chip-warn") : observed || resource ? "lt-chip-ok" : "lt-chip-warn";
+        const notice = hostinger ? (resource ? text.signedDetail : text.hostingerDetail) : unavailable ? text.unavailableDetail : resource ? text.nodeStatusNotConfigured : text.noObservationDetail;
         const Icon = hostinger ? Cloud : Server;
         const signals = observed ? [
           { label: text.signals.publisher, value: health(entry?.agentState), icon: ShieldCheck },
@@ -82,15 +91,15 @@ export default function LemtelNodeResourcePanel({ t, lang, status, writerResourc
         ] : [];
         return <article key={nodeRole} data-node-role={nodeRole} className="lt-card p-5 min-w-0 overflow-hidden" aria-label={label}>
           <div className="flex flex-wrap justify-between gap-3 items-start mb-4">
-            <div className="flex items-center gap-3 min-w-0"><span className="rounded-xl p-2" style={{ background: "hsl(var(--lt-cyan) / .10)", color: "hsl(var(--lt-cyan))" }}><Icon className="w-5 h-5" aria-hidden="true" /></span><div><h3 className="font-semibold">{label}</h3><p className="text-[11px] lt-ink-2 mt-0.5">{hostinger ? text.hostingerDetail : observed ? `${text.lastObservation} · ${safeDate(entry?.observedAt, lang)}` : text.noObservation}</p></div></div>
-            <span className={`lt-chip ${observed ? "lt-chip-ok" : "lt-chip-warn"}`}>{hostinger ? text.hostingerPending : observed ? text.observed : text.noObservation}</span>
+            <div className="flex items-center gap-3 min-w-0"><span className="rounded-xl p-2" style={{ background: "hsl(var(--lt-cyan) / .10)", color: "hsl(var(--lt-cyan))" }}><Icon className="w-5 h-5" aria-hidden="true" /></span><div><h3 className="font-semibold">{label}</h3><p className="text-[11px] lt-ink-2 mt-0.5">{subtitle}</p></div></div>
+            <span className={`lt-chip ${chipTone}`}>{chip}</span>
           </div>
-          {observed ? <div className="grid sm:grid-cols-2 gap-3 mb-4">{signals.map(({ label: signalLabel, value, icon: SignalIcon }) => <div key={signalLabel} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5" style={{ borderColor: "hsl(var(--lt-border))" }}><span className="text-xs flex items-center gap-2 min-w-0"><SignalIcon className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(var(--lt-cyan))" }} />{signalLabel}</span><span className={`lt-chip ${resourceTone(value)}`}>{text.states[value]}</span></div>)}</div> : <p className="lt-resource-notice text-xs mb-4">{hostinger ? text.hostingerDetail : unavailable ? text.unavailableDetail : text.noObservationDetail}</p>}
+          {observed ? <div className="grid sm:grid-cols-2 gap-3 mb-4">{signals.map(({ label: signalLabel, value, icon: SignalIcon }) => <div key={signalLabel} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5" style={{ borderColor: "hsl(var(--lt-border))" }}><span className="text-xs flex items-center gap-2 min-w-0"><SignalIcon className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(var(--lt-cyan))" }} />{signalLabel}</span><span className={`lt-chip ${resourceTone(value)}`}>{text.states[value]}</span></div>)}</div> : <p className="lt-resource-notice text-xs mb-4">{notice}</p>}
           <div className="grid grid-cols-2 gap-3" aria-label={text.resourceMetrics}>
-            <ResourceSlot icon={Cpu} label={text.metrics.cpu} value={resource ? `${resource.cpuPercent} %` : "—"} detail={resource ? text.observed : text.metrics.unavailable} />
-            <ResourceSlot icon={MemoryStick} label={text.metrics.memory} value={resource ? `${resource.memoryPercent} %` : "—"} detail={resource ? text.observed : text.metrics.unavailable} />
-            <ResourceSlot icon={HardDrive} label={text.metrics.disk} value={resource ? `${resource.diskPercent} %` : "—"} detail={resource ? text.observed : text.metrics.unavailable} />
-            <ResourceSlot icon={Activity} label={text.metrics.load} value={resource ? [resource.load1Milli, resource.load5Milli, resource.load15Milli].map((value) => new Intl.NumberFormat(lang === "fr" ? "fr-CA" : "en-CA", { maximumFractionDigits: 3 }).format(value / 1000)).join(" / ") : "—"} detail={resource ? text.observed : text.metrics.unavailable} />
+            <ResourceSlot icon={Cpu} label={text.metrics.cpu} value={resource ? `${resource.cpuPercent} %` : "—"} detail={slotDetail} />
+            <ResourceSlot icon={MemoryStick} label={text.metrics.memory} value={resource ? `${resource.memoryPercent} %` : "—"} detail={slotDetail} />
+            <ResourceSlot icon={HardDrive} label={text.metrics.disk} value={resource ? `${resource.diskPercent} %` : "—"} detail={slotDetail} />
+            <ResourceSlot icon={Activity} label={text.metrics.load} value={resource ? [resource.load1Milli, resource.load5Milli, resource.load15Milli].map((value) => new Intl.NumberFormat(lang === "fr" ? "fr-CA" : "en-CA", { maximumFractionDigits: 3 }).format(value / 1000)).join(" / ") : "—"} detail={slotDetail} />
           </div>
           <p className="text-[11px] lt-ink-2 mt-4">{text.resourceNote}</p>
         </article>;

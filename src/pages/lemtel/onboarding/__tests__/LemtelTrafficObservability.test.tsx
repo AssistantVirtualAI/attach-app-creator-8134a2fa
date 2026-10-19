@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LemtelTrafficTrend } from "../lemtelHostedApi";
-const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn(), getNodeStatus: vi.fn(), getDoWriterResources: vi.fn() }));
+const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn(), getNodeStatus: vi.fn(), getDoWriterResources: vi.fn(), getHostingerStandbyResources: vi.fn() }));
 vi.mock("../lemtelHostedApi", () => ({ portalApi: api, LemtelError: class extends Error { key = "unavailable"; } }));
 import LemtelOperationalStatus, { TRAFFIC_READ_DEADLINE_MS } from "../LemtelOperationalStatus";
 import LemtelTrafficPanel from "../LemtelTrafficPanel";
@@ -19,6 +19,7 @@ beforeEach(() => {
   api.getOperationalTrend.mockReset().mockResolvedValue({ samples: [] });
   api.getNodeStatus.mockReset().mockResolvedValue({ telemetry: "not_configured", roles: [] });
   api.getDoWriterResources.mockReset().mockResolvedValue({ schemaVersion: "lemtel-do-writer-resources/v1", observation: "no_observation" });
+  api.getHostingerStandbyResources.mockReset().mockResolvedValue({ schemaVersion: "lemtel-hostinger-standby-resources/v1", trust: "signed_publication_not_enrolled", observation: "no_observation" });
 });
 afterEach(() => cleanup());
 
@@ -86,8 +87,38 @@ describe("Lemtel private traffic observability", () => {
     expect(within(resources).getAllByText("Observation attestée").length).toBeGreaterThan(0);
     expect(within(resources).getByText("Hostinger — statut inconnu")).toBeInTheDocument();
     expect(within(resources).getAllByText(/resteront inconnus jusqu’à l’enrôlement sécurisé/i)).toHaveLength(2);
+    // Hostinger traffic is accepted server-side only with its role-bound secret: shown, but labelled as not enrolled.
     const traffic = screen.getByRole("region", { name: "Trafic serveur" });
-    expect(within(traffic).getByText("Le trafic Hostinger restera masqué jusqu’à une publication redacted provenant d’un publisher Hostinger enrôlé et attesté.")).toBeInTheDocument();
+    expect(within(traffic).getByText("Publication signée — non enrôlée")).toBeInTheDocument();
     expect(api.getNodeStatus).toHaveBeenCalledTimes(1);
   });
+  });
+  it("labels DO resources as observed without the misleading node-status notice", async () => {
+    api.getDoWriterResources.mockResolvedValue({ schemaVersion: "lemtel-do-writer-resources/v1", observation: "observed", observedAt: new Date().toISOString(), resources: { cpuPercent: 44, memoryPercent: 43, diskPercent: 15, load1Milli: 1569, load5Milli: 868, load15Milli: 774 } });
+    operations();
+    const resources = await screen.findByRole("region", { name: "Ressources des nœuds" });
+    const doCard = await waitFor(() => { const card = resources.querySelector('[data-node-role="do_writer"]') as HTMLElement; expect(within(card).getByText("44 %")).toBeInTheDocument(); return card; });
+    expect(within(doCard).getByText("Observation attestée", { selector: ".lt-chip" })).toBeInTheDocument();
+    expect(within(doCard).getByText(/^Ressources observées · /)).toBeInTheDocument();
+    expect(within(doCard).queryByText(/Aucun relevé de nœud autoritaire/)).toBeNull();
+    expect(within(doCard).getByText(/Statut du nœud \(publieur, runtime, réplication, stockage\) : non configuré/)).toBeInTheDocument();
+  });
+  it("shows signed Hostinger resources only with the not-enrolled trust label", async () => {
+    api.getHostingerStandbyResources.mockResolvedValue({ schemaVersion: "lemtel-hostinger-standby-resources/v1", trust: "signed_publication_not_enrolled", observation: "observed", observedAt: new Date().toISOString(), resources: { cpuPercent: 9, memoryPercent: 51, diskPercent: 22, load1Milli: 40, load5Milli: 30, load15Milli: 20 } });
+    operations();
+    const resources = await screen.findByRole("region", { name: "Ressources des nœuds" });
+    const card = await waitFor(() => { const element = resources.querySelector('[data-node-role="hostinger_standby"]') as HTMLElement; expect(within(element).getByText("9 %")).toBeInTheDocument(); return element; });
+    expect(within(card).getByText("Hostinger — standby")).toBeInTheDocument();
+    expect(within(card).getByText("Publication signée — non enrôlée")).toBeInTheDocument();
+    expect(within(card).getAllByText("Observation signée")).toHaveLength(4);
+    expect(within(card).queryByText("Observation attestée")).toBeNull();
+  });
+  it("refuses Hostinger resources that do not carry the signed-not-enrolled trust label", async () => {
+    api.getHostingerStandbyResources.mockResolvedValue({ schemaVersion: "lemtel-hostinger-standby-resources/v1", observation: "observed", observedAt: new Date().toISOString(), resources: { cpuPercent: 9, memoryPercent: 51, diskPercent: 22, load1Milli: 40, load5Milli: 30, load15Milli: 20 } });
+    operations();
+    const resources = await screen.findByRole("region", { name: "Ressources des nœuds" });
+    await waitFor(() => expect(api.getHostingerStandbyResources).toHaveBeenCalled());
+    const card = resources.querySelector('[data-node-role="hostinger_standby"]') as HTMLElement;
+    expect(within(card).queryByText("9 %")).toBeNull();
+    expect(within(card).getByText("Hostinger — statut inconnu")).toBeInTheDocument();
 });

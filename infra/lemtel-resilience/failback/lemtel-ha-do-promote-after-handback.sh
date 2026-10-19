@@ -20,9 +20,21 @@ project='lemtel-ha-standby'
 hostinger_tunnel='10.253.47.1'
 fence_tool="$T/usr/local/sbin/lemtel-ha-do-writer-boot-fence"
 probe_host='lemtel-do-l7.assistantvirtualai.com'
-psql() { docker exec -u postgres "$container" psql -X -At -d postgres -v ON_ERROR_STOP=1 -c "$1"; }
+# Supabase images: the role "postgres" is NOT a superuser (no CHECKPOINT, pg_promote, ALTER SYSTEM, pg_hba_file_rules).
+# The cluster superuser is supabase_admin, trusted on the container loopback. The session is chosen and PROVEN superuser
+# before any change; a plain socket session is kept only when that role really is superuser.
+su_args=()
+pick_superuser() {
+  if [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$container" psql -X -At -d postgres -h 127.0.0.1 -U supabase_admin -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ]; then
+    su_args=(-h 127.0.0.1 -U supabase_admin); return 0
+  fi
+  [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$container" psql -X -At -d postgres -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ] && { su_args=(); return 0; }
+  return 1
+}
+psql() { docker exec -u postgres "$container" psql -X -At -d postgres ${su_args[@]+"${su_args[@]}"} -v ON_ERROR_STOP=1 -c "$1"; }
 docker inspect "$container" >/dev/null 2>&1 || fail database_container_missing
 [ "$(docker inspect --format '{{.State.Running}}' "$container")" = true ] || fail database_not_running
+pick_superuser || fail superuser_session_unavailable
 
 if [ "$mode" = replay-lsn ]; then
   [ "$(psql 'SELECT pg_is_in_recovery()')" = t ] || fail not_a_standby

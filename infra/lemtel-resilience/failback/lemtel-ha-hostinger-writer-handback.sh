@@ -21,12 +21,25 @@ project='lemtel-ha-hostinger-promoted'
 stage="$T/opt/lemtel-ha/runtime-stage"
 marker="$stage/volumes/proxy/caddy/lemtel-lb-ready.json"
 state_dir="$T/var/lib/lemtel-ha/failback"
-psql() { docker exec -u postgres "$container" psql -X -At -d postgres -v ON_ERROR_STOP=1 -c "$1"; }
+# Supabase images: the role "postgres" is NOT a superuser (no CHECKPOINT, pg_promote, ALTER SYSTEM, pg_hba_file_rules).
+# The cluster superuser is supabase_admin, trusted on the container loopback. The session is chosen and PROVEN superuser
+# before any change; a plain socket session is kept only when that role really is superuser.
+su_args=()
+pick_superuser() {
+  if [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$container" psql -X -At -d postgres -h 127.0.0.1 -U supabase_admin -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ]; then
+    su_args=(-h 127.0.0.1 -U supabase_admin); return 0
+  fi
+  [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$container" psql -X -At -d postgres -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ] && { su_args=(); return 0; }
+  return 1
+}
+psql() { docker exec -u postgres "$container" psql -X -At -d postgres ${su_args[@]+"${su_args[@]}"} -v ON_ERROR_STOP=1 -c "$1"; }
 docker inspect "$container" >/dev/null 2>&1 || fail database_container_missing
 install -d -m 0700 "$state_dir"
 
 if [ "$mode" = quiesce ]; then
   [ "$(docker inspect --format '{{.State.Running}}' "$container")" = true ] || fail database_not_running
+  # Proven BEFORE the runtime is stopped: CHECKPOINT and pg_terminate_backend need the cluster superuser.
+  pick_superuser || fail superuser_session_unavailable
   [ "$(psql 'SELECT pg_is_in_recovery()')" = f ] || fail hostinger_not_writer
   # The DigitalOcean standby must already be streaming from us, otherwise the hand-back would lose data.
   [ "$(psql "SELECT count(*) FROM pg_stat_replication WHERE application_name = 'lemtel_do_standby' AND state = 'streaming'")" = 1 ] \
@@ -53,6 +66,7 @@ fi
 expected="${LEMTEL_HA_DO_REPLAYED_LSN:-}"
 [[ "$expected" =~ ^[0-9A-F]+/[0-9A-F]+$ ]] || fail do_replayed_lsn_required
 if [ "$(docker inspect --format '{{.State.Running}}' "$container")" = true ]; then
+  pick_superuser || true
   current="$(psql 'SELECT pg_current_wal_lsn()')"
   # DigitalOcean must have replayed everything Hostinger ever wrote.
   [ "$(psql "SELECT pg_wal_lsn_diff('$expected', '$current') >= 0")" = t ] || fail do_standby_behind_hostinger

@@ -23,11 +23,23 @@ slot='lemtel_do_standby'
 relay_unit_name='lemtel-ha-hostinger-postgres-wireguard-relay.service'
 relay_unit="$T/etc/systemd/system/$relay_unit_name"
 relay_script="$T/usr/local/libexec/lemtel-ha-hostinger-postgres-wireguard-relay"
-psql() { docker exec -u postgres "$container" psql -X -At -d postgres -v ON_ERROR_STOP=1 -c "$1"; }
+# Supabase images: the role "postgres" is NOT a superuser (no CHECKPOINT, pg_promote, ALTER SYSTEM, pg_hba_file_rules).
+# The cluster superuser is supabase_admin, trusted on the container loopback. The session is chosen and PROVEN superuser
+# before any change; a plain socket session is kept only when that role really is superuser.
+su_args=()
+pick_superuser() {
+  if [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$container" psql -X -At -d postgres -h 127.0.0.1 -U supabase_admin -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ]; then
+    su_args=(-h 127.0.0.1 -U supabase_admin); return 0
+  fi
+  [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$container" psql -X -At -d postgres -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ] && { su_args=(); return 0; }
+  return 1
+}
+psql() { docker exec -u postgres "$container" psql -X -At -d postgres ${su_args[@]+"${su_args[@]}"} -v ON_ERROR_STOP=1 -c "$1"; }
 
 relay_listening() { ss -H -ltn "sport = :5432" 2>/dev/null | awk '{print $4}' | grep -Fqx "${hostinger_tunnel}:5432"; }
 
 if [ "$mode" = status ]; then
+  pick_superuser || true
   printf 'hostinger_writer_replication_format=lemtel_hostinger_writer_replication_v1\n'
   printf 'database_in_recovery=%s\n' "$(psql 'SELECT pg_is_in_recovery()' 2>/dev/null || echo unknown)"
   printf 'replication_slot=%s\n' "$(psql "SELECT CASE WHEN count(*) = 1 THEN 'present' ELSE 'absent' END FROM pg_replication_slots WHERE slot_name = '$slot'" 2>/dev/null || echo unknown)"
@@ -54,6 +66,7 @@ ip -brief address show lemtel-ha0 | grep -Fq "$hostinger_tunnel" || fail hosting
 docker inspect "$container" >/dev/null 2>&1 || fail database_container_missing
 [ "$(docker inspect --format '{{.State.Running}}' "$container")" = true ] || fail database_not_running
 [ -z "$(docker port "$container" 2>/dev/null || true)" ] || fail database_port_published
+pick_superuser || fail superuser_session_unavailable
 # Only a promoted writer may serve replication to DigitalOcean.
 [ "$(psql 'SELECT pg_is_in_recovery()')" = f ] || fail hostinger_not_promoted_writer
 [ "$(psql "SELECT count(*) FROM pg_roles WHERE rolname = 'lemtel_ha_replication' AND rolreplication AND rolcanlogin")" = 1 ] \
@@ -90,8 +103,8 @@ if ! docker exec -u postgres "$container" grep -Fqx "$rule" "$hba"; then
   hba_added=true
 fi
 [ "$(psql 'SELECT pg_reload_conf()')" = t ] || fail hba_reload_failed
-[ "$(psql "SELECT count(*) FROM pg_hba_file_rules WHERE 'replication' = ANY(database) AND 'lemtel_ha_replication' = ANY(user_name) AND address = '$gateway' AND error IS NULL")" -ge 1 ] \
-  || fail hba_rule_not_active
+active_rules="$(psql "SELECT count(*) FROM pg_hba_file_rules WHERE 'replication' = ANY(database) AND 'lemtel_ha_replication' = ANY(user_name) AND address = '$gateway' AND error IS NULL" || true)"
+[[ "$active_rules" =~ ^[0-9]+$ ]] && [ "$active_rules" -ge 1 ] || fail hba_rule_not_active
 
 # 2. Physical slot so the DigitalOcean rebuild never misses WAL.
 if [ "$(psql "SELECT count(*) FROM pg_replication_slots WHERE slot_name = '$slot'")" = 0 ]; then

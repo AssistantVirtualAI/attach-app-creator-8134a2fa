@@ -587,7 +587,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         let info = ringingCallers.removeValue(forKey: uuid)
         let answered = answeredUUIDs.remove(uuid) != nil
         let programmatic = programmaticEnds.remove(uuid) != nil
-        guard let info = info, !answered, !programmatic, !nativeOutgoingCall || nativeCalls[uuid] != nil,
+        guard let info = info, !answered, !programmatic,
               let to = PpVoipCall.quickReplyTarget(info.number) else { return }
         let key = info.callId.isEmpty ? uuid.uuidString : info.callId
         guard !quickReplyOffered.contains(key) else { return }

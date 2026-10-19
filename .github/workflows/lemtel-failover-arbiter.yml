@@ -10,6 +10,7 @@ on:
       - "scripts/lemtel-sealed-arbiter-bootstrap.test.mjs"
       - "scripts/lemtel-serializer-test-helpers.mjs"
       - "scripts/lemtel-hostinger-standby-deploy*"
+      - "scripts/lemtel-cloudflare-arbiter-*"
       - ".github/workflows/lemtel-failover-arbiter.yml"
   push:
     branches: [lemtel/integration]
@@ -21,6 +22,7 @@ on:
       - "scripts/lemtel-sealed-arbiter-bootstrap.test.mjs"
       - "scripts/lemtel-serializer-test-helpers.mjs"
       - "scripts/lemtel-hostinger-standby-deploy*"
+      - "scripts/lemtel-cloudflare-arbiter-*"
       - ".github/workflows/lemtel-failover-arbiter.yml"
 
 permissions:
@@ -36,6 +38,6 @@ jobs:
         with:
           node-version: "22"
       - name: Arbiter Worker, Durable Object serializer, sealed bootstrap and agent mailbox
-        run: node --test scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-durable-object-serialization.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs
+        run: node --test scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-durable-object-serialization.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs scripts/lemtel-cloudflare-arbiter-disabled-version-deploy.test.mjs
       - name: Hostinger signed-observation deployers (offline fakes)
         run: node --test scripts/lemtel-hostinger-standby-deploy.test.mjs

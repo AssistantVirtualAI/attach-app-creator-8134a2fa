@@ -26,7 +26,8 @@ export const ALLOWED_INHERITED_BINDINGS = Object.freeze([
   'STATE',
   'FAILOVER_MODE',
   'CONFIG_REVISION',
-  'ARBITER_SERIALIZATION_ACK',
+  // Post-provisioning state: the Durable Object serializer replaced the historical text ACK.
+  'ARBITER_SERIALIZER',
 ]);
 
 const REPOSITORY_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -178,6 +179,12 @@ function assertRemoteDisabledSettings(payload) {
   const failoverMode = byName.get('FAILOVER_MODE');
   if (failoverMode.type !== 'plain_text' || failoverMode.text !== 'disabled') {
     throw new DeploymentGateError('remote_failover_mode_not_disabled');
+  }
+
+  const serializer = byName.get('ARBITER_SERIALIZER');
+  if (serializer.type !== 'durable_object_namespace' || serializer.class_name !== 'LemtelFailoverSerializer' ||
+      (serializer.script_name !== undefined && serializer.script_name !== WORKER_NAME)) {
+    throw new DeploymentGateError('remote_serializer_binding_invalid');
   }
 }
 

@@ -48,7 +48,7 @@ function disabledRemoteSettings(overrides = {}) {
       { name: 'STATE', type: 'kv_namespace' },
       { name: 'FAILOVER_MODE', type: 'plain_text', text: 'disabled' },
       { name: 'CONFIG_REVISION', type: 'plain_text', text: 'lemtel-failover-v1' },
-      { name: 'ARBITER_SERIALIZATION_ACK', type: 'plain_text', text: 'reviewed_single_serialized_scheduler' },
+      { name: 'ARBITER_SERIALIZER', type: 'durable_object_namespace', class_name: 'LemtelFailoverSerializer' },
     ],
     ...overrides,
   };
@@ -197,7 +197,7 @@ test('remote active mode blocks before version upload', async () => {
               { name: 'STATE', type: 'kv_namespace' },
               { name: 'FAILOVER_MODE', type: 'plain_text', text: 'active' },
               { name: 'CONFIG_REVISION', type: 'plain_text', text: 'lemtel-failover-v1' },
-              { name: 'ARBITER_SERIALIZATION_ACK', type: 'plain_text', text: 'reviewed' },
+              { name: 'ARBITER_SERIALIZER', type: 'durable_object_namespace', class_name: 'LemtelFailoverSerializer' },
             ],
           }),
         }), { status: 200 });
@@ -208,3 +208,26 @@ test('remote active mode blocks before version upload', async () => {
   assert.equal(requests.length, 1);
   assert.equal(requests[0].init.method, 'GET');
 });
+
+for (const [label, serializer, code] of [
+  ['historical text ACK instead of the Durable Object', { name: 'ARBITER_SERIALIZATION_ACK', type: 'plain_text', text: 'reviewed_single_serialized_scheduler' }, 'remote_bindings_not_allowlisted'],
+  ['serializer bound to another class', { name: 'ARBITER_SERIALIZER', type: 'durable_object_namespace', class_name: 'OtherClass' }, 'remote_serializer_binding_invalid'],
+  ['serializer of another type', { name: 'ARBITER_SERIALIZER', type: 'plain_text', text: 'x' }, 'remote_serializer_binding_invalid'],
+  ['serializer hosted by another Worker', { name: 'ARBITER_SERIALIZER', type: 'durable_object_namespace', class_name: 'LemtelFailoverSerializer', script_name: 'other-worker' }, 'remote_serializer_binding_invalid'],
+]) {
+  test(`remote ${label} blocks before version upload`, async () => {
+    const requests = [];
+    await assert.rejects(runDeployment({ env: environment(), readFile: sourceReader(),
+      fetchImpl: async (url, init) => {
+        requests.push({ url, init });
+        return new Response(JSON.stringify({ success: true, result: disabledRemoteSettings({ bindings: [
+          { name: 'STATE', type: 'kv_namespace' },
+          { name: 'FAILOVER_MODE', type: 'plain_text', text: 'disabled' },
+          { name: 'CONFIG_REVISION', type: 'plain_text', text: 'lemtel-failover-v1' },
+          serializer,
+        ] }) }), { status: 200 });
+      } }), assertGate(code));
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].init.method, 'GET');
+  });
+}

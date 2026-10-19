@@ -64,6 +64,17 @@ find "$new/volumes/proxy/caddy" -maxdepth 1 -name '.lemtel-portal-governance-sta
 import sys
 path = sys.argv[1]
 lines = open(path, encoding='utf-8').read().split('\n')
+# The DigitalOcean-only origin probe site must never be served by Hostinger.
+begin, end = '# LEMTEL_DO_ORIGIN_PROBE_V1', '# LEMTEL_DO_ORIGIN_PROBE_V1_END'
+if (begin in lines) != (end in lines) or lines.count(begin) > 1 or lines.count(end) > 1:
+    sys.exit(1)
+if begin in lines:
+    start, stop = lines.index(begin), lines.index(end)
+    if stop < start:
+        sys.exit(1)
+    lines = lines[:start] + lines[stop + 1:]
+if any('lemtel-do-l7.' in line for line in lines):
+    sys.exit(1)
 out, patched = [], 0
 for index, line in enumerate(lines):
     out.append(line)
@@ -90,5 +101,5 @@ install "${own[@]}" -m 0600 "$envelope" "$artifact_dir/$expected.tgz"
 printf '%s\n' "$expected" > "$artifact_dir/.current.sha256.tmp"; chmod 0600 "$artifact_dir/.current.sha256.tmp"
 mv -f -- "$artifact_dir/.current.sha256.tmp" "$artifact_dir/current.sha256"
 printf 'hostinger_runtime_stage_refresh_format=lemtel_hostinger_runtime_stage_refresh_v1\n'
-printf 'runtime_envelope_sha256=%s\nstaged_readiness_marker=false\ncaddy_tls=internal_for_lemtel_host\npooler_config_present=true\n' "${expected:0:12}"
+printf 'runtime_envelope_sha256=%s\nstaged_readiness_marker=false\ncaddy_tls=internal_for_lemtel_host\ndo_origin_probe_site_staged=false\npooler_config_present=true\n' "${expected:0:12}"
 printf 'previous_stage_backup=kept\nruntime_started=false\nstandby_postgres_touched=false\nhostinger_runtime_stage_refresh_status=complete\n'

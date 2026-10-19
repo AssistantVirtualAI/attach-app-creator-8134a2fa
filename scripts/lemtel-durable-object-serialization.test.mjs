@@ -50,9 +50,27 @@ test('lease capability is revision-bound, short-lived, and records each destruct
   const ledger = [...storage.values.entries()].filter(([entry]) => entry.startsWith('intent:'));
   assert.equal(ledger.length, 1);
   assert.doesNotMatch(ledger[0][0], /11111111/u, 'ledger key contains no clear incident identifier');
-  now += 16;
+  now += 51;
   assert.equal((await call(stub, '/intent', { ...correct, intent: 'power_off' })).status, 409, 'expired capability is refused');
   assert.equal((await call(stub, '/lease', { execution_key: key(4), config_revision: revision })).status, 200);
+});
+
+test('only the exact holder can release a lease early; a released capability is refused', async (t) => {
+  let now = Math.floor(Date.UTC(2034, 0, 1) / 1000);
+  t.mock.method(Date, 'now', () => now * 1000);
+  const { binding } = createSerializerBinding();
+  const stub = binding.get(binding.idFromName(singleton));
+  const lease = (await call(stub, '/lease', { execution_key: key(5), config_revision: revision })).body.lease;
+  assert.equal(lease.expires_at, now + 50, 'one lease covers a 25 s L7 observation plus provider calls');
+  assert.equal((await call(stub, '/lease', { execution_key: key(6), config_revision: revision })).status, 409);
+  const holder = { execution_key: lease.execution_key, config_revision: revision, capability: lease.capability };
+  assert.equal((await call(stub, '/release', { ...holder, capability: crypto.randomUUID() })).status, 409, 'wrong capability');
+  assert.equal((await call(stub, '/release', { ...holder, execution_key: key(6) })).status, 409, 'wrong holder');
+  assert.equal((await call(stub, '/lease', { execution_key: key(6), config_revision: revision })).status, 409, 'still held');
+  assert.equal((await call(stub, '/release', holder)).status, 200);
+  assert.equal((await call(stub, '/intent', { ...holder, incident_id: incident, intent: 'shutdown' })).status, 409,
+    'a released capability can no longer record a destructive intent');
+  assert.equal((await call(stub, '/lease', { execution_key: key(6), config_revision: revision })).status, 200, 'free at once');
 });
 
 test('missing or invalid Durable Object binding blocks active work before any health/provider fetch', async () => {

@@ -19,7 +19,7 @@ export const CRON = '* * * * *';
 export const CONFIG_TTL_SECONDS = 89 * 86400;
 export const POLICY = Object.freeze({
   DO_API_BASE_URL: 'https://api.digitalocean.com/v2',
-  DO_WRITER_L7_URL: 'https://lemtel.assistantvirtualai.com/lemtel-lb-ready',
+  DO_WRITER_L7_URL: 'https://lemtel-do-l7.assistantvirtualai.com/lemtel-lb-ready',
   OBSERVATION_INTERVAL_SECONDS: '60',
   INCIDENT_FAILURE_CYCLES: '5',
   GRACEFUL_SHUTDOWN_DELAY_SECONDS: '120',

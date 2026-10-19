@@ -62,7 +62,11 @@ docker inspect "$container" >/dev/null 2>&1 || fail database_container_missing
 # 1. Replication rule (inside the container's hba file, exactly like the DigitalOcean writer), then reload.
 hba="$(psql "SELECT current_setting('hba_file')")"
 [[ "$hba" =~ ^/[A-Za-z0-9/._-]+$ ]] || fail hba_path_invalid
-gateway="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{if .Gateway}}{{println .Gateway}}{{end}}{{end}}' "$container" | head -1)"
+# The relay always reaches the database on Docker's DEFAULT bridge network, so PostgreSQL sees the docker0 address.
+# (After promotion the container is also on the runtime network; its gateway must not be used: first drill, 2026-10-19.)
+bridge_ip="$(docker inspect --format '{{with index .NetworkSettings.Networks "bridge"}}{{.IPAddress}}{{end}}' "$container")"
+[[ "$bridge_ip" =~ ^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || fail database_not_on_default_bridge
+gateway="$(ip -4 -o address show docker0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)"
 [[ "$gateway" =~ ^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || fail bridge_gateway_unresolved
 rule="host replication lemtel_ha_replication ${gateway}/32 scram-sha-256"
 hba_added=false
@@ -90,7 +94,7 @@ install -d -m 0755 "$(dirname "$relay_script")" "$(dirname "$relay_unit")"
 cat > "$relay_script.tmp" <<RELAY
 #!/usr/bin/env bash
 set -euo pipefail
-ip="\$(docker inspect --format '{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' $container | awk '/^(172\.(1[6-9]|2[0-9]|3[0-1])|10|192\.168)\./ { print; exit }')"
+ip="\$(docker inspect --format '{{with index .NetworkSettings.Networks "bridge"}}{{.IPAddress}}{{end}}' $container)"
 [ -n "\$ip" ] || exit 1
 exec /usr/bin/socat "TCP-LISTEN:5432,bind=${hostinger_tunnel},reuseaddr,fork,range=${do_tunnel}/32" "TCP:\${ip}:5432"
 RELAY

@@ -29,7 +29,7 @@ test('DO relay binds only to its WireGuard address and limits the source to Host
   assert.match(relay, /HostConfig\.NetworkMode/u);
   assert.match(relay, /database_backend_target='127\.0\.0\.1:5432'/u);
   assert.match(relay, /range \.NetworkSettings\.Networks\}\}\{\{println \.IPAddress/u);
-  assert.match(relay, /awk '\/\^\(172\\\.\(1\[6-9\]\|2\[0-9\]\|3\[0-1\]\)\|10\|192\\\.168\)/u);
+  assert.match(relay, /awk '\/\^\(10\\\.\[0-9\]\{1,3\}\|172\\\.\(1\[6-9\]\|2\[0-9\]\|3\[0-1\]\)\|192\\\.168\)/u);
   assert.match(relay, /private_relay_listener_verified=true/u);
   assert.match(relay, /public_database_listener_enabled=false/u);
   assert.match(relay, /rollback\(\)/u);

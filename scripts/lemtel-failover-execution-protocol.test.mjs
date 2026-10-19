@@ -893,3 +893,31 @@ test('agent sandbox can read the Storage receiver, readiness runs the full attes
   assert.match(agent, /write_ledger\(ledger, 'stage_attestation_blocked_' \+ local_reason\(\)\)/u);
   assert.match(agent, /print\('hostinger_standby_readiness=' \+ READINESS_REASON\['value'\]\)/u);
 });
+
+test('KV write budget: unchanged status and readiness are not rewritten every minute (free tier: 1000 writes/day)', async (t) => {
+  const f = await fixture(t);
+  f.health = 'healthy'; f.autoReady = false;
+  const writes = [];
+  const put = f.env.STATE.put.bind(f.env.STATE);
+  f.env.STATE.put = async (key, value) => { writes.push(key); return put(key, value); };
+  const poll = () => worker.fetch(new Request(fakeURL('arbiter') + '/agent/command', { headers: {
+    authorization: `Bearer ${f.configuration.AGENT_SHARED_SECRET}`, 'x-lemtel-standby-readiness': f.readinessHeader() } }), f.env);
+  // Agent polls every ~60 s with the same verdict: the proof is refreshed at most every 100 s.
+  for (let i = 0; i < 10; i++) { f.now += 60; await poll(); }
+  const readinessWrites = writes.filter((k) => k === readinessKey).length;
+  assert.ok(readinessWrites >= 4 && readinessWrites <= 6, `readiness writes=${readinessWrites}`);
+  // The stored proof is never older than the gate accepts (180 s) right before the next refresh.
+  const stored = await f.open(f.values.get(readinessKey));
+  assert.ok(f.now - stored.observed_at < 180);
+  // A changed verdict is written immediately.
+  f.now += 10;
+  writes.length = 0;
+  await worker.fetch(new Request(fakeURL('arbiter') + '/agent/command', { headers: {
+    authorization: `Bearer ${f.configuration.AGENT_SHARED_SECRET}`, 'x-lemtel-standby-readiness': f.readinessHeader(f.readinessPayload({ ready: false })) } }), f.env);
+  assert.equal(writes.filter((k) => k === readinessKey).length, 1);
+  assert.equal((await f.open(f.values.get(readinessKey))).ready, false);
+  // Identical healthy status on consecutive ticks: one write, not one per tick.
+  writes.length = 0;
+  for (let i = 0; i < 5; i++) await f.tick();
+  assert.ok(writes.filter((k) => k === statusKey).length <= 2, `status writes=${writes.filter((k) => k === statusKey).length}`);
+});

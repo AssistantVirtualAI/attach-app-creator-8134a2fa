@@ -435,9 +435,21 @@ async function bootstrap(request, env, path, now) {
   } catch { return json(status('blocked', 'bootstrap_rejected'), 409); }
   finally { controller.running = false; }
 }
+// Workers KV free tier allows 1,000 writes/day: a permanent arbiter ticking every minute must not rewrite an
+// unchanged status. The status object carries no timestamp, so an identical value is skipped when this isolate
+// wrote it less than STATUS_HEARTBEAT_MS ago AND KV still holds it (a fresh isolate always writes once).
+const STATUS_HEARTBEAT_MS = 15 * 60 * 1000;
+let lastStatusWrite = { json: '', at: 0 };
 async function storeStatus(env, value) {
   try {
-    if (env.STATE && typeof env.STATE.put === 'function') await env.STATE.put(STATUS_KEY, JSON.stringify(value));
+    if (env.STATE && typeof env.STATE.put === 'function') {
+      const json = JSON.stringify(value);
+      const fresh = lastStatusWrite.json === json && Date.now() - lastStatusWrite.at < STATUS_HEARTBEAT_MS;
+      if (!(fresh && (await env.STATE.get(STATUS_KEY)) === json)) {
+        await env.STATE.put(STATUS_KEY, json);
+        lastStatusWrite = { json, at: Date.now() };
+      }
+    }
     return value;
   } catch (error) { diag('store_status', error); return status('blocked', 'state_unavailable'); }
 }
@@ -641,11 +653,17 @@ async function readinessFromHeader(value, env, now) {
     return await verify(env.AGENT_SHARED_SECRET, READINESS_CONTEXT, p, envelope.signature) ? p : null;
   } catch (error) { diag('readiness_header', error); return null; }
 }
+const READINESS_REFRESH_SECONDS = 100;
 async function recordReadiness(env, readiness, now) {
   try {
     const raw = await env.STATE.get(READINESS_KEY);
     const previous = raw ? (await openState(env, 'readiness', raw, now)).payload : null;
     if (previous && previous.observed_at >= readiness.observed_at) return;
+    // Same verdict reported again within READINESS_REFRESH_SECONDS: keep the stored proof (KV write budget).
+    // The gate accepts proofs up to 180 s old; refreshing every <=100 s + one 60 s agent cycle stays inside it.
+    if (previous && readiness.observed_at - previous.observed_at < READINESS_REFRESH_SECONDS &&
+        previous.ready === readiness.ready && previous.standby_in_recovery === readiness.standby_in_recovery &&
+        previous.runtime_stage_present === readiness.runtime_stage_present) return;
   } catch (error) { diag('readiness_record', error); /* unreadable or expired record: replace it */ }
   await env.STATE.put(READINESS_KEY, JSON.stringify(await sealState(env, 'readiness', readiness,
     env.protectedIssuedAt, env.protectedExpiresAt)));

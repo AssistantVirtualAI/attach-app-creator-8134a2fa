@@ -1,3 +1,4 @@
+import LemtelFailoverBridge from "./LemtelFailoverBridge";
 import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Cloud, Database, HardDrive, RefreshCw, Route, Server, ShieldCheck, Smartphone, WifiOff } from "lucide-react";
 import { LemtelError, portalApi, type LemtelDoWriterResources, type LemtelHostingerStandbyResources, type LemtelNodeStatus, type LemtelOperationalStatus, type LemtelOperationalTrendSample, type LemtelTrafficTrend, type PortalConfig } from "./lemtelHostedApi";
@@ -169,6 +170,7 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
       <div className="lt-card p-5 space-y-4"><div><div className="text-sm lt-ink-2">{lang === "fr" ? "Santé observée" : "Observed health"}</div><div className="text-3xl font-semibold mt-1">{sampleCount ? `${healthySamples}/${sampleCount}` : "—"}</div><p className="text-xs lt-ink-2 mt-1">{lang === "fr" ? "échantillons sains" : "healthy samples"}</p></div></div>
     </section>
 
+    {!readonly && <LemtelFailoverBridge lang={lang} />}
     <LemtelNodeResourcePanel t={t} lang={lang} status={nodeStatus} writerResources={writerResources} hostingerResources={hostingerResources} loading={nodeStatusLoading} unavailable={nodeStatusUnavailable} />
     <LemtelTrafficPanel t={t} lang={lang} trend={traffic} loading={trafficLoading} unavailable={trafficUnavailable} />
 

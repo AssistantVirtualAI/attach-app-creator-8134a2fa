@@ -19,6 +19,7 @@ case "${1:-preflight}" in preflight|poll) ;; *) blocked invalid_mode ;; esac
 
 # No shell sourcing, eval, environment overrides, command-line secrets or alternate config path.
 /usr/bin/python3 -I - "${1:-preflight}" <<'PY'
+import base64
 import hashlib
 import hmac
 import json
@@ -39,6 +40,7 @@ STAGE_ATTEST = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-to
 PROMOTION = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-promote.sh'
 RUNTIME = '/opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-current-topology-runtime-start.sh'
 MAX_BODY = 65536
+STAGE_DIR = '/opt/lemtel-ha/runtime-stage'
 
 class Blocked(Exception):
     pass
@@ -173,10 +175,33 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *_args, **_kwargs):
         deny('arbiter_redirect_refused')
 
+def standby_readiness(cfg):
+    # Read-only local facts the arbiter requires before it may ever fence the writer:
+    # the standby PostgreSQL answers and is still in recovery, and the runtime stage is present.
+    in_recovery = False
+    try:
+        result = run_command(['/usr/bin/docker', 'exec', '-u', 'postgres', cfg['LEMTEL_HA_LOCAL_POSTGRES_CONTAINER'],
+                              'psql', '-X', '-At', '-d', 'postgres', '-c', 'SELECT pg_is_in_recovery()'],
+                             {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'}, 15)
+        in_recovery = result.returncode == 0 and result.stdout.strip() == b't'
+    except Exception:
+        in_recovery = False
+    stage = all(os.path.isfile(os.path.join(STAGE_DIR, name)) and not os.path.islink(os.path.join(STAGE_DIR, name))
+                for name in ('docker-compose.yml', 'volumes/pooler/pooler.exs'))
+    payload = {'format': 'lemtel_standby_readiness_v1', 'target_role': 'hostinger_standby',
+               'observed_at': int(time.time()), 'ready': bool(in_recovery and stage),
+               'standby_in_recovery': bool(in_recovery), 'runtime_stage_present': bool(stage)}
+    signature = hmac.new(cfg['AGENT_SHARED_SECRET'].encode(),
+                         ('lemtel-standby-readiness-v1\n' + canonical(payload)).encode(), hashlib.sha256).hexdigest()
+    envelope = canonical({'payload': payload, 'signature': signature}).encode()
+    return base64.urlsafe_b64encode(envelope).decode().rstrip('=')
+
 def poll(cfg):
     # The only remote endpoint in this agent is the authenticated arbiter command mailbox.
+    # Every poll also carries the signed standby readiness the arbiter requires before any fencing.
     request = urllib.request.Request(cfg['ARBITER_URL'].rstrip('/') + '/agent/command',
-        headers={'Authorization': 'Bearer ' + cfg['AGENT_SHARED_SECRET'], 'Accept': 'application/json'}, method='GET')
+        headers={'Authorization': 'Bearer ' + cfg['AGENT_SHARED_SECRET'], 'Accept': 'application/json',
+                 'X-Lemtel-Standby-Readiness': standby_readiness(cfg)}, method='GET')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     with opener.open(request, timeout=8) as response:
         if response.status != 200 or response.headers.get_content_type() != 'application/json':
@@ -277,11 +302,12 @@ def execution_environment(incident, cfg, phase):
                     'LEMTEL_HA_ALLOW_CURRENT_TOPOLOGY_RUNTIME_START': 'I_UNDERSTAND_PROMOTED_HOSTINGER_RUNTIME_WILL_START'})
     return env
 
+def run_command(argv, env, timeout):
+    return subprocess.run(argv, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL, timeout=timeout, check=False)
+
 def run_local(path, env, timeout):
-    result = subprocess.run(['/usr/bin/bash', path], env=env, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                            timeout=timeout, check=False)
-    return result.returncode == 0
+    return run_command(['/usr/bin/bash', path], env, timeout).returncode == 0
 
 def main():
     cfg = load_config()

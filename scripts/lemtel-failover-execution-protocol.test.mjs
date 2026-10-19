@@ -21,6 +21,7 @@ const prefix = 'lemtel_failover_execution_v1';
 const incidentKey = `${prefix}:incident`;
 const statusKey = `${prefix}:status`;
 const drillKey = `${prefix}:production-drill`;
+const readinessKey = `${prefix}:standby-readiness`;
 const fakeURL = (name) => `https://${[name, 'test', 'invalid'].join('.')}`;
 const writerID = '7'.repeat(9);
 const secret = (name) => `synthetic-${name}-${'x'.repeat(48)}`;
@@ -83,6 +84,12 @@ async function fixture(t) {
       issued_at: f.now, expires_at: f.now + 3600, configuration: f.configuration }));
   f.setIncident = async (payload) => values.set(incidentKey, await f.seal('incident', payload));
   f.setDrill = async (payload) => values.set(drillKey, await f.seal('drill', payload));
+  f.autoReady = true;
+  f.readinessPayload = (overrides = {}) => ({ format: 'lemtel_standby_readiness_v1', target_role: 'hostinger_standby',
+    observed_at: f.now, ready: true, standby_in_recovery: true, runtime_stage_present: true, ...overrides });
+  f.setReadiness = async (payload = f.readinessPayload()) => values.set(readinessKey, await f.seal('readiness', payload));
+  f.readinessHeader = (payload = f.readinessPayload(), key = f.configuration.AGENT_SHARED_SECRET) =>
+    Buffer.from(JSON.stringify({ payload, signature: signature(key, 'lemtel-standby-readiness-v1', payload) })).toString('base64url');
   const readyMarker = (observedAt = f.now) => ({ format: 'lemtel_do_writer_l7_ready_v1', writer_role: 'do_writer',
     definitive: true, observed_at: observedAt, status: 'healthy' });
   const l7Response = (body, code = 200, url = f.configuration.DO_WRITER_L7_URL, redirected = false) => {
@@ -91,6 +98,11 @@ async function fixture(t) {
   };
   const l7TextResponse = (body, code = 200, url = f.configuration.DO_WRITER_L7_URL) => {
     const raw = new Response(body, { status: code, headers: { 'content-type': 'application/json' } });
+    return { status: raw.status, headers: raw.headers, body: raw.body, url, redirected: false };
+  };
+  const cloudflareEdge = (code, ray, url = f.configuration.DO_WRITER_L7_URL) => {
+    const raw = new Response('<html>origin error</html>', { status: code,
+      headers: { 'content-type': 'text/html', ...(ray ? { 'cf-ray': ray } : {}) } });
     return { status: raw.status, headers: raw.headers, body: raw.body, url, redirected: false };
   };
   const l7EmptyResponse = (code = 404, url = f.configuration.DO_WRITER_L7_URL) => {
@@ -118,6 +130,10 @@ async function fixture(t) {
       if (f.health === 'wrong_host') return l7EmptyResponse(404, `${fakeURL('other-writer')}/lemtel-lb-ready`);
       if (f.health === 'wrong_path') return l7EmptyResponse(404, `${fakeURL('writer')}/unexpected`);
       if (f.health === 'redirect') return l7Response(readyMarker(), 200, f.configuration.DO_WRITER_L7_URL, true);
+      if (f.health === 'origin_down') return cloudflareEdge(522, '8c1f0e2d3a4b5c6d-YUL');
+      if (f.health === 'origin_down_521') return cloudflareEdge(521, '8c1f0e2d3a4b5c6d-YYZ');
+      if (f.health === 'origin_down_no_ray') return cloudflareEdge(522, null);
+      if (f.health === 'edge_524') return cloudflareEdge(524, '8c1f0e2d3a4b5c6d-YUL');
       return l7Response(readyMarker());
     }
     assert.ok(url.startsWith(`${f.configuration.DO_API_BASE_URL}/`), 'only the configured fake provider can be requested');
@@ -138,6 +154,7 @@ async function fixture(t) {
   });
   f.tick = async (advance = 60) => {
     f.now += advance;
+    if (f.autoReady) await f.setReadiness();
     let waited;
     const result = await worker.scheduled({}, f.env, { waitUntil(task) { waited = task; } });
     assert.ok(waited instanceof Promise);
@@ -547,4 +564,77 @@ test('an unrecorded dispatch never releases the command; the incident then requi
   assert.equal(incident.phase, 'blocked');
   assert.equal(incident.reason, 'command_delivery_unknown_manual_review');
   assert.equal((await f.tick()).state, 'blocked');
+});
+
+test('a writer that looks down is never fenced while the standby has not recently proven readiness', async (t) => {
+  const f = await fixture(t);
+  f.autoReady = false;
+  assert.equal((await f.tick()).state, 'incident_suspected');
+  assert.equal((await f.tick()).state, 'incident_suspected');
+  for (let cycle = 0; cycle < 4; cycle += 1) {
+    const result = await f.tick();
+    assert.equal(result.state, 'blocked');
+    assert.equal(result.reason, 'standby_not_ready_no_fencing');
+  }
+  assert.deepEqual(f.posts(), [], 'no provider action without standby readiness');
+  // Stale, negative or incomplete readiness are all refused.
+  for (const payload of [f.readinessPayload({ observed_at: f.now - 600 }), f.readinessPayload({ ready: false }),
+    f.readinessPayload({ standby_in_recovery: false }), f.readinessPayload({ runtime_stage_present: false })]) {
+    await f.setReadiness({ ...payload, observed_at: payload.observed_at === f.now ? f.now + 60 : payload.observed_at });
+    assert.equal((await f.tick()).reason, 'standby_not_ready_no_fencing');
+  }
+  assert.deepEqual(f.posts(), []);
+  f.autoReady = true;
+  assert.equal((await f.tick()).state, 'fence_wait_graceful');
+  assert.deepEqual(f.posts(), ['shutdown']);
+});
+
+test('a standby outage alone never starts an incident: the writer marker stays healthy', async (t) => {
+  const f = await fixture(t);
+  f.health = 'healthy'; f.autoReady = false;
+  for (let cycle = 0; cycle < 5; cycle += 1) assert.equal((await f.tick()).state, 'healthy');
+  assert.deepEqual(f.posts(), []);
+});
+
+test('repeated Cloudflare origin-down answers (521/522) count as a definitive writer failure', async (t) => {
+  const f = await fixture(t);
+  f.health = 'origin_down';
+  assert.equal((await f.tick()).state, 'incident_suspected');
+  f.health = 'origin_down_521';
+  assert.equal((await f.tick()).state, 'incident_suspected');
+  f.health = 'origin_down';
+  assert.equal((await f.tick()).state, 'fence_wait_graceful');
+  assert.deepEqual(f.posts(), ['shutdown']);
+});
+
+test('origin errors without Cloudflare provenance, and other edge errors, stay ambiguous', async (t) => {
+  for (const health of ['origin_down_no_ray', 'edge_524', 'arbitrary_5xx', 'timeout']) {
+    const f = await fixture(t);
+    f.health = health;
+    for (let cycle = 0; cycle < 4; cycle += 1) assert.equal((await f.tick()).reason, 'l7_health_ambiguous_no_fencing', health);
+    assert.deepEqual(f.posts(), [], health);
+  }
+});
+
+test('agent poll records signed readiness; forged, malformed or stale readiness is ignored', async (t) => {
+  const f = await fixture(t);
+  f.autoReady = false;
+  const poll = (header) => worker.fetch(new Request(fakeURL('arbiter') + '/agent/command', { headers: {
+    authorization: `Bearer ${f.configuration.AGENT_SHARED_SECRET}`, ...(header ? { 'x-lemtel-standby-readiness': header } : {}) } }), f.env);
+  for (const make of [() => f.readinessHeader(f.readinessPayload(), secret('wrong-agent')), () => 'not-base64-json!',
+    () => f.readinessHeader(f.readinessPayload({ observed_at: f.now - 600 })), () => f.readinessHeader({ ...f.readinessPayload(), extra: 1 })]) {
+    f.now += 16; // each poll takes the 15 s serializer lease
+    assert.equal((await poll(make())).status, 200);
+    assert.equal(f.values.has(readinessKey), false);
+  }
+  f.now += 16;
+  assert.deepEqual(await (await poll(f.readinessHeader())).json(), { state: 'no_command' });
+  const stored = await f.open(f.values.get(readinessKey));
+  assert.equal(stored.ready, true);
+  assert.equal(stored.observed_at, f.now);
+  assert.ok(!f.values.get(readinessKey).includes('hostinger_standby'), 'readiness is sealed in KV');
+  // An older report never replaces a newer one.
+  f.now += 16;
+  await poll(f.readinessHeader(f.readinessPayload({ observed_at: f.now - 30, ready: false })));
+  assert.equal((await f.open(f.values.get(readinessKey))).ready, true);
 });

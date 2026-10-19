@@ -5,6 +5,11 @@ const VERSION = 'lemtel_failover_execution_v1';
 const STATUS_KEY = `${VERSION}:status`;
 const INCIDENT_KEY = `${VERSION}:incident`;
 const DRILL_KEY = `${VERSION}:production-drill`;
+const READINESS_KEY = `${VERSION}:standby-readiness`;
+const READINESS_HEADER = 'x-lemtel-standby-readiness';
+const READINESS_CONTEXT = 'lemtel-standby-readiness-v1';
+// Cloudflare edge codes that mean the origin itself is down or unreachable (not an application error).
+const ORIGIN_DOWN_CODES = new Set([521, 522, 523]);
 const BOOTSTRAP_KEY_PATH = '/.well-known/lemtel-failover-bootstrap-key';
 const BOOTSTRAP_PATH = '/.well-known/lemtel-failover-bootstrap';
 const BOOTSTRAP_FORMAT = 'lemtel_failover_bootstrap_v1';
@@ -37,7 +42,8 @@ const SAFE_REASONS = new Set([...SAFE_STATES, 'not_found', 'method_not_allowed',
   'writer_healthy', 'promotion_command_expired', 'unknown_phase', 'state_or_protocol_error_manual_review',
   'promotion_command_expired_or_configuration_changed', 'promotion_command_invalid',
   'command_delivery_unknown_manual_review', 'serializer_lease_unavailable',
-  'serializer_lease_expired', 'serializer_incident_refused', 'command_dispatched_to_agent']);
+  'serializer_lease_expired', 'serializer_incident_refused', 'command_dispatched_to_agent',
+  'standby_not_ready_no_fencing']);
 function status(state, reason = state) {
   state = SAFE_STATES.has(state) ? state : 'blocked';
   reason = SAFE_REASONS.has(reason) ? reason : 'state_or_protocol_error_manual_review';
@@ -441,6 +447,10 @@ function exactL7Response(response, requested) {
 }
 async function requestL7(url, options = {}) {
   const response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(8000) });
+  // A Cloudflare edge answer saying the origin is down/unreachable is a definitive negative, like a 404.
+  // It must come from the configured host and path, and carry Cloudflare's cf-ray header.
+  if (ORIGIN_DOWN_CODES.has(response.status) && exactL7Response(response, url) &&
+      /^[0-9a-f]{16}-[A-Z]{3}$/u.test(response.headers.get('cf-ray') || '')) return { code: 'origin_down' };
   if (![200, 404].includes(response.status) || !exactL7Response(response, url)) throw new Error('untrusted_l7_response');
   if (response.status === 404) return { code: 404 };
   if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new Error('untrusted_l7_response');
@@ -462,7 +472,7 @@ async function observe(env, cfg, now, lease) {
     if (!validLease(lease, env) || !protectedStillValid(env)) throw new Error('invalid');
     const observation = await requestL7(cfg.health,
       { headers: { authorization: `Bearer ${env.DO_WRITER_L7_SECRET}` } });
-    if (observation.code === 404) return 'unhealthy';
+    if (observation.code === 404 || observation.code === 'origin_down') return 'unhealthy';
     return healthyL7Marker(observation.body, now) ? 'healthy' : 'ambiguous';
   } catch { return 'ambiguous'; } // Timeout, transport failure and arbitrary 5xx are NOT proof of writer failure.
 }
@@ -561,6 +571,40 @@ async function issueCommand(env, cfg, incident, now, lease) {
   await persist(env, incident);
   return storeStatus(env, status(incident.phase, 'manual_promotion_action_required'));
 }
+// Signed standby readiness, carried by every agent poll. The arbiter never fences the writer unless the
+// standby has recently and positively said it can take over; otherwise a standby outage could turn into
+// a full outage (healthy writer stopped, nothing to promote).
+async function readinessFromHeader(value, env, now) {
+  try {
+    if (typeof value !== 'string' || value.length > 4096) return null;
+    const envelope = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes(value, 2, 3072)));
+    if (!exactKeys(envelope, ['payload', 'signature'])) return null;
+    const p = envelope.payload;
+    if (!exactKeys(p, ['format', 'target_role', 'observed_at', 'ready', 'standby_in_recovery', 'runtime_stage_present']) ||
+        p.format !== 'lemtel_standby_readiness_v1' || p.target_role !== 'hostinger_standby' ||
+        !Number.isSafeInteger(p.observed_at) || p.observed_at > now + 15 || now - p.observed_at > 120 ||
+        typeof p.ready !== 'boolean' || typeof p.standby_in_recovery !== 'boolean' || typeof p.runtime_stage_present !== 'boolean') return null;
+    return await verify(env.AGENT_SHARED_SECRET, READINESS_CONTEXT, p, envelope.signature) ? p : null;
+  } catch { return null; }
+}
+async function recordReadiness(env, readiness, now) {
+  try {
+    const raw = await env.STATE.get(READINESS_KEY);
+    const previous = raw ? (await openState(env, 'readiness', raw, now)).payload : null;
+    if (previous && previous.observed_at >= readiness.observed_at) return;
+  } catch { /* unreadable or expired record: replace it */ }
+  await env.STATE.put(READINESS_KEY, JSON.stringify(await sealState(env, 'readiness', readiness,
+    env.protectedIssuedAt, env.protectedExpiresAt)));
+}
+async function standbyReady(env, cfg, now) {
+  try {
+    const raw = await env.STATE.get(READINESS_KEY);
+    if (!raw) return false;
+    const r = (await openState(env, 'readiness', raw, now)).payload;
+    return r.ready === true && r.standby_in_recovery === true && r.runtime_stage_present === true &&
+      r.observed_at <= now + 15 && now - r.observed_at <= Math.max(180, 2 * cfg.interval + 60);
+  } catch { return false; }
+}
 async function sameSecret(presented, expected) {
   // Compare fixed-length digests so the comparison cost does not depend on the shared secret.
   if (typeof presented !== 'string' || typeof expected !== 'string' || presented.length > 4096) return false;
@@ -577,6 +621,8 @@ async function agentCommand(request, env, cfg, now) {
   const presented = (request.headers.get('authorization') || '').replace(/^Bearer /u, '');
   if (!/^Bearer /u.test(request.headers.get('authorization') || '') ||
       !await sameSecret(presented, env.AGENT_SHARED_SECRET)) return json(status('blocked', 'unauthorized'), 401);
+  const readiness = await readinessFromHeader(request.headers.get(READINESS_HEADER), env, now);
+  if (readiness) await recordReadiness(env, readiness, now);
   const lease = await acquireLease(env);
   if (!lease) return json(status('blocked', 'serializer_lease_unavailable'), 503);
   const raw = await env.STATE.get(INCIDENT_KEY);
@@ -639,6 +685,11 @@ async function tick(env) {
       incident.failure_cycles += 1; incident.phase = 'incident_suspected';
       if (incident.failure_cycles < cfg.cycles) {
         await persist(env, incident); return await storeStatus(env, status(incident.phase));
+      }
+      if (!await standbyReady(env, cfg, now)) {
+        // Writer looks down but the standby has not recently proven it can take over: never fence.
+        await persist(env, incident);
+        return await storeStatus(env, status('blocked', 'standby_not_ready_no_fencing'));
       }
       incident.fencing_started_at = now;
       return await requestFence(env, cfg, incident, 'shutdown', now, lease);

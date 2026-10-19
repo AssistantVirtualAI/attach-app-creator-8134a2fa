@@ -11,11 +11,11 @@
 The marker is written only when the local DigitalOcean writer checks all of the following:
 
 - Caddy, PostgreSQL and Auth containers are running;
-- PostgreSQL is the writer and has a streaming standby;
-- WireGuard and the Storage timer are healthy;
-- the recent Storage integrity attestation is within the local freshness policy; and
+- PostgreSQL is the writer (not in recovery); and
 - the authenticated Auth health route is reachable.
 
-Any failed check removes the marker. On this exact path, Caddy consequently returns `404`; this is the only negative observation the failover arbiter may treat as definitive, and only after a clear HTTPS response from the configured host and exact path. A timeout, transport error, redirect, unexpected host or path, arbitrary `5xx`, a `200` with a non-JSON/stale/non-exact marker, or any other response is **ambiguous** and cannot contribute to fencing.
+The marker deliberately measures **only the writer itself**. Standby-side signals (WireGuard tunnel, streaming replica, Storage copy) are not part of it: a missing marker means "the writer is down" to the arbiter and to the Cloudflare monitor, so a Hostinger or tunnel outage must never make a healthy writer look dead. Standby readiness reaches the arbiter separately, signed by the Hostinger agent.
+
+Any failed check removes the marker. On this exact path, Caddy consequently returns `404`. The failover arbiter treats as definitive only this `404`, or a Cloudflare edge `521`/`522`/`523` (origin down or unreachable) carrying a `cf-ray` header, each from the configured host and exact path. A timeout, transport error, redirect, unexpected host or path, any other `5xx` (including `520`/`524`), a `200` with a non-JSON/stale/non-exact marker, or any other response is **ambiguous** and cannot contribute to fencing.
 
 The endpoint does not change DNS, Cloudflare routing, providers, promotion, fencing, runtime state or telephony.

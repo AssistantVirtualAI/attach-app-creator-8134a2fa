@@ -78,7 +78,7 @@ export function alreadyReplied(callId: string): boolean {
   return !!callId && !!sentSet()[callId];
 }
 
-export type QuickReplyResult = { ok: true } | { ok: false; error: string; duplicate?: boolean };
+export type QuickReplyResult = { ok: boolean; error: string; duplicate?: boolean };
 
 export async function sendQuickReply(args: { callId: string; to: string; text: string }): Promise<QuickReplyResult> {
   const to = quickReplyTarget(args.to);
@@ -97,7 +97,7 @@ export async function sendQuickReply(args: { callId: string; to: string; text: s
   }
   const s = sentSet(); s[callId] = Date.now();
   try { localStorage.setItem(sentKey, JSON.stringify(s)); } catch { /* ignore */ }
-  return { ok: true };
+  return { ok: true, error: "" };
 }
 
 export function quickReplyErrorText(error: string, lang: QuickReplyLang): string {

@@ -16,7 +16,7 @@ describe("quick reply", () => {
     expect(quickReplyTarget("")).toBeNull();
   });
   it("envoie un seul texto par appel avec la clé quick-reply:<callId>", async () => {
-    expect(await sendQuickReply({ callId: "c1", to: "5147071203", text: "Je vous rappelle" })).toEqual({ ok: true });
+    expect(await sendQuickReply({ callId: "c1", to: "5147071203", text: "Je vous rappelle" })).toMatchObject({ ok: true });
     expect(invoke.mock.calls[0][1].body).toMatchObject({ to: "+15147071203", idempotency_key: "quick-reply:c1" });
     const again = await sendQuickReply({ callId: "c1", to: "5147071203", text: "x" });
     expect(again).toMatchObject({ ok: false, duplicate: true });
@@ -29,7 +29,7 @@ describe("quick reply", () => {
   it("échec serveur (aucun numéro texto) n'est pas marqué envoyé", async () => {
     invoke.mockResolvedValueOnce({ data: { ok: false, error_code: "sms_sender_not_assigned" }, error: null });
     expect(await sendQuickReply({ callId: "c3", to: "5147071203", text: "x" })).toMatchObject({ ok: false });
-    expect(await sendQuickReply({ callId: "c3", to: "5147071203", text: "x" })).toEqual({ ok: true });
+    expect(await sendQuickReply({ callId: "c3", to: "5147071203", text: "x" })).toMatchObject({ ok: true });
   });
   it("textes personnalisés par utilisateur", () => {
     saveQuickReplies("u1", { meeting: "En rendez-vous" });
@@ -43,7 +43,7 @@ describe("quick reply", () => {
   });
   it("action notification envoie le texte choisi", async () => {
     const r = await handleQuickReplyAction("qr_callback", { callId: "c5", to: "+15147071203", expiresAt: String(Date.now() + 60000) });
-    expect(r).toEqual({ ok: true });
+    expect(r).toMatchObject({ ok: true });
     expect(invoke.mock.calls[0][1].body.message).toBe(DEFAULT_QUICK_REPLIES.fr.callback);
   });
 });

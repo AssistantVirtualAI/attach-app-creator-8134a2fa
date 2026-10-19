@@ -667,23 +667,59 @@ async function agentCommand(request, env, cfg, now) {
   await storeStatus(env, status('manual_promotion_action_required', 'command_dispatched_to_agent'));
   return json({ state: 'command_available', command: incident.command });
 }
-// The incident record survives a new sealed configuration (re-bootstrap = new CONFIG_REVISION).
-// A record from the current revision is used as is. A record from an earlier revision is superseded
-// only if it provably never reached a destructive step (decrypted, non-destructive phase, no fence
-// action, no command). Anything else (blocked, fencing, command, unreadable) stays untouched in KV
-// and is reported for manual reconciliation: a new configuration never erases an in-flight fence.
-async function loadIncident(env, raw, now) {
+// Provider proof that no fence ever happened since a given time: the writer droplet is active and its
+// complete DigitalOcean action history holds no shutdown/power_off started at or after `since`.
+// Every fence (and therefore every promotion command) goes through exactly such an action, so this is
+// authoritative even when the incident record itself can no longer be decrypted.
+const FENCE_HISTORY_PAGE_SIZE = 10, FENCE_HISTORY_MAX_PAGES = 20;
+async function noFenceSince(env, cfg, lease, since) {
+  const id = env.DO_WRITER_DROPLET_ID;
+  const { droplet } = await provider(env, cfg, `/droplets/${id}`, undefined, lease);
+  if (String(droplet?.id) !== id || droplet.status !== 'active') return false;
+  let seen = 0;
+  for (let page = 1; page <= FENCE_HISTORY_MAX_PAGES; page += 1) {
+    const body = await provider(env, cfg, `/droplets/${id}/actions?page=${page}&per_page=${FENCE_HISTORY_PAGE_SIZE}`, undefined, lease);
+    const total = body?.meta?.total;
+    if (!Array.isArray(body?.actions) || !Number.isSafeInteger(total) || total < 0 ||
+        total > FENCE_HISTORY_PAGE_SIZE * FENCE_HISTORY_MAX_PAGES) return false;
+    for (const action of body.actions) {
+      const started = Date.parse(action?.started_at);
+      if (String(action?.resource_id) !== id || action.resource_type !== 'droplet' || typeof action.type !== 'string' ||
+          !Number.isFinite(started)) return false;
+      if ((action.type === 'shutdown' || action.type === 'power_off') && Math.floor(started / 1000) >= since - 60) return false;
+    }
+    seen += body.actions.length;
+    if (seen >= total) return seen === total;
+    if (body.actions.length === 0) return false;
+  }
+  return false;
+}
+// The incident record survives a new sealed configuration (re-bootstrap = new CONFIG_REVISION, and a
+// new state key: records of earlier revisions can no longer be decrypted). A record from the current
+// revision is used as is. A record from an earlier revision is superseded only if it provably never
+// reached a destructive step: decrypted and in a non-destructive phase, or (unreadable) the provider
+// proves no fence since that revision was issued. Anything else stays untouched in KV and is reported
+// for manual reconciliation: a new configuration never erases an in-flight fence.
+async function loadIncident(env, raw, now, cfg, lease) {
   const fresh = () => ({ version: VERSION, config_revision: env.CONFIG_REVISION,
     phase: 'observation', failure_cycles: 0, last_cycle_at: 0 });
   if (!raw) return { incident: fresh() };
   const recordRevision = JSON.parse(raw)?.config_revision;
   if (recordRevision === env.CONFIG_REVISION) return { incident: (await openState(env, 'incident', raw, now)).payload };
-  try {
-    const previous = (await openState(env, 'incident', raw, now, recordRevision)).payload;
+  let previous;
+  try { previous = (await openState(env, 'incident', raw, now, recordRevision)).payload; }
+  catch (error) { diag('previous_incident_unreadable', error); }
+  if (previous) {
     if (previous.version === VERSION && previous.config_revision === recordRevision &&
         NON_DESTRUCTIVE_PHASES.has(previous.phase) && previous.fencing_started_at === undefined &&
         previous.action_id === undefined && previous.command === undefined) return { incident: fresh() };
-  } catch (error) { diag('previous_incident', error); }
+    return { denied: status('blocked', 'previous_revision_incident_manual_review') };
+  }
+  try {
+    const since = JSON.parse(raw)?.issued_at;
+    if (cfg && lease && Number.isSafeInteger(since) && since > 0 && since <= now &&
+        await noFenceSince(env, cfg, lease, since)) return { incident: fresh() };
+  } catch (error) { diag('previous_incident_provider_proof', error); }
   return { denied: status('blocked', 'previous_revision_incident_manual_review') };
 }
 async function tick(env) {
@@ -699,7 +735,7 @@ async function tick(env) {
     if (!lease) return await storeStatus(env, status('blocked', 'serializer_lease_unavailable'));
     const denied = await readiness(env, cfg, now);
     if (denied) return await storeStatus(env, denied);
-    const loaded = await loadIncident(env, await env.STATE.get(INCIDENT_KEY), now);
+    const loaded = await loadIncident(env, await env.STATE.get(INCIDENT_KEY), now, cfg, lease);
     if (loaded.denied) return await storeStatus(env, loaded.denied);
     const incident = loaded.incident;
     if (incident.version !== VERSION || incident.config_revision !== env.CONFIG_REVISION) {

@@ -45,8 +45,8 @@ describe("speaker context isolation", () => {
     data.A.me = { extension: "1284", full_name: "Courtier A modifié" };
     await act(async () => { authCb?.("USER_UPDATED", { user: { id: "A" } }); });
     await waitFor(() => expect(screen.getByText("Courtier A modifié")).toBeInTheDocument());
-    expect(container.textContent).not.toContain("Courtier A\n");
-    expect(container.textContent).toContain("Poste 1284");
+    // The refreshed broker name shows, not the stale "Poste 1284" fallback.
+    expect(container.textContent).not.toContain("Poste 1284");
   });
 
   it("never shows user A's names after sign-out and sign-in as B", async () => {

@@ -17,6 +17,7 @@ export const SOURCE_PATH = resolve(fileURLToPath(new URL('..', import.meta.url))
 export const MAIN_MODULE = 'lemtel-failover-arbiter-worker.mjs';
 export const CRON = '* * * * *';
 export const CONFIG_TTL_SECONDS = 89 * 86400;
+export const PRODUCTION_ACK = 'I_AUTHORIZE_PERMANENT_AUTOMATIC_FAILOVER_AFTER_SUCCESSFUL_DRILL';
 export const POLICY = Object.freeze({
   DO_API_BASE_URL: 'https://api.digitalocean.com/v2',
   DO_WRITER_L7_URL: 'https://lemtel-do-l7.assistantvirtualai.com/lemtel-lb-ready',
@@ -52,21 +53,28 @@ export function readGates(env) {
   gate(Array.isArray(agentCommand) && agentCommand.length > 0 && agentCommand.every((part) => typeof part === 'string'), 'agent_sink_invalid');
   gate(Array.isArray(drillCommand) && drillCommand.length > 0 && drillCommand.every((part) => typeof part === 'string'), 'drill_sink_invalid');
   gate(typeof env.LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT === 'string' && env.LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT.startsWith('/'), 'agent_remote_script_invalid');
-  // Optional, explicit: a short supervised-drill authorization (1–4 h) written right after the bootstrap.
+  // Optional, explicit authorization written right after the bootstrap:
+  //   supervised_review_drill:<1-4>  : a short supervised drill (hours);
+  //   production_authorization:<1-89>: permanent operation after a successful real drill (days, at most the sealed
+  //                                    configuration's lifetime). Needs its own acknowledgement phrase; renewed by a
+  //                                    new bootstrap (new revision) before expiry.
   const drill = env.LEMTEL_DRILL_AUTHORIZATION || 'none';
   const match = /^supervised_review_drill:([1-4])$/u.exec(drill);
-  gate(drill === 'none' || match, 'drill_authorization_invalid');
+  const production = /^production_authorization:([1-9]\d?)$/u.exec(drill);
+  gate(drill === 'none' || match || (production && Number(production[1]) <= CONFIG_TTL_SECONDS / 86400), 'drill_authorization_invalid');
+  gate(!production || env.LEMTEL_PRODUCTION_AUTHORIZATION_ACK === PRODUCTION_ACK, 'production_authorization_requires_acknowledgement');
   // Optional, explicit: the agent really promotes Hostinger (full drill). Requires the supervised drill authorization
   // and the agent's own acknowledgement phrase; the default stays review (validate, never promote).
   const promotionMode = env.LEMTEL_AGENT_PROMOTION_MODE || 'review';
   gate(promotionMode === 'review' || promotionMode === 'execute', 'agent_promotion_mode_invalid');
-  gate(promotionMode === 'review' || (match && env.LEMTEL_AGENT_EXECUTE_ACK === 'I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER'),
+  gate(promotionMode === 'review' || ((match || production) && env.LEMTEL_AGENT_EXECUTE_ACK === 'I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER'),
     'agent_execute_requires_drill_authorization_and_acknowledgement');
   return { promotionMode, accountId: env.LEMTEL_CF_TARGET_ACCOUNT_ID, sourceSha256: env.LEMTEL_CF_EXPECTED_SOURCE_SHA256,
     compatibilityDate: env.LEMTEL_CF_COMPATIBILITY_DATE, revision: env.LEMTEL_CF_CONFIG_REVISION,
     dropletId: env.LEMTEL_DO_WRITER_DROPLET_ID, origin: origin.origin, cfToken: env.CLOUDFLARE_API_TOKEN,
     doToken: env.LEMTEL_DO_ARBITER_TOKEN, agentCommand, drillCommand, agentRemoteScript: env.LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT,
-    drillHours: match ? Number(match[1]) : 0 };
+    authorizationKind: production ? 'production_after_validated_drill' : match ? 'supervised_review_drill' : 'none',
+    authorizationSeconds: production ? Number(production[1]) * 86400 : match ? Number(match[1]) * 3600 : 0 };
 }
 
 export function versionMetadata(compatibilityDate, bindings) {
@@ -190,7 +198,8 @@ export async function runBootstrap({ env = process.env, fetchImpl = globalThis.f
   // 5. Sealed bootstrap: bootstrap mode only for the injection, then disabled in all cases.
   const session = await createBootstrapSession(g.revision);
   let keyProvisioned = false;
-  const result = await injectBootstrapConfiguration({ session, configuration, now: now(), configTTL: CONFIG_TTL_SECONDS,
+  const configIssuedAt = now();
+  const result = await injectBootstrapConfiguration({ session, configuration, now: configIssuedAt, configTTL: CONFIG_TTL_SECONDS,
     enterBootstrap: async () => {
       await deploy(bootstrapBindings(session), 'bootstrap_version_failed');
       keyProvisioned = true;
@@ -228,12 +237,14 @@ export async function runBootstrap({ env = process.env, fetchImpl = globalThis.f
   gate(agent.ok, 'hostinger_agent_config_failed');
   // 7. Optional supervised-drill authorization: signed with the drill secret, sealed with the state key, both
   //    only in memory, written to the arbiter KV. It never changes the mode (still disabled).
-  if (g.drillHours) {
+  if (g.authorizationSeconds) {
     const issued = now();
     const payload = { format: 'lemtel_production_destructive_drill_v1', config_revision: g.revision,
       writer_role: 'do_writer', target_role: 'hostinger_standby', writer_droplet_id: g.dropletId,
       destructive_drill_validated: true, serialized_execution_verified: true,
-      authorization_kind: 'supervised_review_drill', validated_at: issued, expires_at: issued + g.drillHours * 3600 };
+      authorization_kind: g.authorizationKind, validated_at: issued,
+      // Never outlives the sealed configuration it authorizes.
+      expires_at: Math.min(issued + g.authorizationSeconds, configIssuedAt + CONFIG_TTL_SECONDS) };
     const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(drillSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const signature = Buffer.from(await crypto.subtle.sign('HMAC', key,
       new TextEncoder().encode(`lemtel-production-drill-v1\n${canonical(payload)}`))).toString('hex');
@@ -246,9 +257,12 @@ export async function runBootstrap({ env = process.env, fetchImpl = globalThis.f
       { method: 'PUT', headers: { authorization: `Bearer ${g.cfToken}`, 'content-type': 'text/plain' }, body: JSON.stringify(sealed), redirect: 'error' }); }
     catch { response = null; }
     gate(response?.ok && (await response.json().catch(() => null))?.success === true, 'drill_authorization_write_failed');
-    log(`supervised_drill_authorization=written_valid_${g.drillHours}h`);
+    log(g.authorizationKind === 'supervised_review_drill'
+      ? `supervised_drill_authorization=written_valid_${g.authorizationSeconds / 3600}h`
+      : `production_authorization=written_valid_${g.authorizationSeconds / 86400}d_expires_${new Date(payload.expires_at * 1000).toISOString().slice(0, 10)}`);
   }
-  return { state: 'complete', revision: g.revision, failover_mode: 'disabled', promotion_mode: 'review' };
+  return { state: 'complete', revision: g.revision, failover_mode: 'disabled', promotion_mode: g.promotionMode,
+    authorization_kind: g.authorizationKind };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

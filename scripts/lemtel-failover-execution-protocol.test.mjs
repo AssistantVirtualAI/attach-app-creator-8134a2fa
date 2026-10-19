@@ -505,8 +505,10 @@ test('agent keeps network and provider control in the arbiter, validates a fixed
 });
 
 test('service and timer are uninstalled, unenabled templates with no Install/WantedBy or active mode', () => {
+  assert.match(service, /NOT installed, NOT enabled, NOT started/u);
+  // The timer is never enabled through an Install section; the only boot start is the explicit link of start_permanent.
+  assert.match(timer, /explicit timers\.target\.wants link created by `start_permanent` and removed by `stop`/u);
   for (const text of [service, timer]) {
-    assert.match(text, /NOT installed, NOT enabled, NOT started/u);
     assert.doesNotMatch(text, /^\s*(?:\[Install\]|WantedBy=|RequiredBy=|Also=|Alias=)/mu);
     assert.doesNotMatch(text, /FAILOVER_MODE=active|ExecStartPre=|ExecStartPost=|ExecReload=/u);
   }
@@ -712,6 +714,10 @@ test('agent control prepares the evidence directory, never promotes, and archive
   assert.match(control, /install -d -o root -g root -m 0700 "\$EVIDENCE"/u);
   assert.ok(control.indexOf('install -d -o root -g root -m 0700 "$EVIDENCE"') < control.indexOf('systemctl start lemtel-ha-hostinger-failover-agent.timer'));
   assert.match(control, /fail stop_the_agent_first/u);
+  // Permanent mode: boot link only with an execute configuration; plain start and stop always remove it.
+  assert.match(control, /grep -qx 'PROMOTION_EXECUTION_MODE=execute' \/etc\/lemtel-ha\/failover-agent\.env \|\| fail permanent_requires_execute_configuration/u);
+  assert.match(control, /ln -sfn \/etc\/systemd\/system\/lemtel-ha-hostinger-failover-agent\.timer "\$BOOT_LINK"/u);
+  assert.match(control, /stop\)\n    rm -f -- "\$BOOT_LINK"/u);
   assert.doesNotMatch(control, /pg_ctl|promote\.sh|runtime-start\.sh|>\s*\/etc\/lemtel-ha\/failover-agent\.env|EXECUTION_ACK/u);
   assert.match(service, /^TimeoutStartSec=600s$/mu);
   assert.match(service, /ReadWritePaths=.*\/etc\/systemd\/system/u);

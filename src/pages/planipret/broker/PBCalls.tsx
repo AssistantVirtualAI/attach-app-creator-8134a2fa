@@ -11,6 +11,7 @@ import { fmtDateTime, fmtDuration, callPeer } from "@/lib/planipret/brokerFormat
 import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
 import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
 import ppBanner from "@/assets/planipret/banner-calls.jpg";
+import { TranscriptConversation, normalizeTranscriptTurns } from "@/components/planipret/mobile/call/TranscriptConversation";
 
 const PAGE_SIZE = 25;
 
@@ -171,7 +172,9 @@ export default function PBCalls() {
             {detail.transcript && (
               <div className="mt-4">
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--pp-text-muted)", textTransform: "uppercase" }}>{lang === "en" ? "Transcript" : "Transcription"}</div>
-                <p style={{ fontSize: 12.5, color: "var(--pp-text-secondary)", marginTop: 4, whiteSpace: "pre-wrap" }}>{detail.transcript}</p>
+                <div style={{ marginTop: 4 }}>
+                  <TranscriptConversation turns={normalizeTranscriptTurns(detail.transcript_segments, detail.transcript)} english={lang === "en"} />
+                </div>
               </div>
             )}
           </div>

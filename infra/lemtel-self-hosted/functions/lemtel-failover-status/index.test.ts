@@ -1,7 +1,7 @@
-import nodeAssert from "node:assert/strict";
+import { assert, assertEquals } from "../_shared/lemtelTestAssert.ts";
 import { collect, handle } from "./index.ts";
 
-const eq = (a: unknown, b: unknown, m?: string) => nodeAssert.deepStrictEqual(a, b, m);
+const eq = assertEquals;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
 const ACCOUNT = "8a53f376e1cba00708efaa1bba562c33";
 
@@ -21,7 +21,7 @@ Deno.test("real signals: arbiter ON, site served by DigitalOcean, pools healthy 
   eq(s.arbiter, { reachable: true, automaticFailover: "on", state: "healthy", reason: "healthy" });
   eq(s.routing, { servingRole: "do_writer", httpStatus: 200 });
   eq(s.loadBalancer.pools, [{ role: "do_writer", healthy: true, enabled: true }, { role: "hostinger_standby", healthy: true, enabled: true }]);
-  nodeAssert.ok(!JSON.stringify(s).includes("1.2.3.4") && !JSON.stringify(s).includes("secret_field"));
+  assert(!JSON.stringify(s).includes("1.2.3.4") && !JSON.stringify(s).includes("secret_field"));
 });
 
 Deno.test("arbiter disabled -> OFF; unreachable signals stay unknown (never guessed)", async () => {

@@ -1,7 +1,4 @@
-import nodeAssert from "node:assert/strict";
-function assert(v: unknown, m?: string): asserts v { nodeAssert.ok(v, m); }
-const assertEquals = (a: unknown, b: unknown, m?: string) => nodeAssert.deepStrictEqual(a, b, m);
-const assertMatch = (a: string, r: RegExp) => nodeAssert.match(a, r);
+import { assert, assertEquals, assertMatch } from "./lemtelTestAssert.ts";
 import {
   activationBlocker, buildSipRequest, digestAuthorization, extensionAad, isInvalid, loadSecretKey, md5, openSecret, optionsPing,
   parseAssignment, parseChallenge, parseSecret, parseSettings, registrationProbe, sealSecret, summarize, turnCredential,

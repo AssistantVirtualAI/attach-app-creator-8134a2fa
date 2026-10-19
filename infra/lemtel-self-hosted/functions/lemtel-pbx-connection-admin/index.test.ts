@@ -1,12 +1,12 @@
 // End-to-end (offline): portal intake -> validation against a fake FusionPBX over WSS -> activation ->
 // Mobile/Desktop provisioning. In-memory Supabase fake; no network.
-import nodeAssert from "node:assert/strict";
+import { assert, assertEquals } from "../_shared/lemtelTestAssert.ts";
 import { handle as adminHandle, validateBody } from "./index.ts";
 import { handle as provisionHandle } from "../lemtel-softphone-provisioning/index.ts";
 import { digestAuthorization, parseChallenge, type SocketLike } from "../_shared/lemtelPbxConnection.ts";
 
-const eq = (a: unknown, b: unknown, m?: string) => nodeAssert.deepStrictEqual(a, b, m);
-const ok = (v: unknown, m?: string) => nodeAssert.ok(v, m);
+const eq = assertEquals;
+const ok = (v: unknown, m?: string) => assert(v, m);
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const ADMIN = "22222222-2222-4222-8222-222222222222";

@@ -143,7 +143,9 @@ export async function runBootstrap({ env = process.env, fetchImpl = globalThis.f
       { ...init, headers: { authorization: `Bearer ${g.cfToken}`, ...(init.headers || {}) }, redirect: 'error' }); }
     catch { throw new BootstrapGateError(code); }
     const payload = await response.json().catch(() => null);
-    gate(response.ok && payload?.success === true, code);
+    // Cloudflare error code (numeric) or HTTP status is kept in the reason: enough to diagnose, nothing secret.
+    const cfCode = Number.isSafeInteger(payload?.errors?.[0]?.code) ? payload.errors[0].code : response.status;
+    gate(response.ok && payload?.success === true, `${code}_cf_${cfCode}`);
     return payload.result;
   };
   const deploy = async (bindings, code) => {
@@ -255,7 +257,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.info('automatic_failover_active=false');
     console.info('arbiter_bootstrap_status=complete');
   }).catch((error) => {
-    console.error(`arbiter_bootstrap_status=blocked\nreason=${error instanceof BootstrapGateError ? error.code : 'unexpected_error'}`);
+    const reason = error instanceof BootstrapGateError ? error.code
+      : /^bootstrap_[a-z_]+(:[a-z0-9_]+)?$/u.test(String(error?.message)) ? error.message : 'unexpected_error';
+    console.error(`arbiter_bootstrap_status=blocked\nreason=${reason}`);
     process.exitCode = 1;
   });
 }

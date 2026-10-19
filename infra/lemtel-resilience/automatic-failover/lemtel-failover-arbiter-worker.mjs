@@ -47,6 +47,14 @@ const SAFE_REASONS = new Set([...SAFE_STATES, 'not_found', 'method_not_allowed',
   'command_delivery_unknown_manual_review', 'serializer_lease_unavailable',
   'serializer_lease_expired', 'serializer_incident_refused', 'command_dispatched_to_agent',
   'standby_not_ready_no_fencing']);
+// Diagnostics for Workers Logs / tail: step, error class and a short message with anything token-like removed.
+// Never logs configuration, request bodies, signatures, identifiers or secrets.
+function diag(step, error) {
+  try {
+    const message = String(error?.message ?? '').replace(/[A-Za-z0-9+/_=.-]{20,}/gu, '[redacted]').slice(0, 160);
+    console.error(JSON.stringify({ lemtel_arbiter_error: step, name: String(error?.name ?? 'Error').slice(0, 40), message }));
+  } catch { /* logging must never change the outcome */ }
+}
 function status(state, reason = state) {
   state = SAFE_STATES.has(state) ? state : 'blocked';
   reason = SAFE_REASONS.has(reason) ? reason : 'state_or_protocol_error_manual_review';
@@ -158,7 +166,7 @@ async function serializerMessage(request) {
     const url = new URL(request.url);
     if (url.origin !== serializerOrigin() || url.search || url.hash) return null;
     return { path: url.pathname, body: await responseJSON(request) };
-  } catch { return null; }
+  } catch (error) { diag('serializer_message', error); return null; }
 }
 
 // This class belongs to the same Worker module but has no public route. Only a Durable Object binding can address it.
@@ -192,7 +200,7 @@ export class LemtelFailoverSerializer {
         return lease;
       });
       return result ? serializerGranted(result) : serializerRefused();
-    } catch { return serializerRefused(); }
+    } catch (error) { diag('serializer_lease_tx', error); return serializerRefused(); }
   }
 
   async recordIntent(body, now) {
@@ -213,7 +221,7 @@ export class LemtelFailoverSerializer {
         return lease;
       });
       return result ? serializerGranted(result) : serializerRefused();
-    } catch { return serializerRefused(); }
+    } catch (error) { diag('serializer_intent_tx', error); return serializerRefused(); }
   }
 }
 
@@ -223,7 +231,7 @@ function serializerStub(env) {
         typeof env.ARBITER_SERIALIZER.get !== 'function') return null;
     const stub = env.ARBITER_SERIALIZER.get(env.ARBITER_SERIALIZER.idFromName(SERIALIZER_SINGLETON_NAME));
     return stub && typeof stub.fetch === 'function' ? stub : null;
-  } catch { return null; }
+  } catch (error) { diag('serializer_stub', error); return null; }
 }
 function validLease(lease, env) {
   if (!lease || typeof lease !== 'object') return false;
@@ -238,7 +246,7 @@ async function serializerCall(stub, path, body) {
     if (response.status !== 200 || !response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) return null;
     const reply = await responseJSON(response);
     return serializerReply(reply) ? reply.lease : null;
-  } catch { return null; }
+  } catch (error) { diag('serializer_call', error); return null; }
 }
 async function acquireLease(env) {
   const stub = serializerStub(env), execution_key = crypto.randomUUID();
@@ -323,7 +331,7 @@ async function config(env, now) {
       STATE: env.STATE, ARBITER_SERIALIZER: env.ARBITER_SERIALIZER, CONFIG_REVISION: env.CONFIG_REVISION,
       CONFIG_STATE_ENCRYPTION_KEY: env.CONFIG_STATE_ENCRYPTION_KEY,
       protectedIssuedAt: payload.issued_at, protectedExpiresAt: payload.expires_at } };
-  } catch { return { denied: status('blocked', 'protected_configuration_unavailable') }; }
+  } catch (error) { diag('protected_config', error); return { denied: status('blocked', 'protected_configuration_unavailable') }; }
 }
 async function bootstrap(request, env, path, now) {
   // HTTP bootstrap is disjoint from readiness/tick/provider/command delivery. Never changes mode.
@@ -397,7 +405,7 @@ async function storeStatus(env, value) {
   try {
     if (env.STATE && typeof env.STATE.put === 'function') await env.STATE.put(STATUS_KEY, JSON.stringify(value));
     return value;
-  } catch { return status('blocked', 'state_unavailable'); }
+  } catch (error) { diag('store_status', error); return status('blocked', 'state_unavailable'); }
 }
 async function readiness(env, cfg, now) {
   if (cfg.denied) return cfg.denied;
@@ -416,7 +424,7 @@ async function readiness(env, cfg, now) {
       return status('blocked', 'production_drill_or_serialization_not_verified');
     }
     return null;
-  } catch { return status('blocked', 'state_or_drill_receipt_invalid'); }
+  } catch (error) { diag('drill_gate', error); return status('blocked', 'state_or_drill_receipt_invalid'); }
 }
 // Cloudflare Workers reject the "error" redirect mode (every request would throw). `manual` returns any 3xx as-is,
 // and a 3xx is never an accepted status here, so a redirect is still refused, never followed.
@@ -432,15 +440,19 @@ async function responseJSON(response) {
   const reader = response.body.getReader();
   let text = '', size = 0;
   const decoder = new TextDecoder();
+  let finished = false;
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) { finished = true; break; }
       size += value.byteLength;
       if (size > 65536) throw new Error('response_too_large');
       text += decoder.decode(value, { stream: true });
     }
-  } finally { await reader.cancel(); }
+  } finally {
+    // Cancel only an unfinished stream (oversized/aborted); cancelling a finished one can throw on Workers.
+    if (finished) reader.releaseLock(); else await reader.cancel().catch(() => {});
+  }
   return JSON.parse(text + decoder.decode());
 }
 function exactL7Response(response, requested) {
@@ -481,7 +493,7 @@ async function observe(env, cfg, now, lease) {
       { headers: { authorization: `Bearer ${env.DO_WRITER_L7_SECRET}` } });
     if (observation.code === 404 || observation.code === 'origin_down') return 'unhealthy';
     return healthyL7Marker(observation.body, now) ? 'healthy' : 'ambiguous';
-  } catch { return 'ambiguous'; } // Timeout, transport failure and arbitrary 5xx are NOT proof of writer failure.
+  } catch (error) { diag('l7_observe', error); return 'ambiguous'; } // Timeout, transport failure and arbitrary 5xx are NOT proof of writer failure.
 }
 async function provider(env, cfg, path, actionType, lease) {
   if (!validLease(lease, env) || !protectedStillValid(env)) throw new Error('invalid');
@@ -522,7 +534,7 @@ async function requestFence(env, cfg, incident, type, now, lease) {
     if (type === 'shutdown') incident.graceful_requested_at = now;
     await persist(env, incident);
     return storeStatus(env, status(incident.phase));
-  } catch { return blockIncident(env, incident, 'fence_request_outcome_unknown_manual_review'); }
+  } catch (error) { diag('fence_request', error); return blockIncident(env, incident, 'fence_request_outcome_unknown_manual_review'); }
 }
 async function pollFence(env, cfg, incident, now, lease) {
   if (!validLease(lease, env)) return blockIncident(env, incident, 'serializer_lease_expired');
@@ -533,7 +545,7 @@ async function pollFence(env, cfg, incident, now, lease) {
     ({ droplet } = await provider(env, cfg, `/droplets/${env.DO_WRITER_DROPLET_ID}`, undefined, lease));
     if (!validAction(action, env, incident.action_type, incident.action_id) ||
         String(droplet?.id) !== env.DO_WRITER_DROPLET_ID || !['active', 'off'].includes(droplet.status)) throw new Error('ambiguous');
-  } catch { return blockIncident(env, incident, 'provider_terminal_state_ambiguous'); }
+  } catch (error) { diag('fence_poll', error); return blockIncident(env, incident, 'provider_terminal_state_ambiguous'); }
   if (droplet.status === 'off' && action.status === 'completed') {
     incident.power_confirmations = (incident.power_confirmations || 0) + 1;
     incident.phase = incident.power_confirmations >= 2 ? 'fence_verified' : 'fence_poll_terminal';
@@ -592,14 +604,14 @@ async function readinessFromHeader(value, env, now) {
         !Number.isSafeInteger(p.observed_at) || p.observed_at > now + 15 || now - p.observed_at > 120 ||
         typeof p.ready !== 'boolean' || typeof p.standby_in_recovery !== 'boolean' || typeof p.runtime_stage_present !== 'boolean') return null;
     return await verify(env.AGENT_SHARED_SECRET, READINESS_CONTEXT, p, envelope.signature) ? p : null;
-  } catch { return null; }
+  } catch (error) { diag('readiness_header', error); return null; }
 }
 async function recordReadiness(env, readiness, now) {
   try {
     const raw = await env.STATE.get(READINESS_KEY);
     const previous = raw ? (await openState(env, 'readiness', raw, now)).payload : null;
     if (previous && previous.observed_at >= readiness.observed_at) return;
-  } catch { /* unreadable or expired record: replace it */ }
+  } catch (error) { diag('readiness_record', error); /* unreadable or expired record: replace it */ }
   await env.STATE.put(READINESS_KEY, JSON.stringify(await sealState(env, 'readiness', readiness,
     env.protectedIssuedAt, env.protectedExpiresAt)));
 }
@@ -610,7 +622,7 @@ async function standbyReady(env, cfg, now) {
     const r = (await openState(env, 'readiness', raw, now)).payload;
     return r.ready === true && r.standby_in_recovery === true && r.runtime_stage_present === true &&
       r.observed_at <= now + 15 && now - r.observed_at <= Math.max(180, 2 * cfg.interval + 60);
-  } catch { return false; }
+  } catch (error) { diag('readiness_check', error); return false; }
 }
 async function sameSecret(presented, expected) {
   // Compare fixed-length digests so the comparison cost does not depend on the shared secret.
@@ -713,7 +725,7 @@ async function tick(env) {
       return await storeStatus(env, status('manual_promotion_action_required'));
     }
     return await blockIncident(env, incident, 'unknown_phase');
-  } catch { return await storeStatus(env, status('blocked', 'state_or_protocol_error_manual_review')); }
+  } catch (error) { diag('tick', error); return await storeStatus(env, status('blocked', 'state_or_protocol_error_manual_review')); }
   finally { tickRunning = false; }
 }
 
@@ -733,7 +745,7 @@ export default {
       // Any missing gate hides the mailbox entirely: same answer as an unknown route, no state written.
       if (cfg.denied || !serializerStub(env) || await readiness(env, cfg, now)) return json(status('blocked', 'not_found'), 404);
       try { return await agentCommand(request, env, cfg, now); }
-      catch { return json(status('blocked', 'state_or_protocol_error_manual_review'), 503); }
+      catch (error) { diag('agent_mailbox', error); return json(status('blocked', 'state_or_protocol_error_manual_review'), 503); }
     }
     // Do not mint a lease for a read-only status request, but missing/invalid binding remains fail-closed.
     if (!serializerStub(env)) {
@@ -748,7 +760,7 @@ export default {
     try {
       const saved = JSON.parse(await env.STATE.get(STATUS_KEY) || 'null');
       return json(saved ? status(saved.state, saved.reason) : status('observation'));
-    } catch { return json(status('blocked', 'state_unavailable'), 503); }
+    } catch (error) { diag('status_read', error); return json(status('blocked', 'state_unavailable'), 503); }
   },
   async scheduled(_controller, env, ctx) {
     const task = tick(env);

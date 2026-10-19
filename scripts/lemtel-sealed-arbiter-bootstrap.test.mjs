@@ -107,7 +107,10 @@ test('explicit crypto and secret binding boundaries; no imports/logs/cleartext K
   assert.match(source, /await env\.STATE\.put\(configKey, JSON\.stringify\(sealed\)\)/u);
   assert.match(source, /await env\.STATE\.put\(INCIDENT_KEY, JSON\.stringify\(sealed\)\)/u);
   assert.doesNotMatch(source, /\.put\([^\n]*JSON\.stringify\((?:payload|incident|configuration|privateJWK)\)/u);
-  assert.doesNotMatch(source + controllerSource, /console\.|process\.env|writeFile|readFile|localStorage|-----BEGIN|dop_v1_|github_pat_|ghp_/u);
+  // Exactly one log sink: the redacted diag() helper (step, error class, token-stripped message).
+  assert.equal((source.match(/console\./gu) || []).length, 1);
+  assert.match(source, /function diag\(step, error\) \{[\s\S]*?replace\(\/\[A-Za-z0-9\+\/_=\.-\]\{20,\}\/gu, '\[redacted\]'\)[\s\S]*?console\.error/u);
+  assert.doesNotMatch(source.replace(/function diag\(step, error\) \{[\s\S]*?\n\}\n/u, '') + controllerSource, /console\.|process\.env|writeFile|readFile|localStorage|-----BEGIN|dop_v1_|github_pat_|ghp_/u);
   assert.doesNotMatch(source, /^\s*import\s|load_balancers|dns_records|\/zones\/|\/accounts\//mu);
   assert.match(source, /const ROUTING_ENABLED = false/u);
   assert.match(source, /automatic_failback_enabled: false/u);

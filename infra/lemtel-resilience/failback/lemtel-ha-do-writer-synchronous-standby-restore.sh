@@ -11,7 +11,19 @@ fail() { printf 'do_synchronous_standby_restore_status=failed\nreason=%s\n' "$1"
 [ -n "$T" ] || [ "$(id -u)" -eq 0 ] || fail root_required
 [ "${LEMTEL_HA_EXECUTE:-}" = restore_do_synchronous_hostinger_standby ] || fail execution_token_required
 container='lemtel-postgres-standby'
-psql() { docker exec -u postgres "$container" psql -X -At -d postgres -v ON_ERROR_STOP=1 -c "$1"; }
+# Supabase images: the role "postgres" is NOT a superuser (no CHECKPOINT, pg_promote, ALTER SYSTEM, pg_hba_file_rules).
+# The cluster superuser is supabase_admin, trusted on the container loopback. The session is chosen and PROVEN superuser
+# before any change; a plain socket session is kept only when that role really is superuser.
+su_args=()
+pick_superuser() {
+  if [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$container" psql -X -At -d postgres -h 127.0.0.1 -U supabase_admin -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ]; then
+    su_args=(-h 127.0.0.1 -U supabase_admin); return 0
+  fi
+  [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$container" psql -X -At -d postgres -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ] && { su_args=(); return 0; }
+  return 1
+}
+psql() { docker exec -u postgres "$container" psql -X -At -d postgres ${su_args[@]+"${su_args[@]}"} -v ON_ERROR_STOP=1 -c "$1"; }
+pick_superuser || fail superuser_session_unavailable
 [ "$(psql 'SELECT pg_is_in_recovery()')" = f ] || fail do_not_writer
 [ "$(psql "SELECT count(*) FROM pg_stat_replication WHERE application_name = 'lemtel_hostinger_standby' AND state = 'streaming'")" = 1 ] \
   || fail hostinger_standby_not_streaming

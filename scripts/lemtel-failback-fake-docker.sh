@@ -59,6 +59,10 @@ case "$1" in
     if [[ "$*" == *"sh -eu -c"* ]]; then echo hba-append >> "$F/hba-writes"; exit 0; fi
     if [[ "$*" == *"test -f /var/lib/postgresql/data/lemtel-ha-replication.pgpass"* ]]; then echo present; exit 0; fi
     if [[ "$*" == *"-h 10.253.47.1"* ]]; then [ -f "$F/hostinger-accepts-logins" ]; exit $?; fi
+    if [[ "$*" == *"rolsuper"* ]]; then
+      if [[ "$*" == *"-U supabase_admin"* ]]; then [ -f "$F/no-loopback-superuser" ] && exit 2; echo t; else [ -f "$F/postgres-is-superuser" ] && echo t || echo f; fi; exit 0
+    fi
+    [[ "$*" == *"-U supabase_admin"* ]] && echo "as-superuser $last" >> "$F/log"
     sql="$last"; file="$F/sql" ;;
   *) exit 0 ;;
 esac

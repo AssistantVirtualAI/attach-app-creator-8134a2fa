@@ -297,3 +297,25 @@ test('step 1 on the real Hostinger topology: 10.x Docker networks (default-addre
   assert.match(r.stdout, /relay_network=bridge\nrelay_source=10\.0\.0\.1/u);
   assert.match(w.log(), /address = '10\.0\.0\.1'/u);
 });
+test('Supabase image: privileged SQL runs as the proven superuser supabase_admin (postgres is not superuser)', () => {
+  const w = hWriter();
+  const r = w.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(w.log(), /as-superuser SELECT count\(\*\) FROM pg_hba_file_rules/u);
+  assert.match(w.log(), /as-superuser SELECT pg_create_physical_replication_slot/u);
+  const h = hHandback([]);
+  assert.equal(h.run(HANDBACK, ['quiesce'], HB).status, 0);
+  assert.match(h.log(), /as-superuser CHECKPOINT/u);
+});
+test('no superuser session -> refused BEFORE any change (no hba write, no relay, runtime not stopped)', () => {
+  const w = hWriter(); w.flag('no-loopback-superuser');
+  const r = w.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' });
+  assert.equal(reason(r), 'superuser_session_unavailable');
+  assert.equal(w.read('hba-writes'), '');
+  assert.equal(existsSync(join(w.root, 'usr/local/libexec/lemtel-ha-hostinger-postgres-wireguard-relay')), false);
+  const h = hHandback([]); h.flag('no-loopback-superuser');
+  assert.equal(reason(h.run(HANDBACK, ['quiesce'], HB)), 'superuser_session_unavailable');
+  assert.doesNotMatch(h.log(), /docker stop/u);
+  const ok = hWriter(); ok.flag('no-loopback-superuser'); ok.flag('postgres-is-superuser');
+  assert.equal(ok.run(H_REPL, ['install'], { LEMTEL_HA_EXECUTE: 'enable_hostinger_writer_replication_for_failback' }).status, 0, 'a real superuser socket session is accepted');
+});

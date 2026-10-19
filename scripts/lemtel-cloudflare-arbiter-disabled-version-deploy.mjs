@@ -117,7 +117,10 @@ function localConfiguration(env, argv) {
   };
 }
 
-export function buildVersionMetadata(compatibilityDate) {
+// Present only after a sealed bootstrap: the AES key that opens the sealed configuration and incidents.
+export const OPTIONAL_INHERITED_SECRET = 'CONFIG_STATE_ENCRYPTION_KEY';
+
+export function buildVersionMetadata(compatibilityDate, includeStateKey = false) {
   if (!isCalendarDate(compatibilityDate)) {
     throw new DeploymentGateError('compatibility_date_must_be_calendar_date');
   }
@@ -125,16 +128,17 @@ export function buildVersionMetadata(compatibilityDate) {
   return {
     main_module: MAIN_MODULE_NAME,
     compatibility_date: compatibilityDate,
-    bindings: ALLOWED_INHERITED_BINDINGS.map((name) => ({ name, type: 'inherit' })),
+    bindings: [...ALLOWED_INHERITED_BINDINGS, ...(includeStateKey ? [OPTIONAL_INHERITED_SECRET] : [])]
+      .map((name) => ({ name, type: 'inherit' })),
   };
 }
 
-export function buildVersionMultipart(source, compatibilityDate) {
+export function buildVersionMultipart(source, compatibilityDate, includeStateKey = false) {
   const sourceBytes = normaliseSource(source);
   const form = new FormData();
   form.append(
     'metadata',
-    new Blob([JSON.stringify(buildVersionMetadata(compatibilityDate))], { type: 'application/json' }),
+    new Blob([JSON.stringify(buildVersionMetadata(compatibilityDate, includeStateKey))], { type: 'application/json' }),
     'metadata.json',
   );
   form.append(
@@ -171,7 +175,9 @@ function assertRemoteDisabledSettings(payload) {
     byName.set(binding.name, binding);
   }
 
-  if (byName.size !== ALLOWED_INHERITED_BINDINGS.length ||
+  const stateKey = byName.get(OPTIONAL_INHERITED_SECRET);
+  if (stateKey && stateKey.type !== 'secret_text') throw new DeploymentGateError('remote_bindings_not_allowlisted');
+  if (byName.size !== ALLOWED_INHERITED_BINDINGS.length + (stateKey ? 1 : 0) ||
       !ALLOWED_INHERITED_BINDINGS.every((name) => byName.has(name))) {
     throw new DeploymentGateError('remote_bindings_not_allowlisted');
   }
@@ -186,6 +192,7 @@ function assertRemoteDisabledSettings(payload) {
       (serializer.script_name !== undefined && serializer.script_name !== WORKER_NAME)) {
     throw new DeploymentGateError('remote_serializer_binding_invalid');
   }
+  return { includeStateKey: Boolean(stateKey) };
 }
 
 async function readAndVerifySource({ sourcePath, readFile, expectedSourceSha256 }) {
@@ -266,11 +273,13 @@ export async function runDeployment(options = {}) {
     { method: 'GET', headers, redirect: 'error' },
     'worker_settings_read_failed',
   );
-  assertRemoteDisabledSettings(settings);
+  const { includeStateKey } = assertRemoteDisabledSettings(settings);
+  const multipart = includeStateKey
+    ? buildVersionMultipart(prepared.source, prepared.compatibilityDate, true) : prepared.multipart;
   const upload = await cloudflareJSON(
     fetchImpl,
     versionUploadURL(prepared.accountId),
-    { method: 'POST', headers, body: prepared.multipart, redirect: 'error' },
+    { method: 'POST', headers, body: multipart, redirect: 'error' },
     'version_upload_failed',
   );
   const versionId = versionIdFrom(upload);

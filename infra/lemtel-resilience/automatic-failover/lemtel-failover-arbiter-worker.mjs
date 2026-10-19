@@ -26,6 +26,7 @@ const SERIALIZER_FORMAT = 'lemtel_failover_serializer_v1';
 // calls of a tick. Every holder releases its lease as soon as it is done, so the agent mailbox is not starved.
 const SERIALIZER_LEASE_SECONDS = 50;
 const L7_TIMEOUT_MS = 25000;
+const CYCLE_TOLERANCE_SECONDS = 10;
 // Sealed configuration (and records bound to it) and the signed drill approval stay valid for at most
 // 90 days: a permanent arbiter must not lapse after an hour, and a quarterly drill renews the approval.
 const CONFIG_TTL = 90 * 86400;
@@ -781,7 +782,9 @@ async function tick(env) {
     if (['fence_graceful_shutdown_requested', 'fence_hard_power_off_requested'].includes(incident.phase)) {
       return await blockIncident(env, incident, 'persisted_fence_intent_requires_manual_reconciliation');
     }
-    if (now < incident.last_cycle_at || now - incident.last_cycle_at < cfg.interval) {
+    // The cron trigger fires every minute but not at exact 60 s spacing: without a tolerance, one tick in two
+    // arrived a second early and was skipped, doubling the detection time (first real drill, 2026-10-19).
+    if (now < incident.last_cycle_at || now - incident.last_cycle_at < cfg.interval - CYCLE_TOLERANCE_SECONDS) {
       return await storeStatus(env, status('cycle_not_due'));
     }
     incident.last_cycle_at = now;
@@ -816,7 +819,8 @@ async function tick(env) {
       await persist(env, incident); return await storeStatus(env, status(incident.phase, 'manual_promotion_action_required'));
     }
     if (incident.phase === 'promotion_command_dispatched') {
-      return await storeStatus(env, status('manual_promotion_action_required'));
+      // Keep the delivery fact visible: later ticks must not overwrite it with a generic reason.
+      return await storeStatus(env, status('manual_promotion_action_required', 'command_dispatched_to_agent'));
     }
     return await blockIncident(env, incident, 'unknown_phase');
   } catch (error) { diag('tick', error); return await storeStatus(env, status('blocked', 'state_or_protocol_error_manual_review')); }

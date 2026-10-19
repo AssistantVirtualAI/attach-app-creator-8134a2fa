@@ -191,6 +191,8 @@ def runtime_images_present(env):
     except Exception:
         return False
 
+READINESS_REASON = {'value': 'not_evaluated'}
+
 def standby_readiness(cfg):
     # Read-only local facts the arbiter requires before it may ever fence the writer:
     # the standby PostgreSQL answers and is still in recovery, and the runtime stage is present.
@@ -206,6 +208,18 @@ def standby_readiness(cfg):
     stage = all(os.path.isfile(os.path.join(STAGE_DIR, name)) and not os.path.islink(os.path.join(STAGE_DIR, name))
                 for name in ('docker-compose.yml', '.env', 'volumes/pooler/pooler.exs'))
     stage = stage and runtime_images_present(local_env)
+    # The full stage attestation (Storage receiver, WireGuard, compose, no public database listener...) runs in
+    # check mode, inside this same sandbox: the arbiter never fences unless the takeover would actually pass it.
+    attested = False
+    if stage:
+        attest_env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C', 'LEMTEL_HA_INCIDENT_ID': 'readiness-check',
+                      'LEMTEL_HA_EXECUTE': 'attest_current_topology_hostinger_runtime_stage',
+                      'LEMTEL_HA_ROLE': 'hostinger_private_hot_standby', 'LEMTEL_HA_ATTEST_MODE': 'check'}
+        attested = run_local(STAGE_ATTEST, attest_env, 45)
+    READINESS_REASON['value'] = ('ready' if in_recovery and attested else
+                                 'standby_not_in_recovery' if not in_recovery else
+                                 'runtime_stage_incomplete' if not stage else 'stage_attestation_' + local_reason())
+    stage = stage and attested
     payload = {'format': 'lemtel_standby_readiness_v1', 'target_role': 'hostinger_standby',
                'observed_at': int(time.time()), 'ready': bool(in_recovery and stage),
                'standby_in_recovery': bool(in_recovery), 'runtime_stage_present': bool(stage)}
@@ -327,10 +341,24 @@ def execution_environment(incident, cfg, phase):
 
 def run_command(argv, env, timeout):
     return subprocess.run(argv, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                          stderr=subprocess.DEVNULL, timeout=timeout, check=False)
+                          stderr=subprocess.PIPE, timeout=timeout, check=False)
+
+LAST_LOCAL_REASON = {'value': 'none'}
 
 def run_local(path, env, timeout):
-    return run_command(['/usr/bin/bash', path], env, timeout).returncode == 0
+    # The local scripts report failures as a fixed token line `reason=<token>` on stderr. Keep only that
+    # token (never free text), so a blocked step always says why without leaking anything.
+    try:
+        result = run_command(['/usr/bin/bash', path], env, timeout)
+    except subprocess.TimeoutExpired:
+        LAST_LOCAL_REASON['value'] = 'timeout'
+        return False
+    tokens = re.findall(rb'^reason=([a-z0-9_]{1,80})$', result.stderr or b'', re.M)
+    LAST_LOCAL_REASON['value'] = tokens[-1].decode() if tokens else ('exit_' + str(result.returncode))
+    return result.returncode == 0
+
+def local_reason():
+    return LAST_LOCAL_REASON['value']
 
 def main():
     cfg = load_config()
@@ -339,6 +367,7 @@ def main():
         print('automatic_promotion_enabled=false\nautomatic_runtime_start_enabled=false\nautomatic_traffic_routing_enabled=false')
         return
     reply = poll(cfg)
+    print('hostinger_standby_readiness=' + READINESS_REASON['value'])
     if isinstance(reply, dict) and reply == {'state': 'no_command'}:
         print('hostinger_failover_agent_status=no_command')
         return
@@ -354,7 +383,8 @@ def main():
     ledger = claim_incident(incident)
     persist_fence_receipt(incident, command)
     if not run_local(STAGE_ATTEST, execution_environment(incident, cfg, 'stage_attest'), 45):
-        deny('runtime_stage_attestation_blocked_incident_consumed')
+        write_ledger(ledger, 'stage_attestation_blocked_' + local_reason())
+        deny('runtime_stage_attestation_blocked_incident_consumed_' + local_reason())
     if cfg['PROMOTION_EXECUTION_MODE'] == 'review':
         write_ledger(ledger, 'manual_promotion_action_required')
         print('hostinger_failover_agent_status=manual_promotion_action_required')
@@ -362,12 +392,12 @@ def main():
         return
     write_ledger(ledger, 'promotion_execution_started')
     if not run_local(PROMOTION, execution_environment(incident, cfg, 'promotion'), 240):
-        write_ledger(ledger, 'promotion_execution_failed_manual_recovery_required')
-        deny('promotion_execution_failed_manual_recovery_required')
+        write_ledger(ledger, 'promotion_execution_failed_manual_recovery_required_' + local_reason())
+        deny('promotion_execution_failed_manual_recovery_required_' + local_reason())
     write_ledger(ledger, 'runtime_start_started')
     if not run_local(RUNTIME, execution_environment(incident, cfg, 'runtime'), 180):
-        write_ledger(ledger, 'runtime_start_failed_manual_recovery_required')
-        deny('runtime_start_failed_manual_recovery_required')
+        write_ledger(ledger, 'runtime_start_failed_manual_recovery_required_' + local_reason())
+        deny('runtime_start_failed_manual_recovery_required_' + local_reason())
     write_ledger(ledger, 'promotion_and_runtime_completed')
     print('hostinger_failover_agent_status=promotion_and_runtime_completed')
     print('promotion_executed=true\nruntime_start_executed=true\nautomatic_traffic_routing_enabled=false')

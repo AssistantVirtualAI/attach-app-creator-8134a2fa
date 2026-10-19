@@ -54,7 +54,7 @@ jobs:
         with:
           node-version: "22"
       - name: Arbiter Worker, Durable Object serializer, sealed bootstrap and agent mailbox
-        run: node --test scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-durable-object-serialization.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs scripts/lemtel-cloudflare-arbiter-disabled-version-deploy.test.mjs scripts/lemtel-l7-ready.test.mjs scripts/lemtel-cloudflare-arbiter-bootstrap-operator.test.mjs scripts/lemtel-do-writer-boot-fence.test.mjs scripts/lemtel-do-origin-probe-site.test.mjs
+        run: node --test scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-durable-object-serialization.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs scripts/lemtel-cloudflare-arbiter-disabled-version-deploy.test.mjs scripts/lemtel-l7-ready.test.mjs scripts/lemtel-cloudflare-arbiter-bootstrap-operator.test.mjs scripts/lemtel-do-writer-boot-fence.test.mjs scripts/lemtel-do-origin-probe-site.test.mjs scripts/lemtel-cloudflare-arbiter-incident-archive.test.mjs scripts/lemtel-current-topology-execution-agent.test.mjs
       - name: Hostinger runtime stage refresh (real age + tar, fake docker)
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq age

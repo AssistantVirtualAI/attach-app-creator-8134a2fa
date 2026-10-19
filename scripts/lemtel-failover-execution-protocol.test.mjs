@@ -859,3 +859,37 @@ test('L7 observation waits long enough for a Cloudflare 522 (~20 s) and judges f
   });
   assert.equal((await f.tick()).state, 'healthy');
 });
+
+test('a cron tick arriving a few seconds early still counts as the next cycle (no skipped minute)', async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.tick()).state, 'incident_suspected');
+  assert.equal((await f.tick(59)).state, 'incident_suspected');
+  assert.equal((await f.incident()).failure_cycles, 2);
+  assert.equal((await f.tick(49)).state, 'cycle_not_due', 'never twice inside one cycle');
+  assert.equal((await f.incident()).failure_cycles, 2);
+  assert.equal((await f.tick(3)).state, 'fence_wait_graceful', '52 s after the last cycle is within the 10 s tolerance');
+});
+
+test('after delivery, later ticks keep the command_dispatched_to_agent reason', async (t) => {
+  const f = await fixture(t);
+  await gracefulCommand(f);
+  assert.equal((await (await f.get('/agent/command', true)).json()).state, 'command_available');
+  const later = await f.tick();
+  assert.equal(later.state, 'manual_promotion_action_required');
+  assert.equal(later.reason, 'command_dispatched_to_agent');
+});
+
+test('agent sandbox can read the Storage receiver, readiness runs the full attestation in check mode, failures carry a token', () => {
+  const unit = read('lemtel-ha-hostinger-failover-agent.service');
+  assert.match(unit, /^ProtectHome=read-only$/mu);
+  assert.doesNotMatch(unit, /^ProtectHome=true$/mu);
+  const attest = read('lemtel-ha-hostinger-current-topology-stage-attest.sh');
+  assert.match(attest, /storage_receiver=\/home\/lemtelstorage\/storage-current/u);
+  assert.ok(attest.indexOf('if [ "$attest_mode" = check ]') > attest.indexOf("SELECT pg_is_in_recovery()"), 'check mode runs every verification');
+  assert.ok(attest.indexOf('if [ "$attest_mode" = check ]') < attest.indexOf('install -d -o root -g root -m 0700 "$state_dir"'), 'check mode writes no evidence');
+  assert.match(agent, /'LEMTEL_HA_ATTEST_MODE': 'check'/u);
+  assert.match(agent, /stage = stage and attested/u);
+  assert.match(agent, /re\.findall\(rb'\^reason=\(\[a-z0-9_\]\{1,80\}\)\$'/u);
+  assert.match(agent, /write_ledger\(ledger, 'stage_attestation_blocked_' \+ local_reason\(\)\)/u);
+  assert.match(agent, /print\('hostinger_standby_readiness=' \+ READINESS_REASON\['value'\]\)/u);
+});

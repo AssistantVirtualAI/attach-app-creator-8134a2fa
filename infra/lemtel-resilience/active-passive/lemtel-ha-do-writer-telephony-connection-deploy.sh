@@ -74,7 +74,18 @@ try:
     if len(re.findall(line,block,re.M))!=1: raise ValueError
 except Exception: raise SystemExit(1)
 PY
-compose() { (cd "$dir" && docker compose --project-name "$project" --env-file .env $(printf -- '-f %s ' "${COMPOSE_FILES[@]}") "$@"); }
+# Recreate with the functions container's OWN Compose chain (config files + env files recorded in its labels): earlier
+# Lemtel activations appended overrides/secrets there, and a fixed file list would silently drop them.
+mapfile -t chain_files < <(docker inspect --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$edge" | tr ',' '\n' | sed '/^$/d')
+mapfile -t chain_env < <(docker inspect --format '{{index .Config.Labels "com.docker.compose.project.environment_file"}}' "$edge" | tr ',' '\n' | sed '/^$/d')
+[ "${#chain_files[@]}" -gt 0 ] || fail edge_compose_chain_unresolved
+[ "${#chain_env[@]}" -gt 0 ] || chain_env=("${dir#$T}/.env")
+printf '%s\n' "${chain_files[@]}" | grep -qx "${dir#$T}/docker-compose.lemtel-private.yml" || chain_files+=("${dir#$T}/docker-compose.lemtel-private.yml")
+compose_args=()
+for e in "${chain_env[@]}"; do [ -f "$T$e" ] || fail edge_compose_env_file_missing; compose_args+=(--env-file "$T$e"); done
+for f in "${chain_files[@]}"; do [ -f "$T$f" ] || fail edge_compose_file_missing; compose_args+=(-f "$T$f"); done
+names_before="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$edge" | cut -d= -f1 | sort -u)"
+compose() { docker compose --project-name "$project" --project-directory "$dir" "${compose_args[@]}" "$@"; }
 compose config --services >/dev/null 2>&1 || fail compose_config_invalid_before_change
 compose config --services | grep -qx "$service" || fail functions_service_not_in_compose
 pbx_tables="$(printf "SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'lemtel_pbx_%%';\n" | psql_su 2>/dev/null || echo unknown)"
@@ -191,6 +202,8 @@ ok=false
 for _ in $(seq 1 30); do [ "$(docker inspect --format '{{.State.Running}}' "$edge" 2>/dev/null)" = true ] && { ok=true; break; }; sleep 2; done
 [ "$ok" = true ] || fail functions_not_running_after_recreate
 names="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$edge" | cut -d= -f1)"
+# Nothing the container had before may disappear (email, ingest secrets, ...).
+while read -r n; do [ -z "$n" ] || printf '%s\n' "$names" | grep -qx "$n" || fail "function_env_lost_$n"; done <<< "$names_before"
 for n in LEMTEL_PBX_SECRET_ENCRYPTION_KEY LEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY LEMTEL_ARBITER_STATUS_URL; do
   printf '%s\n' "$names" | grep -qx "$n" || fail "function_env_missing_$n"
 done

@@ -1,7 +1,7 @@
 // Offline test of the DO deployment of the FusionPBX connection + failover-status release (fake docker/openssl).
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, mkdirSync as mkdir, writeFileSync, readFileSync, chmodSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -17,6 +17,7 @@ function world({ caddyfile = CADDY_OK, privateCompose = 'services:\n  kong:\n   
   for (const d of [bin, fake, join(fns, '_shared'), join(fns, 'lemtel-onboarding-admin'), join(caddy, 'lemtel-portal/assets'), join(root, 'run'), join(root, 'var/lib/lemtel-ha')]) mkdirSync(d, { recursive: true });
   writeFileSync(join(dir, '.env'), 'POSTGRES_PASSWORD=x\n');
   for (const f of ['docker-compose.yml', 'docker-compose.caddy.yml', 'docker-compose.lemtel-db-init.yml']) writeFileSync(join(dir, f), 'services: {}\n');
+  mkdir(join(root, 'var/lib/lemtel-ha/transactional-email/runtime-config'), { recursive: true }); writeFileSync(join(root, 'var/lib/lemtel-ha/transactional-email/runtime-config/compose.lemtel-transactional-email.yml'), 'services: {}\n');
   writeFileSync(join(dir, 'docker-compose.lemtel-private.yml'), privateCompose);
   writeFileSync(join(caddy, 'Caddyfile'), caddyfile);
   writeFileSync(join(caddy, 'lemtel-portal/lemtel-portal.html'), 'OLD');
@@ -38,11 +39,13 @@ case "$1" in
     case "$*" in
       *State.Running*) echo true ;;
       *working_dir*) echo /srv/supabase ;;
+      *config_files*) echo /srv/supabase/docker-compose.yml,/srv/supabase/docker-compose.caddy.yml,/srv/supabase/docker-compose.lemtel-db-init.yml,/var/lib/lemtel-ha/transactional-email/runtime-config/compose.lemtel-transactional-email.yml ;;
+      *environment_file*) echo /srv/supabase/.env ;;
       *compose.project\\"*|*'compose.project"'*) echo supabase ;;
       *compose.service*) echo functions ;;
       *home/deno/functions*) echo /srv/supabase/volumes/functions ;;
       *etc/caddy*) echo /srv/supabase/volumes/proxy/caddy ;;
-      *Config.Env*) if [ -f "$F/recreated" ]; then printf 'SUPABASE_URL=x\\nLEMTEL_PBX_SECRET_ENCRYPTION_KEY=k\\nLEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY=disabled\\nLEMTEL_ARBITER_STATUS_URL=u\\n'; else echo SUPABASE_URL=x; fi ;;
+      *Config.Env*) if [ -f "$F/recreated" ]; then printf 'SUPABASE_URL=x\\nRESEND_API_KEY=r\\nLEMTEL_PBX_SECRET_ENCRYPTION_KEY=k\\nLEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY=disabled\\nLEMTEL_ARBITER_STATUS_URL=u\\n'; else printf 'SUPABASE_URL=x\\nRESEND_API_KEY=r\\n'; fi ;;
       *) echo supabase ;;
     esac ;;
   exec) if [[ "$*" == *rolsuper* ]]; then echo t; exit 0; fi
@@ -54,7 +57,7 @@ esac
   writeFileSync(join(bin, 'docker'), docker); chmodSync(join(bin, 'docker'), 0o755);
   writeFileSync(join(bin, 'openssl'), '#!/bin/bash\nhead -c 32 /dev/urandom | base64\n'); chmodSync(join(bin, 'openssl'), 0o755);
   writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n'); chmodSync(join(bin, 'sleep'), 0o755);
-  const run = (mode, extra = {}) => spawnSync('bash', [SCRIPT, mode], { encoding: 'utf8',
+  const run = (mode, extra = {}) => spawnSync('bash', [...(process.env.TC_TRACE ? ['-x'] : []), SCRIPT, mode], { encoding: 'utf8',
     env: { PATH: `${bin}:${process.env.PATH}`, LEMTEL_TC_TEST_ROOT: root, LEMTEL_HA_ROLE: 'digitalocean_writer', LEMTEL_TC_BUNDLE: bundle, ...extra } });
   return { root, dir, fns, caddy, bundle, run, log: () => readFileSync(join(fake, 'log'), 'utf8') };
 }
@@ -131,4 +134,13 @@ test('portal route: repeated ownership comments are fine, a missing or duplicate
   assert.equal(reason(world({ caddyfile: '# LEMTEL_OPERATIONS_PORTAL_V1\n' }).run('check')), 'portal_route_missing_or_ambiguous');
   const twice = CADDY_OK.replace('probe {', 'probe {\n  handle @lemtel_operations_portal {\n    uri strip_prefix /lemtel-portal\n    root * /etc/caddy/lemtel-portal\n    try_files {path} /lemtel-portal.html\n    file_server\n  }');
   assert.equal(reason(world({ caddyfile: twice }).run('check')), 'portal_route_missing_or_ambiguous');
+});
+
+test('recreate keeps the functions container\'s own Compose chain (earlier activation overrides are never dropped)', () => {
+  const w = world();
+  assert.equal(w.run('deploy', GO).status, 0);
+  const up = w.log().split('\n').find((l) => l.includes('up -d --no-deps functions'));
+  assert.match(up, /compose\.lemtel-transactional-email\.yml/u, 'activation override kept');
+  assert.match(up, /docker-compose\.lemtel-private\.yml/u, 'Lemtel override present');
+  assert.match(up, /--env-file \S*\/srv\/supabase\/\.env/u);
 });

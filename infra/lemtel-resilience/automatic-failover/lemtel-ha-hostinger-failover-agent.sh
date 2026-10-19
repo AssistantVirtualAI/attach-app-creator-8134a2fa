@@ -368,8 +368,12 @@ try:
 except Blocked as error:
     print('hostinger_failover_agent_status=blocked\nreason=' + str(error), file=sys.stderr)
     sys.exit(78)
-except Exception:
-    # Never print exceptions, HTTP bodies, configuration, signatures or secrets.
-    print('hostinger_failover_agent_status=blocked\nreason=local_or_arbiter_error_manual_review', file=sys.stderr)
+except Exception as error:
+    # Never print exception messages, HTTP bodies, configuration, signatures or secrets: only the error class
+    # (and an HTTP status code when the arbiter answered), enough to diagnose without leaking anything.
+    detail = type(error).__name__
+    if isinstance(error, urllib.error.HTTPError):
+        detail += '_' + str(error.code)
+    print('hostinger_failover_agent_status=blocked\nreason=local_or_arbiter_error_manual_review\nerror_class=' + re.sub(r'[^A-Za-z0-9_]', '', detail)[:60], file=sys.stderr)
     sys.exit(78)
 PY

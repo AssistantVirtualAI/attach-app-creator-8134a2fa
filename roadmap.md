@@ -1,7 +1,11 @@
 # Roadmap
 
 - [x] Prepare admin feedback reply alerts in portal/mobile: server-derived reporter, existing push + fixed email template, stable comment-ID keys; 14 server + 6 portal + 6 mobile tests pass, Deno check and preview build OK.
-- [ ] Activate and verify feedback alerts on a real phone and email: awaiting explicit deployment approval and healthy managed email send path (domain verified; delivery-path verification timed out). No real sends performed.
+- [x] Deploy approved feedback reply endpoint and email preview (2026-10-19); 14 server + 6 portal + 6 mobile tests pass, Deno check and security gate OK. One explicit self-test push accepted by native provider; authenticated mobile Feedback link opens. No app publication.
+- [ ] Verify actual feedback reply phone/email delivery and report-specific opening: requester has no own reports and self-replies are intentionally skipped; needs a reply authored by a different authorized administrator. Email send path verification timed out; no email test sent. Phone receipt/tap requires user's confirmation.
+- [x] Compare MMore intentional differences: autonomous mobile DND confirmed/busy, Marketing, AVA Statistic and Microsoft path preserved; quick reply helper/settings equivalent, 11 targeted tests pass. No full-file copying.
+- [ ] Reconcile three native safety failures with validated candidate: RX adjustment prohibition, stale-end literal, generation guard expressions. Requires separate protected-native review; no native or test weakening performed.
+- [ ] Obtain fresh portal/mobile TypeScript and production build results from automated validation or Manus; manual builds/typechecks prohibited by environment, no fresh outputs available this turn.
 
 - [x] Add missed-call mark-one/mark-all read controls in both web-mobile trees; 5 tests pass in each tree, authenticated 13-call history retained after clearing, reload persistence and mark-unread verified at 390px without overflow; build OK, no native/server changes or deployment. Read status is per user/device, not synchronized with the main bell.
 

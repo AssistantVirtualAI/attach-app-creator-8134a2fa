@@ -29,6 +29,8 @@ type ReadOnlyWorkspaceProps = {
   organizationId: string | null;
   onRetry: () => void;
   onSignOut: () => void;
+  /** Lemtel portal-provisioned telephony (shown on Home only when the provisioning contract answers). */
+  telephony?: React.ReactNode;
 };
 
 const NAV: { id: WorkspaceTab; label: I18nKey; Icon: React.ComponentType<{ size?: number | string; strokeWidth?: number | string }> }[] = [
@@ -110,7 +112,7 @@ function ReadOnlySection({ tab, onReturnToPhone }: {
  * hook. The member can inspect the actual Desktop experience before their
  * administrator assigns telephony, while all calling actions stay disabled.
  */
-export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetry, onSignOut }: ReadOnlyWorkspaceProps) {
+export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetry, onSignOut, telephony }: ReadOnlyWorkspaceProps) {
   const { t } = useTranslation();
   const [active, setActive] = useState<WorkspaceTab>('home');
   const [dial, setDial] = useState('');
@@ -285,11 +287,11 @@ export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetr
 
           <div className="desktop-readonly-content">
             {active === 'home' ? (
-              <DesktopWorkspaceHome
+              <>{telephony}<DesktopWorkspaceHome
                 displayName={displayName}
                 organizationVerified={Boolean(organizationId)}
                 onNavigate={setActive}
-              />
+              /></>
             ) : active === 'more' ? (
               <DesktopWorkspacePreferences />
             ) : active === 'phone' ? (

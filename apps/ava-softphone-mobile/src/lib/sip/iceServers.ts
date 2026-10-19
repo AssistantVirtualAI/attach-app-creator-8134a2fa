@@ -13,9 +13,17 @@ let cache: { at: number; userId: string; servers: RTCIceServer[] } | null = null
 const TTL_MS = 5 * 60 * 1000;
 const INCOMING_CALL_BUDGET_MS = 1_200;
 
-export function clearIceServerCache(): void { cache = null; }
+// Portal-provisioned ICE (lemtel-softphone-provisioning): STUN + short-lived TURN for the signed-in user.
+let provisioned: { servers: RTCIceServer[]; policy: RTCIceTransportPolicy } | null = null;
+export function setProvisionedIceServers(servers: Array<{ urls: string[]; username?: string; credential?: string }> | null, policy: RTCIceTransportPolicy = 'all'): void {
+  provisioned = servers && servers.length ? { servers: servers.map((s) => ({ ...s })), policy } : null;
+}
+export function getProvisionedIceTransportPolicy(): RTCIceTransportPolicy { return provisioned?.policy ?? 'all'; }
+export function clearIceServerCache(): void { cache = null; provisioned = null; }
 
 export async function fetchIceServers(timeoutMs = INCOMING_CALL_BUDGET_MS): Promise<RTCIceServer[]> {
+  // The portal already issued the relay credential with the SIP connection: no extra round-trip at call time.
+  if (provisioned) return provisioned.servers;
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<RTCIceServer[]>((resolve) => {

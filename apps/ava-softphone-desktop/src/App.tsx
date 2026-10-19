@@ -14,6 +14,8 @@ import { audit } from './lib/audit';
 import { sipProvider } from './lib/sip/jssipProvider';
 import { useLemtelDesktopSessionBootstrap } from './hooks/useLemtelDesktopSessionBootstrap';
 import DesktopReadOnlyWorkspace from './components/DesktopReadOnlyWorkspace';
+import LemtelDesktopTelephonyPanel from './components/LemtelDesktopTelephonyPanel';
+import { useLemtelDesktopProvisioning } from './hooks/useLemtelDesktopProvisioning';
 
 const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 const IS_LAB = qs?.get('lab') === 'responsive';
@@ -71,6 +73,8 @@ function DesktopApp() {
   const [creds, setCreds] = useState<Creds>(null);
   const [loading, setLoading] = useState(true);
   const bootstrap = useLemtelDesktopSessionBootstrap(creds?.accessToken || null);
+  // Portal-provisioned telephony (lemtel-softphone-provisioning) — asked only after the session gate accepted the member.
+  const provisioning = useLemtelDesktopProvisioning(creds?.accessToken || null, bootstrap.status === 'not_provisioned');
 
   const returnToSignIn = async () => {
     await clearDesktopAuthState();
@@ -212,7 +216,8 @@ function DesktopApp() {
 
   // This is the expected and safe response from the current server contract.
   if (bootstrap.status === 'not_provisioned') {
-    return <DesktopReadOnlyWorkspace email={creds.email} organizationId={bootstrap.organizationId} onRetry={() => { void bootstrap.refresh(); }} onSignOut={() => { void returnToSignIn(); }} />;
+    return <DesktopReadOnlyWorkspace email={creds.email} organizationId={bootstrap.organizationId} onRetry={() => { void bootstrap.refresh(); void provisioning.refresh(); }} onSignOut={() => { void returnToSignIn(); }}
+      telephony={<LemtelDesktopTelephonyPanel state={provisioning.state} accessToken={creds.accessToken || ''} refreshToken={creds.refreshToken || ''} onRetry={() => { void provisioning.refresh(); }} />} />;
   }
 
   return null;

@@ -21,7 +21,11 @@ const STATE_CONTEXT = 'lemtel-failover-sealed-state-v1';
 const BOOTSTRAP_TTL = 300;
 const SERIALIZER_SINGLETON_NAME = 'lemtel-failover-arbiter-serializer-v1';
 const SERIALIZER_FORMAT = 'lemtel_failover_serializer_v1';
-const SERIALIZER_LEASE_SECONDS = 15; // Deliberately shorter than every configured observation cycle.
+// Deliberately shorter than every configured observation cycle (>= 60 s), yet long enough to cover one L7
+// observation (Cloudflare answers 522 only after ~20 s when the origin is unreachable) plus the provider
+// calls of a tick. Every holder releases its lease as soon as it is done, so the agent mailbox is not starved.
+const SERIALIZER_LEASE_SECONDS = 50;
+const L7_TIMEOUT_MS = 25000;
 // Sealed configuration (and records bound to it) and the signed drill approval stay valid for at most
 // 90 days: a permanent arbiter must not lapse after an hour, and a quarterly drill renews the approval.
 const CONFIG_TTL = 90 * 86400;
@@ -183,6 +187,7 @@ export class LemtelFailoverSerializer {
     const now = Math.floor(Date.now() / 1000);
     if (message.path === '/lease') return this.acquire(message.body, now);
     if (message.path === '/intent') return this.recordIntent(message.body, now);
+    if (message.path === '/release') return this.release(message.body, now);
     return serializerRefused();
   }
 
@@ -204,6 +209,23 @@ export class LemtelFailoverSerializer {
       });
       return result ? serializerGranted(result) : serializerRefused();
     } catch (error) { diag('serializer_lease_tx', error); return serializerRefused(); }
+  }
+
+  // Ends a lease early. Only the exact holder (execution key + capability) can release it.
+  async release(body, now) {
+    if (!exactKeys(body, ['execution_key', 'config_revision', 'capability']) || !serializerExecutionKey(body.execution_key) ||
+        !revision(body.config_revision) || !serializerCapability(body.capability)) return serializerRefused();
+    try {
+      const result = await this.state.storage.transaction(async (storage) => {
+        const lease = await storage.get('lease');
+        if (!serializerLeaseRecord(lease) || lease.execution_key !== body.execution_key ||
+            lease.config_revision !== body.config_revision || lease.capability !== body.capability) return null;
+        const released = { ...lease, expires_at: Math.min(lease.expires_at, now) };
+        await storage.put('lease', released);
+        return released;
+      });
+      return result ? serializerGranted(result) : serializerRefused();
+    } catch (error) { diag('serializer_release_tx', error); return serializerRefused(); }
   }
 
   async recordIntent(body, now) {
@@ -256,6 +278,14 @@ async function acquireLease(env) {
   if (!stub) return null;
   const lease = await serializerCall(stub, '/lease', { execution_key, config_revision: env.CONFIG_REVISION });
   return lease && lease.execution_key === execution_key && validLease(lease, env) ? { ...lease, stub } : null;
+}
+async function releaseLease(env, lease) {
+  // Best effort: an unreleased lease simply expires. Never changes the outcome of the caller.
+  try {
+    if (!lease?.stub) return;
+    await serializerCall(lease.stub, '/release', { execution_key: lease.execution_key,
+      config_revision: lease.config_revision, capability: lease.capability });
+  } catch (error) { diag('serializer_release', error); }
 }
 async function recordSerializedIntent(env, lease, incident_id, intent) {
   if (!lease || !validLease(lease, env) || !serializerIncident(incident_id) || !serializerIntent(intent)) return false;
@@ -467,7 +497,7 @@ function exactL7Response(response, requested) {
   } catch { return false; }
 }
 async function requestL7(url, options = {}) {
-  const response = await fetch(url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(8000) });
+  const response = await fetch(url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(L7_TIMEOUT_MS) });
   if (response.status >= 300 && response.status < 400) throw new Error('redirect_refused');
   // A Cloudflare edge answer saying the origin is down/unreachable is a definitive negative, like a 404.
   // It must come from the configured host and path, and carry Cloudflare's cf-ray header.
@@ -495,7 +525,8 @@ async function observe(env, cfg, now, lease) {
     const observation = await requestL7(cfg.health,
       { headers: { authorization: `Bearer ${env.DO_WRITER_L7_SECRET}` } });
     if (observation.code === 404 || observation.code === 'origin_down') return 'unhealthy';
-    return healthyL7Marker(observation.body, now) ? 'healthy' : 'ambiguous';
+    // The observation may take up to L7_TIMEOUT_MS: judge the marker's freshness at answer time.
+    return healthyL7Marker(observation.body, Math.max(now, Math.floor(Date.now() / 1000))) ? 'healthy' : 'ambiguous';
   } catch (error) { diag('l7_observe', error); return 'ambiguous'; } // Timeout, transport failure and arbitrary 5xx are NOT proof of writer failure.
 }
 async function provider(env, cfg, path, actionType, lease) {
@@ -647,6 +678,10 @@ async function agentCommand(request, env, cfg, now) {
   if (readiness) await recordReadiness(env, readiness, now);
   const lease = await acquireLease(env);
   if (!lease) return json(status('blocked', 'serializer_lease_unavailable'), 503);
+  try { return await mailboxWithLease(env, cfg, now, lease); }
+  finally { await releaseLease(env, lease); }
+}
+async function mailboxWithLease(env, cfg, now, lease) {
   const raw = await env.STATE.get(INCIDENT_KEY);
   if (!raw || JSON.parse(raw)?.config_revision !== env.CONFIG_REVISION) return json({ state: 'no_command' });
   const incident = (await openState(env, 'incident', raw, now)).payload;
@@ -730,8 +765,9 @@ async function tick(env) {
   // Local overlap denial is only an optimisation; the Durable Object lease is the cross-isolate authority.
   if (tickRunning) return await storeStatus(env, status('blocked', 'overlapping_tick'));
   tickRunning = true;
+  let lease;
   try {
-    const lease = await acquireLease(env);
+    lease = await acquireLease(env);
     if (!lease) return await storeStatus(env, status('blocked', 'serializer_lease_unavailable'));
     const denied = await readiness(env, cfg, now);
     if (denied) return await storeStatus(env, denied);
@@ -784,7 +820,7 @@ async function tick(env) {
     }
     return await blockIncident(env, incident, 'unknown_phase');
   } catch (error) { diag('tick', error); return await storeStatus(env, status('blocked', 'state_or_protocol_error_manual_review')); }
-  finally { tickRunning = false; }
+  finally { await releaseLease(env, lease); tickRunning = false; }
 }
 
 export default {

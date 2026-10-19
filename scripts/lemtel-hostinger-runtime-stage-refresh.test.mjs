@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 const script = resolve(import.meta.dirname, '../infra/lemtel-resilience/active-passive/lemtel-ha-hostinger-runtime-stage-refresh.sh');
 const CADDY = '{$PROXY_DOMAIN}, lemtel.assistantvirtualai.com {\n  @lemtel_load_balancer_ready path /lemtel-lb-ready\n  handle {\n    reverse_proxy studio:3000\n  }\n}\n';
 
-function fixture({ extraPath, dropPooler = false, recovery = 't' } = {}) {
+function fixture({ extraPath, dropPooler = false, recovery = 't', caddy = CADDY } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'lemtel-hsr-'));
   const bin = join(root, 'bin'); mkdirSync(bin);
   writeFileSync(join(bin, 'docker'), `#!/bin/bash
@@ -29,7 +29,7 @@ esac\n`); chmodSync(join(bin, 'docker'), 0o755);
   writeFileSync(join(src, '.env'), 'PROXY_DOMAIN=example\n');
   for (const f of ['docker-compose.yml', 'docker-compose.caddy.yml', 'docker-compose.lemtel-private.yml', 'docker-compose.lemtel-db-init.yml']) writeFileSync(join(src, f), 'services: {}\n');
   writeFileSync(join(src, 'volumes/functions/main/index.ts'), 'export {}\n');
-  writeFileSync(join(src, 'volumes/proxy/caddy/Caddyfile'), CADDY);
+  writeFileSync(join(src, 'volumes/proxy/caddy/Caddyfile'), caddy);
   writeFileSync(join(src, 'volumes/proxy/caddy/lemtel-lb-ready.json'), '{"status":"healthy"}');
   writeFileSync(join(src, 'volumes/proxy/caddy/lemtel-portal/lemtel-portal.html'), '<html></html>');
   for (const f of ['envoy.yaml', 'cds.yaml', 'lds.template.yaml', 'docker-entrypoint.sh']) writeFileSync(join(src, 'volumes/api/envoy', f), 'x');
@@ -80,5 +80,28 @@ test('refuses unexpected envelope content, a wrong digest, or a standby out of r
     assert.notEqual(r.status, 0);
     assert.match(r.stdout, new RegExp(`reason=${reason}`, 'u'));
     assert.ok(existsSync(join(f.stage, 'old-marker')), 'previous stage still in place');
+  }
+});
+
+const PROBE = '# LEMTEL_DO_ORIGIN_PROBE_V1\nlemtel-do-l7.assistantvirtualai.com {\n  tls internal\n  handle {\n    respond 404\n  }\n}\n# LEMTEL_DO_ORIGIN_PROBE_V1_END\n';
+
+test('never stages the DigitalOcean-only origin probe site on Hostinger', () => {
+  const f = fixture({ caddy: `${CADDY}\n${PROBE}` });
+  const r = f.run();
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /do_origin_probe_site_staged=false/u);
+  const caddy = readFileSync(join(f.stage, 'volumes/proxy/caddy/Caddyfile'), 'utf8');
+  assert.doesNotMatch(caddy, /lemtel-do-l7|LEMTEL_DO_ORIGIN_PROBE/u);
+  assert.match(caddy, /lemtel\.assistantvirtualai\.com \{\n  tls internal\n/u);
+});
+
+test('refuses a malformed origin probe block or a probe host outside its markers, stage untouched', () => {
+  for (const caddy of [`${CADDY}\n# LEMTEL_DO_ORIGIN_PROBE_V1\nlemtel-do-l7.assistantvirtualai.com {\n}\n`,
+    `${CADDY}\nlemtel-do-l7.assistantvirtualai.com {\n  respond 404\n}\n`]) {
+    const f = fixture({ caddy });
+    const r = f.run();
+    assert.notEqual(r.status, 0);
+    assert.match(r.stdout, /reason=caddyfile_transform_failed/u);
+    assert.ok(existsSync(join(f.stage, 'old-marker')), 'previous stage kept');
   }
 });

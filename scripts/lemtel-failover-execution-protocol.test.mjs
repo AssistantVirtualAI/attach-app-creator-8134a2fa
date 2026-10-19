@@ -308,11 +308,20 @@ test('only the exact healthy JSON is positive; ambiguous L7 responses reset susp
   assert.deepEqual(f.posts(), []);
 });
 
-test('duplicate scheduler attempts during a live lease fail closed and do not manufacture failures', async (t) => {
+test('duplicate scheduler attempts fail closed and do not manufacture failures', async (t) => {
   const f = await fixture(t);
   await f.tick();
+  // The finished tick released its lease: an early duplicate gets it, but the cycle is not due.
+  assert.equal((await f.tick(0)).state, 'cycle_not_due');
+  assert.equal((await f.tick(1)).state, 'cycle_not_due');
+  // While another holder keeps the lease, a due tick is refused outright.
+  f.now += 60;
+  const stub = f.serializer.binding.get(f.serializer.binding.idFromName('lemtel-failover-arbiter-serializer-v1'));
+  const held = await stub.fetch(new Request('https://serializer.invalid/lease', { method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ execution_key: crypto.randomUUID(), config_revision: f.env.CONFIG_REVISION }) }));
+  assert.equal(held.status, 200);
   assert.equal((await f.tick(0)).reason, 'serializer_lease_unavailable');
-  assert.equal((await f.tick(1)).reason, 'serializer_lease_unavailable');
   assert.equal((await f.incident()).failure_cycles, 1);
   assert.deepEqual(f.posts(), []);
 });
@@ -549,11 +558,16 @@ test('mailbox delivers a prepared command exactly once, after recording the disp
 test('mailbox refuses while the scheduler holds the serializer lease, without changing the incident', async (t) => {
   const f = await fixture(t);
   await gracefulCommand(f);
+  const stub = f.serializer.binding.get(f.serializer.binding.idFromName('lemtel-failover-arbiter-serializer-v1'));
+  const held = await stub.fetch(new Request('https://serializer.invalid/lease', { method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ execution_key: crypto.randomUUID(), config_revision: f.env.CONFIG_REVISION }) }));
+  assert.equal(held.status, 200, 'a scheduler holds the lease');
   const res = await f.get('/agent/command', true);
   assert.equal(res.status, 503);
   assert.equal((await res.json()).command, undefined);
   assert.equal((await f.incident()).phase, 'promotion_command_ready');
-  f.now += 16;
+  f.now += 51;
   assert.equal((await (await f.get('/agent/command', true)).json()).state, 'command_available');
 });
 
@@ -815,4 +829,33 @@ test('an unreadable earlier-revision incident blocks without any proof: fence si
 test('agent treats a disabled arbiter as no action, not as a malformed command', () => {
   assert.match(agent, /reply\.get\('state'\) == 'disabled_or_dry_run' and reply\.get\('reason'\) == 'disabled_or_dry_run'/u);
   assert.ok(agent.indexOf('arbiter_disabled_no_action') < agent.indexOf("exact_fields(reply, ('state', 'command'))"));
+});
+
+test('a finished tick and a finished mailbox poll release the lease at once (no agent starvation)', async (t) => {
+  const f = await fixture(t);
+  f.health = 'healthy';
+  assert.equal((await f.tick()).state, 'healthy');
+  assert.deepEqual(await (await f.get('/agent/command', true)).json(), { state: 'no_command' }, 'mailbox right after a tick');
+  assert.deepEqual(await (await f.get('/agent/command', true)).json(), { state: 'no_command' }, 'mailbox right after a poll');
+  assert.equal((await f.tick()).state, 'healthy', 'tick right after a poll');
+});
+
+test('L7 observation waits long enough for a Cloudflare 522 (~20 s) and judges freshness at answer time', async (t) => {
+  assert.match(workerSource, /const L7_TIMEOUT_MS = 25000;/u);
+  assert.match(workerSource, /signal: AbortSignal\.timeout\(L7_TIMEOUT_MS\)/u);
+  assert.match(workerSource, /const SERIALIZER_LEASE_SECONDS = 50;/u);
+  const f = await fixture(t);
+  f.health = 'slow_healthy';
+  const original = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url === f.configuration.DO_WRITER_L7_URL) {
+      const marker = { format: 'lemtel_do_writer_l7_ready_v1', writer_role: 'do_writer', definitive: true,
+        observed_at: f.now + 20, status: 'healthy' };
+      f.now += 20; // the answer arrives 20 s after the tick started, carrying a marker written meanwhile
+      const raw = new Response(JSON.stringify(marker), { status: 200, headers: { 'content-type': 'application/json' } });
+      return { status: 200, headers: raw.headers, body: raw.body, url, redirected: false };
+    }
+    return original(url, options);
+  });
+  assert.equal((await f.tick()).state, 'healthy');
 });

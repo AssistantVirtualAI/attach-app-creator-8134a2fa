@@ -44,11 +44,11 @@ export function resolveSpeakerName(speaker: string | null | undefined, ctx: Spea
   return user;
 }
 
-let cached: Promise<SpeakerCtx> | null = null;
-async function loadCtx(): Promise<SpeakerCtx> {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth?.user?.id;
-  if (!uid) return {};
+const cache = new Map<string, Promise<SpeakerCtx>>();
+/** Test/auth hook: drop every cached speaker context. */
+export function resetSpeakerCtxCache() { cache.clear(); }
+
+async function loadCtx(uid: string): Promise<SpeakerCtx> {
   const [me, internal, contacts] = await Promise.all([
     supabase.from("planipret_profiles").select("extension,full_name").eq("user_id", uid).maybeSingle(),
     supabase.from("planipret_profiles").select("extension,full_name").not("extension", "is", null).limit(500),
@@ -64,13 +64,33 @@ async function loadCtx(): Promise<SpeakerCtx> {
   return { brokerExt: (me.data as any)?.extension ?? null, brokerName: (me.data as any)?.full_name ?? null, internalByExt, contactsByPhone };
 }
 
+function ctxFor(uid: string): Promise<SpeakerCtx> {
+  let p = cache.get(uid);
+  if (!p) { p = loadCtx(uid).catch(() => { cache.delete(uid); return {}; }); cache.set(uid, p); }
+  return p;
+}
+
 export function useSpeakerCtx(enabled: boolean): SpeakerCtx {
   const [ctx, setCtx] = useState<SpeakerCtx>({});
+  const [uid, setUid] = useState<string | null>(null);
   useEffect(() => {
-    if (!enabled) return;
     let alive = true;
-    (cached ??= loadCtx().catch(() => { cached = null; return {}; })).then((c) => { if (alive) setCtx(c); });
+    supabase.auth.getUser().then(({ data }) => { if (alive) setUid(data?.user?.id ?? null); });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || event === "SIGNED_IN" || event === "USER_UPDATED") {
+        cache.clear();
+        setCtx({});
+        setUid(event === "SIGNED_OUT" ? null : session?.user?.id ?? null);
+      }
+    });
+    return () => { alive = false; sub?.subscription?.unsubscribe(); };
+  }, []);
+  useEffect(() => {
+    setCtx({});
+    if (!enabled || !uid) return;
+    let alive = true;
+    ctxFor(uid).then((c) => { if (alive) setCtx(c); });
     return () => { alive = false; };
-  }, [enabled]);
+  }, [enabled, uid]);
   return ctx;
 }

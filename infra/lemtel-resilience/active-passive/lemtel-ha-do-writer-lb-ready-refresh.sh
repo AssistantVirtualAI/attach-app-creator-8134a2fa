@@ -5,6 +5,9 @@
 # marker: the failover arbiter and the Cloudflare monitor treat a missing marker as "DO is down", so a
 # Hostinger or tunnel outage must never make a healthy writer look dead. Standby readiness reaches the
 # arbiter separately, signed by the Hostinger agent.
+# The same script publishes the marker of a promoted Hostinger writer (role hostinger_promoted_writer):
+# there the Auth route is checked locally (TLS internal, through the local Caddy), because the public path
+# only reaches Hostinger once the Cloudflare monitor already sees this marker.
 # No routing, provider action, promotion, database mutation or telephony action is performed.
 set -euo pipefail
 
@@ -16,8 +19,11 @@ fail() {
 }
 
 [ "$(id -u)" -eq 0 ] || fail root_required
-[ "${LEMTEL_HA_EXECUTE:-}" = 'refresh_digitalocean_writer_l7_ready' ] || fail execution_token_required
-[ "${LEMTEL_HA_ROLE:-}" = 'digitalocean_promoted_writer' ] || fail invalid_role
+case "${LEMTEL_HA_ROLE:-}:${LEMTEL_HA_EXECUTE:-}" in
+  digitalocean_promoted_writer:refresh_digitalocean_writer_l7_ready) marker_writer_role='do_writer' ;;
+  hostinger_promoted_writer:refresh_hostinger_writer_l7_ready) marker_writer_role='hostinger_writer' ;;
+  *) fail execution_token_or_role_invalid ;;
+esac
 
 caddy_container='supabase-caddy'
 resolve_runtime_container() {
@@ -57,18 +63,24 @@ writer_state="$(docker exec "$db_container" sh -eu -c 'export PSQLRC=/dev/null; 
 
 auth_url="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$auth_container" | sed -n 's/^API_EXTERNAL_URL=//p' | sed -n '1p')"
 case "$auth_url" in https://*) ;; *) fail auth_external_url_invalid ;; esac
-auth_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --connect-timeout 5 --max-time 15 "$auth_url/auth/v1/health" || true)"
+if [ "$marker_writer_role" = hostinger_writer ]; then
+  auth_host="${auth_url#https://}"; auth_host="${auth_host%%/*}"; auth_host="${auth_host%%:*}"
+  [[ "$auth_host" =~ ^[a-z0-9.-]+$ ]] || fail auth_external_url_invalid
+  auth_status="$(curl --silent --show-error --insecure --resolve "$auth_host:443:127.0.0.1" --output /dev/null --write-out '%{http_code}' --connect-timeout 5 --max-time 15 "https://$auth_host/auth/v1/health" || true)"
+else
+  auth_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --connect-timeout 5 --max-time 15 "$auth_url/auth/v1/health" || true)"
+fi
 case "$auth_status" in 200|204|401|403) ;; *) fail auth_route_unreachable ;; esac
 
 tmp="$(mktemp "$caddy_mount/.${marker_name}.XXXXXX")"
 observed_at="$(date -u +%s)"
-printf '{"format":"lemtel_do_writer_l7_ready_v1","writer_role":"do_writer","definitive":true,"observed_at":%s,"status":"healthy"}\n' "$observed_at" > "$tmp"
+printf '{"format":"lemtel_do_writer_l7_ready_v1","writer_role":"%s","definitive":true,"observed_at":%s,"status":"healthy"}\n' "$marker_writer_role" "$observed_at" > "$tmp"
 chmod 0644 "$tmp"
 mv -f -- "$tmp" "$marker_path"
 rm -f -- "$caddy_mount/$legacy_marker_name"
 
 printf 'do_writer_l7_ready_format=lemtel_do_writer_l7_ready_v1\n'
-printf 'writer=digitalocean_promoted_writer\n'
+printf 'writer=%s\n' "$LEMTEL_HA_ROLE"
 printf 'marker_written=true\n'
 printf 'response_body=minimal_l7_ready_json\n'
 printf 'dns_change_executed=false\n'

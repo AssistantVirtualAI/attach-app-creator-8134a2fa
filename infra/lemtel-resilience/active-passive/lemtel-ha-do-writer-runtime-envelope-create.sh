@@ -19,6 +19,7 @@ runtime_paths=(
   volumes/api/envoy/cds.yaml
   volumes/api/envoy/lds.template.yaml
   volumes/api/envoy/docker-entrypoint.sh
+  volumes/pooler/pooler.exs
 )
 valid_compose_dir() {
   local candidate="$1" path

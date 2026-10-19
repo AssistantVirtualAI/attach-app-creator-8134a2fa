@@ -13,6 +13,8 @@ on:
       - "scripts/lemtel-cloudflare-arbiter-*"
       - "scripts/lemtel-l7-ready.test.mjs"
       - "infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-lb-ready-*"
+      - "infra/lemtel-resilience/active-passive/lemtel-ha-hostinger-runtime-stage-refresh.sh"
+      - "scripts/lemtel-hostinger-runtime-stage-refresh.test.mjs"
       - ".github/workflows/lemtel-failover-arbiter.yml"
   push:
     branches: [lemtel/integration]
@@ -27,6 +29,8 @@ on:
       - "scripts/lemtel-cloudflare-arbiter-*"
       - "scripts/lemtel-l7-ready.test.mjs"
       - "infra/lemtel-resilience/active-passive/lemtel-ha-do-writer-lb-ready-*"
+      - "infra/lemtel-resilience/active-passive/lemtel-ha-hostinger-runtime-stage-refresh.sh"
+      - "scripts/lemtel-hostinger-runtime-stage-refresh.test.mjs"
       - ".github/workflows/lemtel-failover-arbiter.yml"
 
 permissions:
@@ -43,5 +47,9 @@ jobs:
           node-version: "22"
       - name: Arbiter Worker, Durable Object serializer, sealed bootstrap and agent mailbox
         run: node --test scripts/lemtel-failover-execution-protocol.test.mjs scripts/lemtel-durable-object-serialization.test.mjs scripts/lemtel-sealed-arbiter-bootstrap.test.mjs scripts/lemtel-cloudflare-arbiter-disabled-version-deploy.test.mjs scripts/lemtel-l7-ready.test.mjs scripts/lemtel-cloudflare-arbiter-bootstrap-operator.test.mjs
+      - name: Hostinger runtime stage refresh (real age + tar, fake docker)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq age
+          node --test scripts/lemtel-hostinger-runtime-stage-refresh.test.mjs
       - name: Hostinger signed-observation deployers (offline fakes)
         run: node --test scripts/lemtel-hostinger-standby-deploy.test.mjs

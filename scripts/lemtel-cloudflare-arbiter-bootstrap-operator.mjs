@@ -56,7 +56,13 @@ export function readGates(env) {
   const drill = env.LEMTEL_DRILL_AUTHORIZATION || 'none';
   const match = /^supervised_review_drill:([1-4])$/u.exec(drill);
   gate(drill === 'none' || match, 'drill_authorization_invalid');
-  return { accountId: env.LEMTEL_CF_TARGET_ACCOUNT_ID, sourceSha256: env.LEMTEL_CF_EXPECTED_SOURCE_SHA256,
+  // Optional, explicit: the agent really promotes Hostinger (full drill). Requires the supervised drill authorization
+  // and the agent's own acknowledgement phrase; the default stays review (validate, never promote).
+  const promotionMode = env.LEMTEL_AGENT_PROMOTION_MODE || 'review';
+  gate(promotionMode === 'review' || promotionMode === 'execute', 'agent_promotion_mode_invalid');
+  gate(promotionMode === 'review' || (match && env.LEMTEL_AGENT_EXECUTE_ACK === 'I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER'),
+    'agent_execute_requires_drill_authorization_and_acknowledgement');
+  return { promotionMode, accountId: env.LEMTEL_CF_TARGET_ACCOUNT_ID, sourceSha256: env.LEMTEL_CF_EXPECTED_SOURCE_SHA256,
     compatibilityDate: env.LEMTEL_CF_COMPATIBILITY_DATE, revision: env.LEMTEL_CF_CONFIG_REVISION,
     dropletId: env.LEMTEL_DO_WRITER_DROPLET_ID, origin: origin.origin, cfToken: env.CLOUDFLARE_API_TOKEN,
     doToken: env.LEMTEL_DO_ARBITER_TOKEN, agentCommand, drillCommand, agentRemoteScript: env.LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT,
@@ -104,10 +110,11 @@ export function assertFinalSettings(result, revision) {
   gate(byName.get('FAILOVER_MODE').text === 'disabled', 'final_mode_not_disabled');
   gate(byName.get('CONFIG_REVISION').text === revision, 'final_revision_mismatch');
 }
-export function agentConfiguration({ origin, agentSecret, dropletId }) {
+export function agentConfiguration({ origin, agentSecret, dropletId, promotionMode = 'review' }) {
   return ['FAILOVER_MODE=active', `ARBITER_URL=${origin}`, `AGENT_SHARED_SECRET=${agentSecret}`,
     `DO_WRITER_DROPLET_ID=${dropletId}`, 'LEMTEL_HA_LOCAL_POSTGRES_CONTAINER=lemtel-postgres-hostinger-standby',
-    'PROMOTION_EXECUTION_MODE=review', ''].join('\n');
+    `PROMOTION_EXECUTION_MODE=${promotionMode === 'execute' ? 'execute' : 'review'}`,
+    ...(promotionMode === 'execute' ? ['EXECUTION_ACK=I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER'] : []), ''].join('\n');
 }
 
 function runSink(spawnImpl, argv, input, success) {
@@ -213,7 +220,7 @@ export async function runBootstrap({ env = process.env, fetchImpl = globalThis.f
   log('arbiter_mode=disabled_confirmed');
   // 6. Hostinger agent configuration (agent secret only), validated by the agent's own preflight.
   const remote = await readFile(g.agentRemoteScript, 'utf8');
-  const agent = await runSink(spawnImpl, g.agentCommand, `${remote.endsWith('\n') ? remote : `${remote}\n`}${agentConfiguration({ origin: g.origin, agentSecret, dropletId: g.dropletId })}`,
+  const agent = await runSink(spawnImpl, g.agentCommand, `${remote.endsWith('\n') ? remote : `${remote}\n`}${agentConfiguration({ origin: g.origin, agentSecret, dropletId: g.dropletId, promotionMode: g.promotionMode })}`,
     'agent_config_status=complete');
   log(agent.ok ? 'hostinger_agent_config=written_preflight_ready' : 'hostinger_agent_config=failed_rerun_with_new_revision');
   gate(agent.ok, 'hostinger_agent_config_failed');

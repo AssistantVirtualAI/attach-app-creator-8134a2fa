@@ -176,3 +176,26 @@ test('active is refused without a drill authorization, and invalid authorization
   }
   await assert.rejects(sw(w, modeEnv('active', { LEMTEL_ARBITER_MODE_INTENT: 'LEMTEL_ARBITER_MODE_DISABLED_V1' })), (e) => e.code === 'intent_required');
 });
+
+test('agent execute mode (full drill) needs the supervised drill authorization and the explicit acknowledgement', async () => {
+  const { readGates, agentConfiguration } = await import('./lemtel-cloudflare-arbiter-bootstrap-operator.mjs');
+  const base = { LEMTEL_CF_BOOTSTRAP_INTENT: 'LEMTEL_CF_BOOTSTRAP_SEALED_CONFIG_V1', LEMTEL_CF_TARGET_ACCOUNT_ID: 'a'.repeat(32),
+    LEMTEL_CF_EXPECTED_SOURCE_SHA256: 'b'.repeat(64), LEMTEL_CF_COMPATIBILITY_DATE: '2026-10-16', LEMTEL_CF_CONFIG_REVISION: 'lemtel-failover-drill-x1',
+    LEMTEL_DO_WRITER_DROPLET_ID: '123', LEMTEL_ARBITER_ORIGIN: 'https://lemtel-failover-arbiter.example.workers.dev/',
+    CLOUDFLARE_API_TOKEN: 'c'.repeat(40), LEMTEL_DO_ARBITER_TOKEN: 'd'.repeat(40), LEMTEL_AGENT_CONFIG_CMD: '["ssh"]',
+    LEMTEL_DRILL_SECRET_CMD: '["security"]', LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT: '/tmp/x.sh' };
+  assert.equal(readGates(base).promotionMode, 'review');
+  const ack = { LEMTEL_AGENT_PROMOTION_MODE: 'execute', LEMTEL_AGENT_EXECUTE_ACK: 'I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER' };
+  assert.throws(() => readGates({ ...base, ...ack }), /agent_execute_requires_drill_authorization_and_acknowledgement/u);
+  assert.throws(() => readGates({ ...base, LEMTEL_AGENT_PROMOTION_MODE: 'execute', LEMTEL_DRILL_AUTHORIZATION: 'supervised_review_drill:2' }),
+    /agent_execute_requires_drill_authorization_and_acknowledgement/u);
+  assert.throws(() => readGates({ ...base, LEMTEL_AGENT_PROMOTION_MODE: 'yolo' }), /agent_promotion_mode_invalid/u);
+  const g = readGates({ ...base, ...ack, LEMTEL_DRILL_AUTHORIZATION: 'supervised_review_drill:2' });
+  assert.equal(g.promotionMode, 'execute');
+  const config = agentConfiguration({ origin: 'https://o', agentSecret: 's', dropletId: '1', promotionMode: 'execute' });
+  assert.match(config, /PROMOTION_EXECUTION_MODE=execute\nEXECUTION_ACK=I_UNDERSTAND_CURRENT_TOPOLOGY_AUTOMATIC_FAILOVER\n$/u);
+  assert.match(agentConfiguration({ origin: 'https://o', agentSecret: 's', dropletId: '1' }), /PROMOTION_EXECUTION_MODE=review\n$/u);
+  const configure = readFileSync(new URL('../infra/lemtel-resilience/automatic-failover/lemtel-ha-hostinger-failover-agent-configure.sh', import.meta.url), 'utf8');
+  assert.match(configure, /"PROMOTION_EXECUTION_MODE": r"review\|execute"/u);
+  assert.match(configure, /if \(seen\["PROMOTION_EXECUTION_MODE"\] == "execute"\) != \("EXECUTION_ACK" in seen\): fail\("configuration_invalid"\)/u);
+});

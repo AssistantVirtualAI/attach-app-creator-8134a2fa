@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageSquare, Send, X } from "lucide-react";
+import { MessageSquare, Send, Trash2, X } from "lucide-react";
+import { useSmsThreadState, smsThreadKey, isHidden } from "@/lib/planipret/smsThreadState";
+import { confirmDialog } from "@/lib/confirmDialog";
 import { toast } from "sonner";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
@@ -35,6 +37,7 @@ export default function PBMessages() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [detail, setDetail] = useState<any | null>(null);
+  const { state: smsState, act: smsAct } = useSmsThreadState(userId);
 
   const patch = (next: Record<string, string | null>, resetPage = true) => {
     const p = new URLSearchParams(params);
@@ -77,8 +80,8 @@ export default function PBMessages() {
         map.set(key, { key, peer, last: m, messages: [m], unread: m.direction === "inbound" && !m.read_at ? 1 : 0 });
       }
     }
-    return Array.from(map.values());
-  }, [rows]);
+    return Array.from(map.values()).filter((t) => !isHidden(smsState, smsThreadKey(t.key, t.peer), t.last.sent_at ?? t.last.created_at));
+  }, [rows, smsState]);
 
   const totalThreads = threads.length;
   const pageThreads = threads.slice((page - 1) * THREADS_PER_PAGE, page * THREADS_PER_PAGE);
@@ -194,6 +197,20 @@ export default function PBMessages() {
           <div className="pp-card flex flex-col" style={{ padding: 0, maxHeight: "70vh" }}>
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
               <span className="pp-heading" style={{ fontSize: 14, fontWeight: 700 }}>{active?.peer}</span>
+              {active && (
+                <button aria-label={lang === "en" ? "Delete conversation" : "Supprimer la conversation"}
+                  onClick={async () => {
+                    const at = active.last.sent_at ?? active.last.created_at;
+                    const ok = await confirmDialog({ title: lang === "en" ? "Delete this conversation?" : "Supprimer cette conversation ?", message: lang === "en" ? "It will be removed from this list on this device. A new text will bring it back." : "Elle sera retirée de cette liste sur cet appareil. Un nouveau texto la fera réapparaître.", confirmLabel: lang === "en" ? "Delete" : "Supprimer", destructive: true });
+                    if (!ok) return;
+                    const k = smsThreadKey(active.key, active.peer);
+                    if (smsAct([k], "hide", { [k]: at })) { setActiveKey(null); toast.success(lang === "en" ? "Conversation deleted" : "Conversation supprimée"); }
+                  }}
+                  className="float-right inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[12px]"
+                  style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-danger)" }}>
+                  <Trash2 className="w-3.5 h-3.5" />{lang === "en" ? "Delete" : "Supprimer"}
+                </button>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {ordered.map((m) => (

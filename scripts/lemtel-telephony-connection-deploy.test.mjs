@@ -44,7 +44,8 @@ case "$1" in
       *Config.Env*) if [ -f "$F/recreated" ]; then printf 'SUPABASE_URL=x\\nLEMTEL_PBX_SECRET_ENCRYPTION_KEY=k\\nLEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY=disabled\\nLEMTEL_ARBITER_STATUS_URL=u\\n'; else echo SUPABASE_URL=x; fi ;;
       *) echo supabase ;;
     esac ;;
-  exec) sql="$(cat)"; echo "sql $sql" >> "$F/log"
+  exec) if [[ "$*" == *rolsuper* ]]; then echo t; exit 0; fi
+    sql="$(cat)"; echo "sql $sql" >> "$F/log"
     case "$sql" in *pg_is_in_recovery*) echo ${recovery} ;; *"tablename IN"*) echo 4 ;; *"LIKE 'lemtel_pbx_"*) echo 0 ;; esac ;;
   compose) case "$*" in *"config --services"*) ${composeBreaks ? `if grep -q LEMTEL_PBX "$LEMTEL_TC_TEST_ROOT/srv/supabase/docker-compose.lemtel-private.yml"; then exit 1; fi;` : ''} echo functions; echo kong ;; *"up -d --no-deps functions"*) touch "$F/recreated" ;; esac ;;
 esac

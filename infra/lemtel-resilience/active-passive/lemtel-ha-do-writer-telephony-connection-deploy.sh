@@ -31,7 +31,20 @@ fence_status="$( [ -n "$T" ] && cat "$T/fence-status" 2>/dev/null || /usr/local/
 case "$fence_status" in *boot_fence=fenced*) fail do_is_fenced_not_the_writer ;; esac
 db="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' '$2 ~ /supabase\/postgres(:|$)/ {print $1}')"
 [ "$(printf '%s\n' "$db" | grep -c .)" = 1 ] || fail database_container_unresolved
-psql_su() { docker exec -i "$db" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' ; }
+# Superuser session proven like the failback tooling: supabase_admin on the container loopback (the DO container was
+# re-created by the failback and may not carry POSTGRES_USER), else the container's own POSTGRES_USER.
+su_mode=''
+if [ "$(docker exec -u postgres -e PGCONNECT_TIMEOUT=5 "$db" psql -X -At -d postgres -h 127.0.0.1 -U supabase_admin -c 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user' 2>/dev/null)" = t ]; then
+  su_mode=loopback
+elif [ "$(docker exec "$db" sh -c 'export PSQLRC=/dev/null; psql -X -At -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}" -c "SELECT rolsuper FROM pg_roles WHERE rolname = current_user"' 2>/dev/null)" = t ]; then
+  su_mode=env
+else
+  fail superuser_session_unavailable
+fi
+psql_su() {
+  if [ "$su_mode" = loopback ]; then docker exec -i -u postgres "$db" psql -X -At -v ON_ERROR_STOP=1 -d postgres -h 127.0.0.1 -U supabase_admin
+  else docker exec -i "$db" sh -eu -c 'export PSQLRC=/dev/null; psql -X -At -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}"'; fi
+}
 [ "$(printf 'SELECT pg_is_in_recovery()::text;\n' | psql_su 2>/dev/null)" = false ] || fail writer_not_verified
 edge='supabase-edge-functions'; caddy='supabase-caddy'
 for c in "$edge" "$caddy"; do [ "$(docker inspect --format '{{.State.Running}}' "$c" 2>/dev/null)" = true ] || fail "container_not_running_$(printf %s "$c" | tr -c "a-z0-9" _)"; done

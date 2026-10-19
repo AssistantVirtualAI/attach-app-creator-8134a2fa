@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import worker from '../infra/lemtel-resilience/automatic-failover/lemtel-failover-arbiter-worker.mjs';
 import { runBootstrap, SOURCE_PATH, CRON } from './lemtel-cloudflare-arbiter-bootstrap-operator.mjs';
+import { switchMode } from './lemtel-cloudflare-arbiter-mode.mjs';
 import { createSerializerBinding } from './lemtel-serializer-test-helpers.mjs';
 
 // Synthetic, offline simulation of Cloudflare, DigitalOcean, the Keychain and the Hostinger agent sink.
@@ -30,7 +31,14 @@ function world({ mode = 'disabled', revision = 'lemtel-failover-v1', failBootstr
     if (url === `https://api.digitalocean.com/v2/droplets/${DROPLET}`) return new Response(JSON.stringify({ droplet: { id: Number(DROPLET), status: 'active' } }), { status: 200 });
     const base = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/workers/scripts/lemtel-failover-arbiter`;
     if (url === `${base}/settings`) return ok({ bindings: Object.entries(w.bindings).map(([name, b]) => ({ name, type: b.type,
-      ...(b.type === 'plain_text' ? { text: b.value } : {}), ...(b.type === 'durable_object_namespace' ? { class_name: 'LemtelFailoverSerializer' } : {}) })) });
+      ...(b.type === 'plain_text' ? { text: b.value } : {}), ...(b.type === 'durable_object_namespace' ? { class_name: 'LemtelFailoverSerializer' } : {}),
+      ...(b.type === 'kv_namespace' ? { namespace_id: 'f'.repeat(32) } : {}) })) });
+    const kvBase = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/storage/kv/namespaces/${'f'.repeat(32)}/values/`;
+    if (url.startsWith(kvBase)) {
+      const key = decodeURIComponent(url.slice(kvBase.length));
+      if (init.method === 'PUT') { w.kv.set(key, init.body); return ok(null); }
+      return w.kv.has(key) ? new Response(w.kv.get(key), { status: 200 }) : new Response('{}', { status: 404 });
+    }
     if (url === `${base}/schedules`) {
       if (init.method === 'PUT') w.schedules = JSON.parse(init.body).map((s) => s.cron);
       return ok({ schedules: w.schedules.map((cron) => ({ cron })) });
@@ -133,4 +141,38 @@ test('invalid gates never reach the network', async () => {
     await assert.rejects(run(w, env(override)));
     assert.equal(w.calls.length, 0, JSON.stringify(override));
   }
+});
+
+const modeEnv = (mode, overrides = {}) => ({ LEMTEL_ARBITER_TARGET_MODE: mode, LEMTEL_ARBITER_MODE_INTENT: `LEMTEL_ARBITER_MODE_${mode.toUpperCase()}_V1`,
+  LEMTEL_CF_TARGET_ACCOUNT_ID: ACCOUNT, LEMTEL_CF_EXPECTED_SOURCE_SHA256: createHash('sha256').update(source).digest('hex'),
+  LEMTEL_CF_COMPATIBILITY_DATE: '2026-10-16', CLOUDFLARE_API_TOKEN: 'synthetic-cloudflare-token-xxxxxxxx', LEMTEL_ARBITER_ORIGIN: ORIGIN, ...overrides });
+const sw = (w, e) => switchMode({ env: e, fetchImpl: w.fetch, sleep: async () => {} });
+
+test('a supervised drill authorization lets the arbiter go active, observe, then return to disabled', async () => {
+  const w = world();
+  await run(w, env({ LEMTEL_DRILL_AUTHORIZATION: 'supervised_review_drill:3' }));
+  assert.ok(w.kv.has('lemtel_failover_execution_v1:production-drill'));
+  const sealed = JSON.parse(w.kv.get('lemtel_failover_execution_v1:production-drill'));
+  assert.equal(sealed.kind, 'drill'); assert.ok(sealed.expires_at - sealed.issued_at <= 3 * 3600);
+  assert.equal(w.bindings.FAILOVER_MODE.value, 'disabled', 'the authorization never changes the mode');
+  const active = await sw(w, modeEnv('active'));
+  assert.equal(w.bindings.FAILOVER_MODE.value, 'active');
+  assert.notEqual(active.status.reason, 'production_drill_or_serialization_not_verified', 'drill gate passes');
+  assert.notEqual(active.status.reason, 'protected_configuration_unavailable');
+  const back = await sw(w, modeEnv('disabled'));
+  assert.equal(back.status.state, 'disabled_or_dry_run'); assert.equal(w.bindings.FAILOVER_MODE.value, 'disabled');
+  assert.deepEqual(Object.keys(w.bindings).sort(), ['ARBITER_SERIALIZER', 'CONFIG_REVISION', 'CONFIG_STATE_ENCRYPTION_KEY', 'FAILOVER_MODE', 'STATE']);
+});
+
+test('active is refused without a drill authorization, and invalid authorizations are rejected before any change', async () => {
+  const w = world();
+  await run(w);
+  await assert.rejects(sw(w, modeEnv('active')), (e) => e.code === 'drill_authorization_missing');
+  assert.equal(w.bindings.FAILOVER_MODE.value, 'disabled');
+  for (const value of ['supervised_review_drill:5', 'supervised_review_drill:0', 'forever']) {
+    const v = world();
+    await assert.rejects(run(v, env({ LEMTEL_DRILL_AUTHORIZATION: value })), (e) => e.code === 'drill_authorization_invalid');
+    assert.equal(v.calls.length, 0);
+  }
+  await assert.rejects(sw(w, modeEnv('active', { LEMTEL_ARBITER_MODE_INTENT: 'LEMTEL_ARBITER_MODE_DISABLED_V1' })), (e) => e.code === 'intent_required');
 });

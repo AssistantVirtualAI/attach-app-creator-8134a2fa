@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { injectBootstrapConfiguration, createBootstrapSession, protocol }
+import { injectBootstrapConfiguration, createBootstrapSession, protocol, sealDrillReceipt, canonical }
   from '../infra/lemtel-resilience/automatic-failover/lemtel-sealed-bootstrap-controller.mjs';
 
 export const WORKER_NAME = 'lemtel-failover-arbiter';
@@ -52,10 +52,15 @@ export function readGates(env) {
   gate(Array.isArray(agentCommand) && agentCommand.length > 0 && agentCommand.every((part) => typeof part === 'string'), 'agent_sink_invalid');
   gate(Array.isArray(drillCommand) && drillCommand.length > 0 && drillCommand.every((part) => typeof part === 'string'), 'drill_sink_invalid');
   gate(typeof env.LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT === 'string' && env.LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT.startsWith('/'), 'agent_remote_script_invalid');
+  // Optional, explicit: a short supervised-drill authorization (1–4 h) written right after the bootstrap.
+  const drill = env.LEMTEL_DRILL_AUTHORIZATION || 'none';
+  const match = /^supervised_review_drill:([1-4])$/u.exec(drill);
+  gate(drill === 'none' || match, 'drill_authorization_invalid');
   return { accountId: env.LEMTEL_CF_TARGET_ACCOUNT_ID, sourceSha256: env.LEMTEL_CF_EXPECTED_SOURCE_SHA256,
     compatibilityDate: env.LEMTEL_CF_COMPATIBILITY_DATE, revision: env.LEMTEL_CF_CONFIG_REVISION,
     dropletId: env.LEMTEL_DO_WRITER_DROPLET_ID, origin: origin.origin, cfToken: env.CLOUDFLARE_API_TOKEN,
-    doToken: env.LEMTEL_DO_ARBITER_TOKEN, agentCommand, drillCommand, agentRemoteScript: env.LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT };
+    doToken: env.LEMTEL_DO_ARBITER_TOKEN, agentCommand, drillCommand, agentRemoteScript: env.LEMTEL_AGENT_CONFIG_REMOTE_SCRIPT,
+    drillHours: match ? Number(match[1]) : 0 };
 }
 
 export function versionMetadata(compatibilityDate, bindings) {
@@ -212,6 +217,28 @@ export async function runBootstrap({ env = process.env, fetchImpl = globalThis.f
     'agent_config_status=complete');
   log(agent.ok ? 'hostinger_agent_config=written_preflight_ready' : 'hostinger_agent_config=failed_rerun_with_new_revision');
   gate(agent.ok, 'hostinger_agent_config_failed');
+  // 7. Optional supervised-drill authorization: signed with the drill secret, sealed with the state key, both
+  //    only in memory, written to the arbiter KV. It never changes the mode (still disabled).
+  if (g.drillHours) {
+    const issued = now();
+    const payload = { format: 'lemtel_production_destructive_drill_v1', config_revision: g.revision,
+      writer_role: 'do_writer', target_role: 'hostinger_standby', writer_droplet_id: g.dropletId,
+      destructive_drill_validated: true, serialized_execution_verified: true,
+      authorization_kind: 'supervised_review_drill', validated_at: issued, expires_at: issued + g.drillHours * 3600 };
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(drillSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const signature = Buffer.from(await crypto.subtle.sign('HMAC', key,
+      new TextEncoder().encode(`lemtel-production-drill-v1\n${canonical(payload)}`))).toString('hex');
+    const sealed = await sealDrillReceipt({ session, receipt: { payload, signature }, issuedAt: issued, expiresAt: payload.expires_at });
+    const settings = await cf('/settings', {}, 'settings_read_failed');
+    const namespace = settings.bindings.find((binding) => binding.name === 'STATE')?.namespace_id;
+    gate(/^[a-f0-9]{32}$/u.test(namespace || ''), 'state_namespace_unresolved');
+    let response;
+    try { response = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${g.accountId}/storage/kv/namespaces/${namespace}/values/${encodeURIComponent('lemtel_failover_execution_v1:production-drill')}`,
+      { method: 'PUT', headers: { authorization: `Bearer ${g.cfToken}`, 'content-type': 'text/plain' }, body: JSON.stringify(sealed), redirect: 'error' }); }
+    catch { response = null; }
+    gate(response?.ok && (await response.json().catch(() => null))?.success === true, 'drill_authorization_write_failed');
+    log(`supervised_drill_authorization=written_valid_${g.drillHours}h`);
+  }
   return { state: 'complete', revision: g.revision, failover_mode: 'disabled', promotion_mode: 'review' };
 }
 

@@ -683,3 +683,13 @@ test('standby readiness requires every staged runtime image locally, and the run
   assert.match(start, /fail runtime_image_missing/u);
   assert.ok(start.indexOf('fail runtime_image_missing') < start.indexOf('docker network create'), 'image check precedes any runtime change');
 });
+
+test('agent control prepares the evidence directory, never promotes, and archives one-time drill evidence', () => {
+  const control = read('lemtel-ha-hostinger-failover-agent-control.sh');
+  assert.match(control, /install -d -o root -g root -m 0700 "\$EVIDENCE"/u);
+  assert.ok(control.indexOf('install -d -o root -g root -m 0700 "$EVIDENCE"') < control.indexOf('systemctl start lemtel-ha-hostinger-failover-agent.timer'));
+  assert.match(control, /fail stop_the_agent_first/u);
+  assert.doesNotMatch(control, /pg_ctl|promote\.sh|runtime-start\.sh|>\s*\/etc\/lemtel-ha\/failover-agent\.env|EXECUTION_ACK/u);
+  assert.match(service, /^TimeoutStartSec=600s$/mu);
+  assert.match(service, /ReadWritePaths=.*\/etc\/systemd\/system/u);
+});

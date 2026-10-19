@@ -11,7 +11,8 @@ Group=root
 Environment=LEMTEL_HA_EXECUTE=run_hostinger_failover_agent
 Environment=LEMTEL_HA_ROLE=hostinger_standby
 ExecStart=/usr/bin/bash /opt/lemtel-ha/automatic-failover/lemtel-ha-hostinger-failover-agent.sh poll
-TimeoutStartSec=50s
+# Execute mode runs promotion (<=240 s) and runtime start (<=180 s) inside one poll.
+TimeoutStartSec=600s
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
@@ -19,5 +20,7 @@ ProtectSystem=strict
 ProtectHome=true
 StateDirectory=lemtel-ha/failover-agent
 StateDirectoryMode=0700
-ReadWritePaths=/var/lib/lemtel-ha/failover-agent /var/lib/lemtel-ha/current-topology-evidence /var/lock /opt/lemtel-ha/runtime-stage
+# current-topology-evidence must exist before start (created by the agent control script).
+# /etc/systemd/system: the promoted runtime installs its readiness-marker timer there.
+ReadWritePaths=/var/lib/lemtel-ha/failover-agent /var/lib/lemtel-ha/current-topology-evidence /var/lock /opt/lemtel-ha/runtime-stage /etc/systemd/system
 ReadOnlyPaths=/etc/lemtel-ha /opt/lemtel-ha/automatic-failover

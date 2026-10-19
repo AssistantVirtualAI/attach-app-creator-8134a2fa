@@ -73,6 +73,7 @@ function ctxFor(uid: string): Promise<SpeakerCtx> {
 export function useSpeakerCtx(enabled: boolean): SpeakerCtx {
   const [ctx, setCtx] = useState<SpeakerCtx>({});
   const [uid, setUid] = useState<string | null>(null);
+  const [ctxRevision, setCtxRevision] = useState(0);
   useEffect(() => {
     let alive = true;
     supabase.auth.getUser().then(({ data }) => { if (alive) setUid(data?.user?.id ?? null); });
@@ -81,6 +82,7 @@ export function useSpeakerCtx(enabled: boolean): SpeakerCtx {
         cache.clear();
         setCtx({});
         setUid(event === "SIGNED_OUT" ? null : session?.user?.id ?? null);
+        setCtxRevision((v) => v + 1);
       }
     });
     return () => { alive = false; sub?.subscription?.unsubscribe(); };
@@ -91,6 +93,6 @@ export function useSpeakerCtx(enabled: boolean): SpeakerCtx {
     let alive = true;
     ctxFor(uid).then((c) => { if (alive) setCtx(c); });
     return () => { alive = false; };
-  }, [enabled, uid]);
+  }, [enabled, uid, ctxRevision]);
   return ctx;
 }

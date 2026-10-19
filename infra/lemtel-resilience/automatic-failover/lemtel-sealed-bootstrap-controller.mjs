@@ -93,15 +93,19 @@ export async function injectBootstrapConfiguration({ session, configuration, tra
   try {
     await enterBootstrap(); // This callback may set ONLY bootstrap, never active.
     const keyResponse = await transport({ method: 'GET', path: protocol.keyPath });
-    if (keyResponse.status !== 200) throw new Error('invalid');
+    if (keyResponse.status !== 200) throw new Error(`key_http_${keyResponse.status}`);
     const publicDescriptor = await keyResponse.json();
     const { envelope, proof } = await createBootstrapEnvelope({ session, publicDescriptor,
       configuration, now, bootstrapTTL, configTTL });
     const response = await transport({ method: 'POST', path: protocol.bootstrapPath,
       headers: { 'content-type': 'application/json', 'x-lemtel-bootstrap-proof': proof }, body: JSON.stringify(envelope) });
-    if (response.status !== 201) throw new Error('invalid');
+    if (response.status !== 201) throw new Error(`injection_http_${response.status}`);
     accepted = true;
-  } catch { throw new Error('bootstrap_injection_rejected'); }
+  } catch (error) {
+    // Keep the cause (a fixed token: gate code or HTTP status), never free text from a remote party.
+    const cause = String(error?.code || error?.message || 'unknown');
+    throw new Error(`bootstrap_injection_rejected:${/^[a-z0-9_]{1,80}$/u.test(cause) ? cause : 'unexpected'}`);
+  }
   finally {
     try { await returnToDisabled(); } catch { throw new Error('bootstrap_disabled_reset_unconfirmed'); }
   }

@@ -239,3 +239,6 @@ project_id = "gejxisrqtvxavbrfcoxz"
 
 [functions.pp-call-handoff]
 verify_jwt = false
+
+[functions.pp-feedback-reply-notify]
+verify_jwt = true

@@ -116,7 +116,7 @@ async function fixture(t) {
   await f.setDrill({ payload, signature: signature(f.configuration.DRILL_APPROVAL_SECRET, 'lemtel-production-drill-v1', payload) });
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     f.calls.push({ url, options });
-    assert.equal(options.redirect, 'error');
+    assert.equal(options.redirect, 'manual', 'Workers reject redirect: error');
     assert.ok(options.signal instanceof AbortSignal);
     if (url === f.configuration.DO_WRITER_L7_URL) {
       if (f.healthBarrier) await f.healthBarrier;
@@ -134,6 +134,8 @@ async function fixture(t) {
       if (f.health === 'origin_down_521') return cloudflareEdge(521, '8c1f0e2d3a4b5c6d-YYZ');
       if (f.health === 'origin_down_no_ray') return cloudflareEdge(522, null);
       if (f.health === 'edge_524') return cloudflareEdge(524, '8c1f0e2d3a4b5c6d-YUL');
+      if (f.health === 'manual_302') { const raw = new Response(null, { status: 302, headers: { location: `${fakeURL('writer')}/elsewhere` } });
+        return { status: raw.status, headers: raw.headers, body: raw.body, url: f.configuration.DO_WRITER_L7_URL, redirected: false }; }
       return l7Response(readyMarker());
     }
     assert.ok(url.startsWith(`${f.configuration.DO_API_BASE_URL}/`), 'only the configured fake provider can be requested');
@@ -692,4 +694,13 @@ test('agent control prepares the evidence directory, never promotes, and archive
   assert.doesNotMatch(control, /pg_ctl|promote\.sh|runtime-start\.sh|>\s*\/etc\/lemtel-ha\/failover-agent\.env|EXECUTION_ACK/u);
   assert.match(service, /^TimeoutStartSec=600s$/mu);
   assert.match(service, /ReadWritePaths=.*\/etc\/systemd\/system/u);
+});
+
+test('Workers-compatible requests: never redirect "error" (rejected by the Workers runtime), and a 3xx is never followed or trusted', async (t) => {
+  assert.doesNotMatch(workerSource, /redirect:\s*'error'/u);
+  assert.equal((workerSource.match(/redirect: 'manual'/gu) || []).length, 2);
+  const f = await fixture(t);
+  f.health = 'manual_302';
+  for (let cycle = 0; cycle < 4; cycle += 1) assert.equal((await f.tick()).reason, 'l7_health_ambiguous_no_fencing');
+  assert.deepEqual(f.posts(), []);
 });

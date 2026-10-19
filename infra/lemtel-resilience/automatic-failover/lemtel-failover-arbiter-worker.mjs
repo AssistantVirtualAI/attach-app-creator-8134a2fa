@@ -418,8 +418,11 @@ async function readiness(env, cfg, now) {
     return null;
   } catch { return status('blocked', 'state_or_drill_receipt_invalid'); }
 }
+// Cloudflare Workers reject the "error" redirect mode (every request would throw). `manual` returns any 3xx as-is,
+// and a 3xx is never an accepted status here, so a redirect is still refused, never followed.
 async function requestJSON(url, options = {}, accepted = [200]) {
-  const response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(8000) });
+  const response = await fetch(url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(8000) });
+  if (response.status >= 300 && response.status < 400) throw new Error('redirect_refused');
   if (!accepted.includes(response.status) ||
       !response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new Error('untrusted_response');
   return { code: response.status, body: await responseJSON(response) };
@@ -449,7 +452,8 @@ function exactL7Response(response, requested) {
   } catch { return false; }
 }
 async function requestL7(url, options = {}) {
-  const response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(8000) });
+  const response = await fetch(url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(8000) });
+  if (response.status >= 300 && response.status < 400) throw new Error('redirect_refused');
   // A Cloudflare edge answer saying the origin is down/unreachable is a definitive negative, like a 404.
   // It must come from the configured host and path, and carry Cloudflare's cf-ray header.
   if (ORIGIN_DOWN_CODES.has(response.status) && exactL7Response(response, url) &&

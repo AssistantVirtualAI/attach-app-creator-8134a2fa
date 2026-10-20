@@ -2,7 +2,7 @@
 // pour un courtier Planiprêt, via Lovable AI Gateway (Claude / GPT-5.5).
 // Retourne { report, period, stats }.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { generateText } from "npm:ai";
+import { generateText } from "npm:ai@6";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { hasValidAiConsent } from "../_shared/ai-consent.ts";
 

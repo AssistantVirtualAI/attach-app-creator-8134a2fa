@@ -4,7 +4,7 @@
 // Cached 30 min per (user, period) in `planipret_ai_insights`.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { hasValidAiConsent } from "../_shared/ai-consent.ts";
-import { generateText } from "npm:ai";
+import { generateText } from "npm:ai@6";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";

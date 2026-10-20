@@ -1,7 +1,7 @@
 // Lemtel Mascot agent — tool-calling AI orchestrator across the AVA Statistic admin.
 // Streams via AI SDK + Lovable Gateway. Tools fan out to existing edge functions / RPCs.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "npm:ai";
+import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "npm:ai@6";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 

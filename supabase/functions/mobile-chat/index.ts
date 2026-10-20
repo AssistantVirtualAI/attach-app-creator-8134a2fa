@@ -1,6 +1,6 @@
 // mobile-chat: AVA chatbot for the mobile app. Uses Lovable AI Gateway.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { streamText, generateText, convertToModelMessages } from "npm:ai";
+import { streamText, generateText, convertToModelMessages } from "npm:ai@6";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { callAnthropic } from "../_shared/anthropic.ts";
 

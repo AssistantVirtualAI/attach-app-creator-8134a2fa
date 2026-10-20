@@ -1,7 +1,7 @@
 // AVA admin chat command pipeline.
 // Hardened: zod-validated body, structured logging, latency tracking,
 // strict super_admin/lemtel_admin gate, audit log on every tool exec.
-import { streamText, tool, stepCountIs, convertToModelMessages, type UIMessage } from "npm:ai";
+import { streamText, tool, stepCountIs, convertToModelMessages, type UIMessage } from "npm:ai@6";
 import { createClaudeProvider } from "../_shared/ai-gateway.ts";
 import { z } from "npm:zod";
 import { corsHeaders, jsonResponse, requireUser, getServiceClient } from "../_shared/auth.ts";

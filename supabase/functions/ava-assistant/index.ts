@@ -16,7 +16,7 @@
 //   Denials return { error: "forbidden", reason } so the model can explain to the user.
 // * Mutating tools (send_sms, click_to_call) ALWAYS preview first (confirm:false) and only
 //   execute on confirm:true.
-import { generateText, tool, stepCountIs } from "npm:ai";
+import { generateText, tool, stepCountIs } from "npm:ai@6";
 import { z } from "npm:zod";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";

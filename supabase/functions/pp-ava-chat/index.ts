@@ -2,7 +2,7 @@
 // Returns { reply, suggestions[], openCoach?, openVoice? } for the mobile UI.
 // Uses Lovable AI Gateway. Does NOT alter pp-ava-proactive (cron push) or any other function.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { generateText, Output } from "npm:ai";
+import { generateText, Output } from "npm:ai@6";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 

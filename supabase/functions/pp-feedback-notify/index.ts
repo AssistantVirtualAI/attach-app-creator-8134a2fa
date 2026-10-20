@@ -27,6 +27,44 @@ function belongsToReporter(path: unknown, reporterId: string): path is string {
     && /^[0-9a-f-]{36}\/[A-Za-z0-9._/-]+$/i.test(path);
 }
 
+export const INLINE_MAX_BYTES = 8 * 1024 * 1024;
+export type ScreenshotItem = { signedUrl?: string; contentId?: string };
+export type InlineAttachment = { filename: string; content: string; content_id: string };
+
+// Per-capture best effort: a capture that cannot be signed, downloaded or
+// encoded is skipped (or kept link-only) and never blocks the notification.
+export async function collectScreenshots(storage: any, paths: string[]) {
+  const items: ScreenshotItem[] = [];
+  const attachments: InlineAttachment[] = [];
+  let inlineBytes = 0;
+  for (let index = 0; index < paths.length; index += 1) {
+    const item: ScreenshotItem = {};
+    try {
+      const { data, error } = await storage.createSignedUrl(paths[index], SIGNED_URL_SECONDS);
+      if (!error && data?.signedUrl) item.signedUrl = data.signedUrl;
+    } catch { /* link optional */ }
+    try {
+      const { data: blob, error } = await storage.download(paths[index]);
+      if (!error && blob) {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        if (bytes.length > 0 && inlineBytes + bytes.length <= INLINE_MAX_BYTES) {
+          let binary = "";
+          for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+            binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+          }
+          const content = btoa(binary);
+          const contentId = `fb-shot-${index}`;
+          inlineBytes += bytes.length;
+          item.contentId = contentId;
+          attachments.push({ filename: paths[index].split("/").pop() || `capture-${index + 1}.png`, content, content_id: contentId });
+        }
+      }
+    } catch { /* inline copy optional */ }
+    if (item.signedUrl || item.contentId) items.push(item);
+  }
+  return { items, attachments };
+}
+
 async function markFailed(admin: any, reportId: string, code: string) {
   await admin.from("pp_feedback_reports").update({
     notification_status: "failed",
@@ -35,7 +73,7 @@ async function markFailed(admin: any, reportId: string, code: string) {
   }).eq("id", reportId).eq("notification_status", "sending");
 }
 
-Deno.serve(async (req) => {
+export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
@@ -78,50 +116,14 @@ Deno.serve(async (req) => {
   const screenshotPaths = (Array.isArray(report.screenshots) ? report.screenshots : [])
     .filter((path: unknown) => belongsToReporter(path, report.reporter_id))
     .slice(0, MAX_SCREENSHOTS);
-  const screenshots: string[] = [];
-  for (const path of screenshotPaths) {
-    const { data, error } = await admin.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS);
-    if (error || !data?.signedUrl) {
-      await markFailed(admin, reportId, "screenshot_sign_failed");
-      return json({ ok: false, report_recorded: true, notification_status: "failed", error: "screenshot_sign_failed" }, 502);
-    }
-    screenshots.push(data.signedUrl);
-  }
-
-  // Inline copies so the photos are visible directly in the e-mail. The signed
-  // links above stay as a fallback. Attachments are skipped (never fatal) when
-  // a file cannot be read or the total would exceed INLINE_MAX_BYTES.
-  const INLINE_MAX_BYTES = 8 * 1024 * 1024;
-  const attachments: Array<{ filename: string; content: string; content_id: string }> = [];
-  const inlineCidByIndex = new Map<number, string>();
-  let inlineBytes = 0;
-  for (let index = 0; index < screenshotPaths.length; index += 1) {
-    try {
-      const { data: blob, error } = await admin.storage.from(BUCKET).download(screenshotPaths[index]);
-      if (error || !blob) continue;
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      if (bytes.length === 0 || inlineBytes + bytes.length > INLINE_MAX_BYTES) continue;
-      let binary = "";
-      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-      }
-      inlineBytes += bytes.length;
-      const contentId = `fb-shot-${index}`;
-      inlineCidByIndex.set(index, contentId);
-      attachments.push({
-        filename: screenshotPaths[index].split("/").pop() || `capture-${index + 1}.png`,
-        content: btoa(binary),
-        content_id: contentId,
-      });
-    } catch { /* inline copy optional */ }
-  }
+  const { items: screenshots, attachments } = await collectScreenshots(admin.storage.from(BUCKET), screenshotPaths);
 
   const source = report.source === "mobile" ? "App mobile" : report.source === "ava_chat" ? "AVA chat" : report.source === "ava_voice" ? "AVA vocal" : "Portail courtier";
   const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#ffffff;color:#1A2540;max-width:620px;margin:auto;padding:24px">
 <h2 style="color:#1A4A8A;margin:0 0 8px">Nouveau feedback — ${esc(report.title)}</h2>
 <p style="color:#6B7280;font-size:13px;margin:0 0 16px">${esc(report.reporter_name || replyTo || "Courtier")} · ${esc(replyTo || "")} · ${source} · Gravité : <b>${esc(SEVERITY[report.severity] ?? report.severity)}</b>${report.page ? ` · Page : ${esc(report.page)}` : ""}</p>
 <div style="white-space:pre-wrap;background:#F1F7FE;border-radius:10px;padding:14px;font-size:14px">${esc(report.description || "(aucune description)")}</div>
-${screenshots.length ? `<h3 style="color:#1A4A8A;margin-top:20px">Captures (${screenshots.length})</h3>${screenshots.map((signedUrl, index) => `${inlineCidByIndex.has(index) ? `<p style="margin:12px 0 4px"><img src="cid:${inlineCidByIndex.get(index)}" alt="Capture ${index + 1}" style="max-width:100%;border-radius:8px;border:1px solid #E5E7EB" /></p>` : ""}<p style="margin:0 0 8px"><a href="${esc(signedUrl)}">Ouvrir la capture ${index + 1}</a></p>`).join("")}<p style="font-size:11px;color:#9CA3AF">Liens valides 1 heure.</p>` : ""}
+${screenshots.length ? `<h3 style="color:#1A4A8A;margin-top:20px">Captures (${screenshots.length})</h3>${screenshots.map((shot, index) => `${shot.contentId ? `<p style="margin:12px 0 4px"><img src="cid:${shot.contentId}" alt="Capture ${index + 1}" style="max-width:100%;border-radius:8px;border:1px solid #E5E7EB" /></p>` : ""}${shot.signedUrl ? `<p style="margin:0 0 8px"><a href="${esc(shot.signedUrl)}">Ouvrir la capture ${index + 1}</a></p>` : ""}`).join("")}${screenshots.some((shot) => shot.signedUrl) ? `<p style="font-size:11px;color:#9CA3AF">Liens valides 1 heure.</p>` : ""}` : ""}
 <p style="margin-top:24px"><a href="https://courtierai.planipret.com/planipret/broker/feedback" style="background:#1A4A8A;color:#ffffff;padding:10px 16px;border-radius:8px;text-decoration:none">Ouvrir le feedback</a></p>
 </body></html>`;
 
@@ -157,4 +159,6 @@ ${screenshots.length ? `<h3 style="color:#1A4A8A;margin-top:20px">Captures (${sc
     notification_next_retry_at: null,
   }).eq("id", reportId).eq("notification_status", "sending");
   return json({ ok: true, report_recorded: true, notification_status: "sent" });
-});
+}
+
+if (import.meta.main) Deno.serve(handler);

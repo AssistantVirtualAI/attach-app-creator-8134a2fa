@@ -21,6 +21,8 @@ import LanguageSwitcher from './ui/LanguageSwitcher';
 import avaPoweredBy from '../assets/ava-powered-by.png';
 import DesktopWorkspaceHome from './DesktopWorkspaceHome';
 import DesktopWorkspacePreferences from './DesktopWorkspacePreferences';
+import DesktopCallsPage from './DesktopCallsPage';
+import { lemtelGatewayAvailable } from '../lib/lemtelPbxDesktop';
 
 type WorkspaceTab = 'home' | 'phone' | 'calls' | 'messages' | 'contacts' | 'more';
 
@@ -338,6 +340,8 @@ export default function DesktopReadOnlyWorkspace({ email, organizationId, onRetr
                   </div>
                 </div>
               </>
+            ) : active === 'calls' && lemtelGatewayAvailable(organizationId) ? (
+              <DesktopCallsPage organizationId={organizationId} />
             ) : (
               <ReadOnlySection tab={active} onReturnToPhone={() => setActive('phone')} />
             )}

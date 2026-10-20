@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Confirm missing requester SMS phone alert: four profile preferences enabled, one active iOS alert token, no recent inbound SMS stored for verified requester account. SMS/missed/voicemail triggers enabled; task reminders already call pp-push-notify. Android logs show Google invalid JWT signature, not proof of this iOS failure; unrelated net HTTP 401 responses are not attributed to pp-row-push. Blocked on affected phone/account and event time; no runtime code, credentials or call configuration changed.
+
 - [x] Prepare admin feedback reply alerts in portal/mobile: server-derived reporter, existing push + fixed email template, stable comment-ID keys; 14 server + 6 portal + 6 mobile tests pass, Deno check and preview build OK.
 - [x] Deploy approved feedback reply endpoint and email preview (2026-10-19); 14 server + 6 portal + 6 mobile tests pass, Deno check and security gate OK. One explicit self-test push accepted by native provider; authenticated mobile Feedback link opens. No app publication.
 - [ ] Verify actual feedback reply phone/email delivery and report-specific opening: requester has no own reports and self-replies are intentionally skipped; needs a reply authored by a different authorized administrator. Email send path verification timed out; no email test sent. Phone receipt/tap requires user's confirmation.

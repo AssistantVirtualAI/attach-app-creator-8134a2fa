@@ -179,3 +179,37 @@ Deno.test("gates: delivery switch, revoked client family, settings change re-req
   const other = await r.call(ADMIN, { action: "assign_extension", assignment: { userId: OUTSIDER, extension: "1043" }, sipPassword: null });
   eq(other.body.error, "user_not_active_member");
 });
+
+Deno.test("D2: Lemtel-hosted TURN is used when the organization configures none; an organization's own TURN wins", async () => {
+  const HOSTED = { LEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY: "enabled", LEMTEL_STUN_URLS: "stun:turn.assistantvirtualai.com:3478",
+    LEMTEL_TURN_URLS: "turns:turn.assistantvirtualai.com:5349?transport=tcp,turn:turn.assistantvirtualai.com:3478?transport=udp",
+    LEMTEL_TURN_SHARED_SECRET: "hosted-turn-secret-0123456789abcdef0123" };
+  const w = setup(HOSTED);
+  await w.call(ADMIN, { action: "save_settings", settings: { ...SETTINGS, stunUrls: [], turnUrls: [] } });
+  await w.call(ADMIN, { action: "assign_extension", assignment: { userId: ALICE, extension: "1042", isTest: true }, sipPassword: "Ext1042!Pass" });
+  const v = await w.call(ADMIN, { action: "validate" });
+  eq(v.body.report.checks.find((c: { key: string }) => c.key === "turn_relay"), { key: "turn_relay", status: "ok", detail: "lemtel_hosted_relay" });
+  await w.call(ADMIN, { action: "set_state", state: "active" });
+  const p = await w.provision(ALICE, "desktop");
+  eq(p.body.status, "ready");
+  eq(p.body.media.iceServers[0], { urls: ["stun:turn.assistantvirtualai.com:3478"] });
+  eq(p.body.media.iceServers[1].urls, ["turns:turn.assistantvirtualai.com:5349?transport=tcp", "turn:turn.assistantvirtualai.com:3478?transport=udp"]);
+  ok(/^\d+:[0-9a-f]{16}$/.test(p.body.media.iceServers[1].username), "short-lived HMAC username");
+  ok(!JSON.stringify(p.body).includes("hosted-turn-secret"), "the hosted secret never leaves the server");
+
+  const own = setup(HOSTED);
+  await own.call(ADMIN, { action: "save_settings", settings: SETTINGS });
+  await own.call(ADMIN, { action: "set_secret", kind: "turn_shared_secret", value: "turn-shared-secret-0123456789" });
+  await own.call(ADMIN, { action: "assign_extension", assignment: { userId: ALICE, extension: "1042", isTest: true }, sipPassword: "Ext1042!Pass" });
+  await own.call(ADMIN, { action: "validate" });
+  await own.call(ADMIN, { action: "set_state", state: "active" });
+  const q = await own.provision(ALICE, "mobile");
+  eq(q.body.media.iceServers[0], { urls: ["stun:turn.lemtel.tel:3478"] });
+  eq(q.body.media.iceServers[1].urls, ["turns:turn.lemtel.tel:5349?transport=tcp"]);
+
+  const bad = setup({ ...HOSTED, LEMTEL_TURN_URLS: "turns:user:pw@evil.example:5349", LEMTEL_TURN_SHARED_SECRET: "short" });
+  await bad.call(ADMIN, { action: "save_settings", settings: { ...SETTINGS, stunUrls: [], turnUrls: [] } });
+  await bad.call(ADMIN, { action: "assign_extension", assignment: { userId: ALICE, extension: "1042", isTest: true }, sipPassword: "Ext1042!Pass" });
+  const bv = await bad.call(ADMIN, { action: "validate" });
+  eq(bv.body.report.checks.find((c: { key: string }) => c.key === "turn_relay").status, "skipped", "an invalid hosted relay is ignored");
+});

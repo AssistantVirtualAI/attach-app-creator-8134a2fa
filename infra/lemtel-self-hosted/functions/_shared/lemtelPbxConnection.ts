@@ -182,6 +182,23 @@ export async function openSecret(k: SecretKey, sealed: string, aad: string): Pro
 export const secretAad = (organizationId: string, kind: string) => `lemtel-pbx:${organizationId}:${kind}`;
 export const extensionAad = (organizationId: string, userId: string, extension: string) => `lemtel-ext:${organizationId}:${userId}:${extension}`;
 
+// ---------- Lemtel-hosted media relay (decision D2) ----------
+// Lemtel runs coturn itself, so an organization does not have to configure TURN in FusionPBX or the portal.
+// LEMTEL_STUN_URLS / LEMTEL_TURN_URLS: comma-separated stun:/turn:/turns: URIs; LEMTEL_TURN_SHARED_SECRET: the coturn
+// static-auth-secret (server-only). An organization's own TURN (portal settings + its secret) always takes precedence.
+export type PlatformIce = { stunUrls: string[]; turnUrls: string[]; secret: string | null };
+export function platformIce(env: (name: string) => string | undefined): PlatformIce {
+  const urls = (name: string, turn: boolean) => {
+    const raw = (env(name) ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+    if (raw.length > 6) return [];
+    const out: string[] = [];
+    for (const v of raw) { const u = iceUrl(v, turn); if (!u) return []; if (!out.includes(u)) out.push(u); }
+    return out;
+  };
+  const secret = (env("LEMTEL_TURN_SHARED_SECRET") ?? "").trim();
+  return { stunUrls: urls("LEMTEL_STUN_URLS", false), turnUrls: urls("LEMTEL_TURN_URLS", true), secret: /^[\x21-\x7e]{32,256}$/.test(secret) ? secret : null };
+}
+
 // ---------- TURN short-lived credentials (coturn use-auth-secret / TURN REST API) ----------
 export async function turnCredential(sharedSecret: string, subject: string, ttlSeconds: number, now = Date.now()) {
   const expiry = Math.floor(now / 1000) + ttlSeconds;

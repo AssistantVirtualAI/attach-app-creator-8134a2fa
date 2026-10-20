@@ -4,7 +4,7 @@
 // the organization's connection only after a passing validation. No secret is ever returned.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  activationBlocker, extensionAad, rowFromDb, isInvalid, loadSecretKey, openSecret, optionsPing, parseAssignment, parseSecret, parseSettings,
+  activationBlocker, extensionAad, rowFromDb, isInvalid, loadSecretKey, openSecret, optionsPing, platformIce, parseAssignment, parseSecret, parseSettings,
   registrationProbe, sealSecret, secretAad, SECRET_KINDS, summarize,
   type ConnectionRow, type ConnectionSettings, type SecretKind, type SocketFactory, type ValidationCheck,
 } from "../_shared/lemtelPbxConnection.ts";
@@ -148,7 +148,9 @@ export async function runValidation(d: Deps, organizationId: string, actor: stri
     }
   } else checks.push({ key: "register_test_extension", status: "skipped", detail: "wss_not_open" });
   const turnSet = (await admin.from("lemtel_pbx_connection_secrets").select("secret_kind").eq("organization_id", organizationId).eq("secret_kind", "turn_shared_secret")).data?.length;
+  const hosted = platformIce(d.env);
   checks.push(row.turnUrls.length && turnSet ? { key: "turn_relay", status: "ok", detail: "configured_short_lived_credentials" }
+    : hosted.turnUrls.length && hosted.secret ? { key: "turn_relay", status: "ok", detail: row.turnUrls.length ? "turn_secret_missing_using_lemtel_hosted_relay" : "lemtel_hosted_relay" }
     : { key: "turn_relay", status: "skipped", detail: row.turnUrls.length ? "turn_secret_missing" : "turn_not_configured_media_may_fail_behind_nat" });
   const report = summarize(checks, new Date(d.now()));
   const patch: Record<string, unknown> = { last_validation: report, validated_at: report.passed ? report.checkedAt : null };

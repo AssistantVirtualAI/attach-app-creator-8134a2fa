@@ -1,3 +1,4 @@
+# Lemtel TURN relay — installed by lemtel-turn-install.sh into /opt/lemtel-turn on the DO writer.
 services:
   turn:
     image: coturn/coturn:4.6.3
@@ -6,6 +7,7 @@ services:
     network_mode: host
     command: ["-c", "/etc/coturn/turnserver.conf"]
     volumes:
-      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
-      - /etc/letsencrypt/live/turn.assistantvirtualai.com:/etc/coturn/tls:ro
-      - ./secrets/lemtel_turn_secret:/run/secrets/lemtel_turn_secret:ro
+      - /etc/lemtel-turn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

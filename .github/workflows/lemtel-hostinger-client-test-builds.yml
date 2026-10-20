@@ -57,7 +57,7 @@ jobs:
     timeout-minutes: 45
     env:
       VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
-      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_LEMTEL_API_URL }}
       VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
       VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved
       VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
@@ -76,6 +76,14 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Enforce approved Lemtel canonical configuration
+        # Same contract as release-desktop.yml: the filter checks the Lemtel names and refuses generic runtime keys,
+        # with exactly the origin and publishable key the build embeds.
+        env:
+          VITE_SUPABASE_URL: ""
+          VITE_SUPABASE_PUBLISHABLE_KEY: ""
+          VITE_LEMTEL_API_URL: ${{ vars.VITE_LEMTEL_API_URL }}
+          VITE_LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_LEMTEL_HOSTED_ONBOARDING: approved
         run: node scripts/lemtel-hostinger-client-config-filter.mjs
       - name: Build Lemtel web mobile bundle
         working-directory: apps/ava-softphone-mobile
@@ -106,7 +114,7 @@ jobs:
     timeout-minutes: 45
     env:
       VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
-      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_LEMTEL_API_URL }}
       VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
       VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved
       VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
@@ -119,6 +127,14 @@ jobs:
           cache: npm
           cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
       - name: Enforce approved Lemtel canonical configuration
+        # Same contract as release-desktop.yml: the filter checks the Lemtel names and refuses generic runtime keys,
+        # with exactly the origin and publishable key the build embeds.
+        env:
+          VITE_SUPABASE_URL: ""
+          VITE_SUPABASE_PUBLISHABLE_KEY: ""
+          VITE_LEMTEL_API_URL: ${{ vars.VITE_LEMTEL_API_URL }}
+          VITE_LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_LEMTEL_HOSTED_ONBOARDING: approved
         run: node scripts/lemtel-hostinger-client-config-filter.mjs
       - name: Build and compile iOS device app without signing
         working-directory: apps/ava-softphone-mobile

@@ -109,6 +109,11 @@ function fakePbx() {
       const form = new URLSearchParams(String(init?.body));
       return form.get("password") === "WebPass123!" && form.get("abc123") === "tok" ? new Response(null, { status: 302, headers: { location: "/core/dashboard/", "set-cookie": "PHPSESSID=s2; path=/" } }) : new Response(null, { status: 302, headers: { location: "/login.php" } });
     }
+    if (url.pathname === "/app/voicemails/voicemail_messages.php") {
+      const cookie = (init?.headers as Record<string, string>)?.Cookie;
+      if (cookie !== "PHPSESSID=s2" || url.searchParams.get("uuid") !== uuidN(20)) return new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } });
+      return new Response(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0]), { headers: { "content-type": "audio/wav" } });
+    }
     if (url.pathname === "/app/xml_cdr/download.php") {
       const cookie = (init?.headers as Record<string, string>)?.Cookie;
       if (cookie !== "PHPSESSID=s2") return new Response("<html>login</html>", { status: 200, headers: { "content-type": "text/html" } });
@@ -367,4 +372,12 @@ Deno.test("extensions: creating with a password and a user binds the apps' provi
   assertEquals(tables.lemtel_pbx_extension_assignments.some((x) => x.user_id === U.stranger), false);
   assertEquals(pbx.db.extensions.some((e) => e.extension === "1005"), false);
   assertEquals((await call("admin", { action: "resource_create", resource: "voicemails", values: { voicemail_id: "1005" }, assignUserId: U.member })).json.error, "invalid_assign_user");
+});
+
+Deno.test("voicemail audio: a member plays their own mailbox only; unknown messages are refused", async () => {
+  const { call } = await setup();
+  const ok = await call("member", { action: "voicemail_audio", messageUuid: uuidN(20) });
+  assertEquals(ok.status, 200); assertEquals(ok.type, "audio/wav");
+  assertEquals((await call("member", { action: "voicemail_audio", messageUuid: uuidN(99) })).status, 404);
+  assertEquals((await call("admin", { action: "voicemail_audio", voicemailUuid: uuidN(10), messageUuid: uuidN(20) })).status, 200);
 });

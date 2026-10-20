@@ -1,5 +1,6 @@
 import { BACKEND_URL, BACKEND_ANON_KEY, BACKEND_STORAGE_SUFFIX } from './backendOrigin';
 import { unregisterLemtelCallPush } from './lemtelCallPush';
+import { setLemtelOrganizationId } from './lemtelPbxMobile';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { supabase, clearRecordingAudioCache } from './mobileSupabase';
@@ -199,6 +200,7 @@ export function useStoredCreds() {
     const pushToken = credsRef.current?.accessToken;
     const pushUnregister = pushToken ? unregisterLemtelCallPush({ accessToken: pushToken, publishableKey: BACKEND_ANON_KEY }).catch(() => {}) : Promise.resolve();
     setAuthToken(null);
+    setLemtelOrganizationId(null);
     setSigningOut(true);
     credsRef.current = null;
     setCredsState(null);

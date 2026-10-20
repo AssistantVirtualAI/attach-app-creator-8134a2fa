@@ -351,12 +351,8 @@ export class FusionPbxClient {
     this.session = { cookie, until: Date.now() + 20 * 60_000 };
     return cookie;
   }
-  /** Downloads one recording's audio by CDR id; returns bytes + content type, refuses anything that is not audio. */
-  async recording(xmlCdrUuid: string, recordName: string | null, maxBytes = 60 * 1024 * 1024): Promise<{ body: Uint8Array; contentType: string }> {
-    if (!isUuid(xmlCdrUuid)) throw new PbxError("invalid_uuid", 400);
+  private async downloadAudio(urls: string[], maxBytes: number): Promise<{ body: Uint8Array; contentType: string }> {
     const cookie = await this.webSession();
-    const ids = [recordName?.replace(/\.(mp3|wav|ogg)$/i, ""), xmlCdrUuid].filter((x): x is string => Boolean(x) && /^[A-Za-z0-9._-]{1,128}$/.test(x!));
-    const urls = [...new Set(ids)].flatMap((id) => [`${this.origin}/app/xml_cdr/download.php?id=${encodeURIComponent(id)}&t=bin`, `${this.origin}/app/xml_cdr/xml_cdr_download.php?id=${encodeURIComponent(id)}&t=bin`]);
     for (const url of urls) {
       const res = await this.fetchFn(url, { headers: { Cookie: cookie }, redirect: "manual", signal: AbortSignal.timeout(30_000) }).catch(() => null);
       if (!res || res.status !== 200) { await res?.body?.cancel(); continue; }
@@ -369,6 +365,21 @@ export class FusionPbxClient {
       return { body: buf, contentType: /^audio\/[a-z0-9.+-]+$/i.test(type) ? type : head.startsWith("riff") ? "audio/wav" : head.startsWith("oggs") ? "audio/ogg" : "audio/mpeg" };
     }
     throw new PbxError("recording_not_available", 404);
+  }
+  /** Downloads one recording's audio by CDR id; returns bytes + content type, refuses anything that is not audio. */
+  async recording(xmlCdrUuid: string, recordName: string | null, maxBytes = 60 * 1024 * 1024): Promise<{ body: Uint8Array; contentType: string }> {
+    if (!isUuid(xmlCdrUuid)) throw new PbxError("invalid_uuid", 400);
+    const ids = [recordName?.replace(/\.(mp3|wav|ogg)$/i, ""), xmlCdrUuid].filter((x): x is string => Boolean(x) && /^[A-Za-z0-9._-]{1,128}$/.test(x!));
+    return this.downloadAudio([...new Set(ids)].flatMap((id) => [`${this.origin}/app/xml_cdr/download.php?id=${encodeURIComponent(id)}&t=bin`, `${this.origin}/app/xml_cdr/xml_cdr_download.php?id=${encodeURIComponent(id)}&t=bin`]), maxBytes);
+  }
+  /** One voicemail message's audio (FusionPBX voicemail_messages.php download, web session). */
+  async voicemailAudio(voicemailId: string, voicemailUuid: string, messageUuid: string, maxBytes = 30 * 1024 * 1024): Promise<{ body: Uint8Array; contentType: string }> {
+    if (!/^[0-9]{2,16}$/.test(voicemailId) || !isUuid(voicemailUuid) || !isUuid(messageUuid)) throw new PbxError("invalid_uuid", 400);
+    const base = `${this.origin}/app/voicemails/voicemail_messages.php`;
+    return this.downloadAudio([
+      `${base}?action=download&type=vm&t=bin&id=${voicemailId}&voicemail_uuid=${voicemailUuid}&uuid=${messageUuid}`,
+      `${base}?action=download&t=bin&id=${messageUuid}&voicemail_uuid=${voicemailUuid}`,
+    ], maxBytes);
   }
 }
 

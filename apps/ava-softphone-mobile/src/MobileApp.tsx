@@ -45,6 +45,7 @@ import { MobileI18nProvider } from './lib/i18n';
 import { requestAllPermissions, checkAllPermissions } from './lib/permissions';
 import { registerPush } from './lib/pushNotifications';
 import { consumePendingIncomingPush, registerLemtelCallPush, watchVoipToken } from './lib/lemtelCallPush';
+import { setLemtelOrganizationId } from './lib/lemtelPbxMobile';
 import { syncDeviceContacts } from './lib/contacts';
 import { bootNative, onAppStateChange } from './lib/nativeBoot';
 import { registerDeepLinkHandler, PENDING_CALL_KEY } from './lib/deepLink';
@@ -182,6 +183,8 @@ export default function MobileApp() {
 function AuthenticatedShell({
   creds, setCreds, tab, setTab, callsSub, callsFilter, onSignOut, onAccessBlocked, preferClickToCall, onTogglePreferC2C,
 }: { creds: Creds; setCreds: (c: Creds) => void; tab: Tab; setTab: (t: Tab) => void; callsSub?: 'recents' | 'recordings' | 'voicemail' | 'dial'; callsFilter?: 'all' | 'missed'; onSignOut: () => void; onAccessBlocked: () => void; preferClickToCall: boolean; onTogglePreferC2C: () => void }) {
+  // Lemtel gateway calls are scoped to the verified organization of this session.
+  setLemtelOrganizationId(creds.organizationId);
 
 
   const reconciliationInFlight = useRef(false);

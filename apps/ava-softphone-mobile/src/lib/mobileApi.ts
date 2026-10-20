@@ -1,3 +1,4 @@
+import { getLemtelOrganizationId, LemtelPbxError, lemtelPbxJson, lemtelPbxFetch, type GatewayCdr, type GatewaySelf, type GatewayVoicemail } from './lemtelPbxMobile';
 import { BACKEND_URL, BACKEND_ANON_KEY } from './backendOrigin';
 /**
  * Lemtel AI Phone — Mobile API client.
@@ -72,6 +73,36 @@ async function liveCall<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw err;
   }
   return res.json() as Promise<T>;
+}
+
+/* ─── Lemtel gateway (lemtel-pbx) — the Lemtel backend's telephony data source ─────────────── */
+async function pbx<T>(body: Record<string, unknown>): Promise<T> {
+  const token = await getFreshToken();
+  if (!token) { emitAuthRequired(); const e = new Error('Not authenticated') as Error & { code?: string }; e.code = 'AUTH_REQUIRED'; throw e; }
+  try { return await lemtelPbxJson<T>(token, body); }
+  catch (e) {
+    if (e instanceof LemtelPbxError && e.status === 401) emitAuthRequired();
+    const err = new Error(e instanceof LemtelPbxError ? e.code : 'server_error') as Error & { status?: number; code?: string };
+    err.status = e instanceof LemtelPbxError ? e.status : 0; err.code = e instanceof LemtelPbxError ? e.code : 'server_error';
+    throw err;
+  }
+}
+const periodFrom = (days: number) => new Date(Date.now() - days * 86400_000).toISOString();
+let lastCdr = new Map<string, GatewayCdr>();
+function cdrToCall(r: GatewayCdr): CallRecord {
+  return { id: r.id, direction: r.direction === 'outbound' ? 'out' : 'in', status: r.missed || (r.direction === 'inbound' && !r.billsec) ? 'missed' : 'answered',
+    from: r.callerNumber ?? '', to: r.destination ?? '', customer: r.callerName ?? undefined, startedAt: r.startAt ?? new Date(0).toISOString(),
+    durationSec: Number(r.billsec ?? 0), hasRecording: r.hasRecording, pbx_uuid: r.id, organization_id: getLemtelOrganizationId() };
+}
+function vmToEntry(m: GatewayVoicemail): VoicemailEntry {
+  return { id: m.uuid, from: m.callerNumber, customer: m.callerName || undefined, receivedAt: m.createdAt ?? new Date(0).toISOString(), durationSec: m.seconds,
+    priority: 'normal', sentiment: 'neutral', isNew: m.status !== 'saved', voicemail_message_uuid: m.uuid, transcription: m.transcription ?? undefined };
+}
+async function ownCalls(days: number, limit: number, recordedOnly = false) {
+  const r = await pbx<{ records: GatewayCdr[]; total: number }>({ action: 'cdr_list', from: periodFrom(days), to: new Date().toISOString(), limit: Math.min(500, Math.max(1, limit)), ...(recordedOnly ? { recordedOnly: true } : {}) });
+  for (const c of r.records) lastCdr.set(c.id, c);
+  if (lastCdr.size > 2000) lastCdr = new Map([...lastCdr].slice(-1000));
+  return r.records;
 }
 
 // In-flight GET dedup — multiple components requesting the same path in
@@ -192,6 +223,9 @@ export interface VoicemailEntry {
   durationSec: number;
   priority: 'low' | 'normal' | 'high'; sentiment: 'positive' | 'neutral' | 'negative';
   isNew: boolean;
+  /** Lemtel gateway: the FusionPBX voicemail message id (audio via lemtel-pbx voicemail_audio). */
+  voicemail_message_uuid?: string;
+  transcription?: string;
   // Fields needed by `voicemailAudio` to issue a signed URL.
   xml_cdr_uuid?: string;
   record_path?: string;
@@ -350,8 +384,36 @@ function mapCdrToVoicemailEntry(r: any): VoicemailEntry {
 }
 
 export const mobileApi = {
-  me:        () => call<MeResponse>('/mobile-me', undefined, meMock),
-  dashboard: () => call<DashboardBrief>('/mobile-dashboard', undefined, dashboardMock),
+  // Profile = verified session (supabase user) + own extension from the Lemtel gateway.
+  me: async (): Promise<MeResponse> => {
+    if (isMockMode()) return meMock;
+    const self = await pbx<GatewaySelf>({ action: 'self_overview' }).catch(() => null);
+    const caps = await pbx<{ role: string; domainName: string | null }>({ action: 'capabilities' }).catch(() => null);
+    const orgId = getLemtelOrganizationId() ?? '';
+    const admin = caps ? caps.role !== 'member' : false;
+    const sip = caps?.domainName ?? '';
+    return {
+      user: { id: '', name: self?.callerIdName ?? '', email: '' },
+      organization: { id: orgId, name: 'Lemtel', sipDomain: sip }, domain: { organizationId: orgId, sipDomain: sip },
+      extension: { number: self?.extension ?? '', displayName: self?.callerIdName ?? '', sipDomain: sip },
+      role: caps?.role === 'platform' ? 'super_admin' : admin ? 'org_admin' : 'agent', dataScope: admin ? 'domain_admin' : 'extension_user',
+      permissions: { admin, canManageNumbers: admin, canManageAgents: admin, canManageUsers: admin, canManageRouting: admin, canViewDomainReports: admin },
+      status: { sipState: 'offline', doNotDisturb: self?.forwarding?.do_not_disturb === 'true', forwarding: self?.forwarding?.forward_all_enabled === 'true' ? self.forwarding.forward_all_destination ?? null : null },
+    };
+  },
+  // Home: today's own calls (missed / total) and new voicemails, from the Lemtel gateway.
+  dashboard: async () => {
+    if (isMockMode()) return dashboardMock;
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const [today, self] = await Promise.all([
+      pbx<{ records: GatewayCdr[]; total: number }>({ action: 'cdr_list', from: start.toISOString(), to: new Date().toISOString(), limit: 500 }).catch(() => ({ records: [] as GatewayCdr[], total: 0 })),
+      pbx<GatewaySelf>({ action: 'self_overview' }).catch(() => null),
+    ]);
+    const missed = today.records.filter((r) => r.missed || (r.direction === 'inbound' && !r.billsec)).length;
+    const newVm = (self?.voicemail?.messages ?? []).filter((m) => m.status !== 'saved').length;
+    return { profile: { displayName: self?.callerIdName ?? '' }, calls: { today: today.total, missed }, messages: { unread: newVm },
+      metrics: { missedCalls: missed, answeredCalls: today.total - missed, unreadSms: 0, voicemails: newVm, actionItems: missed + newVm } } as unknown as DashboardBrief;
+  },
   homeStats: (period: 'today' | 'week' | 'month', lang?: 'fr' | 'en') => call<HomeStatsResponse>(
     `/mobile-home-stats?period=${period}&lang=${lang || 'fr'}`,
     undefined,
@@ -378,58 +440,51 @@ export const mobileApi = {
 
   // Recents (Phase 26A): the extension is imposed server-side by mobile-calls from the
   // signed-in user. No Mobile caller can choose another extension; only days + limit are sent.
-  calls: (opts?: { rangeDays?: 7 | 30; limit?: number }) => call<CallRecord[] | any>(`/mobile-calls?days=${opts?.rangeDays || 7}&limit=${opts?.limit ?? 20}`, undefined, callsMock).then((raw: any) => {
-    if (isMockMode()) return raw as CallRecord[];
-    if (!Array.isArray(raw)) throw new Error('Invalid response from mobile-calls');
-    return raw as CallRecord[];
-  }),
-  callDetail: (id: string) => call<CallDetail>(`/mobile-calls?id=${encodeURIComponent(id)}`, undefined, callDetailMock(id)),
+  calls: async (opts?: { rangeDays?: 7 | 30; limit?: number }): Promise<CallRecord[]> => {
+    if (isMockMode()) return callsMock as CallRecord[];
+    return (await ownCalls(opts?.rangeDays || 7, opts?.limit ?? 20)).map(cdrToCall);
+  },
+  callDetail: async (id: string): Promise<CallDetail> => {
+    if (isMockMode()) return callDetailMock(id);
+    const hit = lastCdr.get(id) ?? (await ownCalls(30, 500)).find((c) => c.id === id);
+    if (!hit) throw new Error('call_not_found');
+    return { ...cdrToCall(hit), tags: hit.hangupCause ? [hit.hangupCause] : [] };
+  },
 
-  // Recordings: list of completed calls with audio.
-  // Phase 27A — own_extension_only: the server imposes the connected extension;
-  // the Mobile API cannot target another extension.
-  recordings: (opts?: { rangeDays?: 7 | 30 }) => call<RecordingEntry[] | any>(
-    `/mobile-recordings?days=${opts?.rangeDays === 30 ? 30 : 7}`,
-    undefined, [] as RecordingEntry[],
-  ).then((raw: any) => {
-    if (Array.isArray(raw)) return raw as RecordingEntry[];
-    if (Array.isArray(raw?.items)) return raw.items as RecordingEntry[];
-    throw new Error('Invalid response from mobile-recordings');
-  }),
+  // Recordings: completed calls with audio (the server limits a member to their own extension).
+  recordings: async (opts?: { rangeDays?: 7 | 30 }): Promise<RecordingEntry[]> => {
+    if (isMockMode()) return [];
+    return (await ownCalls(opts?.rangeDays === 30 ? 30 : 7, 500, true)).map((r) => ({ id: r.id, from: r.callerNumber ?? '', to: r.destination ?? '', customer: r.callerName ?? undefined,
+      startedAt: r.startAt ?? new Date(0).toISOString(), durationSec: Number(r.billsec ?? 0), xml_cdr_uuid: r.id, pbx_uuid: r.id }));
+  },
 
+  // SMS is not part of the Lemtel PBX contract: empty inbox, sending refused with a clear code.
+  threads:    async (): Promise<SmsThread[]> => (isMockMode() ? threadsMock : []),
+  thread:     async (id: string): Promise<SmsMessage[]> => (isMockMode() ? messagesMock[id] || [] : []),
+  sendMessage:async (_threadId: string, _body: string): Promise<{ id: string }> => {
+    if (isMockMode()) return { id: 'm' + Date.now() };
+    const e = new Error('sms_not_available') as Error & { code?: string }; e.code = 'sms_not_available'; throw e;
+  },
 
-  threads:    () => call<SmsThread[]>('/mobile-sms', undefined, threadsMock),
-  thread:     (id: string) => call<SmsMessage[]>(`/mobile-sms?threadId=${encodeURIComponent(id)}`, undefined, messagesMock[id] || []),
-  sendMessage:(threadId: string, body: string) => call<{ id: string }>(
-    '/mobile-sms', { method: 'POST', body: JSON.stringify({ threadId, body }) },
-    { id: 'm' + Date.now() },
-  ),
-
-  // Voicemail: scoped server-side via mobile-voicemails (returns audio metadata for signed URL).
-  voicemails: () => call<VoicemailEntry[] | any>('/mobile-voicemails', undefined, voicemailMock).then((raw: any) => {
-    if (isMockMode()) return raw as VoicemailEntry[];
-    if (!Array.isArray(raw)) throw new Error('Invalid response from mobile-voicemails');
-    return raw as VoicemailEntry[];
-  }),
-  // Issues a short-lived signed URL (default 5 min) for the recording/voicemail
-  // audio. The bytes are pulled from FusionPBX by the edge function, uploaded
-  // to private Supabase Storage and signed there — the device never sees a
-  // raw FusionPBX URL. Every issuance is audited server-side.
-  voicemailAudio: (params: { xml_cdr_uuid?: string; record_path?: string; record_name?: string; domain_uuid?: string; domain_name?: string; organization_id?: string }) =>
-    call<{ ok: boolean; url: string; expiresInSec: number; contentType: string }>(
-      '/fusionpbx-proxy',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'get-recording-signed-url',
-          params: {
-            xml_cdr_uuid: params.xml_cdr_uuid,
-            expires_in: 300,
-          },
-        }),
-      },
-      { ok: true, url: '', expiresInSec: 0, contentType: 'audio/wav' },
-    ),
+  // Voicemail of the signed-in user's own mailbox (lemtel-pbx self_overview).
+  voicemails: async (): Promise<VoicemailEntry[]> => {
+    if (isMockMode()) return voicemailMock;
+    const me = await pbx<GatewaySelf>({ action: 'self_overview' });
+    return (me.voicemail?.messages ?? []).map(vmToEntry);
+  },
+  /** Plays one voicemail message (bytes through the Lemtel server; an object URL is returned). */
+  voicemailMessageAudio: async (messageUuid: string): Promise<string> => {
+    const token = await getFreshToken();
+    if (!token) { emitAuthRequired(); throw new Error('Not authenticated'); }
+    const res = await lemtelPbxFetch(token, { action: 'voicemail_audio', messageUuid });
+    if (!(res.headers.get('content-type') || '').startsWith('audio/')) throw new Error('voicemail_audio_unavailable');
+    return URL.createObjectURL(await res.blob());
+  },
+  voicemailAudio: async (params: { xml_cdr_uuid?: string; organization_id?: string }) => {
+    if (isMockMode() || !params.xml_cdr_uuid) return { ok: false, url: '', expiresInSec: 0, contentType: 'audio/wav' };
+    const url = await mobileApi.voicemailMessageAudio(params.xml_cdr_uuid);
+    return { ok: true, url, expiresInSec: 0, contentType: 'audio/wav' };
+  },
 
   generateGreeting: (prompt: string) => call<{ text: string; audioUrl?: string }>(
     '/elevenlabs-generate-greeting', { method: 'POST', body: JSON.stringify({ prompt }) },
@@ -442,23 +497,25 @@ export const mobileApi = {
 
 
   // Domain-wide stats for the mobile dashboard (read-only). Range: today|7d|30d.
-  domainStats: (range: StatsRange = 'today') => call<DomainStats>(
-    `/mobile-domain-stats?range=${range}`,
-    undefined,
-    {
-      callsToday: 24, answeredToday: 18, missedToday: 6, voicemailsToday: 3,
-      avgDurationSec: 142, activeExtensions: 8,
-      last7Days: [12, 18, 9, 22, 30, 14, 24],
-      topExtensions: [
-        { extension: '101', name: 'Marie T.',  calls: 12 },
-        { extension: '102', name: 'Alex M.',   calls: 9  },
-        { extension: '110', name: 'Reception', calls: 7  },
-      ],
-      range, totalCalls: 24, answered: 18, missed: 6, voicemails: 3,
-      totalTalkSec: 3400, answerRate: 75, peakHour: 14,
-      buckets: [12, 18, 9, 22, 30, 14, 24],
-    },
-  ),
+  // Domain statistics (admins: lemtel-pbx cdr_stats; members: their own calls).
+  domainStats: async (range: StatsRange = 'today'): Promise<DomainStats> => {
+    const days = range === '30d' ? 30 : range === '7d' ? 7 : 1;
+    const from = new Date(); from.setHours(0, 0, 0, 0); from.setDate(from.getDate() - (days - 1));
+    type S = { total: number; answered: number; missed: number; talkSeconds: number; averageTalkSeconds: number; byDay: Array<{ day: string; total: number }>; byHour: Array<{ hour: number; total: number }>; topNumbers: Array<{ number: string; total: number }> };
+    let s: S;
+    try { s = (await pbx<{ stats: S }>({ action: 'cdr_stats', from: from.toISOString(), to: new Date().toISOString() })).stats; }
+    catch {
+      const own = await ownCalls(days, 500);
+      const missed = own.filter((r) => r.missed || (r.direction === 'inbound' && !r.billsec)).length;
+      const talk = own.reduce((a, r) => a + Number(r.billsec ?? 0), 0);
+      s = { total: own.length, answered: own.length - missed, missed, talkSeconds: talk, averageTalkSeconds: own.length - missed ? Math.round(talk / (own.length - missed)) : 0, byDay: [], byHour: [], topNumbers: [] };
+    }
+    const peak = s.byHour.reduce<{ hour: number; total: number } | null>((a, h) => (!a || h.total > a.total ? h : a), null);
+    const buckets = s.byDay.slice(-7).map((d) => d.total);
+    return { callsToday: s.total, answeredToday: s.answered, missedToday: s.missed, voicemailsToday: 0, avgDurationSec: s.averageTalkSeconds, activeExtensions: s.topNumbers.length,
+      last7Days: buckets, topExtensions: s.topNumbers.map((t) => ({ extension: t.number, calls: t.total })), range, totalCalls: s.total, answered: s.answered, missed: s.missed,
+      voicemails: 0, totalTalkSec: s.talkSeconds, answerRate: s.total ? Math.round((s.answered / s.total) * 100) : 0, peakHour: peak?.hour ?? null, buckets };
+  },
 
   // Call queues — read-only list with live stats.
   queues: () => call<QueueRow[]>('/mobile-queues', undefined, [

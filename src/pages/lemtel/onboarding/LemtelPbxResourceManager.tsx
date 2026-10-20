@@ -153,6 +153,9 @@ function VoicemailPanel({ lang, organizationId, item, canWrite, onClose }: { lan
   const [pin, setPin] = useState<string | null>(null);
   const [purge, setPurge] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [audio, setAudio] = useState<string | null>(null);
+  useEffect(() => () => { if (audio) URL.revokeObjectURL(audio); }, [audio]);
+  const play = async (m: VoicemailMessage) => { try { const b = await pbxGateway.voicemailAudio(organizationId, m.uuid, uuid); setAudio(URL.createObjectURL(b)); } catch (e) { toast.error(err(lang, e)); } };
   const load = useCallback(async () => { try { setMessages((await pbxGateway.voicemailMessages(organizationId, uuid)).messages); } catch (e) { setMessages([]); toast.error(err(lang, e)); } }, [lang, organizationId, uuid]);
   useEffect(() => { void load(); }, [load]);
   const reset = async () => {
@@ -176,7 +179,8 @@ function VoicemailPanel({ lang, organizationId, item, canWrite, onClose }: { lan
         <h3 className="font-semibold text-sm mb-2">{L(lang, "Messages", "Messages")} {messages ? <span className="lt-chip">{messages.length}</span> : null}</h3>
         {messages === null ? <div className="lt-skeleton h-16" /> : messages.length === 0 ? <p className="lt-ink-2 text-sm">{L(lang, "Aucun message.", "No message.")}</p> :
           <ul className="space-y-2">{messages.map((m) => <li key={m.uuid} className="lt-card p-3 text-sm flex justify-between gap-3"><div><div className="font-medium">{m.callerName || m.callerNumber || "—"} <span className="lt-ink-2">{m.callerNumber}</span></div><div className="lt-ink-2 text-xs">{m.createdAt ? new Date(m.createdAt).toLocaleString(lang === "fr" ? "fr-CA" : "en-CA") : "—"} · {formatSeconds(m.seconds)}</div>{m.transcription && <p className="text-xs mt-1">{m.transcription}</p>}</div>
-            <button className="lt-btn lt-btn-ghost !py-1" aria-label={L(lang, "Supprimer", "Delete")} disabled={!canWrite} onClick={() => void del(m)}><Trash2 className="w-4 h-4" /></button></li>)}</ul>}
+            <div className="flex gap-1"><button className="lt-btn lt-btn-ghost !py-1" aria-label={L(lang, "Écouter", "Play")} onClick={() => void play(m)}><Play className="w-4 h-4" /></button><button className="lt-btn lt-btn-ghost !py-1" aria-label={L(lang, "Supprimer", "Delete")} disabled={!canWrite} onClick={() => void del(m)}><Trash2 className="w-4 h-4" /></button></div></li>)}</ul>}
+        {audio && <audio className="w-full mt-3" controls autoPlay src={audio} aria-label={L(lang, "Lecture du message", "Message playback")} />}
       </section>
     </div>
   </Panel>;

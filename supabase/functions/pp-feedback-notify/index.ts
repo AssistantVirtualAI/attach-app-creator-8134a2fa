@@ -88,16 +88,44 @@ Deno.serve(async (req) => {
     screenshots.push(data.signedUrl);
   }
 
+  // Inline copies so the photos are visible directly in the e-mail. The signed
+  // links above stay as a fallback. Attachments are skipped (never fatal) when
+  // a file cannot be read or the total would exceed INLINE_MAX_BYTES.
+  const INLINE_MAX_BYTES = 8 * 1024 * 1024;
+  const attachments: Array<{ filename: string; content: string; content_id: string }> = [];
+  const inlineCidByIndex = new Map<number, string>();
+  let inlineBytes = 0;
+  for (let index = 0; index < screenshotPaths.length; index += 1) {
+    try {
+      const { data: blob, error } = await admin.storage.from(BUCKET).download(screenshotPaths[index]);
+      if (error || !blob) continue;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (bytes.length === 0 || inlineBytes + bytes.length > INLINE_MAX_BYTES) continue;
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      }
+      inlineBytes += bytes.length;
+      const contentId = `fb-shot-${index}`;
+      inlineCidByIndex.set(index, contentId);
+      attachments.push({
+        filename: screenshotPaths[index].split("/").pop() || `capture-${index + 1}.png`,
+        content: btoa(binary),
+        content_id: contentId,
+      });
+    } catch { /* inline copy optional */ }
+  }
+
   const source = report.source === "mobile" ? "App mobile" : report.source === "ava_chat" ? "AVA chat" : report.source === "ava_voice" ? "AVA vocal" : "Portail courtier";
   const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#ffffff;color:#1A2540;max-width:620px;margin:auto;padding:24px">
 <h2 style="color:#1A4A8A;margin:0 0 8px">Nouveau feedback — ${esc(report.title)}</h2>
 <p style="color:#6B7280;font-size:13px;margin:0 0 16px">${esc(report.reporter_name || replyTo || "Courtier")} · ${esc(replyTo || "")} · ${source} · Gravité : <b>${esc(SEVERITY[report.severity] ?? report.severity)}</b>${report.page ? ` · Page : ${esc(report.page)}` : ""}</p>
 <div style="white-space:pre-wrap;background:#F1F7FE;border-radius:10px;padding:14px;font-size:14px">${esc(report.description || "(aucune description)")}</div>
-${screenshots.length ? `<h3 style="color:#1A4A8A;margin-top:20px">Captures (${screenshots.length})</h3>${screenshots.map((signedUrl, index) => `<p><a href="${esc(signedUrl)}">Ouvrir la capture ${index + 1}</a></p>`).join("")}<p style="font-size:11px;color:#9CA3AF">Liens valides 1 heure.</p>` : ""}
+${screenshots.length ? `<h3 style="color:#1A4A8A;margin-top:20px">Captures (${screenshots.length})</h3>${screenshots.map((signedUrl, index) => `${inlineCidByIndex.has(index) ? `<p style="margin:12px 0 4px"><img src="cid:${inlineCidByIndex.get(index)}" alt="Capture ${index + 1}" style="max-width:100%;border-radius:8px;border:1px solid #E5E7EB" /></p>` : ""}<p style="margin:0 0 8px"><a href="${esc(signedUrl)}">Ouvrir la capture ${index + 1}</a></p>`).join("")}<p style="font-size:11px;color:#9CA3AF">Liens valides 1 heure.</p>` : ""}
 <p style="margin-top:24px"><a href="https://courtierai.planipret.com/planipret/broker/feedback" style="background:#1A4A8A;color:#ffffff;padding:10px 16px;border-radius:8px;text-decoration:none">Ouvrir le feedback</a></p>
 </body></html>`;
 
-  const payload = { from: "Planiprêt Feedback <noreply@ava-telecom.ca>", to: recipients, ...(replyTo ? { reply_to: replyTo } : {}), subject: `[Feedback ${source}] ${report.title}`, html };
+  const payload = { from: "Planiprêt Feedback <noreply@ava-telecom.ca>", to: recipients, ...(replyTo ? { reply_to: replyTo } : {}), subject: `[Feedback ${source}] ${report.title}`, html, ...(attachments.length ? { attachments } : {}) };
   let response: Response;
   try {
     response = await fetch("https://api.resend.com/emails", {

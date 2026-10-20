@@ -11,6 +11,7 @@ import Pagination from "@/components/planipret/admin/Pagination";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 import { fmtDateTime, msgPeer } from "@/lib/planipret/brokerFormat";
+import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { brokerSelect, searchFilter, periodStartISO, PERIOD_OPTIONS, type BrokerPeriod } from "@/lib/planipret/brokerAccess";
 import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
 import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
@@ -85,6 +86,8 @@ export default function PBMessages() {
 
   const totalThreads = threads.length;
   const pageThreads = threads.slice((page - 1) * THREADS_PER_PAGE, page * THREADS_PER_PAGE);
+  const contactNames = useCallerNames(pageThreads.map((t) => t.peer));
+  const peerLabel = (peer: string) => contactNames[peer] ?? peer;
   const active = pageThreads.find((t) => t.key === activeKey) ?? pageThreads[0] ?? null;
   const ordered = active ? [...active.messages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) : [];
 
@@ -174,7 +177,7 @@ export default function PBMessages() {
                     background: active?.key === t.key ? "var(--pp-bg-elevated)" : "transparent",
                   }}>
                   <div className="flex items-center justify-between gap-2">
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{t.peer}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{peerLabel(t.peer)}</span>
                     {t.unread > 0 && (
                       <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "var(--pp-danger)", borderRadius: 999, padding: "1px 6px" }}>{t.unread}</span>
                     )}
@@ -196,7 +199,7 @@ export default function PBMessages() {
 
           <div className="pp-card flex flex-col" style={{ padding: 0, maxHeight: "70vh" }}>
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
-              <span className="pp-heading" style={{ fontSize: 14, fontWeight: 700 }}>{active?.peer}</span>
+              <span className="pp-heading" style={{ fontSize: 14, fontWeight: 700 }}>{active ? peerLabel(active.peer) : ""}</span>
               {active && (
                 <button aria-label={lang === "en" ? "Delete conversation" : "Supprimer la conversation"}
                   onClick={async () => {

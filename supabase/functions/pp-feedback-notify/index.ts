@@ -88,6 +88,31 @@ Deno.serve(async (req) => {
     screenshots.push(data.signedUrl);
   }
 
+  // Inline copies so the photos are visible directly in the e-mail. The signed
+  // links above stay as a fallback. Attachments are skipped (never fatal) when
+  // a file cannot be read or the total would exceed INLINE_MAX_BYTES.
+  const INLINE_MAX_BYTES = 8 * 1024 * 1024;
+  const attachments: Array<{ filename: string; content: string; content_id: string }> = [];
+  let inlineBytes = 0;
+  for (let index = 0; index < screenshotPaths.length; index += 1) {
+    try {
+      const { data: blob, error } = await admin.storage.from(BUCKET).download(screenshotPaths[index]);
+      if (error || !blob) continue;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (bytes.length === 0 || inlineBytes + bytes.length > INLINE_MAX_BYTES) continue;
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      }
+      inlineBytes += bytes.length;
+      attachments.push({
+        filename: screenshotPaths[index].split("/").pop() || `capture-${index + 1}.png`,
+        content: btoa(binary),
+        content_id: `fb-shot-${index}`,
+      });
+    } catch { /* inline copy optional */ }
+  }
+
   const source = report.source === "mobile" ? "App mobile" : report.source === "ava_chat" ? "AVA chat" : report.source === "ava_voice" ? "AVA vocal" : "Portail courtier";
   const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#ffffff;color:#1A2540;max-width:620px;margin:auto;padding:24px">
 <h2 style="color:#1A4A8A;margin:0 0 8px">Nouveau feedback — ${esc(report.title)}</h2>

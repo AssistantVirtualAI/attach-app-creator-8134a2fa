@@ -46,8 +46,32 @@ function looksLikeCdr(o: any): boolean {
   return hasDuration && completed;
 }
 
-function looksLikeVoicemail(o: any): boolean {
-  return o?.["voicemail-id"] != null || o?.voicemail_id != null || o?.["message-mailbox"] != null;
+export function looksLikeVoicemail(o: any): boolean {
+  if (o?.["voicemail-id"] != null || o?.voicemail_id != null || o?.["message-mailbox"] != null) return true;
+  // Real NS-API v2 voicemail objects (docs/netsapiens/voicemail.md) carry a
+  // .wav filename plus voicemail-only fields, never a voicemail-id.
+  const filename = str(o?.filename ?? o?.["file-name"]);
+  const vmOnly = o?.FromUser != null || o?.FromName != null || o?.NmsAni != null || o?.RecordTime != null ||
+    o?.["recorded-datetime"] != null || /type=vmail/i.test(str(o?.remotepath ?? o?.["file-access-url"]));
+  return /\.wav$/i.test(filename) && vmOnly;
+}
+
+/** Maps a v2 voicemail object to the receiver's flat voicemail fields. */
+export function mapVoicemail(o: any): Record<string, unknown> {
+  const url = str(o?.remotepath ?? o?.["file-access-url"]);
+  let urlUser = "";
+  try { urlUser = url ? new URL(url).searchParams.get("user") ?? "" : ""; } catch { /* ignore */ }
+  const duration = Number(o?.length ?? o?.["file-duration-seconds"] ?? o?.NmsRecDuration ?? o?.duration ?? 0);
+  return {
+    ...o,
+    user: o?.user ?? o?.extension ?? (urlUser || null),
+    vm_id: o?.vm_id ?? o?.["voicemail-id"] ?? o?.voicemail_id ?? o?.filename ?? o?.index ?? null,
+    from_number: o?.from_number ?? o?.NmsAni ?? o?.FromUser ?? o?.from ?? null,
+    from_name: o?.from_name ?? o?.FromName ?? null,
+    duration_seconds: Number.isFinite(duration) ? Math.round(duration) : null,
+    transcript: o?.transcription ?? o?.transcript ?? null,
+    received_at: o?.["recorded-datetime"] ?? o?.RecordTime ?? o?.["created-datetime"] ?? o?.filedate ?? null,
+  };
 }
 
 function looksLikeMessage(o: any): boolean {
@@ -189,7 +213,7 @@ export function normalizeNsEvents(body: any): NsNormalizedEvent[] {
       if (mapped) out.push(mapped);
       continue;
     }
-    if (looksLikeVoicemail(item)) { out.push({ type: "voicemail.new", data: item }); continue; }
+    if (looksLikeVoicemail(item)) { out.push({ type: "voicemail.new", data: mapVoicemail(item) }); continue; }
     if (looksLikeMessage(item)) { out.push({ type: "message.inbound", data: item }); continue; }
   }
   return out;

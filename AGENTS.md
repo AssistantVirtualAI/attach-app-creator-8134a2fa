@@ -28,3 +28,4 @@
 - Call handoff is JWT-owned or Maestro-machine-key mapped server-side to one broker extension, targets only canonical <ext>x / <ext>M after registration verification, transfers only the remote leg and never hangs up the source (NS owns answer/rollback semantics); Maestro call events remain allowlisted, non-blocking and disabled unless PP_WIDGET_CALL_EVENTS=1.
 
 - Feedback reply alerts derive the reporter from the saved admin-authored comment server-side; reuse push and a fixed email template with comment-ID keys, never browser recipients.
+- Planipret mobile allows one active device per broker (planipret_mobile_active_device via pp-mobile-device-claim); other devices' push/VoIP tokens are revoked (revoked_at), never deleted, and every token reader filters revoked_at is null; sign-out waits for any live call.

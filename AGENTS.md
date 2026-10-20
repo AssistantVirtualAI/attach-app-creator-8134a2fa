@@ -3,9 +3,9 @@
 - Planipret read/hidden SMS and missed-call state is mirrored, local per user/device; never delete history or call/notification records.
 - Planipret transcript diagnostics share a mirrored evidence mapper/notice; native/CDR absence never proves missing audio, provider hints never replace fallback outcomes.
 
-- Planipret APNs alert, background and VoIP pushes use one server-only persisted provider-token cache with atomic renewal and local single-flight reuse; independent worker signing triggers Apple's refresh limits.
+- APNs pushes share one server-only persisted provider-token cache (atomic renewal, single-flight); independent signing hits Apple's refresh limits.
 - Both web trees share the call/recording speaker renderer; identity uses explicit source labels, never inferred turns.
-- Planipret pending-commission presentation and its scoped stylesheet stay byte-identical in both web source trees so portal and mobile expose the same scoped financial view; category totals remain official while monthly tables are labeled as allocated amounts.
+- Pending-commission presentation and stylesheet stay byte-identical in both web trees; category totals official, monthly tables labeled allocated.
 - Portal and mobile paid and pending commissions use separate status panels with independent retained filters; switching panels must never merge their financial sources or widen broker access.
 - Paid commission summaries, deposits and broker charts share the complete paid-deposit collector, while pending uses its own endpoint; failures never become zero totals and selected-broker admin reads use a server-validated broker-owned credential.
 - Commission files and volume (paid and pending, cards, monthly tables, broker table, AVA) count only the receiving broker's own dated Base rows with a positive loan, one file per contract+loan tranche (same key as volume); commission totals keep every category so they match Maestro's official totals.

@@ -639,12 +639,26 @@ async function processEvent(event: any) {
       }
     }
   } else if (type === "voicemail.new") {
-    if (!userId) return;
+    if (!userId || !brokerProfile?.id) {
+      console.warn("[ns-webhook] voicemail ignored: owner unresolved");
+      return;
+    }
     const vmId = await stableWebhookId("voicemail", data, data.vm_id ?? data.id ?? data.message_id ?? data["message-id"]);
+    // ns_vm_id has no unique index: dedupe explicitly before inserting.
+    const { data: existing } = await admin.from("planipret_voicemails")
+      .select("id").eq("user_id", brokerProfile.id).eq("ns_vm_id", vmId).limit(1);
+    if (existing?.length) {
+      console.log("[ns-webhook] duplicate voicemail ignored", { ns_vm_id: vmId });
+      return;
+    }
+    const duration = Number(data.duration_seconds ?? data.duration ?? 0);
     const { data: voicemail, error: voicemailError } = await admin.from("planipret_voicemails").insert({
-      user_id: brokerProfile?.id ?? null, ns_vm_id: vmId,
-      from_number: data.from_number ?? data.from ?? null, ns_message_id: data.id ?? data.message_id ?? data["message-id"] ?? null, thread_id: data.messagesession_id ?? data["messagesession-id"] ?? null,
-      duration_seconds: data.duration ?? data.duration_seconds ?? null,
+      user_id: brokerProfile.id, ns_vm_id: vmId,
+      from_number: data.from_number ?? data.from ?? null,
+      from_name: data.from_name ?? null,
+      duration_seconds: Number.isFinite(duration) ? Math.round(duration) : 0,
+      transcript: data.transcript ?? null,
+      received_at: data.received_at ?? null,
       is_read: false,
     }).select("id").maybeSingle();
     if (voicemailError?.code === "23505") {
@@ -652,6 +666,7 @@ async function processEvent(event: any) {
       return;
     }
     if (voicemailError || !voicemail?.id) throw voicemailError ?? new Error("voicemail_insert_failed");
+    console.log("[ns-webhook] voicemail stored", { ns_vm_id: vmId });
     if (userId) {
       await admin.channel(`voicemails:${userId}`).send({
         type: "broadcast", event: "new_voicemail",

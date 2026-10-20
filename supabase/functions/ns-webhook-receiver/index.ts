@@ -240,6 +240,7 @@ async function processEvent(event: any) {
       .from("planipret_voip_push_tokens")
       .select("id,device_token,bundle_id,environment,updated_at,extension")
       .eq("user_id", uid)
+      .is("revoked_at", null)
       .eq("platform", "ios");
     if (!tokens?.length) {
       console.warn("[ns-webhook] no iOS VoIP tokens for inbound call", { user_id: uid, call_id: payload?.call_id });
@@ -323,6 +324,7 @@ async function processEvent(event: any) {
       .from("mobile_push_tokens")
       .select("id,token,extension")
       .eq("user_id", uid)
+      .is("revoked_at", null)
       .eq("platform", "android");
     if (!tokens?.length) {
       console.warn("[ns-webhook] no Android push tokens for inbound call", { user_id: uid, call_id: payload?.call_id });

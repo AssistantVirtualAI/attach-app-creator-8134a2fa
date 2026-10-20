@@ -115,10 +115,12 @@ Deno.serve(async (req) => {
       .from("planipret_voip_push_tokens")
       .select("device_token, environment, updated_at")
       .eq("user_id", ctx.userId)
+      .is("revoked_at", null)
     : supabase
       .from("mobile_push_tokens")
       .select("token, platform, updated_at")
       .eq("user_id", ctx.userId)
+      .is("revoked_at", null)
       .eq("platform", "android");
   const { data: tokenRow } = await tokenQuery
     .order("updated_at", { ascending: false })

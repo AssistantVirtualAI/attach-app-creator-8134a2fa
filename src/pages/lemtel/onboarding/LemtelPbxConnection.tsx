@@ -58,14 +58,14 @@ const errorText = (lang: Lang, e: unknown) => {
 };
 
 const EMPTY_FORM = { sipDomain: "", pbxHost: "", sipTransport: "tls", sipPort: "5061", wssUrl: "", outboundProxy: "", stunUrls: "", turnUrls: "",
-  registrationExpires: "300", codecs: "opus, PCMU, PCMA", srtpMode: "dtls_srtp", managementMode: "none", managementBaseUrl: "" };
+  registrationExpires: "300", codecs: "opus, PCMU, PCMA", srtpMode: "dtls_srtp", managementMode: "none", managementBaseUrl: "", managementDomainUuid: "", managementUsername: "" };
 
 export default function LemtelPbxConnection({ lang, organizationId, readonly }: Props) {
   const [state, setState] = useState<PbxState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, string>>(EMPTY_FORM);
-  const [secretDraft, setSecretDraft] = useState<Record<PbxSecretKind, string>>({ turn_shared_secret: "", fusionpbx_api_key: "" });
+  const [secretDraft, setSecretDraft] = useState<Record<PbxSecretKind, string>>({ turn_shared_secret: "", fusionpbx_api_key: "", fusionpbx_web_password: "" });
   const [assign, setAssign] = useState({ userId: "", extension: "", authUsername: "", displayName: "", isTest: true, sipPassword: "" });
   const [report, setReport] = useState<PbxCheck[] | null>(null);
 
@@ -74,7 +74,8 @@ export default function LemtelPbxConnection({ lang, organizationId, readonly }: 
     const c = s.connection;
     if (c) setForm({ sipDomain: c.sipDomain, pbxHost: c.pbxHost, sipTransport: c.sipTransport, sipPort: String(c.sipPort), wssUrl: c.wssUrl,
       outboundProxy: c.outboundProxy ?? "", stunUrls: c.stunUrls.join(", "), turnUrls: c.turnUrls.join(", "), registrationExpires: String(c.registrationExpires),
-      codecs: c.codecs.join(", "), srtpMode: c.srtpMode, managementMode: c.managementMode, managementBaseUrl: c.managementBaseUrl ?? "" });
+      codecs: c.codecs.join(", "), srtpMode: c.srtpMode, managementMode: c.managementMode, managementBaseUrl: c.managementBaseUrl ?? "",
+      managementDomainUuid: c.managementDomainUuid ?? "", managementUsername: c.managementUsername ?? "" });
     setReport(c?.lastValidation?.checks ?? null);
   }, []);
 
@@ -151,15 +152,17 @@ export default function LemtelPbxConnection({ lang, organizationId, readonly }: 
         {select("srtpMode", L(lang, "Chiffrement média", "Media encryption"), [["dtls_srtp", "DTLS-SRTP (WebRTC)"], ["sdes", "SDES-SRTP"], ["none", L(lang, "Aucun", "None")]])}
         {select("managementMode", L(lang, "Accès gestion FusionPBX", "FusionPBX management access"), [["none", L(lang, "Aucun (registrations seulement)", "None (registrations only)")], ["fusionpbx_api", L(lang, "API FusionPBX (clé)", "FusionPBX API (key)")]])}
         {form.managementMode === "fusionpbx_api" && field("managementBaseUrl", L(lang, "URL de base API (https)", "API base URL (https)"), { placeholder: "https://pbxnode.lemtel.tel" })}
+        {form.managementMode === "fusionpbx_api" && field("managementDomainUuid", L(lang, "domain_uuid FusionPBX de cette organisation", "FusionPBX domain_uuid of this organization"), { placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", help: L(lang, "Une organisation Lemtel = un domaine FusionPBX. Toutes les opérations sont limitées à ce domaine.", "One Lemtel organization = one FusionPBX domain. Every operation is confined to this domain.") })}
+        {form.managementMode === "fusionpbx_api" && field("managementUsername", L(lang, "Utilisateur API FusionPBX (écritures)", "FusionPBX API user (writes)"), { placeholder: "lemtel-api" })}
       </div>
       <button className="lt-btn lt-btn-gold mt-3" disabled={readonly || busy !== null} onClick={() => void run("save", async () => apply(await pbxApi.saveSettings(organizationId, settingsFromForm(form))), L(lang, "Paramètres enregistrés. Un nouveau test est requis.", "Settings saved. A new test is required."))}>
         {busy === "save" && <Loader2 className="w-4 h-4 animate-spin" />}{L(lang, "Enregistrer les paramètres", "Save settings")}</button>
 
       <h3 className="font-semibold mt-6">2. {L(lang, "Secrets serveur (écriture seule)", "Server secrets (write-only)")}</h3>
       <div className="grid md:grid-cols-2 gap-3 mt-2">
-        {(["turn_shared_secret", "fusionpbx_api_key"] as PbxSecretKind[]).map((kind) => {
+        {(["turn_shared_secret", "fusionpbx_api_key", "fusionpbx_web_password"] as PbxSecretKind[]).map((kind) => {
           const s = state?.secrets[kind];
-          return <div key={kind} className="text-sm"><span className="lt-ink-2 text-xs"><KeyRound className="w-3.5 h-3.5 inline" /> {kind === "turn_shared_secret" ? L(lang, "Secret partagé TURN (coturn use-auth-secret)", "TURN shared secret (coturn use-auth-secret)") : L(lang, "Clé API FusionPBX", "FusionPBX API key")}</span>
+          return <div key={kind} className="text-sm"><span className="lt-ink-2 text-xs"><KeyRound className="w-3.5 h-3.5 inline" /> {kind === "turn_shared_secret" ? L(lang, "Secret partagé TURN (coturn use-auth-secret)", "TURN shared secret (coturn use-auth-secret)") : kind === "fusionpbx_api_key" ? L(lang, "Clé API FusionPBX", "FusionPBX API key") : L(lang, "Mot de passe web FusionPBX (écoute des enregistrements)", "FusionPBX web password (recording playback)")}</span>
             <div className="flex gap-2 mt-1"><input className="lt-input" type="password" autoComplete="off" value={secretDraft[kind]} disabled={readonly || !c} placeholder={s?.set ? L(lang, "défini — saisir pour remplacer", "set — type to replace") : ""} onChange={(e) => setSecretDraft((d) => ({ ...d, [kind]: e.target.value }))} />
               <button className="lt-btn lt-btn-ghost" disabled={readonly || busy !== null || !secretDraft[kind]} onClick={() => void run(kind, async () => { await pbxApi.setSecret(organizationId, kind, secretDraft[kind]); setSecretDraft((d) => ({ ...d, [kind]: "" })); await load(); }, L(lang, "Secret enregistré (chiffré).", "Secret saved (encrypted)."))}>{L(lang, "Enregistrer", "Save")}</button>
               {s?.set && <button className="lt-btn lt-btn-ghost" aria-label={L(lang, "Effacer", "Clear")} disabled={readonly || busy !== null} onClick={() => void run(kind + "-clear", async () => { await pbxApi.clearSecret(organizationId, kind); await load(); })}><Trash2 className="w-4 h-4" /></button>}</div>

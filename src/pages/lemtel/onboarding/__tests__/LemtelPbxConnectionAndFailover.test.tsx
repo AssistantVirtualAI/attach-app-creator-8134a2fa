@@ -19,11 +19,11 @@ import LemtelFailoverBridge from "../LemtelFailoverBridge";
 import LemtelPbxConnection from "../LemtelPbxConnection";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
-const emptyState = { connection: null, secrets: { turn_shared_secret: { set: false, setAt: null }, fusionpbx_api_key: { set: false, setAt: null } }, assignments: [],
+const emptyState = { connection: null, secrets: { turn_shared_secret: { set: false, setAt: null }, fusionpbx_api_key: { set: false, setAt: null }, fusionpbx_web_password: { set: false, setAt: null } }, assignments: [],
   members: [{ userId: "33333333-3333-4333-8333-333333333333", email: "alice@lemtel.tel", name: "Alice", role: "member" }],
   activationBlocker: "connection_not_configured", serverReadiness: { encryptionKeyConfigured: true, credentialDeliveryEnabled: false } };
 const savedConnection = { vendor: "fusionpbx", sipDomain: "lemtel.lemtel.tel", pbxHost: "pbxnode.lemtel.tel", sipTransport: "tls", sipPort: 5061, wssUrl: "wss://pbxnode.lemtel.tel:7443",
-  outboundProxy: null, stunUrls: [], turnUrls: [], registrationExpires: 300, codecs: ["opus", "PCMU", "PCMA"], srtpMode: "dtls_srtp", managementMode: "none", managementBaseUrl: null,
+  outboundProxy: null, stunUrls: [], turnUrls: [], registrationExpires: 300, codecs: ["opus", "PCMU", "PCMA"], srtpMode: "dtls_srtp", managementMode: "none", managementBaseUrl: null, managementDomainUuid: null, managementUsername: null,
   state: "draft", revision: 1, lastValidation: null };
 
 let calls: Array<Record<string, unknown>> = [];

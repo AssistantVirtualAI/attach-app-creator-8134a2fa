@@ -88,3 +88,12 @@ test("TestFlight internal-group association workflow stays valid and Lemtel-only
   assert.match(workflow, /assign-testflight-internal-group\.mjs/);
   assert.doesNotMatch(workflow, /planipret/i);
 });
+
+test("iOS deployment target meets the App Store minimum (iOS 15, required from April 2027 — ITMS-90068)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const pbx = readFileSync(new URL("../ios/App/App.xcodeproj/project.pbxproj", import.meta.url), "utf8");
+  const podfile = readFileSync(new URL("../ios/App/Podfile", import.meta.url), "utf8");
+  const targets = [...pbx.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = ([\d.]+);/g)].map((m) => Number(m[1]));
+  assert.ok(targets.length > 0 && targets.every((v) => v >= 15), `deployment targets: ${targets.join(",")}`);
+  assert.match(podfile, /platform :ios, '15\.0'/);
+});

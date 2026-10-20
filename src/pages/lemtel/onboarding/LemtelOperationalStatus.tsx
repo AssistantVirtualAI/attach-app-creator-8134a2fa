@@ -100,6 +100,8 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
   const [nodeStatusLoading, setNodeStatusLoading] = useState(!readonly);
   const [nodeStatusUnavailable, setNodeStatusUnavailable] = useState(readonly);
   const [error, setError] = useState<"not_allowed" | "unavailable" | null>(null);
+  // The arbiter's own /status (via lemtel-failover-status) is the authority for automatic failover, not the writer snapshot.
+  const [arbiterAuto, setArbiterAuto] = useState<"on" | "off" | "unknown">("unknown");
 
   const refresh = useCallback(async () => {
     if (readonly) { setData(null); setTraffic(null); setTrafficUnavailable(true); setTrafficLoading(false); setNodeStatus(null); setWriterResources(null); setHostingerResources(null); setNodeStatusUnavailable(true); setNodeStatusLoading(false); setError("unavailable"); setLoading(false); return; }
@@ -119,13 +121,16 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
     })();
     const writerResourcesRequest = portalApi.getDoWriterResources().then(setWriterResources).catch(() => setWriterResources(null));
     const hostingerResourcesRequest = portalApi.getHostingerStandbyResources().then(setHostingerResources).catch(() => setHostingerResources(null));
+    const failoverRequest = (portalApi.getFailoverStatus?.() ?? Promise.reject(new Error("unavailable")))
+      .then((failover) => setArbiterAuto(failover?.arbiter?.reachable ? failover.arbiter.automaticFailover : "unknown"))
+      .catch(() => setArbiterAuto("unknown"));
     try {
       setData(await portalApi.getOperationalStatus());
       const history = await portalApi.getOperationalTrend().catch(() => ({ samples: [] }));
       setTrend(history.samples);
     } catch (cause) {
       setError(cause instanceof LemtelError && cause.key === "not_allowed" ? "not_allowed" : "unavailable");
-    } finally { await Promise.all([trafficRequest, nodeStatusRequest, writerResourcesRequest, hostingerResourcesRequest]); setLoading(false); }
+    } finally { await Promise.all([trafficRequest, nodeStatusRequest, writerResourcesRequest, hostingerResourcesRequest, failoverRequest]); setLoading(false); }
   }, [readonly]);
 
   useEffect(() => {
@@ -135,6 +140,8 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
   }, [refresh]);
 
   const status = normalizeOperationalStatus(data ?? unknownOperationalStatus);
+  const failoverOn = arbiterAuto === "on" || (arbiterAuto === "unknown" && status.topology.automaticFailover);
+  const failoverLabel = failoverOn ? t.operations.enabled : arbiterAuto === "off" ? t.operations.disabled : t.operations.states.unknown;
   const services = status.services;
   const replication = status.replication;
   const sampleCount = trend?.length ?? 0;
@@ -184,7 +191,7 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
           <ServiceRow icon={Route} label={t.operations.services.rest} value={services.rest} t={t} />
           <ServiceRow icon={HardDrive} label={t.operations.services.storage} value={services.storage} t={t} />
           <ServiceRow icon={ShieldCheck} label={t.operations.services.accountRecovery} value={services.accountRecovery} t={t} />
-          <ServiceRow icon={AlertTriangle} label={t.operations.automaticFailover} value={status.topology.automaticFailover ? "healthy" : "unknown"} t={t} override={status.topology.automaticFailover ? t.operations.enabled : t.operations.disabled} />
+          <ServiceRow icon={AlertTriangle} label={t.operations.automaticFailover} value={failoverOn ? "healthy" : "unknown"} t={t} override={failoverLabel} />
         </div>
       </div>
 
@@ -193,7 +200,7 @@ export default function LemtelOperationalStatus({ t, lang, config, readonly }: P
         <div className="space-y-3">
           <SignalRow icon={Database} label={t.operations.databaseReplication} tone={replicationHealth(replication.database)} value={t.operations.replication[replication.database]} />
           <SignalRow icon={HardDrive} label={t.operations.storageReplication} tone={replicationHealth(replication.storage)} value={t.operations.replication[replication.storage]} />
-          <SignalRow icon={AlertTriangle} label={t.operations.automaticFailover} tone={status.topology.automaticFailover ? "healthy" : "unknown"} value={status.topology.automaticFailover ? t.operations.enabled : t.operations.disabled} />
+          <SignalRow icon={AlertTriangle} label={t.operations.automaticFailover} tone={failoverOn ? "healthy" : "unknown"} value={failoverLabel} />
         </div>
         <p className="text-xs lt-ink-2 mt-4">{t.operations.replicationNote}</p>
       </div>

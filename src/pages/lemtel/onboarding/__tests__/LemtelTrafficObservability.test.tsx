@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LemtelTrafficTrend } from "../lemtelHostedApi";
-const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn(), getNodeStatus: vi.fn(), getDoWriterResources: vi.fn(), getHostingerStandbyResources: vi.fn() }));
+const api = vi.hoisted(() => ({ getTrafficTrend: vi.fn(), getOperationalStatus: vi.fn(), getOperationalTrend: vi.fn(), getNodeStatus: vi.fn(), getDoWriterResources: vi.fn(), getHostingerStandbyResources: vi.fn(), getFailoverStatus: vi.fn() }));
 vi.mock("../lemtelHostedApi", () => ({ portalApi: api, LemtelError: class extends Error { key = "unavailable"; } }));
 import LemtelOperationalStatus, { TRAFFIC_READ_DEADLINE_MS } from "../LemtelOperationalStatus";
 import LemtelTrafficPanel from "../LemtelTrafficPanel";
@@ -19,9 +19,24 @@ beforeEach(() => {
   api.getOperationalTrend.mockReset().mockResolvedValue({ samples: [] });
   api.getNodeStatus.mockReset().mockResolvedValue({ telemetry: "not_configured", roles: [] });
   api.getDoWriterResources.mockReset().mockResolvedValue({ schemaVersion: "lemtel-do-writer-resources/v1", observation: "no_observation" });
+  api.getFailoverStatus.mockReset().mockRejectedValue(new Error("not_allowed"));
   api.getHostingerStandbyResources.mockReset().mockResolvedValue({ schemaVersion: "lemtel-hostinger-standby-resources/v1", trust: "signed_publication_not_enrolled", observation: "no_observation" });
 });
 afterEach(() => cleanup());
+
+describe("Lemtel automatic failover row", () => {
+  it("follows the arbiter, not the writer snapshot: Activée when the arbiter is active, Désactivée when it is off", async () => {
+    api.getOperationalStatus.mockResolvedValue({ telemetry: "live", overall: "healthy", topology: { automaticFailover: false } });
+    api.getFailoverStatus.mockResolvedValue({ checkedAt: "2026-10-19T12:00:00Z", arbiter: { reachable: true, automaticFailover: "on", state: "healthy", reason: "writer_healthy" }, routing: { servingRole: "do_writer", httpStatus: 200 }, loadBalancer: { configured: true, reachable: true, pools: [] } });
+    operations();
+    await waitFor(() => expect(screen.getAllByText(LEMTEL_DICT.fr.operations.enabled).length).toBeGreaterThan(0));
+    expect(screen.queryByText(LEMTEL_DICT.fr.operations.disabled)).toBeNull();
+    cleanup();
+    api.getFailoverStatus.mockResolvedValue({ checkedAt: "2026-10-19T12:00:00Z", arbiter: { reachable: true, automaticFailover: "off", state: "disabled_or_dry_run", reason: "disabled_or_dry_run" }, routing: { servingRole: "do_writer", httpStatus: 200 }, loadBalancer: { configured: true, reachable: true, pools: [] } });
+    operations();
+    await waitFor(() => expect(screen.getAllByText(LEMTEL_DICT.fr.operations.disabled).length).toBeGreaterThan(0));
+  });
+});
 
 describe("Lemtel private traffic observability", () => {
   it("uses the exact empty message, two pending cards and no fictional counters/charts", async () => {

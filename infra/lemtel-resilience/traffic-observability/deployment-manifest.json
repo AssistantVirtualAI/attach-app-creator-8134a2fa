@@ -31,7 +31,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "e0c76bb5bf849f53f6fd15775e72f3b7e031ff5fed39bd197a1f2c272c7b3f0b"
+      "sha256": "d49d0a116e21d144820bf1f110b9371b93bbc85a7ed5527fd29a95ac901cbf8e"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",

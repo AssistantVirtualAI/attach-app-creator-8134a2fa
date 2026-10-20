@@ -47,8 +47,12 @@ win:
     - target: nsis
       arch: [x64]
   signtoolOptions:
-    # Must equal the CN of the Azure Artifact Signing certificate: installed apps compare it before auto-updating.
-    publisherName: "Automatisation Assistant Virtuel IA Inc."
+    # Accepted signer names (CN of the Azure Artifact Signing certificate). Installed apps refuse an update signed by
+    # any other name, so both the French legal name and the English version submitted to Microsoft are listed.
+    publisherName:
+      - "Automatisation Assistant Virtuel IA Inc."
+      - "Automation Assistant Virtual AI Inc."
+      - "Automation Assistant Virtual AI INC"
     # Azure Artifact Signing hook (no-op unless the release enables it); one SHA-256 signature per binary.
     sign: ./scripts/azure-artifact-sign.cjs
     signingHashAlgorithms: [sha256]

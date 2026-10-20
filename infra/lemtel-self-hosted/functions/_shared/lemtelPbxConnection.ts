@@ -8,7 +8,7 @@ export type ConnectionState = typeof CONNECTION_STATES[number];
 export const SIP_TRANSPORTS = ["udp", "tcp", "tls"] as const;
 export const SRTP_MODES = ["dtls_srtp", "sdes", "none"] as const;
 export const MANAGEMENT_MODES = ["none", "fusionpbx_api"] as const;
-export const SECRET_KINDS = ["turn_shared_secret", "fusionpbx_api_key"] as const;
+export const SECRET_KINDS = ["turn_shared_secret", "fusionpbx_api_key", "fusionpbx_web_password"] as const;
 export type SecretKind = typeof SECRET_KINDS[number];
 export const CODECS = ["opus", "G722", "PCMU", "PCMA", "G729"] as const;
 
@@ -27,6 +27,10 @@ export type ConnectionSettings = {
   srtpMode: typeof SRTP_MODES[number];
   managementMode: typeof MANAGEMENT_MODES[number];
   managementBaseUrl: string | null;
+  /** FusionPBX domain this organization manages (domain_uuid); every management call is bound to it server-side. */
+  managementDomainUuid: string | null;
+  /** FusionPBX API user (writes use key + username; never a secret). */
+  managementUsername: string | null;
 };
 
 export type Invalid = { error: string };
@@ -75,7 +79,7 @@ function list(value: unknown, max: number, each: (v: unknown) => string | null):
 }
 
 const SETTINGS_KEYS = ["vendor", "sipDomain", "pbxHost", "sipTransport", "sipPort", "wssUrl", "outboundProxy", "stunUrls", "turnUrls",
-  "registrationExpires", "codecs", "srtpMode", "managementMode", "managementBaseUrl"];
+  "registrationExpires", "codecs", "srtpMode", "managementMode", "managementBaseUrl", "managementDomainUuid", "managementUsername"];
 
 /** Strict validation of the non-secret connection profile. Unknown keys are refused (no secret can sneak in). */
 export function parseSettings(raw: unknown): ConnectionSettings | Invalid {
@@ -106,12 +110,21 @@ export function parseSettings(raw: unknown): ConnectionSettings | Invalid {
   const managementMode = (r.managementMode ?? "none") as ConnectionSettings["managementMode"];
   if (!MANAGEMENT_MODES.includes(managementMode)) return { error: "invalid_management_mode" };
   let managementBaseUrl: string | null = null;
+  let managementDomainUuid: string | null = null;
+  let managementUsername: string | null = null;
   if (managementMode === "fusionpbx_api") {
     managementBaseUrl = url(r.managementBaseUrl, ["https:"]);
     if (!managementBaseUrl) return { error: "invalid_management_base_url_https_required" };
+    const domainUuid = typeof r.managementDomainUuid === "string" ? r.managementDomainUuid.trim().toLowerCase() : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(domainUuid)) return { error: "invalid_management_domain_uuid" };
+    managementDomainUuid = domainUuid;
+    if (r.managementUsername !== undefined && r.managementUsername !== null && r.managementUsername !== "") {
+      if (typeof r.managementUsername !== "string" || !/^[A-Za-z0-9._@+-]{1,64}$/.test(r.managementUsername.trim())) return { error: "invalid_management_username" };
+      managementUsername = r.managementUsername.trim();
+    }
   }
   return { vendor: "fusionpbx", sipDomain, pbxHost, sipTransport, sipPort, wssUrl, outboundProxy, stunUrls, turnUrls,
-    registrationExpires, codecs, srtpMode, managementMode, managementBaseUrl };
+    registrationExpires, codecs, srtpMode, managementMode, managementBaseUrl, managementDomainUuid, managementUsername };
 }
 
 export type AssignmentInput = { userId: string; extension: string; authUsername: string | null; displayName: string | null; isTest: boolean };
@@ -192,7 +205,8 @@ export function rowFromDb(r: Record<string, unknown> | null): ConnectionRow | nu
     sipPort: Number(r.sip_port), wssUrl: String(r.wss_url), outboundProxy: (r.outbound_proxy as string | null) ?? null,
     stunUrls: (r.stun_urls as string[]) ?? [], turnUrls: (r.turn_urls as string[]) ?? [], registrationExpires: Number(r.registration_expires),
     codecs: (r.codecs as string[]) ?? [], srtpMode: r.srtp_mode as ConnectionRow["srtpMode"], managementMode: r.management_mode as ConnectionRow["managementMode"],
-    managementBaseUrl: (r.management_base_url as string | null) ?? null, state: r.state as ConnectionRow["state"], revision: Number(r.revision),
+    managementBaseUrl: (r.management_base_url as string | null) ?? null,
+    managementDomainUuid: (r.management_domain_uuid as string | null) ?? null, managementUsername: (r.management_username as string | null) ?? null, state: r.state as ConnectionRow["state"], revision: Number(r.revision),
     lastValidation: (r.last_validation as ConnectionRow["lastValidation"]) ?? null,
   };
 }

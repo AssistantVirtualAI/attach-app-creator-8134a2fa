@@ -3,6 +3,8 @@ import { Activity, BarChart3, CheckCircle2, ChevronRight, CircleAlert, Headphone
 import { NavLink, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import LemtelPbxConnection from "./LemtelPbxConnection";
+import LemtelPbxWorkspace from "./LemtelPbxWorkspace";
+import type { Capabilities } from "./lemtelPbxGatewayApi";
 import { LemtelError, portalApi, type PortalTelephonyCapability, type PortalTelephonyPreparation, type PortalTelephonyPreparationState } from "./lemtelHostedApi";
 
 type Props = { basePath: string; lang: "fr" | "en"; organizationId: string | null; readonly: boolean };
@@ -72,6 +74,8 @@ export default function LemtelTelephonyControl({ basePath, lang, organizationId,
   const [preparations, setPreparations] = useState<PortalTelephonyPreparation[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
+  const [caps, setCaps] = useState<Capabilities | null>(null);
+  const live = Boolean(caps?.managementReady);
 
   const refresh = useCallback(async () => {
     if (!organizationId || readonly) { setItems([]); setPreparations([]); return; }
@@ -113,9 +117,10 @@ export default function LemtelTelephonyControl({ basePath, lang, organizationId,
   return <section>
     <div className="flex flex-wrap items-center justify-between gap-3 mb-6"><div><div className="flex items-center gap-2 mb-1"><span className="lt-chip lt-chip-cyan">{copy.preparedOnly}</span><span className="lt-ink-2 text-xs uppercase tracking-wide">{copy.sectionLabel}</span></div><h1 className="lt-page-heading font-semibold">{activeSection === "overview" ? copy.title : labelFor(lang, SECTION_LABELS[activeSection])}</h1><p className="lt-ink-2 text-sm mt-1">{activeSection === "overview" ? copy.subtitle : labelFor(lang, SECTION_DESCRIPTIONS[activeSection])}</p></div><button className="lt-btn lt-btn-ghost" onClick={() => void refresh()} disabled={readonly || refreshing || !organizationId}><RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />{copy.refresh}</button></div>
     {navigation}
-    <div className="grid md:grid-cols-3 gap-4 mb-6"><div className="lt-card p-5"><ShieldCheck className="w-5 h-5 mb-3" style={{ color: "hsl(var(--lt-cyan))" }} /><div className="lt-ink-2 text-xs uppercase tracking-wide">{copy.serverAuthority}</div><div className="font-semibold mt-1">{copy.ready}</div></div><div className="lt-card p-5"><CircleAlert className="w-5 h-5 mb-3" style={{ color: "hsl(var(--lt-gold))" }} /><div className="lt-ink-2 text-xs uppercase tracking-wide">{copy.providerRuntime}</div><div className="font-semibold mt-1">{copy.notProvisioned}</div></div><div className="lt-card p-5"><CheckCircle2 className="w-5 h-5 mb-3" style={{ color: "hsl(var(--lt-gold))" }} /><div className="lt-ink-2 text-xs uppercase tracking-wide">{copy.activationGate}</div><div className="font-semibold mt-1">{copy.pending}</div></div></div>
-    <div className="lt-notice p-4 mb-6 text-sm"><p className="font-semibold">{copy.activationRule}</p><p className="mt-1">{copy.disclosure}</p></div>
+    <div className="grid md:grid-cols-3 gap-4 mb-6"><div className="lt-card p-5"><ShieldCheck className="w-5 h-5 mb-3" style={{ color: "hsl(var(--lt-cyan))" }} /><div className="lt-ink-2 text-xs uppercase tracking-wide">{copy.serverAuthority}</div><div className="font-semibold mt-1">{copy.ready}</div></div><div className="lt-card p-5"><CircleAlert className="w-5 h-5 mb-3" style={{ color: live ? "hsl(var(--lt-cyan))" : "hsl(var(--lt-gold))" }} /><div className="lt-ink-2 text-xs uppercase tracking-wide">{copy.providerRuntime}</div><div className="font-semibold mt-1">{live ? (lang === "fr" ? `FusionPBX connecté${caps?.domainName ? ` · ${caps.domainName}` : ""}` : `FusionPBX connected${caps?.domainName ? ` · ${caps.domainName}` : ""}`) : copy.notProvisioned}</div></div><div className="lt-card p-5"><CheckCircle2 className="w-5 h-5 mb-3" style={{ color: "hsl(var(--lt-gold))" }} /><div className="lt-ink-2 text-xs uppercase tracking-wide">{copy.activationGate}</div><div className="font-semibold mt-1">{copy.pending}</div></div></div>
+    {!live && <div className="lt-notice p-4 mb-6 text-sm"><p className="font-semibold">{copy.activationRule}</p><p className="mt-1">{copy.disclosure}</p></div>}
     {activeSection === "overview" && organizationId ? <LemtelPbxConnection lang={lang} organizationId={organizationId} readonly={readonly} /> : null}
+    {organizationId && !readonly ? <LemtelPbxWorkspace lang={lang} organizationId={organizationId} section={activeSection} readonly={readonly} onCapabilities={setCaps} /> : null}
     {!organizationId ? <div className="lt-card p-6 text-sm lt-ink-2">{copy.chooseOrganization}</div> : items === null ? <div className="lt-card p-6 text-sm lt-ink-2">{copy.loading}</div> : catalog.length === 0 ? <div className="lt-card p-6 text-sm lt-ink-2">{copy.noCapability}</div> : activeSection === "overview" ? <div className="grid lg:grid-cols-2 gap-4">{overview.map(({ id, icon: Icon, modules }) => <NavLink key={id} to={`${basePath}/${id}`} className="lt-card lt-control-overview p-5 text-left"><div className="flex items-start justify-between gap-4"><div className="lt-control-icon"><Icon className="w-5 h-5" /></div><ChevronRight className="w-5 h-5 lt-ink-2" aria-hidden /></div><h2 className="font-semibold mt-5">{labelFor(lang, SECTION_LABELS[id])}</h2><p className="lt-ink-2 text-sm mt-1">{labelFor(lang, SECTION_DESCRIPTIONS[id])}</p><div className="flex flex-wrap items-center justify-between gap-3 mt-5"><span className="lt-chip lt-chip-warn">{modules.length} {copy.catalogModules}</span><span className="text-sm font-semibold" style={{ color: "hsl(var(--lt-cyan))" }}>{copy.openSection}</span></div></NavLink>)}</div> : selectedItems.length === 0 ? <div className="lt-card p-6 text-sm lt-ink-2">{copy.noModulesInSection}</div> : <div className="space-y-3">{selectedItems.map((item) => {
       const preparation = preparationByKey.get(item.key);
       const isReviewReady = preparation?.state === "review_ready";

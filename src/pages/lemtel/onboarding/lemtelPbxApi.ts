@@ -6,14 +6,14 @@ import * as hosted from "./lemtelHostedApi";
 export type PbxSettings = {
   sipDomain: string; pbxHost: string; sipTransport: "udp" | "tcp" | "tls"; sipPort: number; wssUrl: string; outboundProxy: string | null;
   stunUrls: string[]; turnUrls: string[]; registrationExpires: number; codecs: string[]; srtpMode: "dtls_srtp" | "sdes" | "none";
-  managementMode: "none" | "fusionpbx_api"; managementBaseUrl: string | null;
+  managementMode: "none" | "fusionpbx_api"; managementBaseUrl: string | null; managementDomainUuid: string | null; managementUsername: string | null;
 };
 export type PbxCheck = { key: string; status: "ok" | "failed" | "skipped"; detail: string };
 export type PbxReport = { checkedAt: string; checks: PbxCheck[]; passed: boolean };
 export type PbxConnection = PbxSettings & { vendor: "fusionpbx"; state: "draft" | "validated" | "active" | "suspended"; revision: number; lastValidation: PbxReport | null };
 export type PbxAssignment = { userId: string; email: string | null; userName: string | null; extension: string; authUsername: string | null; displayName: string | null; isTest: boolean; state: string; credentialSet: boolean; credentialSetAt: string | null; credentialRevision: number };
 export type PbxMember = { userId: string; email: string; name: string; role: string };
-export type PbxSecretKind = "turn_shared_secret" | "fusionpbx_api_key";
+export type PbxSecretKind = "turn_shared_secret" | "fusionpbx_api_key" | "fusionpbx_web_password";
 export type PbxState = {
   connection: PbxConnection | null;
   secrets: Record<PbxSecretKind, { set: boolean; setAt: string | null }>;
@@ -72,7 +72,11 @@ export function settingsFromForm(f: Record<string, string>): Partial<PbxSettings
     registrationExpires: Number(f.registrationExpires), codecs: listOf(f.codecs), srtpMode: f.srtpMode as PbxSettings["srtpMode"],
     managementMode: f.managementMode as PbxSettings["managementMode"],
   };
-  if (out.managementMode === "fusionpbx_api") out.managementBaseUrl = f.managementBaseUrl.trim();
+  if (out.managementMode === "fusionpbx_api") {
+    out.managementBaseUrl = f.managementBaseUrl.trim();
+    out.managementDomainUuid = (f.managementDomainUuid ?? "").trim().toLowerCase();
+    out.managementUsername = (f.managementUsername ?? "").trim() || null;
+  }
   return out;
 }
 

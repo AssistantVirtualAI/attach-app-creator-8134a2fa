@@ -1,0 +1,26 @@
+{
+  "function": "lemtel-pbx",
+  "scope": "lemtel_only_fusionpbx_domain_management_gateway",
+  "allowed_methods": ["POST", "OPTIONS"],
+  "authentication": "lemtel_session_platform_admin_or_org_role",
+  "capabilities": [
+    "declared_resource_catalog_only",
+    "domain_uuid_forced_on_create_and_verified_before_update_delete",
+    "write_only_secrets_never_read_out",
+    "writes_off_until_platform_records_pbx_owner_agreement",
+    "local_cdr_copy_with_statistics_and_csv_export",
+    "recording_playback_through_server_web_session",
+    "live_calls_registrations_hangup_transfer_eavesdrop_domain_scoped",
+    "member_self_service_forwarding_voicemail_click_to_call",
+    "extension_password_resealed_for_app_provisioning",
+    "operation_audit_without_values"
+  ],
+  "forbidden": [
+    "caller_supplied_freeswitch_command_text",
+    "cross_domain_read_or_write",
+    "secret_values_in_responses_logs_or_audit",
+    "planipret_auth_or_data"
+  ],
+  "required_environment": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "LEMTEL_PBX_SECRET_ENCRYPTION_KEY"],
+  "deployment_prerequisites": ["migration_0024_lemtel_pbx_connection", "migration_0025_lemtel_pbx_management"]
+}

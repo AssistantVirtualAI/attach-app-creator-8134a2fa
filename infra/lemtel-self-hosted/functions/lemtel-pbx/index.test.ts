@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.14";
 import { cdrCsv, handle, parseBody, type Deps } from "./index.ts";
-import { extensionAad, loadSecretKey, sealSecret, secretAad } from "../_shared/lemtelPbxConnection.ts";
+import { extensionAad, loadSecretKey, openSecret, sealSecret, secretAad } from "../_shared/lemtelPbxConnection.ts";
 import { normalizeCdr, projectRow, RESOURCES, validateValues } from "../_shared/lemtelFusionPbx.ts";
 
 // ─── Fake Supabase (only the query-builder features the gateway uses) ─────────────────────────────────────────
@@ -344,4 +344,27 @@ Deno.test("helpers: CDR normalization rejects foreign rows and unsafe names; CSV
   const n = normalizeCdr(ORG, { xml_cdr_uuid: uuidN(1), domain_uuid: DOMAIN, record_name: "../../etc/passwd", start_epoch: "1792400000", hangup_cause: "bad cause" }, DOMAIN)!;
   assertEquals(n.record_name, "passwd"); assertEquals(n.hangup_cause, null); assertEquals(n.start_at, "2026-10-19T08:53:20.000Z");
   assertStringIncludes(cdrCsv([{ callerName: "+cmd|' /C calc'!A0" }]), "'+cmd");
+});
+
+Deno.test("extensions: creating with a password and a user binds the apps' provisioning; re-keying reseals; delete unbinds", async () => {
+  const { call, tables, pbx } = await setup();
+  tables.lemtel_organization_memberships.push({ organization_id: ORG, user_id: U.stranger, role: "member", status: "active" });
+  const key = (await loadSecretKey(env))!;
+  const r = await call("admin", { action: "resource_create", resource: "extensions", values: { extension: "1005", password: "Fresh-Secret-1" }, assignUserId: U.stranger });
+  assertEquals(r.status, 200); assertEquals(r.json.boundUserId, U.stranger);
+  const a = tables.lemtel_pbx_extension_assignments.find((x) => x.user_id === U.stranger)!;
+  assertEquals(a.extension, "1005"); assertEquals(a.credential_revision, 1);
+  assertEquals(await openSecret(key, String(a.sip_password_ciphertext), extensionAad(ORG, U.stranger, "1005")), "Fresh-Secret-1");
+  // Taking an extension already bound to someone else is refused.
+  assertEquals((await call("admin", { action: "resource_create", resource: "extensions", values: { extension: "1006" }, assignUserId: U.member })).status, 200, "member moves to 1006");
+  assertEquals((await call("admin", { action: "resource_update", resource: "extensions", uuid: r.json.uuid, values: { description: "x" }, assignUserId: U.admin })).json.error, "extension_already_assigned");
+  assertEquals(pbx.db.extensions.find((e) => e.extension === "1005")!.description, undefined, "refused before any FusionPBX write");
+  // Re-keying the SIP password in FusionPBX re-seals it for the bound user.
+  assertEquals((await call("admin", { action: "resource_update", resource: "extensions", uuid: r.json.uuid, values: { password: "Second-Secret-2" } })).status, 200);
+  assertEquals(await openSecret(key, String(tables.lemtel_pbx_extension_assignments.find((x) => x.user_id === U.stranger)!.sip_password_ciphertext), extensionAad(ORG, U.stranger, "1005")), "Second-Secret-2");
+  assertEquals(tables.lemtel_pbx_extension_assignments.find((x) => x.user_id === U.stranger)!.credential_revision, 2);
+  assertEquals((await call("admin", { action: "resource_delete", resource: "extensions", uuid: r.json.uuid, confirm: "DELETE" })).status, 200);
+  assertEquals(tables.lemtel_pbx_extension_assignments.some((x) => x.user_id === U.stranger), false);
+  assertEquals(pbx.db.extensions.some((e) => e.extension === "1005"), false);
+  assertEquals((await call("admin", { action: "resource_create", resource: "voicemails", values: { voicemail_id: "1005" }, assignUserId: U.member })).json.error, "invalid_assign_user");
 });

@@ -5,7 +5,7 @@
 // Writes are refused until a platform administrator switches "management writes" on for the organization
 // (agreement of the PBX owners, phase 8.8). Every write, live action and refusal is audited (never a value).
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { isInvalid as isInvalidSetting, loadSecretKey, openSecret, rowFromDb, secretAad } from "../_shared/lemtelPbxConnection.ts";
+import { extensionAad, isInvalid as isInvalidSetting, loadSecretKey, openSecret, rowFromDb, sealSecret, secretAad } from "../_shared/lemtelPbxConnection.ts";
 import {
   createResource, deleteResource, deleteVoicemailMessage, FusionPbxClient, gatewayControl, gatewayStatus, getResource, hangup, isInvalid, isUuid,
   listResource, liveChannels, normalizeCdr, originate, PbxError, projectRow, registrations, resetVoicemail, RESOURCES, SELF_FORWARD_FIELDS, transfer,
@@ -106,6 +106,41 @@ async function ownAssignment(admin: Admin, organizationId: string, userId: strin
 async function findByNumber(c: FusionPbxClient, resource: Resource, field: string, value: string) {
   const rows = await c.list(resource.path, resource.path, { domain_uuid: c.domainUuid, [field]: value, limit: "5", offset: "0" });
   return rows.find((r) => r[field] === value && (r.domain_uuid === undefined || r.domain_uuid === c.domainUuid)) ?? null;
+}
+
+/** Refuses a binding before anything is written to FusionPBX (inactive member, extension bound to someone else). */
+async function bindPrecheck(d: Deps, org: string, extension: string | null, userId: string) {
+  const { data: member } = await d.admin.from("lemtel_organization_memberships").select("user_id").eq("organization_id", org).eq("user_id", userId).eq("status", "active").maybeSingle();
+  if (!member?.user_id) throw new PbxError("user_not_active_member", 409);
+  if (!extension) return;
+  const { data: taken } = await d.admin.from("lemtel_pbx_extension_assignments").select("user_id").eq("organization_id", org).eq("extension", extension).maybeSingle();
+  if (taken?.user_id && taken.user_id !== userId) throw new PbxError("extension_already_assigned", 409);
+}
+
+/** Keeps the apps' provisioning in step with FusionPBX: an extension created / re-keyed here is (re)bound to its Lemtel
+ *  user with the same SIP password sealed for that (organization, user, extension) — so Mobile / Desktop just work. */
+async function bindExtension(d: Deps, org: string, actor: string, extension: string, password: string | null, assignUserId: string | null): Promise<string | null> {
+  const now = new Date(d.now()).toISOString();
+  let userId = assignUserId;
+  if (userId) {
+    await bindPrecheck(d, org, extension, userId);
+  } else {
+    const { data: bound } = await d.admin.from("lemtel_pbx_extension_assignments").select("user_id").eq("organization_id", org).eq("extension", extension).maybeSingle();
+    userId = bound?.user_id ?? null;
+    if (!userId || !password) return null;
+  }
+  const { data: previous } = await d.admin.from("lemtel_pbx_extension_assignments").select("extension,credential_revision").eq("organization_id", org).eq("user_id", userId).maybeSingle();
+  const values: Record<string, unknown> = { organization_id: org, user_id: userId, extension, state: "assigned", updated_by: actor, updated_at: now };
+  if (previous && previous.extension !== extension && !password) { values.sip_password_ciphertext = null; values.credential_set_at = null; }
+  if (password) {
+    const key = await loadSecretKey(d.env);
+    if (!key) throw new PbxError("server_encryption_key_missing", 503);
+    values.sip_password_ciphertext = await sealSecret(key, password, extensionAad(org, userId, extension));
+    values.credential_set_at = now;
+    values.credential_revision = Number(previous?.credential_revision ?? 0) + 1;
+  }
+  await d.admin.from("lemtel_pbx_extension_assignments").upsert(values, { onConflict: "organization_id,user_id" });
+  return userId;
 }
 
 // ─── CDR synchronization and queries (local copy) ─────────────────────────────────────────────────────────────
@@ -246,22 +281,39 @@ export async function handle(req: Request, d: Deps): Promise<Response> {
         if (op === "get") { if (!isUuid(body.uuid)) return respond({ error: "invalid_uuid" }, 400); return respond({ item: await getResource(c, r, body.uuid) }); }
         if (op === "delete") {
           if (!isUuid(body.uuid) || body.confirm !== "DELETE") return respond({ error: "confirmation_required" }, 400);
+          const before = r.key === "extensions" ? await c.get("extensions", "extensions", body.uuid) : null;
           await deleteResource(c, r, body.uuid);
+          // A deleted extension no longer provisions any app.
+          if (typeof before?.extension === "string") await d.admin.from("lemtel_pbx_extension_assignments").delete().eq("organization_id", org).eq("extension", before.extension);
           await audit(d.admin, org, actor.userId, "resource_delete", "ok", r.key, body.uuid);
           return respond({ ok: true });
         }
         const values = validateValues(r, body.values, op);
         if (isInvalid(values)) return respond({ error: values.error }, 400);
         const fields = Object.keys(values);
+        if (body.assignUserId !== undefined && (r.key !== "extensions" || !isUuid(body.assignUserId))) return respond({ error: "invalid_assign_user" }, 400);
+        const assignUserId = isUuid(body.assignUserId) ? body.assignUserId.toLowerCase() : null;
         if (op === "create") {
+          if (assignUserId) await bindPrecheck(d, org, values.extension, assignUserId);
           const created = await createResource(c, r, values);
-          await audit(d.admin, org, actor.userId, "resource_create", "ok", r.key, created.uuid, { fields });
-          return respond({ ok: true, uuid: created.uuid });
+          const bound = r.key === "extensions" ? await bindExtension(d, org, actor.userId, values.extension, values.password ?? null, assignUserId) : null;
+          await audit(d.admin, org, actor.userId, "resource_create", "ok", r.key, created.uuid, { fields, boundToUser: Boolean(bound) });
+          return respond({ ok: true, uuid: created.uuid, boundUserId: bound });
         }
         if (!isUuid(body.uuid)) return respond({ error: "invalid_uuid" }, 400);
+        if (assignUserId) {
+          const current = await c.get("extensions", "extensions", body.uuid);
+          await bindPrecheck(d, org, values.extension ?? (typeof current?.extension === "string" ? current.extension : null), assignUserId);
+        }
         await updateResource(c, r, body.uuid, values);
-        await audit(d.admin, org, actor.userId, "resource_update", "ok", r.key, body.uuid, { fields });
-        return respond({ ok: true });
+        let bound: string | null = null;
+        if (r.key === "extensions" && (values.password || assignUserId)) {
+          const current = await c.get("extensions", "extensions", body.uuid);
+          const number = values.extension ?? (typeof current?.extension === "string" ? current.extension : null);
+          if (number) bound = await bindExtension(d, org, actor.userId, number, values.password ?? null, assignUserId);
+        }
+        await audit(d.admin, org, actor.userId, "resource_update", "ok", r.key, body.uuid, { fields, boundToUser: Boolean(bound) });
+        return respond({ ok: true, boundUserId: bound });
       }
 
       case "voicemail_messages": {

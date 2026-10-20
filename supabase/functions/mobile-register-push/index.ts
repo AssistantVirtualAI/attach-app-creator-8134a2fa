@@ -1,5 +1,6 @@
 // mobile-register-push: persist the device push token for the authenticated user.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { canRegisterToken, normalizeDeviceId, readActiveDevice } from "../_shared/pp-active-device.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -36,6 +37,10 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    const deviceId = normalizeDeviceId(body.device_id);
+    if (platform !== "web" && !canRegisterToken(await readActiveDevice(admin, u.user.id), deviceId)) {
+      return json({ error: "device_not_active" }, 409);
+    }
     const { error: upErr } = await admin
       .from("mobile_push_tokens")
       .upsert(
@@ -44,6 +49,8 @@ Deno.serve(async (req) => {
           token,
           platform,
           extension: extension || null,
+          device_id: deviceId,
+          revoked_at: null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id,token" },

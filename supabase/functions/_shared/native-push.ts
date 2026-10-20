@@ -24,6 +24,7 @@ export async function sendNativeAlertPush(
       .from("mobile_push_tokens")
       .select("id,token,platform")
       .eq("user_id", userId)
+      .is("revoked_at", null)
       .in("platform", ["ios", "android"]);
     if (!tokens?.length) { out.reason = "no_native_token"; return out; }
 

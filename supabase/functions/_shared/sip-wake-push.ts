@@ -23,11 +23,13 @@ export async function sendSipWakePush(admin: any, userId: string): Promise<SipWa
         .from("mobile_push_tokens")
         .select("id,token,platform")
         .eq("user_id", userId)
+        .is("revoked_at", null)
         .in("platform", ["ios", "android"]),
       admin
         .from("planipret_voip_push_tokens")
         .select("id")
         .eq("user_id", userId)
+        .is("revoked_at", null)
         .limit(1),
     ]);
     if (!tokens?.length) {

@@ -93,6 +93,7 @@ Deno.serve(async (req) => {
   // a file cannot be read or the total would exceed INLINE_MAX_BYTES.
   const INLINE_MAX_BYTES = 8 * 1024 * 1024;
   const attachments: Array<{ filename: string; content: string; content_id: string }> = [];
+  const inlineCidByIndex = new Map<number, string>();
   let inlineBytes = 0;
   for (let index = 0; index < screenshotPaths.length; index += 1) {
     try {
@@ -105,10 +106,12 @@ Deno.serve(async (req) => {
         binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
       }
       inlineBytes += bytes.length;
+      const contentId = `fb-shot-${index}`;
+      inlineCidByIndex.set(index, contentId);
       attachments.push({
         filename: screenshotPaths[index].split("/").pop() || `capture-${index + 1}.png`,
         content: btoa(binary),
-        content_id: `fb-shot-${index}`,
+        content_id: contentId,
       });
     } catch { /* inline copy optional */ }
   }

@@ -17,7 +17,7 @@ const workflow = readFileSync(
 test("TestFlight assignment is restricted to the processed Lemtel internal build", () => {
   assert.match(assignmentScript, /appId !== "6786177551"/);
   assert.match(assignmentScript, /groupName !== "Lemtel Internal"/);
-  assert.match(assignmentScript, /marketingVersion !== "1\.1"/);
+  assert.match(assignmentScript, /\^1\\\.\\d\{1,2\}\$/);
   assert.match(assignmentScript, /"filter\[version\]": buildVersion/);
   assert.match(
     assignmentScript,
@@ -36,17 +36,17 @@ test("TestFlight assignment is explicitly gated in the protected iOS environment
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(
     workflow,
-    /marketing_version:\n        description: "Existing iOS marketing version\."\n        required: true\n        default: "1\.1"\n        type: string/,
+    /marketing_version:\n        description: "Existing iOS marketing version\."\n        required: true\n        default: "1\.2"\n        type: string/,
   );
   assert.match(
     workflow,
-    /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-group-v1\.1\.5-r\*"/,
+    /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-group-v1\.2\.8-r\*"/,
   );
   assert.match(workflow, /environment: lemtel-ios-testflight/);
   assert.match(workflow, /TESTFLIGHT_APP_ID: "6786177551"/);
   assert.match(workflow, /TESTFLIGHT_GROUP_NAME: "Lemtel Internal"/);
-  assert.match(workflow, /github\.event_name == 'push' && '5'/);
-  assert.match(workflow, /github\.event_name == 'push' && '1\.1'/);
+  assert.match(workflow, /github\.event_name == 'push' && '8'/);
+  assert.match(workflow, /github\.event_name == 'push' && '1\.2'/);
   assert.match(workflow, /APPSTORE_API_PRIVATE_KEY: \$\{\{ secrets\.APPSTORE_API_PRIVATE_KEY \}\}/);
   assert.match(workflow, /assign-testflight-internal-group\.mjs/);
   assert.doesNotMatch(workflow, /planipret/i);

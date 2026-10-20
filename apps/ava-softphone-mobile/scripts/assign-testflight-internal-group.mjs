@@ -62,7 +62,7 @@ const buildVersion = required("TESTFLIGHT_BUILD_VERSION");
 
 if (appId !== "6786177551") throw new Error("Unexpected TestFlight application");
 if (groupName !== "Lemtel Internal") throw new Error("Unexpected TestFlight group");
-if (marketingVersion !== "1.1") throw new Error("Unexpected Lemtel marketing version");
+if (!/^1\.\d{1,2}$/.test(marketingVersion)) throw new Error("Unexpected Lemtel marketing version");
 if (!/^[1-9]\d*$/.test(buildVersion)) throw new Error("Invalid TestFlight build number");
 
 const token = apiToken({

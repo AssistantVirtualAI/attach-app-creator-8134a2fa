@@ -35,8 +35,8 @@ test("APNs entitlement is configuration-specific for device tests and TestFlight
   assert.doesNotMatch(entitlements, /com\.apple\.developer\.pushkit\.unrestricted-voip/);
   assert.match(project, /APS_ENVIRONMENT = development;[\s\S]*?name = Debug;/);
   assert.match(project, /APS_ENVIRONMENT = production;[\s\S]*?name = Release;/);
-  assert.match(project, /CURRENT_PROJECT_VERSION = 7;/);
-  assert.match(project, /MARKETING_VERSION = 1\.1;/);
+  assert.match(project, /CURRENT_PROJECT_VERSION = 8;/);
+  assert.match(project, /MARKETING_VERSION = 1\.2;/);
   assert.match(project, /CODE_SIGN_IDENTITY = "Apple Distribution";[\s\S]*?name = Release;/);
   assert.match(project, /CODE_SIGN_STYLE = Manual;[\s\S]*?PROVISIONING_PROFILE_SPECIFIER = "\$\(LEMTEL_APP_STORE_PROFILE_UUID\)";[\s\S]*?name = Release;/);
 });
@@ -64,7 +64,7 @@ test("TestFlight delivery is signed, internal, canonical-route bound, and Lemtel
   assert.match(workflow, /steps\.app_store_profile\.outputs\.profiles/);
   assert.match(workflow, /LEMTEL_APP_STORE_PROFILE_UUID/);
   assert.match(workflow, /signingStyle<\/key><string>manual<\/string>/);
-  assert.match(workflow, /Lemtel 1\.1 \(7\): canonical Lemtel sign-in only, clear authentication messaging, readable Dark\/Daylight contrast, French\/English navigation/);
+  assert.match(workflow, /Lemtel 1\.2 \(8\): bottom navigation identical to Desktop, real call history, voicemail and recordings, incoming calls through CallKit/);
   assert.doesNotMatch(workflow, /uses-non-exempt-encryption:/);
   assert.doesNotMatch(workflow, /apps\/planipret-mobile/);
   assert.doesNotMatch(workflow, /branches:\s*\n\s+- "Planipret"/);
@@ -76,11 +76,11 @@ test("TestFlight internal-group association workflow stays valid and Lemtel-only
   );
   assert.match(
     workflow,
-    /marketing_version:\n        description: "Existing iOS marketing version\."\n        required: true\n        default: "1\.1"\n        type: string/,
+    /marketing_version:\n        description: "Existing iOS marketing version\."\n        required: true\n        default: "1\.2"\n        type: string/,
   );
   assert.match(
     workflow,
-    /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-group-v1\.1\.7-r\*"/,
+    /push:\s*\n\s+tags:\s*\n\s+- "lemtel-ios-testflight-group-v1\.2\.8-r\*"/,
   );
   assert.match(workflow, /environment: lemtel-ios-testflight/);
   assert.match(workflow, /TESTFLIGHT_APP_ID: "6786177551"/);

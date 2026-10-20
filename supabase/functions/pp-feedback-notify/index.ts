@@ -122,7 +122,7 @@ ${screenshots.length ? `<h3 style="color:#1A4A8A;margin-top:20px">Captures (${sc
 <p style="margin-top:24px"><a href="https://courtierai.planipret.com/planipret/broker/feedback" style="background:#1A4A8A;color:#ffffff;padding:10px 16px;border-radius:8px;text-decoration:none">Ouvrir le feedback</a></p>
 </body></html>`;
 
-  const payload = { from: "Planiprêt Feedback <noreply@ava-telecom.ca>", to: recipients, ...(replyTo ? { reply_to: replyTo } : {}), subject: `[Feedback ${source}] ${report.title}`, html };
+  const payload = { from: "Planiprêt Feedback <noreply@ava-telecom.ca>", to: recipients, ...(replyTo ? { reply_to: replyTo } : {}), subject: `[Feedback ${source}] ${report.title}`, html, ...(attachments.length ? { attachments } : {}) };
   let response: Response;
   try {
     response = await fetch("https://api.resend.com/emails", {

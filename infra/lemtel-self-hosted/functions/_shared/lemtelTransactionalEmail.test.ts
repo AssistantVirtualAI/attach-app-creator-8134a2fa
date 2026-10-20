@@ -66,7 +66,9 @@ Deno.test("the welcome email links every platform separately (iOS, Android, Wind
       assertStringIncludes(message.html, `lang="${locale}"`);
     }
   }
-  assertEquals(config.downloadUrls.android, "https://play.google.com/store/apps/details?id=com.lemtel.softphone");
+  assertEquals(config.downloadUrls.android, "https://play.google.com/store/apps/details?id=com.lemtel.softphone&pcampaignid=web_share");
+  assertEquals(config.downloadUrls.ios, "https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA");
+  assertStringIncludes(config.downloadUrls.windows, "/v2.5.22/Lemtel-Telecom-Setup-2.5.22.exe");
 });
 
 Deno.test("sender and all mail URLs are strict HTTPS configuration, with no credentials, query or fragment", () => {
@@ -81,6 +83,12 @@ Deno.test("sender and all mail URLs are strict HTTPS configuration, with no cred
   assertEquals(safeHttpsUrl("https://play.google.com/store/apps/details?id=com.lemtel.softphone"), "https://play.google.com/store/apps/details?id=com.lemtel.softphone");
   assertEquals(safeHttpsUrl("https://play.google.com/store/apps/details?id=com.lemtel.softphone&x=1"), undefined);
   assertEquals(safeHttpsUrl("https://evil.example/store/apps/details?id=com.lemtel.softphone"), undefined);
-  assertEquals(configured({ LEMTEL_DOWNLOAD_IOS_URL: "http://unsafe.example/download" }), undefined);
+  assertEquals(safeHttpsUrl("https://play.google.com/store/apps/details?id=com.lemtel.softphone&pcampaignid=web_share"), "https://play.google.com/store/apps/details?id=com.lemtel.softphone&pcampaignid=web_share");
+  assertEquals(safeHttpsUrl("https://play.google.com/store/apps/details?id=com.lemtel.softphone&pcampaignid=web_share&x=1"), undefined);
+  assertEquals(safeHttpsUrl("https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA"), "https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA");
+  assertEquals(safeHttpsUrl("https://apps.apple.com/ca/app/lemtel-softphone/id6786177551"), "https://apps.apple.com/ca/app/lemtel-softphone/id6786177551");
+  assertEquals(safeHttpsUrl("https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA&x=1"), undefined);
+  assertEquals(safeHttpsUrl("https://apps.apple.com.evil.example/ca/app/x/id6786177551?l=fr-CA"), undefined);
+  assertEquals(configured({ LEMTEL_DOWNLOAD_IOS_URL: "http://unsafe.example/download" })?.downloadUrls.ios, "https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA", "download links are not environment-controlled any more");
   assertEquals(configured({ RESEND_API_KEY: "invalid-key" }), undefined);
 });

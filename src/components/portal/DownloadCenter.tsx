@@ -120,8 +120,8 @@ export function DownloadCenter({ personalize = false }: { personalize?: boolean 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Smartphone className="h-4 w-4" /> Mobile</CardTitle></CardHeader>
         <CardContent className="flex flex-wrap gap-4 items-center">
-          <Button asChild variant="outline"><a href="https://apps.apple.com/app/lemtel-telecom">iPhone & iPad — App Store</a></Button>
-          <Button asChild variant="outline"><a href="https://play.google.com/store/apps/details?id=com.lemtel.softphone">Android — Google Play</a></Button>
+          <Button asChild variant="outline"><a href="https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA">iPhone & iPad — App Store</a></Button>
+          <Button asChild variant="outline"><a href="https://play.google.com/store/apps/details?id=com.lemtel.softphone&pcampaignid=web_share">Android — Google Play</a></Button>
           {personalize && me.ext && (
             <div className="rounded-md border p-3 bg-muted/30">
               <p className="text-xs mb-2 text-muted-foreground">Scan to auto-configure mobile</p>

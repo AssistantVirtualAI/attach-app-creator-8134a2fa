@@ -11,7 +11,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/lemtel-traffic-manifest.json",
-      "sha256": "f352a41174e5cc45efe4de3ac13ae9714d0a5d6401fff2ca1de4ab51554a4de1"
+      "sha256": "dc9a82c38684ce9cfe241527a856bc555cccf3cb3fb86c21cb15bbd4d676580f"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-traffic-ingest/index.ts",
@@ -31,7 +31,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "357b295375a177e5ae5c3da88121f3e2d0a792c1d7a5c23b1055af051d292c1f"
+      "sha256": "ead6c687a1febe146e4c284aaf3c2c70d7e9ef468d786e598621896e5765df6a"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",
@@ -43,19 +43,19 @@
     },
     {
       "path": "src/pages/lemtel/onboarding/LemtelOperationalStatus.tsx",
-      "sha256": "30b997befca90152e94b9c5c427f0936b8d526f73790fd8ad1808f3cce4da47d"
+      "sha256": "64dec8cfb7e1bb9161031a0d646ef4551545a5b1fd939791f3cafc2ccf701e15"
     },
     {
       "path": "src/pages/lemtel/onboarding/LemtelNodeResourcePanel.tsx",
-      "sha256": "2369c41d15e6edf730dfe4b7d7db5dc4fa3ab8e88acda94f7c847de2d3a3ec75"
+      "sha256": "870e5708bf8f068f12c0497200d8d05e28fabfe3561ce285edf55d203468980b"
     },
     {
       "path": "src/pages/lemtel/onboarding/lemtelHostedApi.ts",
-      "sha256": "64ba4c40a260353c6a92938f14f8cf5b4715ac71de000ae31daf82bc078d84a5"
+      "sha256": "fd613de0a81784af420f57ca34f257efc5b146e00bc84121b659a0e58965e415"
     },
     {
       "path": "src/pages/lemtel/onboarding/lemtelI18n.ts",
-      "sha256": "ac19c41470340b0894d808084c0e0de22050753cd0b6c8846d279f145e345752"
+      "sha256": "92b86ad9144c9d746d005d2da21d1cd36898aead92731b913dd8c576767b59da"
     },
     {
       "path": "infra/lemtel-resilience/traffic-observability/README.md",
@@ -85,7 +85,7 @@
     },
     {
       "path": "src/pages/lemtel/onboarding/__tests__/LemtelTrafficObservability.test.tsx",
-      "sha256": "d54100f0af55235d1bb20c8c5530487411966418044758f7103f65eb712ce470"
+      "sha256": "a9ca1c199fa59c888812e6a7db2147726ae2c0e5b1d57d2b973aaa10121dc601"
     },
     {
       "path": "scripts/lemtel-traffic-observability-contract.test.mjs",

@@ -22,15 +22,15 @@
     },
     {
       "path": "infra/lemtel-resilience/do-writer-resource-observability/lemtel-do-writer-resource-publish.sh",
-      "sha256": "aeb0522fc3fc429eeb0babcc0f7347b02b61e783a51c98d7c909f3dc19c74025"
+      "sha256": "97cf0a3905d4e5d33210e012a260e478516ec511e47770ca6e2372860771b1e4"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "357b295375a177e5ae5c3da88121f3e2d0a792c1d7a5c23b1055af051d292c1f"
+      "sha256": "ead6c687a1febe146e4c284aaf3c2c70d7e9ef468d786e598621896e5765df6a"
     },
     {
       "path": "src/pages/lemtel/onboarding/lemtelHostedApi.ts",
-      "sha256": "33c21c4fed2350b77d15afc984fb77dbe06c54a35bb46d2be47b12c360d6f01c"
+      "sha256": "fd613de0a81784af420f57ca34f257efc5b146e00bc84121b659a0e58965e415"
     },
     {
       "path": "src/pages/lemtel/onboarding/LemtelNodeResourcePanel.tsx",
@@ -38,7 +38,7 @@
     },
     {
       "path": "src/pages/lemtel/onboarding/LemtelOperationalStatus.tsx",
-      "sha256": "b2676284c4fc0a00cd0c594517a5057535649888df1173ddf91998f7fce1070d"
+      "sha256": "64dec8cfb7e1bb9161031a0d646ef4551545a5b1fd939791f3cafc2ccf701e15"
     }
   ],
   "explicitly_excluded": [

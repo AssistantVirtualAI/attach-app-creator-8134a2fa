@@ -1,0 +1,22 @@
+{
+  "function": "lemtel-release-announce",
+  "scope": "lemtel_only_desktop_release_announcement",
+  "allowed_methods": ["POST", "OPTIONS"],
+  "authentication": "anonymous_trigger_or_platform_administrator",
+  "capabilities": [
+    "server_resolved_newest_complete_github_release",
+    "one_email_per_active_user_per_version",
+    "localized_resend_delivery",
+    "resumable_partial_runs_without_duplicates",
+    "counts_only_response"
+  ],
+  "forbidden": [
+    "caller_chosen_version_recipient_or_link",
+    "email_address_in_response_or_logs",
+    "credential_in_email",
+    "planipret_auth_or_data",
+    "fusionpbx_mutation"
+  ],
+  "required_environment": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "RESEND_API_KEY", "LEMTEL_WELCOME_FROM"],
+  "deployment_prerequisites": ["migration_0026_lemtel_desktop_release_announcements", "baseline_version_2_5_22_recorded"]
+}

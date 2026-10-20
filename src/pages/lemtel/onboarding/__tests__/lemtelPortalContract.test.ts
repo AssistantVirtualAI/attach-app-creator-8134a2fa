@@ -226,10 +226,12 @@ describe("Lemtel portal contract", () => {
     expect(app).toContain('key: "ios"');
     expect(app).toContain('key: "android"');
     expect(server).toContain('function distributionUrls()');
-    expect(server).toContain('LEMTEL_DOWNLOAD_WINDOWS_URL');
-    expect(server).toContain('LEMTEL_DOWNLOAD_MACOS_APPLE_URL');
-    expect(server).toContain('LEMTEL_DOWNLOAD_MACOS_INTEL_URL');
-    expect(server).toContain('https://testflight.apple.com');
+    // Desktop links follow the newest complete GitHub release automatically; store links are fixed listings.
+    expect(server).toContain('currentDesktopRelease()');
+    expect(server).toContain('await latestDesktopRelease()');
+    expect(server).not.toContain('LEMTEL_DOWNLOAD_WINDOWS_URL');
+    expect(server).toContain('IOS_APP_STORE');
+    expect(server).not.toContain('https://testflight.apple.com');
     expect(client).not.toMatch(/resend_api_key|service_role_key/i);
   });
 

@@ -68,7 +68,7 @@ open ~/Downloads/Lemtel.Telecom-arm64.dmg`}
           <h2 className="text-lg font-semibold mb-4">Also available on mobile</h2>
           <div className="flex flex-wrap gap-4 items-center">
             <a
-              href="https://apps.apple.com/"
+              href="https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Download on the App Store"

@@ -1,4 +1,5 @@
 // Lemtel transactional email primitives. Source-only: never log, persist, or return a temporary password.
+import { currentDesktopRelease, type DesktopRelease } from "./lemtelDesktopRelease.ts";
 export type LemtelLocale = "fr" | "en";
 export type TransactionalEmailKind = "welcome" | "password_recovery";
 export type EmailEnvironment = { get(name: string): string | undefined };
@@ -14,9 +15,8 @@ export type TransactionalEmailMessage = { subject: string; html: string };
 
 const EMAIL_RE = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$/i;
 const MAX_URL_LENGTH = 2048;
-const RELEASE_ROOT = "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases";
-const RELEASE_TAG = `${RELEASE_ROOT}/download/v2.5.20`;
-const ANDROID_STORE = "https://play.google.com/store/apps/details?id=com.lemtel.softphone";
+export const ANDROID_STORE = "https://play.google.com/store/apps/details?id=com.lemtel.softphone&pcampaignid=web_share";
+export const IOS_APP_STORE = "https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA";
 
 function trimmed(environment: EmailEnvironment, name: string): string | undefined {
   const value = environment.get(name)?.trim();
@@ -29,8 +29,10 @@ export function safeHttpsUrl(value: string | undefined): string | undefined {
   try {
     const url = new URL(value);
     // Single exception to "no query": a Google Play listing is only addressable as ?id=<application id>.
-    const playListing = url.hostname === "play.google.com" && url.pathname === "/store/apps/details" && /^\?id=[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(url.search);
-    if (url.protocol !== "https:" || !url.hostname || url.username || url.password || (url.search && !playListing) || url.hash) return undefined;
+    const playListing = url.hostname === "play.google.com" && url.pathname === "/store/apps/details" && /^\?id=[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+(&pcampaignid=[a-z_]{1,32})?$/.test(url.search);
+    // Second exception: an App Store listing may carry only its storefront language (?l=fr-CA).
+    const appStoreListing = url.hostname === "apps.apple.com" && /^\/[a-z]{2}\/app\/[a-z0-9-]{1,64}\/id[0-9]{6,12}$/.test(url.pathname) && /^\?l=[a-z]{2}(-[A-Z]{2})?$/.test(url.search);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password || (url.search && !playListing && !appStoreListing) || url.hash) return undefined;
     if (url.hostname === "localhost" || url.hostname.endsWith(".localhost")) return undefined;
     return url.href;
   } catch {
@@ -59,22 +61,24 @@ export function validatedFrom(environment: EmailEnvironment): string | undefined
   return `${name} <${address}>`;
 }
 
-export function distributionUrls(environment: EmailEnvironment): DistributionUrls | undefined {
-  const configured = (name: string, fallback: string) => safeHttpsUrl(trimmed(environment, name) ?? fallback);
-  // Same variables and defaults as the portal download center (lemtel-onboarding-admin distributionUrls).
-  const ios = configured("LEMTEL_DOWNLOAD_IOS_URL", "https://testflight.apple.com");
-  const android = configured("LEMTEL_DOWNLOAD_ANDROID_URL", ANDROID_STORE);
-  const windows = configured("LEMTEL_DOWNLOAD_WINDOWS_URL", `${RELEASE_TAG}/Lemtel-Telecom-Setup-2.5.20.exe`);
-  const macosApple = configured("LEMTEL_DOWNLOAD_MACOS_APPLE_URL", `${RELEASE_TAG}/Lemtel-Telecom-2.5.20-arm64.dmg`);
-  const macosIntel = configured("LEMTEL_DOWNLOAD_MACOS_INTEL_URL", `${RELEASE_TAG}/Lemtel-Telecom-2.5.20-x64.dmg`);
+export function distributionUrls(environment: EmailEnvironment, desktop: DesktopRelease = currentDesktopRelease()): DistributionUrls | undefined {
+  // Same sources as the portal download center (lemtel-onboarding-admin distributionUrls). Mobile: the public
+  // store listings. Desktop: always the newest complete GitHub release, so no edit is needed per release.
+  // Former LEMTEL_DOWNLOAD_* environment values are deliberately ignored (they pinned TestFlight / v2.5.20).
+  void environment;
+  const ios = safeHttpsUrl(IOS_APP_STORE);
+  const android = safeHttpsUrl(ANDROID_STORE);
+  const windows = safeHttpsUrl(desktop.windows);
+  const macosApple = safeHttpsUrl(desktop.macosApple);
+  const macosIntel = safeHttpsUrl(desktop.macosIntel);
   return ios && android && windows && macosApple && macosIntel ? { ios, android, windows, macosApple, macosIntel } : undefined;
 }
 
 /** A configuration failure is intentionally one generic condition at every public boundary. */
-export function emailConfig(environment: EmailEnvironment): TransactionalEmailConfig | undefined {
+export function emailConfig(environment: EmailEnvironment, desktop?: DesktopRelease): TransactionalEmailConfig | undefined {
   const apiKey = trimmed(environment, "RESEND_API_KEY");
   const from = validatedFrom(environment);
-  const downloadUrls = distributionUrls(environment);
+  const downloadUrls = distributionUrls(environment, desktop);
   const logoRaw = trimmed(environment, "LEMTEL_EMAIL_LOGO_URL");
   const logoUrl = logoRaw ? safeHttpsUrl(logoRaw) : undefined;
   // Resend server keys use the re_ prefix. Reject malformed configuration without making a provider call.
@@ -181,6 +185,54 @@ export function transactionalEmailMessage(input: {
       + `<div style="font-size:11px;line-height:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${INK_2}">${passwordLabel}</div><div style="margin-top:6px"><code style="display:inline-block;padding:8px 14px;background:#fff8e6;border:1px solid ${GOLD};border-radius:8px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:19px;line-height:24px;letter-spacing:1px;color:${NAVY};word-break:break-all">${password}</code></div>`
       + `</td></tr></table>${welcomeBlocks}</td></tr>`
       + `<tr><td style="padding:22px 32px 28px;${FONT}"><p style="margin:0;padding-top:18px;border-top:1px solid ${LINE};font-size:13px;line-height:19px;color:${INK_2}">${safety}</p><p style="margin:12px 0 0;font-size:12px;line-height:18px;color:#8a97ab">Lemtel Communications · ${fr ? "Propulsé par AVA" : "Powered by AVA"}</p></td></tr>`
+      + `</table></td></tr></table></body></html>`,
+  };
+}
+
+/** "New desktop version" announcement: no credential, desktop buttons for the exact announced version only. */
+export function releaseAnnouncementMessage(input: {
+  locale: LemtelLocale;
+  displayName: string;
+  release: Pick<DesktopRelease, "version" | "windows" | "macosApple" | "macosIntel" | "releaseUrl">;
+  logoUrl?: string;
+}): TransactionalEmailMessage {
+  const fr = input.locale === "fr";
+  const name = escapeHtml(input.displayName);
+  const version = escapeHtml(input.release.version);
+  const subject = fr ? `Lemtel ${input.release.version} — nouvelle version pour ordinateur` : `Lemtel ${input.release.version} — new desktop version`;
+  const heading = fr ? `Bonjour ${name},` : `Hello ${name},`;
+  const intro = fr
+    ? `La version ${version} de l’application Lemtel pour Windows et Mac est disponible.`
+    : `Version ${version} of the Lemtel app for Windows and Mac is available.`;
+  const auto = fr
+    ? "Si l’application est déjà installée, elle se met à jour automatiquement au prochain démarrage. Vous pouvez aussi l’installer directement :"
+    : "If the app is already installed, it updates itself automatically at its next start. You can also install it directly:";
+  const notes = fr ? "Voir les notes de version" : "View release notes";
+  const footer = fr
+    ? "Vous recevez ce courriel parce que vous utilisez Lemtel. Aucune action n’est requise si votre application est déjà à jour."
+    : "You are receiving this email because you use Lemtel. No action is needed if your app is already up to date.";
+  const cell = (content: string) => `<td width="33%" style="padding:5px;vertical-align:top">${content}</td>`;
+  const urls = [safeHttpsUrl(input.release.windows), safeHttpsUrl(input.release.macosApple), safeHttpsUrl(input.release.macosIntel), safeHttpsUrl(input.release.releaseUrl)];
+  if (urls.some((u) => !u)) throw new Error("release_urls_invalid");
+  const [windows, macosApple, macosIntel, releaseUrl] = urls as string[];
+  const buttons = [
+    storeButton(windows, EMAIL_ASSETS.desktop, fr ? "Ordinateur" : "Computer", "Windows"),
+    storeButton(macosApple, EMAIL_ASSETS.laptop, fr ? "Mac · puce Apple" : "Mac · Apple silicon", "macOS"),
+    storeButton(macosIntel, EMAIL_ASSETS.laptop, "Mac · Intel", "macOS"),
+  ];
+  return {
+    subject,
+    html: `<!doctype html><html lang="${input.locale}"><head><meta name="viewport" content="width=device-width,initial-scale=1" /><meta charset="utf-8" /><meta name="color-scheme" content="light only" /><title>${escapeHtml(subject)}</title></head>`
+      + `<body style="margin:0;padding:0;background:#eef2f8;color:${INK}"><div style="display:none;max-height:0;overflow:hidden">${intro}</div>`
+      + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2f8"><tr><td align="center" style="padding:28px 12px">`
+      + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(11,23,48,0.12)">`
+      + `<tr><td style="background:${NAVY};background-image:linear-gradient(135deg,${NAVY} 0%,${NAVY_2} 100%);padding:26px 32px">${brandMarkup(input.logoUrl)}</td></tr>`
+      + `<tr><td style="height:4px;line-height:4px;font-size:0;background:${GOLD}">&nbsp;</td></tr>`
+      + `<tr><td style="padding:32px 32px 8px;${FONT}"><h1 style="margin:0 0 10px;font-size:26px;line-height:32px;font-weight:800;color:${INK}">${heading}</h1>`
+      + `<p style="margin:0 0 10px;font-size:16px;line-height:24px;color:${INK}">${intro}</p><p style="margin:0 0 16px;font-size:15px;line-height:22px;color:${INK_2}">${auto}</p>`
+      + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 -5px"><tr>${buttons.map(cell).join("")}</tr></table>`
+      + `<p style="margin:16px 0 0;font-size:14px;line-height:20px"><a href="${escapeHtml(releaseUrl)}" style="color:${NAVY_2};font-weight:600">${notes}</a></p></td></tr>`
+      + `<tr><td style="padding:22px 32px 28px;${FONT}"><p style="margin:0;padding-top:18px;border-top:1px solid ${LINE};font-size:13px;line-height:19px;color:${INK_2}">${footer}</p><p style="margin:12px 0 0;font-size:12px;line-height:18px;color:#8a97ab">Lemtel Communications · ${fr ? "Propulsé par AVA" : "Powered by AVA"}</p></td></tr>`
       + `</table></td></tr></table></body></html>`,
   };
 }

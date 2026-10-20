@@ -1,5 +1,6 @@
 import { isNative, getPlatform, setPref, type PermStatus } from "./platform";
 import { supabase } from "@/integrations/supabase/client";
+import { getMobileDeviceId } from "@/lib/planipret/singleDevice";
 import { ensureIncomingCallActionType, showIncomingCallNotification } from "./localCallNotifications";
 
 let listenersRegistered = false;
@@ -104,9 +105,10 @@ export async function registerPushListeners(extension?: string) {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           const { error } = await supabase.functions.invoke("mobile-register-push", {
-            body: { token: token.value, platform, extension: currentExtension },
+            body: { token: token.value, platform, extension: currentExtension, device_id: getMobileDeviceId() },
           });
           if (!error) { apnsTokenUploaded = true; return; }
+          if ((error as any)?.context?.status === 409) return; // autre appareil actif
           console.warn("[push] register rejected", error);
         } catch (e) {
           console.warn("[push] register failed", e);

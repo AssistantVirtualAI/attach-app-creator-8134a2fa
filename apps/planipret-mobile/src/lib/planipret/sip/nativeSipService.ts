@@ -605,6 +605,16 @@ export class NativeSipService {
   async setSpeaker(enabled: boolean) { await getPjsip()?.setSpeaker({ enabled }).catch(() => {}); }
   async sendDTMF(digits: string) { await getPjsip()?.sendDTMF({ digits }).catch(() => {}); }
 
+  /** Libère la ligne quand le compte est ouvert sur un autre appareil. */
+  async releaseForSignOut(): Promise<void> {
+    const pjsip = getPjsip();
+    if (!pjsip) return;
+    try { await pjsip.unregister(); } catch { /* best effort */ }
+    this.registered = false;
+    this.setState("unregistered");
+    releaseAorFromNative("signed_out_elsewhere");
+  }
+
   async refreshState() {
     const pjsip = getPjsip();
     if (!pjsip) return null;

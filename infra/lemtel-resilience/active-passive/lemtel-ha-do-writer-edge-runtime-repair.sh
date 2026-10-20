@@ -56,14 +56,14 @@ add /var/lib/lemtel-ha/hostinger-standby-publisher/edge-config/edge-secret.env /
 grep -q '^LEMTEL_PBX_SECRET_ENCRYPTION_KEY=' "$workdir/.env" 2>/dev/null && expected+=(LEMTEL_PBX_SECRET_ENCRYPTION_KEY)
 names() { docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$edge" | cut -d= -f1 | sort -u; }
 missing_now=(); now="$(names)"
-for n in "${expected[@]}"; do printf '%s\n' "$now" | grep -qx "$n" || missing_now+=("$n"); done
+for n in "${expected[@]}"; do grep -qx "$n" <<<"$now" || missing_now+=("$n"); done
 docker compose "${args[@]}" "${files[@]}" config --quiet 2>/dev/null || fail compose_chain_invalid
 
 printf 'edge_runtime_repair_format=lemtel_edge_runtime_repair_v1\nproject=%s\nservice=%s\nbase_from=%s\n' "$project" "$service" "$sibling"
 printf 'base_files=%s\nactivation_overrides=%s\n' "$(printf '%s\n' "${base_files[@]}" | xargs -n1 basename | paste -sd, -)" "$(IFS=,; echo "${added[*]:-none}")"
 printf 'missing_variable_names_now=%s\n' "$(IFS=,; echo "${missing_now[*]:-none}")"
 # Account recovery (status "Dégradé" when absent) needs both; reported by name even when no override provides them.
-for n in RESEND_API_KEY LEMTEL_WELCOME_FROM; do printf '%s\n' "$now" | grep -qx "$n" && printf 'email_%s=present\n' "$n" || printf 'email_%s=absent\n' "$n"; done
+for n in RESEND_API_KEY LEMTEL_WELCOME_FROM; do grep -qx "$n" <<<"$now" && printf 'email_%s=present\n' "$n" || printf 'email_%s=absent\n' "$n"; done
 if [ "$mode" = check ]; then printf 'changes_made=false\nedge_runtime_repair_status=check_passed\n'; exit 0; fi
 
 [ "${LEMTEL_EDGE_REPAIR_EXECUTE:-}" = rebuild_edge_functions_compose_chain ] || fail execution_token_required
@@ -71,6 +71,6 @@ docker compose "${args[@]}" "${files[@]}" up -d --no-deps --force-recreate --no-
 ok=false; for _ in $(seq 1 30); do [ "$(docker inspect --format '{{.State.Running}}' "$edge" 2>/dev/null)" = true ] && { ok=true; break; }; sleep 2; done
 [ "$ok" = true ] || fail edge_not_running_after_repair
 after="$(names)"; still=()
-for n in "${expected[@]}"; do printf '%s\n' "$after" | grep -qx "$n" || still+=("$n"); done
+for n in "${expected[@]}"; do grep -qx "$n" <<<"$after" || still+=("$n"); done
 [ "${#still[@]}" -eq 0 ] || fail "variables_still_missing_$(IFS=_; echo "${still[*]}" | tr A-Z a-z)"
 printf 'edge_recreated=true\nall_expected_variable_names_present=true\nsecret_values_printed=false\nedge_runtime_repair_status=complete\n'

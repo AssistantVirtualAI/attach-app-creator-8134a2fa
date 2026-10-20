@@ -92,7 +92,10 @@ for f in "${chain_files[@]}"; do [ -f "$T$f" ] || fail edge_compose_file_missing
 names_before="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$edge" | cut -d= -f1 | sort -u)"
 compose() { docker compose --project-name "$project" --project-directory "$dir" "${compose_args[@]}" "$@"; }
 compose config --services >/dev/null 2>&1 || fail compose_config_invalid_before_change
-compose config --services | grep -qx "$service" || fail functions_service_not_in_compose
+# Read the whole list first: with pipefail, "| grep -q" stops reading at the first match and Compose (one write per
+# service) then dies on SIGPIPE, which made this check fail whenever "functions" was not the last service listed.
+services_before="$(compose config --services 2>/dev/null)" || fail compose_config_invalid_before_change
+grep -qx "$service" <<<"$services_before" || { printf 'compose_services=%s\n' "$(printf '%s\n' "$services_before" | paste -sd, -)" >&2; fail functions_service_not_in_compose; }
 pbx_tables="$(printf "SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'lemtel_pbx_%%';\n" | psql_su 2>/dev/null || echo unknown)"
 key_present="$(grep -c '^LEMTEL_PBX_SECRET_ENCRYPTION_KEY=' "$dir/.env" || true)"
 existing_admin="$( [ -f "$functions_dir/lemtel-pbx-connection-admin/index.ts" ] && echo present || echo absent)"
@@ -191,7 +194,8 @@ else:
 open(path, "w").write("\n".join(lines))
 PY
 [ "$(sha256sum "$dir/docker-compose.lemtel-private.yml")" = "$before" ] || compose_changed=true
-compose config --services 2>/dev/null | grep -qx "$service" || fail compose_config_invalid_after_change
+services_after="$(compose config --services 2>/dev/null)" || fail compose_config_invalid_after_change
+grep -qx "$service" <<<"$services_after" || fail compose_config_invalid_after_change
 
 # 3. Edge sources.
 install -d -m 0755 "$functions_dir/lemtel-pbx-connection-admin" "$functions_dir/lemtel-softphone-provisioning" "$functions_dir/lemtel-failover-status"
@@ -217,7 +221,7 @@ done
 stage="$(mktemp -d "$caddy_dir/.lemtel-portal-stage.XXXXXX")"
 tar -xf "$bundle/portal.tar" -C "$stage" --no-same-owner
 [ -s "$stage/lemtel-portal.html" ] && [ -d "$stage/assets" ] || { rm -rf -- "$stage"; fail portal_archive_invalid; }
-if find "$stage" \( -type l -o -name '*.map' -o -name '.env' \) | grep -q .; then rm -rf -- "$stage"; fail portal_archive_unexpected_file; fi
+if [ -n "$(find "$stage" \( -type l -o -name '*.map' -o -name '.env' \) -print -quit)" ]; then rm -rf -- "$stage"; fail portal_archive_unexpected_file; fi
 chmod -R go+rX "$stage"
 mv "$caddy_dir/lemtel-portal" "$backup/lemtel-portal"; portal_swapped=true
 mv "$stage" "$caddy_dir/lemtel-portal"

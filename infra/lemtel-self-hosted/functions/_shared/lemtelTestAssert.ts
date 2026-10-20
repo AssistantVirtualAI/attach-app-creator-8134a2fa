@@ -12,3 +12,4 @@ export function assertEquals(actual: unknown, expected: unknown, message?: strin
   if (!deepEqual(actual, expected)) throw new Error(`${message ?? "values differ"}\nactual:   ${JSON.stringify(actual)}\nexpected: ${JSON.stringify(expected)}`);
 }
 export function assertMatch(actual: string, re: RegExp, message?: string) { if (!re.test(actual)) throw new Error(message ?? `${JSON.stringify(actual)} does not match ${re}`); }
+export function assertStringIncludes(actual: string, expected: string, message?: string) { if (!actual.includes(expected)) throw new Error(message ?? `expected text to include ${JSON.stringify(expected)}`); }

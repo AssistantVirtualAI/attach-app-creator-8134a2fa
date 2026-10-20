@@ -82,6 +82,9 @@ export type LemtelErrorKey =
   | "invalid_input"
   | "throttled"
   | "readonly"
+  | "owner_protected"
+  | "self_protected"
+  | "suspend_first"
   | "generic";
 
 export class LemtelError extends Error {
@@ -96,6 +99,9 @@ export function toLemtelErrorKey(code: unknown, status?: number): LemtelErrorKey
   if (value.includes("expired")) return "temp_expired";
   if (value.includes("first_password_change_not_required") || (value.includes("already") && (value.includes("personal") || value.includes("changed")))) return "already_personalized";
   if (value.includes("invalid_credentials") || value.includes("invalid login")) return "invalid_credentials";
+  if (value.includes("transfer_ownership_first") || value.includes("last_owner_required")) return "owner_protected";
+  if (value.includes("cannot_remove_yourself")) return "self_protected";
+  if (value.includes("must_be_suspended_first")) return "suspend_first";
   if (value.includes("throttl") || value.includes("rate") || status === 429) return "throttled";
   if (value.includes("exists") || value.includes("duplicate") || value.includes("conflict") || status === 409) return "conflict";
   if (value.includes("forbidden") || value.includes("unauthorized") || value.includes("membership_required") || status === 401 || status === 403) return "not_allowed";
@@ -169,7 +175,8 @@ export type PortalInvitation = {
   providerAcceptedAt?: string;
   deliveredAt?: string;
 };
-export type PortalActivity = { id: string; at: string; action: string };
+export type PortalActivity = { id: string; at: string; action: string; actor?: { name: string; email: string }; subject?: { name: string; email: string } };
+export type PortalArchivedOrganization = { id: string; displayName: string; slug: string; defaultLocale: LemtelLocale };
 export type PortalDomain = { id: string; hostname: string; status: "active" | "suspended"; verificationStatus: "verified" | "unverified"; createdAt?: string };
 export type PortalClientConnection = {
   userId: string;
@@ -401,6 +408,17 @@ export const portalApi = {
     invoke<{ ok: true; users: Array<{ email: string; deliveryStatus: "provider_accepted" | "failed" | "needs_attention"; error?: string }> }>("lemtel-onboarding-admin", buildProvisionUsersBody(organizationId, users), { write: true }),
   issueTemporaryPassword: (organizationId: string, recipientUserId: string, locale: LemtelLocale) =>
     invoke<{ ok: true; deliveryStatus: "provider_accepted" | "failed" | "needs_attention" }>("lemtel-onboarding-admin", buildResendWelcomeBody(organizationId, recipientUserId, locale), { write: true }),
+  removeMember: (organizationId: string, recipientUserId: string) =>
+    invoke<{ ok: true; account: "deleted" | "disabled" | "kept_other_organizations" }>("lemtel-onboarding-admin", { action: "remove_member", organizationId, recipientUserId, confirmation: "REMOVE_MEMBER" }, { write: true }),
+  restoreMember: (organizationId: string, recipientUserId: string) =>
+    invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "restore_member", organizationId, recipientUserId }, { write: true }),
+  updateMemberProfile: (organizationId: string, recipientUserId: string, profile: { fullName: string; locale: LemtelLocale }) =>
+    invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "update_member_profile", organizationId, recipientUserId, profile }, { write: true }),
+  listArchivedOrganizations: () => invoke<{ organizations: PortalArchivedOrganization[] }>("lemtel-onboarding-admin", { action: "list_archived_organizations" }),
+  restoreOrganization: (organizationId: string) =>
+    invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "restore_organization", organizationId, confirmation: "RESTORE" }, { write: true }),
+  deleteDomain: (organizationId: string, domainId: string) =>
+    invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "delete_domain", organizationId, domainId, confirmation: "DELETE_DOMAIN" }, { write: true }),
   revokeAccess: (organizationId: string, recipientUserId: string) =>
     invoke<{ ok: true }>("lemtel-onboarding-admin", { action: "revoke_invitation", organizationId, recipientUserId }, { write: true }),
   updateOrganization: (organizationId: string, organization: { displayName: string; defaultLocale: LemtelLocale }) =>

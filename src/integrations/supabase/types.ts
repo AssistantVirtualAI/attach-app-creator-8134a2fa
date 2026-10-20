@@ -4079,27 +4079,33 @@ export type Database = {
       mobile_push_tokens: {
         Row: {
           created_at: string
+          device_id: string | null
           extension: string | null
           id: string
           platform: string
+          revoked_at: string | null
           token: string
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          device_id?: string | null
           extension?: string | null
           id?: string
           platform: string
+          revoked_at?: string | null
           token: string
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          device_id?: string | null
           extension?: string | null
           id?: string
           platform?: string
+          revoked_at?: string | null
           token?: string
           updated_at?: string
           user_id?: string
@@ -12025,6 +12031,27 @@ export type Database = {
           },
         ]
       }
+      planipret_mobile_active_device: {
+        Row: {
+          activated_at: string
+          device_id: string
+          platform: string | null
+          user_id: string
+        }
+        Insert: {
+          activated_at?: string
+          device_id: string
+          platform?: string | null
+          user_id: string
+        }
+        Update: {
+          activated_at?: string
+          device_id?: string
+          platform?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_mplanipret_exceptions: {
         Row: {
           created_at: string
@@ -14122,33 +14149,39 @@ export type Database = {
         Row: {
           bundle_id: string | null
           created_at: string
+          device_id: string | null
           device_token: string
           environment: string | null
           extension: string | null
           id: string
           platform: string
+          revoked_at: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           bundle_id?: string | null
           created_at?: string
+          device_id?: string | null
           device_token: string
           environment?: string | null
           extension?: string | null
           id?: string
           platform?: string
+          revoked_at?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           bundle_id?: string | null
           created_at?: string
+          device_id?: string | null
           device_token?: string
           environment?: string | null
           extension?: string | null
           id?: string
           platform?: string
+          revoked_at?: string | null
           updated_at?: string
           user_id?: string
         }

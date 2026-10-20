@@ -120,23 +120,20 @@ describe("NS v2 message webhook", () => {
   });
 });
 
-Deno.test("v2 voicemail object (filename .wav, no voicemail-id) → voicemail.new", () => {
-  const out = normalizeNsEvents([{
-    filename: "vm-20261020200014008354-abc.wav", domain: "planipret.ca", user: "1117",
-    FromName: "Client", NmsAni: "5145551234", "file-duration-seconds": 12,
-    "recorded-datetime": "2026-10-20 20:00:14", transcription: "Bonjour",
-  }]);
-  if (out.length !== 1 || out[0].type !== "voicemail.new") throw new Error(JSON.stringify(out));
-  const d = out[0].data;
-  if (d.user !== "1117" || d.vm_id !== "vm-20261020200014008354-abc.wav" || d.from_number !== "5145551234" || d.duration_seconds !== 12) throw new Error(JSON.stringify(d));
-});
-
-Deno.test("voicemail owner falls back to file-access-url user param", () => {
-  const out = normalizeNsEvents([{ filename: "vm-1.wav", remotepath: "https://x/ns-api/?object=audio&user=1064&type=vmail&file=vm-1.wav" }]);
-  if (out[0]?.type !== "voicemail.new" || out[0].data.user !== "1064") throw new Error(JSON.stringify(out));
-});
-
-Deno.test("plain .wav without voicemail fields is not a voicemail", () => {
-  const out = normalizeNsEvents([{ filename: "greeting.wav" }]);
-  if (out.some((e) => e.type === "voicemail.new")) throw new Error(JSON.stringify(out));
+describe("v2 voicemail objects", () => {
+  it("filename .wav without voicemail-id → voicemail.new", () => {
+    const out = normalizeNsEvents([{ filename: "vm-20261020200014008354-abc.wav", domain: "planipret.ca", user: "1117",
+      FromName: "Client", NmsAni: "5145551234", "file-duration-seconds": 12, "recorded-datetime": "2026-10-20 20:00:14", transcription: "Bonjour" }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].type).toBe("voicemail.new");
+    expect(out[0].data).toMatchObject({ user: "1117", vm_id: "vm-20261020200014008354-abc.wav", from_number: "5145551234", from_name: "Client", duration_seconds: 12 });
+  });
+  it("owner falls back to file-access-url user param", () => {
+    const out = normalizeNsEvents([{ filename: "vm-1.wav", remotepath: "https://x/ns-api/?object=audio&user=1064&type=vmail&file=vm-1.wav" }]);
+    expect(out[0]?.type).toBe("voicemail.new");
+    expect(out[0].data.user).toBe("1064");
+  });
+  it("plain .wav without voicemail fields is ignored", () => {
+    expect(normalizeNsEvents([{ filename: "greeting.wav" }]).some((e) => e.type === "voicemail.new")).toBe(false);
+  });
 });

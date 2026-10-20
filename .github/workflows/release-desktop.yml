@@ -239,7 +239,8 @@ jobs:
           if ($env:WINDOWS_SIGNED -eq 'true' -and $signature.Status -ne 'Valid') { throw "Invalid installer signature: $($signature.Status)" }
           if ($env:WINDOWS_SIGNED -eq 'true') {
             # Installed apps refuse an update whose signer differs from win.signtoolOptions.publisherName.
-            $expected = 'CN="Automatisation Assistant Virtuel IA Inc."|CN=Automatisation Assistant Virtuel IA Inc\.(,|$)'
+            # Same names as win.signtoolOptions.publisherName (case-insensitive, quoted or not).
+            $expected = '(^|, )CN="?(Automatisation Assistant Virtuel IA Inc\.|Automation Assistant Virtual AI Inc\.?)"?(,|$)'
             if ($signature.SignerCertificate.Subject -notmatch $expected) { throw "Signer does not match publisherName: $($signature.SignerCertificate.Subject)" }
             if ($null -eq $signature.TimeStamperCertificate) { throw 'Installer signature is not timestamped' }
             Write-Host "Windows installer signed by: $($signature.SignerCertificate.Subject)"

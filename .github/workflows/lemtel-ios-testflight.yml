@@ -11,7 +11,7 @@ on:
       release_notes:
         description: "Short bilingual “What to Test” note for internal testers."
         required: true
-        default: "Lemtel beta: organization workspace, French/English, Dark/Daylight, and no call transcription in mobile."
+        default: "Lemtel 1.2 beta: bottom navigation identical to Desktop, real call history/voicemail/recordings, incoming calls via CallKit (app closed). / Navigation identique au Desktop, historique/messagerie/enregistrements réels, appels entrants CallKit."
         type: string
   push:
     tags:
@@ -36,7 +36,8 @@ jobs:
         working-directory: apps/ava-softphone-mobile
     env:
       VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
-      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      # The app reads the canonical Lemtel origin under its runtime name (src/lib/backendOrigin.ts); same source as Desktop.
+      VITE_SUPABASE_URL: ${{ vars.VITE_LEMTEL_API_URL || vars.VITE_SUPABASE_URL }}
       VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
       VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved
       VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
@@ -60,6 +61,13 @@ jobs:
           cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
 
       - name: Validate Lemtel-only canonical iOS release boundary
+        # Same contract as release-desktop.yml: the filter checks the Lemtel names and refuses generic runtime keys.
+        env:
+          VITE_SUPABASE_URL: ""
+          VITE_SUPABASE_PUBLISHABLE_KEY: ""
+          VITE_LEMTEL_API_URL: ${{ vars.VITE_LEMTEL_API_URL || vars.VITE_SUPABASE_URL }}
+          VITE_LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_LEMTEL_HOSTED_ONBOARDING: approved
         run: |
           node scripts/ios-native-readiness.test.mjs
           node ../../scripts/lemtel-hostinger-client-config-filter.mjs
@@ -144,7 +152,7 @@ jobs:
           issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
           api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-          release-notes: "${{ github.event_name == 'push' && 'Lemtel 1.1 (7): canonical Lemtel sign-in only, clear authentication messaging, readable Dark/Daylight contrast, French/English navigation, and no call transcription in mobile.' || inputs.release_notes }}"
+          release-notes: "${{ github.event_name == 'push' && 'Lemtel 1.2 (8): bottom navigation identical to Desktop, real call history, voicemail and recordings, incoming calls through CallKit even when the app is closed.' || inputs.release_notes }}"
           wait-for-processing: "true"
 
       - name: Save signed IPA for the internal test record

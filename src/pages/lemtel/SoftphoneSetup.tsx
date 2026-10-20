@@ -156,7 +156,7 @@ export default function SoftphoneSetup() {
         <div className="mt-10">
           <h2 className="text-center text-lg font-semibold text-slate-900 mb-5">Download the softphone app</h2>
           <div className="flex justify-center">
-            <a href="https://apps.apple.com/" target="_blank" rel="noreferrer"
+            <a href="https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA" target="_blank" rel="noreferrer"
               className="flex items-center gap-3 bg-white border-2 border-slate-200 rounded-xl px-6 py-3 hover:border-slate-400 transition">
               <Apple className="w-7 h-7 text-slate-900" />
               <div className="text-left">
@@ -168,7 +168,7 @@ export default function SoftphoneSetup() {
 
           <p className="text-center text-xs text-slate-500 mt-6 mb-3">Also available on:</p>
           <div className="flex flex-wrap justify-center gap-3">
-            <DownloadBadge href="https://apps.apple.com/" icon={<Apple className="w-5 h-5" />} top="Download on the" bottom="App Store" dark />
+            <DownloadBadge href="https://apps.apple.com/ca/app/lemtel-softphone/id6786177551?l=fr-CA" icon={<Apple className="w-5 h-5" />} top="Download on the" bottom="App Store" dark />
             <DownloadBadge href="/download" icon={<Apple className="w-5 h-5" />} top="Download app for" bottom="Mac OS" />
             <DownloadBadge href="https://play.google.com/" icon={<Smartphone className="w-5 h-5" />} top="GET IT ON" bottom="Google Play" dark />
             <DownloadBadge href="/download" icon={<Monitor className="w-5 h-5" />} top="Download for" bottom="Windows" />

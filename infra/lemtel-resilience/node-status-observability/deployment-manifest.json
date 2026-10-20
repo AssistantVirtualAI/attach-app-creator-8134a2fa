@@ -20,7 +20,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/migrations/lemtel-node-status-manifest.json",
-      "sha256": "5d008b35f3fba12f414e809efd26c5c4327ddb1af7abac041cce777cf3cae5cc"
+      "sha256": "b37d4a2c4d3a1d8e0b3f7a651364d451b0c91a27fbb7dd95de5e9731eac2fead"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-node-status-ingest/index.ts",
@@ -52,7 +52,7 @@
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/index.ts",
-      "sha256": "357b295375a177e5ae5c3da88121f3e2d0a792c1d7a5c23b1055af051d292c1f"
+      "sha256": "ead6c687a1febe146e4c284aaf3c2c70d7e9ef468d786e598621896e5765df6a"
     },
     {
       "path": "infra/lemtel-self-hosted/functions/lemtel-onboarding-admin/manifest.json",

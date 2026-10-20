@@ -90,3 +90,14 @@ test("Desktop release documentation preserves the Lemtel-only release boundary",
   assert.match(runbook, /non signé/);
   assert.doesNotMatch(runbook, /fusionner le commit dans `Planipret`/);
 });
+
+test("every published Desktop release triggers the server-side user announcement, after publishing only", () => {
+  const announce = workflow.slice(workflow.indexOf("\n  announce:"));
+  assert.match(announce, /needs: \[publish\]/);
+  assert.match(announce, /needs\.publish\.result == 'success'/);
+  assert.match(announce, /\/functions\/v1\/lemtel-release-announce/);
+  assert.match(announce, /permissions: \{\}/);
+  // The trigger carries no version, recipient or link: the server reads the newest complete release itself.
+  assert.match(announce, /-d '\{\}'/);
+  assert.doesNotMatch(announce, /SERVICE_ROLE|RESEND_API_KEY/);
+});

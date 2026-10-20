@@ -295,3 +295,37 @@ jobs:
             <(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort) \
             <(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | sort)
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+
+  announce:
+    name: Email every active Lemtel user about this release
+    # Runs only after the release is public. The server decides everything (it reads the newest COMPLETE
+    # release itself, emails each active user once, in their language); this job only rings the bell.
+    if: always() && needs.publish.result == 'success'
+    needs: [publish]
+    runs-on: ubuntu-latest
+    environment: lemtel-hostinger-staging
+    permissions: {}
+    env:
+      LEMTEL_API_URL: ${{ vars.VITE_LEMTEL_API_URL }}
+      LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - name: Trigger the release announcement (idempotent, resumable)
+        shell: bash
+        run: |
+          set -uo pipefail
+          [[ "$LEMTEL_API_URL" =~ ^https://[a-z0-9.-]+$ ]] || { echo 'VITE_LEMTEL_API_URL is not an https origin'; exit 1; }
+          want="${GITHUB_REF_NAME#v}"
+          for attempt in $(seq 1 30); do
+            body="$(curl -sS --max-time 150 -X POST "$LEMTEL_API_URL/functions/v1/lemtel-release-announce" \
+              -H "apikey: $LEMTEL_PUBLISHABLE_KEY" -H "Authorization: Bearer $LEMTEL_PUBLISHABLE_KEY" \
+              -H 'Content-Type: application/json' -d '{}' || true)"
+            status="$(node -e 'try{const b=JSON.parse(process.argv[1]);console.log(`${b.status||b.error||"unknown"} ${b.version||"-"}`)}catch{console.log("unreadable -")}' "$body")"
+            echo "attempt $attempt: $status"
+            case "$status" in
+              "sent $want"|"already_announced $want") echo "Release v$want announced."; exit 0 ;;
+              "partial $want") continue ;;
+            esac
+            sleep 30   # GitHub "latest" can lag a little behind the publish step
+          done
+          echo "The announcement did not complete; a platform administrator can resend it from the portal."
+          exit 1

@@ -33,9 +33,10 @@ test('onboarding administrator function enforces role and email-only limits', ()
   assert.match(source, /platformAdmin/);
   assert.match(source, /organizationAdmin/);
   assert.match(source, /lemtel_onboarding_required: true/);
-  assert.match(source, /LEMTEL_DOWNLOAD_IOS_URL/);
-  assert.match(source, /LEMTEL_DOWNLOAD_ANDROID_URL/);
-  assert.match(source, /LEMTEL_DOWNLOAD_DESKTOP_URL/);
+  // Store listings are fixed; desktop links follow the newest complete release (no env pin to go stale).
+  assert.match(source, /IOS_APP_STORE/);
+  assert.match(source, /ANDROID_STORE/);
+  assert.match(source, /currentDesktopRelease\(\)/);
   assert.match(source, /email_delivery_unavailable/);
   assert.doesNotMatch(source, /functions\.invoke\(['"]pbx|from\(['"]pbx_/i);
   assert.doesNotMatch(source, /console\.log/);

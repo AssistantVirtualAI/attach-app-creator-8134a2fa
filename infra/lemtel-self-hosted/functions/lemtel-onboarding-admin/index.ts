@@ -3,7 +3,8 @@
 // This function never calls FusionPBX and never persists or logs a temporary password.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { telephonyReadinessCatalog } from "./lemtelTelephonyReadiness.ts";
-import { emailConfig as configuredEmail, safeHttpsUrl, sendWithResend, transactionalEmailMessage, type TransactionalEmailConfig } from "../_shared/lemtelTransactionalEmail.ts";
+import { ANDROID_STORE, emailConfig as configuredEmail, IOS_APP_STORE, safeHttpsUrl, sendWithResend, transactionalEmailMessage, type TransactionalEmailConfig } from "../_shared/lemtelTransactionalEmail.ts";
+import { currentDesktopRelease, latestDesktopRelease } from "../_shared/lemtelDesktopRelease.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -320,15 +321,17 @@ function randomPassword(length = 20): string {
 }
 
 function distributionUrls() {
-  const value = (name: string, fallback: string) => safeHttpsUrl(Deno.env.get(name)?.trim() || fallback);
+  // Desktop: newest complete GitHub release, resolved automatically (see _shared/lemtelDesktopRelease.ts).
+  // Mobile: the public store listings. No per-release configuration edit.
+  const desktop = currentDesktopRelease();
   return {
-    desktop: value("LEMTEL_DOWNLOAD_DESKTOP_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/tag/v2.5.20"),
-    windows: value("LEMTEL_DOWNLOAD_WINDOWS_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/download/v2.5.20/Lemtel-Telecom-Setup-2.5.20.exe"),
-    macosApple: value("LEMTEL_DOWNLOAD_MACOS_APPLE_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/download/v2.5.20/Lemtel-Telecom-2.5.20-arm64.dmg"),
-    macosIntel: value("LEMTEL_DOWNLOAD_MACOS_INTEL_URL", "https://github.com/AssistantVirtualAI/attach-app-creator-8134a2fa/releases/download/v2.5.20/Lemtel-Telecom-2.5.20-x64.dmg"),
-    ios: value("LEMTEL_DOWNLOAD_IOS_URL", "https://testflight.apple.com"),
-    // The GitHub releases carry no Android package: the store listing is the only working default.
-    android: value("LEMTEL_DOWNLOAD_ANDROID_URL", "https://play.google.com/store/apps/details?id=com.lemtel.softphone"),
+    desktop: safeHttpsUrl(desktop.releaseUrl),
+    desktopVersion: desktop.version,
+    windows: safeHttpsUrl(desktop.windows),
+    macosApple: safeHttpsUrl(desktop.macosApple),
+    macosIntel: safeHttpsUrl(desktop.macosIntel),
+    ios: safeHttpsUrl(IOS_APP_STORE),
+    android: safeHttpsUrl(ANDROID_STORE),
   };
 }
 
@@ -1094,20 +1097,10 @@ async function nodeStatusForPlatformOverview(admin: Pick<SupabaseClient, "from">
 }
 
 function configuredPlatformClientAccess() {
-  const configuredValue = (environmentKey: string) => {
-    try { return Deno.env.get(environmentKey)?.trim() ?? ""; } catch { return ""; }
-  };
-  const configured = (client: "desktop" | "ios" | "android", environmentKey: string) => {
-    const url = safeHttpsUrl(configuredValue(environmentKey));
-    return url ? { client, state: "configured" as const, url } : { client, state: "pending" as const };
-  };
-  // No release URL is inferred from a fallback: availability requires a server-set,
-  // HTTPS distribution source for each client family.
-  return [
-    configured("desktop", "LEMTEL_DOWNLOAD_DESKTOP_URL"),
-    configured("ios", "LEMTEL_DOWNLOAD_IOS_URL"),
-    configured("android", "LEMTEL_DOWNLOAD_ANDROID_URL"),
-  ];
+  const urls = distributionUrls();
+  const configured = (client: "desktop" | "ios" | "android", url: string | undefined) =>
+    url ? { client, state: "configured" as const, url } : { client, state: "pending" as const };
+  return [configured("desktop", urls.desktop), configured("ios", urls.ios), configured("android", urls.android)];
 }
 
 async function platformOverviewAggregates(admin: any) {
@@ -1195,6 +1188,8 @@ export async function handler(req: Request): Promise<Response> {
   try { raw = await req.json(); } catch { return respond({ error: "invalid_json" }, 400); }
   const request = validateBody(raw);
   if (isFailure(request)) return respond({ error: request.error }, request.status);
+  // Refresh the newest desktop release (cached 10 min, never throws) before any download link is built.
+  await latestDesktopRelease();
   const url = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   if (!url || !serviceRoleKey) return respond({ error: "server_not_configured" }, 503);

@@ -188,7 +188,7 @@ export type PortalClientConnection = {
   accessState: "active" | "revoked";
 };
 export type PlatformAdministrator = { userId: string; fullName: string; email: string; status: "active" | "revoked"; grantedAt?: string };
-export type PortalConfig = { downloads: { desktop?: string; windows?: string; macosApple?: string; macosIntel?: string; ios?: string; android?: string }; supportContact?: string };
+export type PortalConfig = { downloads: { desktop?: string; desktopVersion?: string; windows?: string; macosApple?: string; macosIntel?: string; ios?: string; android?: string }; supportContact?: string };
 export type PortalTelephonyCapability = {
   key: string;
   category: "phone_system" | "call_center" | "analytics_media" | "communications" | "monitoring" | "administration";
@@ -376,6 +376,14 @@ export type PortalFailoverStatus = {
   arbiter: { reachable: boolean; automaticFailover: "on" | "off" | "unknown"; state: string | null; reason: string | null };
   routing: { servingRole: "do_writer" | "hostinger_writer" | "unknown"; httpStatus: number | null };
   loadBalancer: { configured: boolean; reachable: boolean; pools: Array<{ role: "do_writer" | "hostinger_standby" | "other"; healthy: boolean | null; enabled: boolean | null }> };
+};
+
+export type ReleaseAnnouncement = { version: string; state: "baseline" | "sending" | "partial" | "sent"; triggeredBy: string; recipients: number; accepted: number; failed: number; createdAt: string; completedAt: string | null };
+export type ReleaseStatus = { latest: { version: string; source: "github_latest" | "pinned"; publishedAt: string | null; releaseUrl: string }; history: ReleaseAnnouncement[] };
+export type ReleaseAnnounceResult = { status: string; version?: string; recipients?: number; acceptedThisRun?: number; failedThisRun?: number; remaining?: number };
+export const releaseApi = {
+  status: () => invoke<ReleaseStatus>("lemtel-release-announce", { action: "status" }),
+  announce: () => invoke<ReleaseAnnounceResult>("lemtel-release-announce", {}, { write: true }),
 };
 
 export const portalApi = {

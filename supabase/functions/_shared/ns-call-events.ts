@@ -12,6 +12,19 @@
 
 export type NsNormalizedEvent = { type: string; data: any };
 
+/** Only actual planipret_phone_messages columns; there is no `type` column. */
+export function inboundSmsRow(profileId: string, messageId: string, data: any) {
+  return {
+    user_id: profileId,
+    direction: "inbound",
+    from_number: data.from_number ?? data.from ?? null,
+    ns_message_id: messageId,
+    thread_id: data.messagesession_id ?? data["messagesession-id"] ?? null,
+    to_number: data.to_number ?? data.to ?? null,
+    body: data.body ?? data.message ?? "",
+  };
+}
+
 const str = (v: unknown) => (v == null ? "" : String(v));
 
 export function isTeardown(o: any): boolean {

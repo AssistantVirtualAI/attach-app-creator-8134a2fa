@@ -658,7 +658,7 @@ async function processEvent(event: any) {
       from_name: data.from_name ?? null,
       duration_seconds: Number.isFinite(duration) ? Math.round(duration) : 0,
       transcript: data.transcript ?? null,
-      received_at: data.received_at ?? null,
+      received_at: data.received_at && !Number.isNaN(Date.parse(String(data.received_at))) ? new Date(String(data.received_at)).toISOString() : null,
       is_read: false,
     }).select("id").maybeSingle();
     if (voicemailError?.code === "23505") {

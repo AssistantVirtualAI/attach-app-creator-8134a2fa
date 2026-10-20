@@ -126,6 +126,20 @@ En active, le Worker exige le marqueur de bootstrap, déchiffre chaque fois la c
 
 Les endpoints bootstrap et de statut ne retournent jamais de valeur opérationnelle. En mode `bootstrap`, désactivé ou bloqué, **aucune commande n’est accessible par HTTP** : `/agent/command` retourne `404`. Les structures scellées de reçu/commande ne sont jamais en clair dans KV et ne sont jamais retournées dans le statut. En mode actif avec toutes les gates, la commande n’est remise qu’à l’agent authentifié, une seule fois (voir [protocole d’exécution](AUTOMATIC_FAILOVER_EXECUTION_PROTOCOL.md)).
 
+## Exploitation permanente (après un exercice réel réussi)
+
+L’opérateur de bootstrap accepte, en plus de `supervised_review_drill:<1-4>` (heures), l’autorisation
+`LEMTEL_DRILL_AUTHORIZATION=production_authorization:<1-89>` (jours). Elle exige la phrase
+`LEMTEL_PRODUCTION_AUTHORIZATION_ACK=I_AUTHORIZE_PERMANENT_AUTOMATIC_FAILOVER_AFTER_SUCCESSFUL_DRILL`, porte
+`authorization_kind=production_after_validated_drill`, est signée/scellée exactement comme un reçu d’exercice et
+**n’excède jamais l’échéance de la configuration scellée** (89 jours). Le Worker n’est pas modifié : il vérifie
+toujours révision, writer, signature et échéance ≤ 90 jours.
+
+Côté Hostinger, `LEMTEL_AGENT_CONTROL_MODE=start_permanent` installe les unités revues, démarre le timer **et** crée
+le lien `timers.target.wants` pour qu’il redémarre après un reboot du standby ; il refuse si l’agent n’est pas
+configuré en `execute`. `stop` retire toujours ce lien. Le renouvellement se fait avant l’échéance par un nouveau
+bootstrap (nouvelle révision) ; à l’échéance l’arbitre se bloque (fail-closed) sans jamais agir.
+
 ## Gates restantes : aucune activation déduite du bootstrap
 
 1. Installation/revue de l’agent **Hostinger**, preflight root-only, secret partagé distribué séparément sans console, ledger atomique, chaîne locale et preuves PostgreSQL/Storage.

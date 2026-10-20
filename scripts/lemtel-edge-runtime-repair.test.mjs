@@ -18,10 +18,11 @@ function world({ composeInvalid = false, upLosesTraffic = false } = {}) {
     'var/lib/lemtel-ha/transactional-email/runtime-config/compose.lemtel-transactional-email.yml': '',
     'var/lib/lemtel-ha/do-writer-resource-publisher/edge-config/edge-secret.env': '', 'var/lib/lemtel-ha/do-writer-resource-publisher/edge-config/edge-resource-publisher.override.yaml': '',
     'var/lib/lemtel-ha/traffic-observability/edge-config/edge-secret.env': '', 'var/lib/lemtel-ha/traffic-observability/edge-config/edge-traffic.override.yaml': '',
+    'var/lib/lemtel-ha/hostinger-standby-publisher/edge-config/edge-secret.env': '', 'var/lib/lemtel-ha/hostinger-standby-publisher/edge-config/edge-hostinger-standby.override.yaml': '',
   };
   for (const [p, c] of Object.entries(files)) { mkdirSync(join(root, p, '..'), { recursive: true }); writeFileSync(join(root, p), c); }
   mkdirSync(bin); mkdirSync(fake);
-  const full = 'SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY RESEND_API_KEY LEMTEL_WELCOME_FROM LEMTEL_DO_WRITER_RESOURCE_SECRET LEMTEL_TRAFFIC_COLLECTOR_SECRET LEMTEL_PBX_SECRET_ENCRYPTION_KEY';
+  const full = 'SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY RESEND_API_KEY LEMTEL_WELCOME_FROM LEMTEL_DO_WRITER_RESOURCE_SECRET LEMTEL_TRAFFIC_COLLECTOR_SECRET LEMTEL_HOSTINGER_STANDBY_PUBLISHER_SECRET LEMTEL_PBX_SECRET_ENCRYPTION_KEY';
   const after = upLosesTraffic ? full.replace(' LEMTEL_TRAFFIC_COLLECTOR_SECRET', '') : full;
   writeFileSync(join(bin, 'docker'), `#!/bin/bash
 F="${fake}"; echo "docker $*" >> "$F/log"
@@ -52,8 +53,9 @@ test('check: base chain from a sibling container + every activation override on 
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /base_from=supabase-rest/u);
   assert.match(r.stdout, /base_files=docker-compose\.yml,docker-compose\.email\.yml,docker-compose\.lemtel-private\.yml/u);
-  assert.match(r.stdout, /activation_overrides=compose\.lemtel-transactional-email\.yml,edge-resource-publisher\.override\.yaml,edge-traffic\.override\.yaml/u);
-  assert.match(r.stdout, /missing_variable_names_now=RESEND_API_KEY,LEMTEL_WELCOME_FROM,LEMTEL_DO_WRITER_RESOURCE_SECRET,LEMTEL_TRAFFIC_COLLECTOR_SECRET/u);
+  assert.match(r.stdout, /activation_overrides=compose\.lemtel-transactional-email\.yml,edge-resource-publisher\.override\.yaml,edge-traffic\.override\.yaml,edge-hostinger-standby\.override\.yaml/u);
+  assert.match(r.stdout, /missing_variable_names_now=RESEND_API_KEY,LEMTEL_WELCOME_FROM,LEMTEL_DO_WRITER_RESOURCE_SECRET,LEMTEL_TRAFFIC_COLLECTOR_SECRET,LEMTEL_HOSTINGER_STANDBY_PUBLISHER_SECRET/u);
+  assert.match(r.stdout, /email_RESEND_API_KEY=absent\nemail_LEMTEL_WELCOME_FROM=absent/u);
   assert.doesNotMatch(w.log(), / up /u);
 });
 test('repair recreates only the functions service with the full chain and proves every name', () => {

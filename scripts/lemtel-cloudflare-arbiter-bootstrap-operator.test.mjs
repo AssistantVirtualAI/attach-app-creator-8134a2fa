@@ -164,6 +164,29 @@ test('a supervised drill authorization lets the arbiter go active, observe, then
   assert.deepEqual(Object.keys(w.bindings).sort(), ['ARBITER_SERIALIZER', 'CONFIG_REVISION', 'CONFIG_STATE_ENCRYPTION_KEY', 'FAILOVER_MODE', 'STATE']);
 });
 
+test('a production authorization (after a successful real drill) keeps the arbiter active for up to 89 days', async () => {
+  const ACK = { LEMTEL_PRODUCTION_AUTHORIZATION_ACK: 'I_AUTHORIZE_PERMANENT_AUTOMATIC_FAILOVER_AFTER_SUCCESSFUL_DRILL' };
+  const w = world();
+  const result = await run(w, env({ LEMTEL_DRILL_AUTHORIZATION: 'production_authorization:89', ...ACK }));
+  assert.equal(result.authorization_kind, 'production_after_validated_drill');
+  const sealed = JSON.parse(w.kv.get('lemtel_failover_execution_v1:production-drill'));
+  const config = JSON.parse([...w.kv.entries()].find(([k]) => k.includes(':sealed-config:'))[1]);
+  assert.ok(sealed.expires_at - sealed.issued_at > 88 * 86400, 'lasts about 89 days');
+  assert.ok(sealed.expires_at <= config.expires_at, 'never outlives the sealed configuration');
+  assert.equal(w.bindings.FAILOVER_MODE.value, 'disabled', 'the authorization never changes the mode');
+  const active = await sw(w, modeEnv('active'));
+  assert.notEqual(active.status.reason, 'production_drill_or_serialization_not_verified', 'drill gate passes');
+  for (const value of ['production_authorization:90', 'production_authorization:0', 'production_authorization:365']) {
+    const v = world();
+    await assert.rejects(run(v, env({ LEMTEL_DRILL_AUTHORIZATION: value, ...ACK })), (e) => e.code === 'drill_authorization_invalid');
+    assert.equal(v.calls.length, 0);
+  }
+  const v = world();
+  await assert.rejects(run(v, env({ LEMTEL_DRILL_AUTHORIZATION: 'production_authorization:30' })),
+    (e) => e.code === 'production_authorization_requires_acknowledgement');
+  assert.equal(v.calls.length, 0);
+});
+
 test('active is refused without a drill authorization, and invalid authorizations are rejected before any change', async () => {
   const w = world();
   await run(w);

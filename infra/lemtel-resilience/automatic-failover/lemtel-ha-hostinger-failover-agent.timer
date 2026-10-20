@@ -1,5 +1,5 @@
-# Prepared template only: NOT installed, NOT enabled, NOT started.
-# No Install section: no automatic boot/start target is connected.
+# Installed and started only by the agent control script. No Install section: the boot start exists only in
+# permanent mode, as an explicit timers.target.wants link created by `start_permanent` and removed by `stop`.
 [Unit]
 Description=Lemtel Hostinger failover agent timer (explicit start only)
 

@@ -1,0 +1,106 @@
+name: Lemtel Android — signed release bundle (Play Console)
+
+# Tag lemtel-android-v<versionName>-<versionCode>, e.g. lemtel-android-v2.3.0-115.
+# Produces a signed .aab for Play Console (internal testing first). The upload key comes from repository secrets
+# set by the owner (never in the repository, logs or artifacts) and is deleted at the end of the job.
+on:
+  push:
+    tags:
+      - "lemtel-android-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lemtel-android-release
+  cancel-in-progress: false
+
+jobs:
+  signed-bundle:
+    name: Signed Android App Bundle
+    environment: lemtel-hostinger-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_LEMTEL_API_URL }}
+      VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
+      VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved
+      VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version from the tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^lemtel-android-v([0-9]+\.[0-9]+\.[0-9]+)-([1-9][0-9]{0,8})$ ]]; then
+            echo "Tag must look like lemtel-android-v2.3.0-115" >&2; exit 1
+          fi
+          echo "name=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "code=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+      - name: Require the upload-key secrets (names only)
+        env:
+          KS: ${{ secrets.LEMTEL_ANDROID_KEYSTORE_BASE64 }}
+          SP: ${{ secrets.LEMTEL_ANDROID_STORE_PASSWORD }}
+          KA: ${{ secrets.LEMTEL_ANDROID_KEY_ALIAS }}
+          KP: ${{ secrets.LEMTEL_ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          missing=0
+          for n in KS SP KA KP; do [ -n "${!n}" ] || { echo "Missing secret for $n"; missing=1; }; done
+          exit $missing
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/ava-softphone-mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Enforce approved Lemtel canonical configuration
+        env:
+          VITE_SUPABASE_URL: ""
+          VITE_SUPABASE_PUBLISHABLE_KEY: ""
+          VITE_LEMTEL_API_URL: ${{ vars.VITE_LEMTEL_API_URL }}
+          VITE_LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_LEMTEL_HOSTED_ONBOARDING: approved
+        run: node scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Build Lemtel web bundle and sync Android
+        working-directory: apps/ava-softphone-mobile
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npx cap sync android
+      - name: Build the signed release bundle
+        working-directory: apps/ava-softphone-mobile/android
+        env:
+          KS: ${{ secrets.LEMTEL_ANDROID_KEYSTORE_BASE64 }}
+          LEMTEL_ANDROID_STORE_PASSWORD: ${{ secrets.LEMTEL_ANDROID_STORE_PASSWORD }}
+          LEMTEL_ANDROID_KEY_ALIAS: ${{ secrets.LEMTEL_ANDROID_KEY_ALIAS }}
+          LEMTEL_ANDROID_KEY_PASSWORD: ${{ secrets.LEMTEL_ANDROID_KEY_PASSWORD }}
+          LEMTEL_ANDROID_VERSION_NAME: ${{ steps.version.outputs.name }}
+          LEMTEL_ANDROID_VERSION_CODE: ${{ steps.version.outputs.code }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export LEMTEL_ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/lemtel-upload.jks"
+          printf '%s' "$KS" | base64 -d > "$LEMTEL_ANDROID_KEYSTORE_FILE"
+          trap 'rm -f "$LEMTEL_ANDROID_KEYSTORE_FILE"' EXIT
+          ./gradlew :app:bundleRelease --no-daemon
+          aab=app/build/outputs/bundle/release/app-release.aab
+          test -s "$aab"
+          # The bundle must carry a signature from the upload key (jarsigner verifies the JAR signature of the .aab).
+          jarsigner -verify "$aab" | grep -q "jar verified"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp "$aab" "$RUNNER_TEMP/out/Lemtel-${LEMTEL_ANDROID_VERSION_NAME}-${LEMTEL_ANDROID_VERSION_CODE}.aab"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemtel-android-${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}
+          path: ${{ runner.temp }}/out/*.aab
+          if-no-files-found: error
+          retention-days: 14

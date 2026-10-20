@@ -1,7 +1,7 @@
 import { getApnsProviderToken } from "../_shared/apns-provider-token.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { normalizeNsEvents, nsCallKey, nsCdrExtensionCandidates, shouldProcessCall } from "../_shared/ns-call-events.ts";
+import { normalizeNsEvents, nsCallKey, nsCdrExtensionCandidates, shouldProcessCall, inboundSmsRow } from "../_shared/ns-call-events.ts";
 import { parseServiceAccount, sendFcmDataMessage } from "../_shared/fcm.ts";
 import { queueWidgetSync, queueWidgetCallEvent, queueWidgetResourceEvent } from "../_shared/maestro-widget-sync.ts";
 
@@ -601,15 +601,10 @@ async function processEvent(event: any) {
       });
     }
   } else if (type === "message.inbound") {
-    if (!userId) return;
+    if (!userId || !brokerProfile?.id) return;
     const messageId = await stableWebhookId("sms", data, data.id ?? data.message_id ?? data["message-id"]);
-    const { data: inboundMsg, error: messageError } = await admin.from("planipret_phone_messages").insert({
-      user_id: brokerProfile?.id ?? null, direction: "inbound",
-      from_number: data.from_number ?? data.from ?? null, ns_message_id: messageId, thread_id: data.messagesession_id ?? data["messagesession-id"] ?? null,
-      to_number: data.to_number ?? data.to ?? null,
-      body: data.body ?? data.message ?? "",
-      type: "sms",
-    }).select("id").maybeSingle();
+    const { data: inboundMsg, error: messageError } = await admin.from("planipret_phone_messages")
+      .insert(inboundSmsRow(brokerProfile.id, messageId, data)).select("id").maybeSingle();
     if (messageError?.code === "23505") {
       console.log("[ns-webhook] duplicate SMS ignored", { ns_message_id: messageId });
       return;

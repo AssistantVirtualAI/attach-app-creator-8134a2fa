@@ -22,7 +22,7 @@ describe("déclencheurs internes Planiprêt", () => {
     const config = read("supabase/config.toml");
     const handler = read("supabase/functions/pp-row-push/index.ts");
     const reports = read("supabase/functions/planipret-commission-reports/index.ts");
-    expect(config).toContain("[functions.pp-row-push]\nverify_jwt = false");
+    expect(config).toMatch(/^\s*\[functions\.pp-row-push\]\s*\n\s*verify_jwt\s*=\s*false\s*$/m);
     expect(handler).toContain('admin.rpc("pp_verify_internal_trigger_secret", { _candidate: candidate })');
     expect(handler).toContain('req.headers.get("X-Planipret-Internal-Trigger")');
     expect(handler).toContain('error: "internal_trigger_required"');

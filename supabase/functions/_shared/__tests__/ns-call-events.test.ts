@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   normalizeNsEvents,
+  inboundSmsRow,
   nsCallKey,
   isTeardown,
   nsCdrExtensionCandidates,
@@ -102,6 +103,18 @@ describe("normalizeNsEvents", () => {
 });
 
 describe("NS v2 message webhook", () => {
+  it("persists a received SMS using only existing database columns", () => {
+    const [event] = normalizeNsEvents([{ id: "received-113", type: "sms", direction: "orig",
+      "terminating-user-id": "113", "from-number": "15145550100", text: "Test",
+      "messagesession-id": "session-113" }]);
+    const row = inboundSmsRow("broker-113", "received-113", event.data);
+    const columns = new Set(["id", "user_id", "organization_id", "ns_message_id", "thread_id", "direction",
+      "from_number", "to_number", "body", "media_urls", "status", "read_at", "sent_at", "metadata",
+      "created_at", "updated_at", "maestro_synced", "idempotency_key"]);
+    expect(Object.keys(row).filter((key) => !columns.has(key))).toEqual([]);
+    expect(row).toMatchObject({ user_id: "broker-113", ns_message_id: "received-113",
+      direction: "inbound", body: "Test", thread_id: "session-113", from_number: "15145550100" });
+  });
   it("SMS to on-net broker becomes message.inbound", () => {
     const ev = normalizeNsEvents([{ id: "m1", type: "sms", domain: "planipret.ca", direction: "orig",
       "from-number": "14388427217", "from-user-id": "113", "terminating-user-id": "1064",

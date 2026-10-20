@@ -11,9 +11,16 @@ test('production Mobile accepts mock data only in explicitly opted-in developmen
   assert.doesNotMatch(source, /if \(!token\) \{[\s\S]{0,220}return mockData;/);
 });
 
-test('live calls, recordings and messages use the canonical authenticated API boundary', () => {
-  for (const endpoint of ['/mobile-calls?', '/mobile-recordings?', '/mobile-sms']) {
-    assert.ok(source.includes(endpoint), `missing canonical endpoint: ${endpoint}`);
+test('live calls, recordings and voicemail use the Lemtel gateway with the user session', () => {
+  // The Lemtel backend serves telephony data only through lemtel-pbx (server-scoped to the user's extension).
+  for (const action of ["action: 'cdr_list'", "action: 'self_overview'", "action: 'voicemail_audio'", 'recordedOnly: true']) {
+    assert.ok(source.includes(action), `missing gateway action: ${action}`);
   }
+  for (const legacy of ['/mobile-calls?', '/mobile-recordings?', '/mobile-voicemails', '/fusionpbx-proxy']) {
+    assert.ok(!source.includes(legacy), `legacy endpoint still used: ${legacy}`);
+  }
+  const gateway = readFileSync(resolve(import.meta.dirname, '../apps/ava-softphone-mobile/src/lib/lemtelPbxMobile.ts'), 'utf8');
+  assert.match(gateway, /functions\/v1\/lemtel-pbx/);
+  assert.match(gateway, /Authorization: `Bearer \$\{token\}`/);
   assert.match(source, /Authorization: `Bearer \$\{token\}`/);
 });

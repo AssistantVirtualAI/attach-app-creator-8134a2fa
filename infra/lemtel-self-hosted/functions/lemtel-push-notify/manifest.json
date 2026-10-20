@@ -1,0 +1,11 @@
+{
+  "function": "lemtel-push-notify",
+  "scope": "lemtel_only_incoming_call_wake",
+  "allowed_methods": ["POST"],
+  "authentication": "hmac_sha256_signed_sip_edge_hook_with_timestamp_and_single_use_nonce",
+  "capabilities": ["apns_voip_push", "fcm_high_priority_data_message", "dead_token_disable", "counts_only_event_log"],
+  "forbidden": ["credential_in_push", "caller_number_in_event_log", "unsigned_or_replayed_request", "planipret_auth_or_data"],
+  "required_environment": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "LEMTEL_PUSH_HOOK_SECRET"],
+  "optional_runtime_configuration": ["LEMTEL_APNS_KEY_P8", "LEMTEL_APNS_KEY_ID", "LEMTEL_APNS_TEAM_ID", "LEMTEL_APNS_BUNDLE_ID", "LEMTEL_FCM_SERVICE_ACCOUNT_JSON"],
+  "deployment_prerequisites": ["migration_0027_lemtel_push_devices", "lemtel_sip_edge_decision_d1"]
+}

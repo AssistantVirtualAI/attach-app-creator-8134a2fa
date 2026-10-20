@@ -138,6 +138,8 @@ export default function VoicemailScreen({ haptic, voicemailPolicy = 'disabled' }
   };
 
   const fetchUrl = async (v: VoicemailEntry): Promise<string> => {
+    // Lemtel gateway: voicemail messages are played by message id (own mailbox, checked by the server).
+    if (v.voicemail_message_uuid) return mobileApi.voicemailMessageAudio(v.voicemail_message_uuid).catch(() => '');
     if (!v.xml_cdr_uuid) return '';
     return loadPbxRecordingAudioMobile({ xml_cdr_uuid: v.xml_cdr_uuid }, mobile.accessToken, mobile.organizationId, mobile.fusionpbxDomainUuid)
       .catch(() => '');

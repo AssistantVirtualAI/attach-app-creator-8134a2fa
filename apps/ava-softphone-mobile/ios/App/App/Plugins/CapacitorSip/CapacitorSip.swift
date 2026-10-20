@@ -41,6 +41,7 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSipServiceStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "triggerReregister", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getVoipPushToken", returnType: CAPPluginReturnPromise),
     ]
 
 
@@ -109,6 +110,19 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
         if changed, token != nil, self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue) {
             self.triggerReregister()
         }
+        // Lemtel call push (3.3): the JS layer registers the new token with lemtel-push-register.
+        if changed { notifyListeners("voipPushToken", data: ["token": token ?? ""]) }
+    }
+
+    /// Full PushKit VoIP token for lemtel-push-register (sent only to the Lemtel server, never logged in full).
+    /// The APNs environment follows the build: Debug builds use the sandbox, TestFlight / App Store production.
+    @objc func getVoipPushToken(_ call: CAPPluginCall) {
+        #if DEBUG
+        let environment = "sandbox"
+        #else
+        let environment = "production"
+        #endif
+        call.resolve(["token": voipPushToken ?? "", "environment": environment])
     }
 
     public override func load() {

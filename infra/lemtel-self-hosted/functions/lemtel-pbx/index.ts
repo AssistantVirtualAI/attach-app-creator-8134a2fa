@@ -26,7 +26,7 @@ const ACTIONS = new Set([
   "capabilities", "test_management", "set_management_writes",
   "resource_list", "resource_get", "resource_create", "resource_update", "resource_delete",
   "voicemail_messages", "voicemail_message_delete", "voicemail_reset",
-  "cdr_sync", "cdr_list", "cdr_export", "cdr_stats", "recording_audio",
+  "cdr_sync", "cdr_list", "cdr_export", "cdr_stats", "recording_audio", "voicemail_audio",
   "live_calls", "call_hangup", "call_transfer", "call_eavesdrop", "registrations", "gateways_status", "gateway_control",
   "self_overview", "self_update_forwarding", "self_voicemail_pin", "self_voicemail_delete", "self_click_to_call",
 ]);
@@ -347,7 +347,8 @@ export async function handle(req: Request, d: Deps): Promise<Response> {
           if (!own) return respond({ error: "no_extension_assigned" }, 409);
           f.number = own.extension;
         }
-        const synced = isAdmin ? await maybeAutoSync(d, org, conn) : null;
+        // Server-side, throttled (2 min) refresh of the local copy for every caller (members see fresh history too).
+        const synced = await maybeAutoSync(d, org, conn);
         const result = await queryCdr(d.admin, org, f);
         if (body.action === "cdr_export") {
           await audit(d.admin, org, actor.userId, "cdr_export", "ok", "cdr", null, { rows: result.records.length });
@@ -376,6 +377,24 @@ export async function handle(req: Request, d: Deps): Promise<Response> {
         return new Response(audio.body.slice().buffer as ArrayBuffer, { headers: { "Content-Type": audio.contentType, "Cache-Control": "no-store", "Content-Disposition": "inline", "X-Content-Type-Options": "nosniff" } });
       }
 
+      case "voicemail_audio": {
+        // Admin: any mailbox of the domain. Member: only the mailbox of their own extension.
+        if (!isUuid(body.messageUuid) || (body.voicemailUuid !== undefined && !isUuid(body.voicemailUuid))) return respond({ error: "invalid_uuid" }, 400);
+        const c = await clientFor(d, org, conn);
+        let vm: Record<string, unknown> | null = null;
+        if (isAdmin && isUuid(body.voicemailUuid)) vm = await c.get("voicemails", "voicemails", body.voicemailUuid);
+        else {
+          const own = await ownAssignment(d.admin, org, actor.userId);
+          if (!own) return respond({ error: "no_extension_assigned" }, 409);
+          vm = await findByNumber(c, RESOURCES.voicemails, "voicemail_id", own.extension);
+        }
+        if (!vm || !isUuid(vm.voicemail_uuid) || (vm.domain_uuid !== undefined && vm.domain_uuid !== c.domainUuid)) return respond({ error: "voicemail_not_found" }, 404);
+        const messages = await voicemailMessages(c, vm.voicemail_uuid);
+        if (!messages.some((m) => m.uuid === String(body.messageUuid).toLowerCase())) return respond({ error: "not_found" }, 404);
+        const audio = await c.voicemailAudio(String(vm.voicemail_id), vm.voicemail_uuid, String(body.messageUuid).toLowerCase());
+        await audit(d.admin, org, actor.userId, "voicemail_played", "ok", "voicemails", vm.voicemail_uuid);
+        return new Response(audio.body.slice().buffer as ArrayBuffer, { headers: { "Content-Type": audio.contentType, "Cache-Control": "no-store", "Content-Disposition": "inline", "X-Content-Type-Options": "nosniff" } });
+      }
       case "live_calls": case "registrations": {
         const key = `${org}:${body.action}`;
         const hit = liveCache.get(key);

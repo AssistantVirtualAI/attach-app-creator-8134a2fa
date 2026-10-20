@@ -7,10 +7,22 @@ import android.view.WindowManager
 import com.getcapacitor.BridgeActivity
 
 class MainActivity : BridgeActivity() {
+    companion object {
+        @Volatile private var alive = false
+        /** True while the app (WebView + JsSIP) exists; used by the call-push helper to stand down. */
+        fun isWebViewAlive(): Boolean = alive
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         registerPlugin(CapacitorPjsip::class.java)
         super.onCreate(savedInstanceState)
+        alive = true
         enableOverLockscreen()
+    }
+
+    override fun onDestroy() {
+        alive = false
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

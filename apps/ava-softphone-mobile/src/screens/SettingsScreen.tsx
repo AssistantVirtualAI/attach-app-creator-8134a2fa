@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import React, { useEffect, useState } from 'react';
 import { colors, font, radius, gradients } from '../lib/theme';
 import type { Creds } from '../lib/creds';
@@ -355,7 +356,7 @@ export default function SettingsScreen({
         {me?.client && <SettingsRow label={t('settings.client')} icon="◈" value={me.client.name} />}
         <SettingsRow label={t('settings.dataScope')} icon="⌁" value={me?.dataScope === 'domain_admin' ? t('settings.scopeDomain') : t('settings.scopeOwn')} />
         <SettingsRow label={t('settings.role')} icon="◎" value={me?.role || creds.role || 'agent'} />
-        <SettingsRow label={t('settings.devices')} icon="📱" value={lang === 'fr' ? 'Cet appareil · WebRTC' : 'This device · WebRTC'} onPress={() => onNavigate?.('permissions' as Tab)} />
+        <SettingsRow label={t('settings.devices')} icon="📱" value={Capacitor.getPlatform() === 'ios' ? (lang === 'fr' ? 'Cet appareil · iOS natif (CallKit)' : 'This device · native iOS (CallKit)') : (lang === 'fr' ? 'Cet appareil · WebRTC (WSS)' : 'This device · WebRTC (WSS)')} onPress={() => onNavigate?.('permissions' as Tab)} />
         <SettingsRow label={t('settings.notifications')} icon="🔔" value={t('settings.pushEnabled')} onPress={() => openAppSettings()} />
         <SettingsRow label={lang === 'fr' ? 'Diagnostic audio / RTP' : 'Audio / RTP diagnostics'} icon="🩺" value={lang === 'fr' ? 'Test ton, route, stats' : 'Tone test, route, stats'} onPress={() => onNavigate?.('audiodiag' as Tab)} />
       </Card>

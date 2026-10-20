@@ -10,7 +10,7 @@ describe('Lemtel mobile workspace remap', () => {
     const tabs = read('src/components/BottomTabs.tsx');
     expect(app).toContain("return 'home' as Tab;");
     expect(app).toContain('<HomeScreen onNavigate={setTab as any}');
-    expect(tabs).toContain("{ id: 'home', labelKey: 'tabs.home', Icon: Home }");
+    expect(tabs).toContain("{ id: 'home', fr: 'Accueil', en: 'Home', Icon: Home }");
   });
 
   it('uses theme tokens for a readable main menu in Dark and Daylight', () => {

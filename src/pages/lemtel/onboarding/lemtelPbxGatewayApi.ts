@@ -68,6 +68,7 @@ export const pbxGateway = {
   cdrStats: (org: string, f: CdrFilter) => call<{ stats: CdrStats; from: string; to: string }>(org, { action: "cdr_stats", from: f.from, to: f.to }),
   cdrCsv: async (org: string, f: CdrFilter) => (await raw(org, { action: "cdr_export", ...f, limit: 10000 }, false)).blob(),
   recording: async (org: string, cdrId: string) => (await raw(org, { action: "recording_audio", cdrId }, false)).blob(),
+  voicemailAudio: async (org: string, messageUuid: string, voicemailUuid?: string) => (await raw(org, { action: "voicemail_audio", messageUuid, ...(voicemailUuid ? { voicemailUuid } : {}) }, false)).blob(),
   liveCalls: (org: string) => call<{ calls: LiveCall[] }>(org, { action: "live_calls" }),
   registrations: (org: string) => call<{ registrations: Registration[] }>(org, { action: "registrations" }),
   hangup: (org: string, uuid: string) => call<{ ok: true }>(org, { action: "call_hangup", uuid }, true),

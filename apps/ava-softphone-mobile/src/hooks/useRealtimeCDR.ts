@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mobileApi, CallRecord } from '../lib/mobileApi';
-import { supabase, SUPABASE_URL, SUPABASE_ANON as ANON_KEY } from '../lib/mobileSupabase';
+import { supabase } from '../lib/mobileSupabase';
 import type { Creds } from '../lib/creds';
 
 function client(token?: string | null): SupabaseClient {
@@ -181,22 +181,10 @@ export function useRealtimeCDR(creds: Creds | null, rangeDays: 7 | 30 = 7) {
       if (backoffTimer) { clearTimeout(backoffTimer); backoffTimer = null; }
       attempt = 0;
       setNextRetryAt(null);
-      pushLog({ status: 'info', source: 'manual', reason: 'Manual CDR retry — triggering PBX sync' });
-      // Force a backend CDR sync, then reload the snapshot so brand-new calls show up.
-      (async () => {
-        try {
-          const token = creds?.accessToken || null;
-          if (token) {
-            await fetch(`${SUPABASE_URL}/functions/v1/cron-pbx-sync`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: ANON_KEY },
-              body: JSON.stringify({}),
-            }).catch(() => {});
-          }
-        } catch {}
-        load();
-        connect();
-      })();
+      pushLog({ status: 'info', source: 'manual', reason: 'Manual CDR retry' });
+      // The Lemtel gateway refreshes its CDR copy server-side on every list (throttled), so a reload is enough.
+      load();
+      connect();
     };
 
     if (creds?.extension) load();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { KeyRound, Loader2, Phone, PhoneForwarded, RefreshCw, Trash2, Voicemail } from "lucide-react";
+import { KeyRound, Loader2, Phone, PhoneForwarded, Play, RefreshCw, Trash2, Voicemail } from "lucide-react";
 import { toast } from "sonner";
 import { LemtelPbxCallHistory } from "./LemtelPbxCdr";
 import { pbxGateway, PbxGatewayError, type SelfOverview } from "./lemtelPbxGatewayApi";
@@ -17,6 +17,8 @@ export default function LemtelMySpace({ lang, organizationId, readonly }: { lang
   const [pin, setPin] = useState("");
   const [dial, setDial] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [audio, setAudio] = useState<string | null>(null);
+  useEffect(() => () => { if (audio) URL.revokeObjectURL(audio); }, [audio]);
   const load = useCallback(async () => {
     if (!organizationId) return;
     setError(null);
@@ -62,7 +64,9 @@ export default function LemtelMySpace({ lang, organizationId, readonly }: { lang
         {!me.voicemail ? <p className="lt-ink-2 text-sm">{L(lang, "Aucune boîte vocale pour ce poste.", "No mailbox for this extension.")}</p> : me.voicemail.messages.length === 0 ? <p className="lt-ink-2 text-sm">{L(lang, "Aucun message.", "No message.")}</p> :
           <ul className="space-y-2">{me.voicemail.messages.map((m) => <li key={m.uuid} className="flex justify-between gap-3 text-sm border-t pt-2" style={{ borderColor: "hsl(var(--lt-border))" }}>
             <div><div className="font-medium">{m.callerName || m.callerNumber || "—"} <span className="lt-ink-2">{m.callerNumber}</span></div><div className="lt-ink-2 text-xs">{m.createdAt ? new Date(m.createdAt).toLocaleString(lang === "fr" ? "fr-CA" : "en-CA") : "—"} · {formatSeconds(m.seconds)}</div>{m.transcription && <p className="text-xs mt-1">{m.transcription}</p>}</div>
-            <button className="lt-btn lt-btn-ghost !py-1" aria-label={L(lang, "Supprimer", "Delete")} disabled={!canWrite || busy !== null} onClick={() => void run(m.uuid, () => pbxGateway.deleteMyVoicemail(organizationId, m.uuid), L(lang, "Message supprimé.", "Message deleted."))}><Trash2 className="w-4 h-4" /></button></li>)}</ul>}
+            <div className="flex gap-1"><button className="lt-btn lt-btn-ghost !py-1" aria-label={L(lang, "Écouter", "Play")} onClick={() => { pbxGateway.voicemailAudio(organizationId, m.uuid).then((b) => setAudio(URL.createObjectURL(b))).catch((e) => toast.error(err(lang, e))); }}><Play className="w-4 h-4" /></button>
+            <button className="lt-btn lt-btn-ghost !py-1" aria-label={L(lang, "Supprimer", "Delete")} disabled={!canWrite || busy !== null} onClick={() => void run(m.uuid, () => pbxGateway.deleteMyVoicemail(organizationId, m.uuid), L(lang, "Message supprimé.", "Message deleted."))}><Trash2 className="w-4 h-4" /></button></div></li>)}</ul>}
+        {audio && <audio className="w-full mt-3" controls autoPlay src={audio} aria-label={L(lang, "Lecture du message", "Message playback")} />}
       </div>
       <LemtelPbxCallHistory lang={lang} organizationId={organizationId} canExport={false} canSync={false} />
     </>}

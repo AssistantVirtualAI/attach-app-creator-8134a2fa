@@ -1,0 +1,14 @@
+# Lemtel SIP edge (template — not part of the running stack until D1 is decided).
+services:
+  sip-edge:
+    image: ghcr.io/kamailio/kamailio:5.8.4-bookworm
+    container_name: lemtel-sip-edge
+    restart: unless-stopped
+    network_mode: host            # SIP/TLS 5061 + WSS 8443 on the writer's public address, RTP stays end-to-end
+    environment:
+      LEMTEL_PUSH_HOOK_URL: "http://127.0.0.1:8000/functions/v1/lemtel-push-notify"
+    env_file:
+      - ./sip-edge.env            # LEMTEL_PUSH_HOOK_SECRET, LEMTEL_UPSTREAM_PBX (from the FusionPBX connection) — server only
+    volumes:
+      - ./kamailio.cfg:/etc/kamailio/kamailio.cfg:ro
+      - /etc/letsencrypt/live/lemtel.assistantvirtualai.com:/etc/kamailio/tls:ro

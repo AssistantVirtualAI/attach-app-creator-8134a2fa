@@ -95,9 +95,10 @@ jobs:
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
-      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      # The desktop app reads the canonical Lemtel origin and key under its runtime names (src/lib/backendOrigin.ts).
+      VITE_SUPABASE_URL: ${{ vars.VITE_LEMTEL_API_URL }}
       VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
-      VITE_LEMTEL_EMAIL_ONLY_SIGNIN: ${{ vars.VITE_LEMTEL_EMAIL_ONLY_SIGNIN }}
+      VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved
       VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
@@ -108,6 +109,14 @@ jobs:
           cache: npm
           cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
       - name: Enforce approved Lemtel Hostinger profile
+        # The filter validates the canonical Lemtel profile under its Lemtel names and refuses generic runtime keys,
+        # so it runs with exactly the values the build will embed (same origin, same publishable key).
+        env:
+          VITE_SUPABASE_URL: ""
+          VITE_SUPABASE_PUBLISHABLE_KEY: ""
+          VITE_LEMTEL_API_URL: ${{ vars.VITE_LEMTEL_API_URL }}
+          VITE_LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_LEMTEL_HOSTED_ONBOARDING: approved
         run: node scripts/lemtel-hostinger-client-config-filter.mjs
       - name: Require macOS signing and notarization configuration
         shell: bash
@@ -155,9 +164,10 @@ jobs:
       CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       WINDOWS_SIGNED: ${{ needs.release-plan.outputs.windows_signed }}
       VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
-      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      # The desktop app reads the canonical Lemtel origin and key under its runtime names (src/lib/backendOrigin.ts).
+      VITE_SUPABASE_URL: ${{ vars.VITE_LEMTEL_API_URL }}
       VITE_LEMTEL_PRIVATE_DIRECTORY: ${{ vars.VITE_LEMTEL_PRIVATE_DIRECTORY }}
-      VITE_LEMTEL_EMAIL_ONLY_SIGNIN: ${{ vars.VITE_LEMTEL_EMAIL_ONLY_SIGNIN }}
+      VITE_LEMTEL_EMAIL_ONLY_SIGNIN: approved
       VITE_LEMTEL_AUTH_REDIRECT_URL: ${{ vars.VITE_LEMTEL_AUTH_REDIRECT_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
@@ -168,6 +178,14 @@ jobs:
           cache: npm
           cache-dependency-path: apps/ava-softphone-desktop/package-lock.json
       - name: Enforce approved Lemtel Hostinger profile
+        # The filter validates the canonical Lemtel profile under its Lemtel names and refuses generic runtime keys,
+        # so it runs with exactly the values the build will embed (same origin, same publishable key).
+        env:
+          VITE_SUPABASE_URL: ""
+          VITE_SUPABASE_PUBLISHABLE_KEY: ""
+          VITE_LEMTEL_API_URL: ${{ vars.VITE_LEMTEL_API_URL }}
+          VITE_LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_LEMTEL_HOSTED_ONBOARDING: approved
         run: node scripts/lemtel-hostinger-client-config-filter.mjs
       - name: Install and build
         working-directory: apps/ava-softphone-desktop

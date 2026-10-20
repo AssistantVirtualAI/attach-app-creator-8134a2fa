@@ -43,6 +43,8 @@ docker inspect "$container" >/dev/null 2>&1 || fail standby_postgres_missing
 if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_detected; fi
 docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in_recovery()' | grep -qx t || fail standby_not_in_recovery
 compose=(docker compose --project-name lemtel-ha-hostinger-promoted --env-file .env -f docker-compose.yml -f docker-compose.caddy.yml -f docker-compose.lemtel-private.yml -f docker-compose.lemtel-db-init.yml)
+# Optional transactional email wiring staged with the runtime (absent = runtime without email, never a failure).
+[ -f "$stage_dir/docker-compose.lemtel-onboarding.yml" ] && compose+=(-f docker-compose.lemtel-onboarding.yml)
 (
   cd "$stage_dir"
   "${compose[@]}" config >/dev/null

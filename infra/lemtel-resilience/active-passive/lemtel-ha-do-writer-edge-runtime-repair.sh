@@ -35,6 +35,10 @@ for f in "${base_files[@]}"; do [ -f "$T$f" ] || fail base_config_file_missing; 
 # The Lemtel override (PBX connection variables) belongs to the chain even if the project was first started without it.
 private_override="${workdir#$T}/docker-compose.lemtel-private.yml"
 if [ -f "$T$private_override" ] && ! printf '%s\n' "${base_files[@]}" | grep -qx "$private_override"; then files+=(-f "$T$private_override"); base_files+=("$private_override"); fi
+# Transactional email wiring (RESEND_API_KEY, LEMTEL_WELCOME_FROM from .env): only the functions service had it, so a
+# sibling container never lists it. Without it account recovery fails and the status shows "Dégradé".
+onboarding="${workdir#$T}/docker-compose.lemtel-onboarding.yml"
+if [ -f "$T$onboarding" ] && ! printf '%s\n' "${base_files[@]}" | grep -qx "$onboarding"; then files+=(-f "$T$onboarding"); base_files+=("$onboarding"); fi
 # Activation additions still on disk (each one: optional env file + override).
 expected=(SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY)
 add() { # $1 = env file or '-', $2 = override, $3.. = variable names it provides
@@ -48,6 +52,7 @@ add - /var/lib/lemtel-ha/transactional-email/runtime-config/compose.lemtel-trans
 add /var/lib/lemtel-ha/do-writer-resource-publisher/edge-config/edge-secret.env /var/lib/lemtel-ha/do-writer-resource-publisher/edge-config/edge-resource-publisher.override.yaml LEMTEL_DO_WRITER_RESOURCE_SECRET
 add /var/lib/lemtel-ha/traffic-observability/edge-config/edge-secret.env /var/lib/lemtel-ha/traffic-observability/edge-config/edge-traffic.override.yaml LEMTEL_TRAFFIC_COLLECTOR_SECRET
 add /var/lib/lemtel-ha/hostinger-standby-publisher/edge-config/edge-secret.env /var/lib/lemtel-ha/hostinger-standby-publisher/edge-config/edge-hostinger-standby.override.yaml LEMTEL_HOSTINGER_STANDBY_PUBLISHER_SECRET
+[ -f "$T$onboarding" ] && expected+=(RESEND_API_KEY LEMTEL_WELCOME_FROM)
 grep -q '^LEMTEL_PBX_SECRET_ENCRYPTION_KEY=' "$workdir/.env" 2>/dev/null && expected+=(LEMTEL_PBX_SECRET_ENCRYPTION_KEY)
 names() { docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$edge" | cut -d= -f1 | sort -u; }
 missing_now=(); now="$(names)"

@@ -41,7 +41,7 @@ if printf '%s\n' "$listing" | grep -Eq '^[lhcbp]'; then fail envelope_contains_l
 while IFS= read -r entry; do
   case "$entry" in
     /*|*..*) fail envelope_path_unsafe ;;
-    .env|docker-compose.yml|docker-compose.caddy.yml|docker-compose.lemtel-private.yml|docker-compose.lemtel-db-init.yml) ;;
+    .env|docker-compose.yml|docker-compose.caddy.yml|docker-compose.lemtel-private.yml|docker-compose.lemtel-db-init.yml|docker-compose.lemtel-onboarding.yml) ;;
     volumes/functions|volumes/functions/*|volumes/proxy/caddy|volumes/proxy/caddy/*|volumes/pooler/pooler.exs) ;;
     volumes/api/envoy/envoy.yaml|volumes/api/envoy/cds.yaml|volumes/api/envoy/lds.template.yaml|volumes/api/envoy/docker-entrypoint.sh) ;;
     *) fail "envelope_unexpected_path" ;;
@@ -89,7 +89,8 @@ open(path, 'w', encoding='utf-8').write('\n'.join(out))
 PY
 (
   cd "$new"
-  services="$(docker compose --project-name lemtel-ha-hostinger-promoted --env-file .env -f docker-compose.yml -f docker-compose.caddy.yml -f docker-compose.lemtel-private.yml -f docker-compose.lemtel-db-init.yml config --services | sort | paste -sd, -)"
+  extra=(); [ -f docker-compose.lemtel-onboarding.yml ] && extra=(-f docker-compose.lemtel-onboarding.yml)
+  services="$(docker compose --project-name lemtel-ha-hostinger-promoted --env-file .env -f docker-compose.yml -f docker-compose.caddy.yml -f docker-compose.lemtel-private.yml -f docker-compose.lemtel-db-init.yml "${extra[@]}" config --services | sort | paste -sd, -)"
   [ "$services" = 'api-gw,auth,caddy,db,functions,imgproxy,meta,realtime,rest,storage,studio,supavisor' ]
 ) || fail staged_compose_invalid
 chmod 0700 "$new"

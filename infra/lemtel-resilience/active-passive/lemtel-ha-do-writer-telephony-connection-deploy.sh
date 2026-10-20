@@ -54,6 +54,8 @@ service="$(docker inspect --format '{{index .Config.Labels "com.docker.compose.s
 [[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ ]] && [[ "$service" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail compose_labels_invalid
 dir="$T$dir"
 COMPOSE_FILES=(docker-compose.yml docker-compose.caddy.yml docker-compose.lemtel-private.yml docker-compose.lemtel-db-init.yml)
+# Optional transactional email wiring (kept when present in the working directory).
+OPTIONAL_COMPOSE_FILES=(docker-compose.lemtel-onboarding.yml)
 for f in .env "${COMPOSE_FILES[@]}"; do [ -f "$dir/$f" ] && [ ! -L "$dir/$f" ] || fail "runtime_file_missing_$f"; done
 functions_dir="$T$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/home/deno/functions"}}{{.Source}}{{end}}{{end}}' "$edge")"
 caddy_dir="$T$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy"}}{{.Source}}{{end}}{{end}}' "$caddy")"
@@ -81,6 +83,9 @@ mapfile -t chain_env < <(docker inspect --format '{{index .Config.Labels "com.do
 [ "${#chain_files[@]}" -gt 0 ] || fail edge_compose_chain_unresolved
 [ "${#chain_env[@]}" -gt 0 ] || chain_env=("${dir#$T}/.env")
 printf '%s\n' "${chain_files[@]}" | grep -qx "${dir#$T}/docker-compose.lemtel-private.yml" || chain_files+=("${dir#$T}/docker-compose.lemtel-private.yml")
+for f in "${OPTIONAL_COMPOSE_FILES[@]}"; do
+  [ -f "$dir/$f" ] && ! printf '%s\n' "${chain_files[@]}" | grep -qx "${dir#$T}/$f" && chain_files+=("${dir#$T}/$f")
+done
 compose_args=()
 for e in "${chain_env[@]}"; do [ -f "$T$e" ] || fail edge_compose_env_file_missing; compose_args+=(--env-file "$T$e"); done
 for f in "${chain_files[@]}"; do [ -f "$T$f" ] || fail edge_compose_file_missing; compose_args+=(-f "$T$f"); done

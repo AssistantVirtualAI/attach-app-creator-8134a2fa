@@ -46,6 +46,8 @@ docker exec -u postgres "$container" psql -X -At -d postgres -c 'SELECT pg_is_in
 [ -z "$(docker port "$container" 2>/dev/null || true)" ] || fail promoted_database_published_port
 if ss -H -ltn 'sport = :5432' | grep -q .; then fail host_postgres_listener_detected; fi
 compose=(docker compose --project-name lemtel-ha-hostinger-promoted --env-file .env -f docker-compose.yml -f docker-compose.caddy.yml -f docker-compose.lemtel-private.yml -f docker-compose.lemtel-db-init.yml)
+# Optional transactional email wiring staged with the runtime (absent = runtime without email, never a failure).
+[ -f "$stage_dir/docker-compose.lemtel-onboarding.yml" ] && compose+=(-f docker-compose.lemtel-onboarding.yml)
 cd "$stage_dir"
 expected='api-gw,auth,caddy,db,functions,imgproxy,meta,realtime,rest,storage,studio,supavisor'
 # Images are pre-pulled while healthy; an outage must never wait on a registry download.

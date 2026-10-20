@@ -45,6 +45,9 @@ STAGE_COMPOSE = ['/usr/bin/docker', 'compose', '--project-name', 'lemtel-ha-host
                  '--project-directory', STAGE_DIR, '--env-file', STAGE_DIR + '/.env',
                  '-f', STAGE_DIR + '/docker-compose.yml', '-f', STAGE_DIR + '/docker-compose.caddy.yml',
                  '-f', STAGE_DIR + '/docker-compose.lemtel-private.yml', '-f', STAGE_DIR + '/docker-compose.lemtel-db-init.yml']
+# Optional transactional email wiring staged with the runtime.
+if os.path.isfile(STAGE_DIR + '/docker-compose.lemtel-onboarding.yml'):
+    STAGE_COMPOSE += ['-f', STAGE_DIR + '/docker-compose.lemtel-onboarding.yml']
 
 class Blocked(Exception):
     pass

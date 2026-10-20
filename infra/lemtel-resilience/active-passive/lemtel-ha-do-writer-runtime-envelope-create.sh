@@ -67,6 +67,8 @@ envelope_tmp="$(mktemp "$stage_dir/.hostinger-runtime.XXXXXX.age")"
 manifest_tmp="$(mktemp "$stage_dir/.hostinger-runtime.XXXXXX.manifest")"
 cleanup() { rm -f -- "$tar_file" "$envelope_tmp" "$manifest_tmp"; }
 trap cleanup EXIT
+# Optional: transactional email wiring (RESEND_API_KEY, LEMTEL_WELCOME_FROM). Without it a promoted runtime sends no email.
+[ -f docker-compose.lemtel-onboarding.yml ] && [ ! -L docker-compose.lemtel-onboarding.yml ] && runtime_paths+=(docker-compose.lemtel-onboarding.yml)
 tar --create --file "$tar_file" --numeric-owner --format=posix "${runtime_paths[@]}"
 if tar -tf "$tar_file" | grep -Eq '(^/|(^|/)\.\.(/|$)|^volumes/(db|storage)(/|$))'; then fail envelope_content_unsafe; fi
 if tar -tvf "$tar_file" | grep -q '^l'; then fail envelope_contains_symlink; fi

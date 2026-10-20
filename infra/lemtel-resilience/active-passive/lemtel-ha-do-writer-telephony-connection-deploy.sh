@@ -155,7 +155,9 @@ add_env LEMTEL_PBX_SECRET_KEY_VERSION 1
 add_env LEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY disabled
 add_env LEMTEL_ARBITER_STATUS_URL https://lemtel-failover-arbiter.mhassoun.workers.dev
 add_env LEMTEL_PUBLIC_SITE_URL https://lemtel.assistantvirtualai.com
-VARS="LEMTEL_PBX_SECRET_ENCRYPTION_KEY LEMTEL_PBX_SECRET_KEY_VERSION LEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY LEMTEL_ARBITER_STATUS_URL LEMTEL_PUBLIC_SITE_URL LEMTEL_CF_LB_READ_TOKEN LEMTEL_CF_ACCOUNT_ID LEMTEL_CF_DO_POOL_ID LEMTEL_CF_HOSTINGER_POOL_ID"
+# Names only (empty when unset): Lemtel-hosted TURN (D2) and call-notification keys (3.3) are filled in .env later
+# by their own launchers; wiring the names here means adding a value never requires another compose edit.
+VARS="LEMTEL_PBX_SECRET_ENCRYPTION_KEY LEMTEL_PBX_SECRET_KEY_VERSION LEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY LEMTEL_ARBITER_STATUS_URL LEMTEL_PUBLIC_SITE_URL LEMTEL_CF_LB_READ_TOKEN LEMTEL_CF_ACCOUNT_ID LEMTEL_CF_DO_POOL_ID LEMTEL_CF_HOSTINGER_POOL_ID LEMTEL_STUN_URLS LEMTEL_TURN_URLS LEMTEL_TURN_SHARED_SECRET LEMTEL_PUSH_HOOK_SECRET LEMTEL_APNS_KEY_P8 LEMTEL_APNS_KEY_ID LEMTEL_APNS_TEAM_ID LEMTEL_APNS_BUNDLE_ID LEMTEL_FCM_SERVICE_ACCOUNT_JSON"
 before="$(sha256sum "$dir/docker-compose.lemtel-private.yml")"
 python3 - "$dir/docker-compose.lemtel-private.yml" "$service" $VARS <<'PY'
 # Line-based, structure-preserving edit: under services.<service>.environment add "NAME: ${NAME:-}" for each missing

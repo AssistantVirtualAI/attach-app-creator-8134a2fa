@@ -5,7 +5,7 @@
 // LEMTEL_SOFTPHONE_CREDENTIAL_DELIVERY=enabled. Otherwise it returns a precise non-secret status.
 // TURN is always a short-lived HMAC credential; the TURN shared secret never leaves the server.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { clientTelephony, extensionAad, loadSecretKey, openSecret, rowFromDb, secretAad, turnCredential } from "../_shared/lemtelPbxConnection.ts";
+import { clientTelephony, extensionAad, loadSecretKey, openSecret, platformIce, rowFromDb, secretAad, turnCredential } from "../_shared/lemtelPbxConnection.ts";
 
 const HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store, private", Pragma: "no-cache" };
 const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: HEADERS });
@@ -51,15 +51,21 @@ export async function handle(req: Request, d: Deps): Promise<Response> {
   const password = await openSecret(key, assignment.sip_password_ciphertext, extensionAad(String(assignment.organization_id), user.id, assignment.extension));
   if (!password) return status("credential_missing", { telephony: descriptor, connectionRevision: row.revision });
 
+  // ICE: the organization's own STUN/TURN when configured, otherwise the Lemtel-hosted relay (decision D2).
+  const platform = platformIce(env);
   const iceServers: Array<Record<string, unknown>> = [];
-  if (row.stunUrls.length) iceServers.push({ urls: row.stunUrls });
+  const stunUrls = row.stunUrls.length ? row.stunUrls : platform.stunUrls;
+  if (stunUrls.length) iceServers.push({ urls: stunUrls });
+  let turn: { urls: string[]; secret: string } | null = null;
   if (row.turnUrls.length) {
     const { data: secret } = await admin.from("lemtel_pbx_connection_secrets").select("ciphertext").eq("organization_id", assignment.organization_id).eq("secret_kind", "turn_shared_secret").maybeSingle();
     const shared = secret?.ciphertext ? await openSecret(key, secret.ciphertext, secretAad(String(assignment.organization_id), "turn_shared_secret")) : null;
-    if (shared) {
-      const t = await turnCredential(shared, user.id.replace(/-/g, "").slice(0, 16), TURN_TTL_SECONDS, d.now());
-      iceServers.push({ urls: row.turnUrls, username: t.username, credential: t.credential });
-    }
+    if (shared) turn = { urls: row.turnUrls, secret: shared };
+  }
+  if (!turn && platform.turnUrls.length && platform.secret) turn = { urls: platform.turnUrls, secret: platform.secret };
+  if (turn) {
+    const t = await turnCredential(turn.secret, user.id.replace(/-/g, "").slice(0, 16), TURN_TTL_SECONDS, d.now());
+    iceServers.push({ urls: turn.urls, username: t.username, credential: t.credential });
   }
   try {
     await admin.from("lemtel_pbx_connection_audit").insert({ organization_id: assignment.organization_id, actor_id: user.id, action: "credential_delivered",

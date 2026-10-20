@@ -17,8 +17,9 @@ android {
         applicationId "com.lemtel.softphone"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 114
-        versionName "2.2.1"
+        // Release builds take the version from the release tag (lemtel-android-v<name>-<code>); local builds keep these.
+        versionCode((System.getenv('LEMTEL_ANDROID_VERSION_CODE') ?: '114') as Integer)
+        versionName(System.getenv('LEMTEL_ANDROID_VERSION_NAME') ?: "2.2.1")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'

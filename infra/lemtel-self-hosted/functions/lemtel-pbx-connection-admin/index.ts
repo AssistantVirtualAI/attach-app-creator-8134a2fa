@@ -177,7 +177,8 @@ export async function handle(req: Request, d: Deps): Promise<Response> {
     const s = body.settings;
     const values = { organization_id: org, vendor: "fusionpbx", sip_domain: s.sipDomain, pbx_host: s.pbxHost, sip_transport: s.sipTransport, sip_port: s.sipPort,
       wss_url: s.wssUrl, outbound_proxy: s.outboundProxy, stun_urls: s.stunUrls, turn_urls: s.turnUrls, registration_expires: s.registrationExpires,
-      codecs: s.codecs, srtp_mode: s.srtpMode, management_mode: s.managementMode, management_base_url: s.managementBaseUrl, updated_by: actor };
+      codecs: s.codecs, srtp_mode: s.srtpMode, management_mode: s.managementMode, management_base_url: s.managementBaseUrl,
+      management_domain_uuid: s.managementDomainUuid, management_username: s.managementUsername, updated_by: actor };
     const { error } = await admin.from("lemtel_pbx_connections").upsert(values, { onConflict: "organization_id" });
     if (error) return respond({ error: "settings_save_failed" }, 503);
     await audit(admin, org, actor, "settings_saved", null, { sipDomain: s.sipDomain, wssHost: new URL(s.wssUrl).host });

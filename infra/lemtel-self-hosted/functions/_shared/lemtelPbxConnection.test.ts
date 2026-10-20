@@ -31,6 +31,11 @@ Deno.test("settings: strict, defaults applied, unknown or secret-looking keys re
   assertEquals((parseSettings({ ...valid, turnUrls: ["turn:user:pw@x"] }) as { error: string }).error, "invalid_turn_urls");
   assertEquals((parseSettings({ ...valid, sipDomain: "10.0.0.1" }) as { error: string }).error, "invalid_sip_domain");
   assertEquals((parseSettings({ ...valid, managementMode: "fusionpbx_api", managementBaseUrl: "http://x.y" }) as { error: string }).error, "invalid_management_base_url_https_required");
+  const dom = "0b8e2c1a-5d3f-4e6a-9b7c-1d2e3f4a5b6c";
+  assertEquals((parseSettings({ ...valid, managementMode: "fusionpbx_api", managementBaseUrl: "https://pbxnode.lemtel.tel" }) as { error: string }).error, "invalid_management_domain_uuid");
+  assertEquals((parseSettings({ ...valid, managementMode: "fusionpbx_api", managementBaseUrl: "https://pbxnode.lemtel.tel", managementDomainUuid: dom, managementUsername: "bad user" }) as { error: string }).error, "invalid_management_username");
+  const m = parseSettings({ ...valid, managementMode: "fusionpbx_api", managementBaseUrl: "https://pbxnode.lemtel.tel", managementDomainUuid: dom.toUpperCase(), managementUsername: "api.lemtel" });
+  assert(!isInvalid(m)); assertEquals(m.managementDomainUuid, dom); assertEquals(m.managementUsername, "api.lemtel");
 });
 
 Deno.test("assignment and secret validation", () => {

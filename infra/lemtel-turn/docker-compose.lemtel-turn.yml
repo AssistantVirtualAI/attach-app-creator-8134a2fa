@@ -1,0 +1,11 @@
+services:
+  turn:
+    image: coturn/coturn:4.6.3
+    container_name: lemtel-turn
+    restart: unless-stopped
+    network_mode: host
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - /etc/letsencrypt/live/turn.assistantvirtualai.com:/etc/coturn/tls:ro
+      - ./secrets/lemtel_turn_secret:/run/secrets/lemtel_turn_secret:ro

@@ -6,6 +6,7 @@ import { requestPermissionsAfterLogin, navLog, setPermissionLogContext } from '.
 // Re-use battle-tested SIP hook from the desktop app
 import { useSoftphone } from './hooks/useSoftphone';
 import AuthScreen from './screens/AuthScreen';
+import PermissionsScreen from './screens/PermissionsScreen';
 import HomeScreen from './screens/HomeScreen';
 import CallsScreen from './screens/CallsScreen';
 // Lazy-loaded screens: only fetched when the user navigates to the tab.
@@ -662,6 +663,7 @@ function AuthenticatedShell({
             {tab === 'sms'        && <MessagesScreen haptic={haptic} />}
             {tab === 'queues'     && <QueuesScreen />}
             {tab === 'audiodiag'  && <AudioDiagnosticsScreen />}
+            {tab === 'permissions' && <PermissionsScreen />}
           </Suspense>
         </ScreenErrorBoundary>
       </div>

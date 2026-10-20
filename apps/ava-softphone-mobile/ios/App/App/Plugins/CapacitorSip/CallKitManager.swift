@@ -13,6 +13,8 @@ import UIKit
     private let provider: CXProvider
     private let callController = CXCallController()
     private var activeUUID: UUID?
+    /// Set when a VoIP push reported the call before its SIP INVITE arrived (Lemtel SIP edge holds the INVITE).
+    private var pushPendingSince: Date?
 
     /// Called by CallKit when the user taps Answer in the native UI.
     /// Plugin assigns this so it can forward the action to PJSIP.
@@ -53,14 +55,21 @@ import UIKit
     }
 
     @objc public func reportIncoming(from: String) {
-        let uuid = UUID()
-        activeUUID = uuid
         let update = CXCallUpdate()
         let displayName = cleanCallerLabel(from)
         update.remoteHandle = CXHandle(type: .generic, value: displayName)
         update.localizedCallerName = displayName
         update.hasVideo = false
         update.supportsHolding = true
+        // The INVITE of a call already announced by a VoIP push: update that CallKit call, never ring twice.
+        if let uuid = activeUUID, let since = pushPendingSince, Date().timeIntervalSince(since) < 45 {
+            pushPendingSince = nil
+            provider.reportCall(with: uuid, updated: update)
+            return
+        }
+        let uuid = UUID()
+        activeUUID = uuid
+        pushPendingSince = nil
         provider.reportNewIncomingCall(with: uuid, update: update) { _ in }
     }
 
@@ -71,6 +80,15 @@ import UIKit
     public func reportIncomingVoipPush(from: String, callId: String, completion: @escaping () -> Void) {
         let uuid = UUID()
         activeUUID = uuid
+        let since = Date()
+        pushPendingSince = since
+        // If the caller hangs up before the INVITE reaches this device, end the announced call cleanly.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 45) { [weak self] in
+            guard let self = self, self.pushPendingSince == since, self.activeUUID == uuid else { return }
+            self.pushPendingSince = nil
+            self.activeUUID = nil
+            self.provider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+        }
         let update = CXCallUpdate()
         // Display the caller ID from the push payload.
         let displayName = cleanCallerLabel(from)

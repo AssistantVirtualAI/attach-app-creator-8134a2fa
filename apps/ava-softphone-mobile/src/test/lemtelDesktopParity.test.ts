@@ -30,6 +30,15 @@ describe('Lemtel cross-platform visual parity', () => {
     const mobileShell = readFileSync(resolve(process.cwd(), 'src/MobileApp.tsx'), 'utf8');
     const mobileDock = readFileSync(resolve(process.cwd(), 'src/components/BottomTabs.tsx'), 'utf8');
     expect(mobileShell).toContain('linear-gradient(90deg,#0023e6,#7a4cff 52%,#21d4fd)');
-    expect(mobileDock).toContain('Floating glass dock inspired by the Desktop Lemtel shell');
+    expect(mobileDock).toContain('Bottom navigation: the Desktop rail, docked at the bottom of the phone screen.');
+  });
+
+  it('has exactly the Desktop pages, in the Desktop order, with the Desktop icons', () => {
+    const desktop = readFileSync(resolve(process.cwd(), '../ava-softphone-desktop/src/components/DesktopReadOnlyWorkspace.tsx'), 'utf8');
+    const mobile = readFileSync(resolve(process.cwd(), 'src/components/BottomTabs.tsx'), 'utf8');
+    const desktopIcons = [...desktop.matchAll(/\{ id: '([a-z]+)', label: '[a-z.]+', Icon: ([A-Za-z]+) \}/g)].map((m) => m[2]);
+    const mobileIcons = [...mobile.matchAll(/\{ id: '([a-z]+)', fr: '[^']+', en: '[^']+', Icon: ([A-Za-z]+) \}/g)].map((m) => m[2]);
+    expect(desktopIcons).toEqual(['Home', 'Phone', 'History', 'MessageCircle', 'Users', 'LayoutGrid']);
+    expect(mobileIcons).toEqual(desktopIcons);
   });
 });

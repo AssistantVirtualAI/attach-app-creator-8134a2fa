@@ -1,3 +1,4 @@
+import { LemtelPbxError, lemtelPbxFetch } from './lemtelPbxMobile';
 import { BACKEND_URL, BACKEND_ANON_KEY, BACKEND_STORAGE_SUFFIX } from './backendOrigin';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Preferences } from '@capacitor/preferences';
@@ -166,89 +167,32 @@ export async function loadPbxRecordingAudioMobile(
     }
   };
 
-  // Phase 29B/30A: the server resolves the path, org, domain, name and URL
-  // from the authorized CDR. The device sends no recording metadata at all.
-  const payload = { params: { xml_cdr_uuid, expires_in: 300 } };
-
-  // Per-attempt correlation id
-  const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-    ? (crypto as any).randomUUID()
-    : `rec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  const doFetch = (tok: string | null, action: string) => fetch(`${SUPABASE_URL}/functions/v1/fusionpbx-proxy`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Request-Id': requestId,
-      apikey: SUPABASE_ANON,
-      ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
-    },
-    body: JSON.stringify({ action, ...payload }),
-  });
-
-  // Try signed URL first (faster, no session cookie needed)
-  const signed = await doFetch(freshToken, 'get-recording-signed-url');
-  if (signed.ok) {
-    const json = await signed.json().catch(() => null);
-    if (json?.ok && json?.url) {
-      await assertCurrentSession();
-      return json.url as string;
-    }
-  }
-  if (signed.status === 403) throw new Error('Accès refusé à cet enregistrement.');
-
-  // Fall back to direct streaming
-  let res = await doFetch(freshToken, 'get-recording');
-
-  // On 401: force-refresh once and retry — mirrors desktop behavior
-  if (res.status === 401) {
-    try {
+  // Lemtel gateway (lemtel-pbx · recording_audio): the server checks the CDR belongs to this organization and,
+  // for a member, to their own extension; the device sends only the CDR id — never a path, name or domain.
+  const doFetch = (tok: string) => lemtelPbxFetch(tok, { action: 'recording_audio', cdrId: xml_cdr_uuid });
+  let res: Response;
+  try {
+    res = await doFetch(freshToken);
+  } catch (e) {
+    if (e instanceof LemtelPbxError && e.status === 401) {
       const sb = getMobileSupabaseClient();
       const { data: refreshed } = await sb.auth.refreshSession();
-      if (refreshed?.session?.access_token && refreshed.session.user.id === userId && requestEpoch === audioEpoch) {
-        freshToken = refreshed.session.access_token;
-        res = await doFetch(freshToken, 'get-recording');
+      if (!refreshed?.session?.access_token || refreshed.session.user.id !== userId || requestEpoch !== audioEpoch) {
+        throw new Error('Session expirée. Déconnectez-vous et reconnectez-vous pour écouter les enregistrements.');
       }
-    } catch {}
-    if (res.status === 401) {
-      throw new Error('Session expirée. Déconnectez-vous et reconnectez-vous pour écouter les enregistrements.');
+      freshToken = refreshed.session.access_token;
+      res = await doFetch(freshToken);
+    } else if (e instanceof LemtelPbxError && e.status === 403) {
+      throw new Error('Accès refusé à cet enregistrement.');
+    } else if (e instanceof LemtelPbxError && e.status === 404) {
+      throw new Error('Enregistrement indisponible (supprimé ou hors période de rétention).');
+    } else if (e instanceof LemtelPbxError && e.code === 'organization_not_selected') {
+      throw new Error('Organisation non chargée. Réessayez dans un instant.');
+    } else {
+      throw new Error('Enregistrement non disponible pour le moment.');
     }
   }
-
-  const contentType = res.headers.get('content-type') || '';
-  const isJson = contentType.includes('application/json');
-
-  if (!res.ok || isJson) {
-    const text = await res.text().catch(() => '');
-    let parsed: any = null;
-    try { parsed = JSON.parse(text); } catch { /* not json */ }
-    const code = parsed?.error || '';
-    const cid = parsed?.correlation_id || res.headers.get('x-request-id') || '';
-    const cidSuffix = cid ? ` [ref: ${cid}]` : '';
-    const statusList = Array.isArray(parsed?.http_statuses) && parsed.http_statuses.length
-      ? ` (PBX HTTP ${parsed.http_statuses.join('/')})` : '';
-    const buildErr = (msg: string, kind?: string) => {
-      const e: any = new Error(msg + cidSuffix);
-      e.code = code; e.failure_kind = kind || parsed?.failure_kind || code; e.correlation_id = cid;
-      e.http_statuses = parsed?.http_statuses || []; e.http_status = res.status;
-      return e;
-    };
-    if (code === 'MISSING_SECRET') throw buildErr(`Configuration manquante dans Supabase Vault : ${parsed?.secret || 'secret inconnu'}. Contactez votre administrateur.`, 'missing_secret');
-    if (code === 'RECORDING_NOT_FOUND') {
-      const kind = parsed?.failure_kind || (parsed?.session_login_failed ? 'login_failed' : parsed?.file_missing ? 'file_missing' : 'unknown');
-      const detail = kind === 'login_failed'
-        ? `Connexion au PBX échouée${parsed?.login_error ? ` (${parsed.login_error})` : ''} — vérifiez FUSIONPBX_USERNAME et FUSIONPBX_PASSWORD dans le Vault Supabase.`
-        : kind === 'file_missing'
-        ? 'Fichier audio introuvable sur le PBX (supprimé ou hors période de rétention).'
-        : kind === 'http_error'
-        ? `Le PBX a refusé toutes les tentatives${statusList}.`
-        : 'Enregistrement non accessible sur le PBX.';
-      throw buildErr(detail, kind);
-    }
-    if (code === 'Forbidden') throw buildErr('Accès refusé à cet enregistrement.', 'forbidden');
-    if (code === 'INTERNAL') throw buildErr(`Erreur interne du proxy PBX : ${parsed?.message || 'inconnue'}`, 'internal');
-    throw buildErr(parsed?.message || parsed?.error || text.slice(0, 200) || `Enregistrement non disponible (HTTP ${res.status})`, 'http_error');
-  }
+  if (!(res.headers.get('content-type') || '').startsWith('audio/')) throw new Error('Enregistrement non disponible pour le moment.');
 
   const blob = await res.blob();
   if (!blob.size) throw new Error('Empty recording');

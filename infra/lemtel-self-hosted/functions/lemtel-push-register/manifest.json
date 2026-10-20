@@ -1,0 +1,10 @@
+{
+  "function": "lemtel-push-register",
+  "scope": "lemtel_only_call_push_device_registry",
+  "allowed_methods": ["POST", "OPTIONS"],
+  "authentication": "lemtel_user_session",
+  "capabilities": ["register_or_unregister_own_device", "token_moves_with_account", "max_ten_devices_per_user"],
+  "forbidden": ["token_in_response", "registration_for_another_user", "planipret_auth_or_data"],
+  "required_environment": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
+  "deployment_prerequisites": ["migration_0027_lemtel_push_devices"]
+}

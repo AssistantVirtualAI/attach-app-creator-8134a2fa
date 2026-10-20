@@ -108,6 +108,16 @@ class SipConnectionService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         emitStatus("running", "foreground_helper_started")
+        if (intent?.action == LemtelPushService.ACTION_PUSH_INCOMING) {
+            // Woken by a call push: ring now and open the app so JsSIP registers and receives the held INVITE.
+            showIncomingCallNotification(
+                intent.getStringExtra(LemtelPushService.EXTRA_CALLER_NAME) ?: "",
+                intent.getStringExtra(LemtelPushService.EXTRA_CALLER_NUMBER) ?: "",
+            )
+            emitStatus("running", "push_incoming_call")
+            // No JsSIP owner yet: stop the helper if the app does not take over within the ring window.
+            handler.postDelayed({ if (!MainActivity.isWebViewAlive()) { dismissIncomingCallNotification(); stopSelf() } }, 45_000)
+        }
         // Never revive a helper that has no JsSIP owner.
         return START_NOT_STICKY
     }

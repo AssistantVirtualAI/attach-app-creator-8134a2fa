@@ -1,4 +1,4 @@
-import { BACKEND_URL } from './lib/backendOrigin';
+import { BACKEND_ANON_KEY } from './lib/backendOrigin';
 import { Component, useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy, type ReactNode } from 'react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
@@ -42,7 +42,8 @@ import { gradients, colors } from './lib/theme';
 import { ThemeProvider } from './lib/ThemeContext';
 import { MobileI18nProvider } from './lib/i18n';
 import { requestAllPermissions, checkAllPermissions } from './lib/permissions';
-import { registerPush, sendPushTokenToBackend } from './lib/pushNotifications';
+import { registerPush } from './lib/pushNotifications';
+import { consumePendingIncomingPush, registerLemtelCallPush, watchVoipToken } from './lib/lemtelCallPush';
 import { syncDeviceContacts } from './lib/contacts';
 import { bootNative, onAppStateChange } from './lib/nativeBoot';
 import { registerDeepLinkHandler, PENDING_CALL_KEY } from './lib/deepLink';
@@ -500,19 +501,19 @@ function AuthenticatedShell({
   // Once the permission gate is dismissed, finalize permissions + push.
   useEffect(() => {
     let cancelled = false;
+    let stopVoipWatch: () => void = () => {};
     (async () => {
       const perms = await requestAllPermissions();
       if (cancelled) return;
 
       // Push notifications — register token with backend.
+      // Call notifications (3.3): iOS registers its PushKit VoIP token, Android its FCM token, with lemtel-push-register.
+      const pushArgs = () => ({ accessToken: creds.accessToken || '', publishableKey: BACKEND_ANON_KEY });
+      void registerLemtelCallPush(pushArgs());
+      void watchVoipToken(() => { void registerLemtelCallPush(pushArgs()); }).then((stop) => { if (cancelled) stop(); else stopVoipWatch = stop; });
       registerPush({
         onToken: async (token, platform) => {
-          await sendPushTokenToBackend({
-            token, platform,
-            portalUrl: BACKEND_URL,
-            accessToken: creds.accessToken || '',
-            extension: creds.extension,
-          });
+          if (platform === 'android') await registerLemtelCallPush({ ...pushArgs(), fcmToken: token });
         },
         onAction: (p) => {
           // Deep-link: tap a push to open the right tab + sub-tab.
@@ -547,8 +548,15 @@ function AuthenticatedShell({
     // for a refresh (it enforces the 900 s minimum). A manifest read alone never
     // triggers reconnect(); reconnect stays reserved for the terminal error state
     // and only while the manifest allows telephony.
+    // Android: a call push woke the app — register SIP now so the held INVITE reaches this device.
+    const wakeForPushedCall = async () => {
+      const pending = await consumePendingIncomingPush();
+      if (pending && clientConfigRef.current.sipAllowed && spRef.current?.snap?.status !== 'registered') spRef.current?.reconnect?.();
+    };
+    void wakeForPushedCall();
     onAppStateChange((active) => {
       if (!active) return;
+      void wakeForPushedCall();
       void reconcileAccountAuthority();
       const cs = spRef.current?.snap?.callState;
       const busy = cs === 'active' || cs === 'held' || cs === 'ringing-in' || cs === 'ringing-out';
@@ -558,7 +566,7 @@ function AuthenticatedShell({
       }
     }).then((u) => { unsub = u; });
 
-    return () => { cancelled = true; unsub(); };
+    return () => { cancelled = true; unsub(); stopVoipWatch(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creds.extension, reconcileAccountAuthority]);
 

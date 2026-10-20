@@ -1,4 +1,5 @@
 import { BACKEND_URL, BACKEND_ANON_KEY, BACKEND_STORAGE_SUFFIX } from './backendOrigin';
+import { unregisterLemtelCallPush } from './lemtelCallPush';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { supabase, clearRecordingAudioCache } from './mobileSupabase';
@@ -194,12 +195,15 @@ export function useStoredCreds() {
     // remote refresh-token revocation completes.
     clearRecordingAudioCache();
     clearIceServerCache();
+    // This install stops ringing for the account (call push), before the session is revoked.
+    const pushToken = credsRef.current?.accessToken;
+    const pushUnregister = pushToken ? unregisterLemtelCallPush({ accessToken: pushToken, publishableKey: BACKEND_ANON_KEY }).catch(() => {}) : Promise.resolve();
     setAuthToken(null);
     setSigningOut(true);
     credsRef.current = null;
     setCredsState(null);
     const storage = Store.clear();
-    void Promise.allSettled([storage, signOutSupabaseSession(), clearRecordingCache()])
+    void Promise.allSettled([storage, pushUnregister.then(() => signOutSupabaseSession()), clearRecordingCache()])
       .finally(() => { clearingRef.current = false; setSigningOut(false); });
   }, []);
 

@@ -260,6 +260,8 @@ extension AppDelegate: PKPushRegistryDelegate {
         CallKitManager.shared.reportIncomingVoipPush(from: from, callId: callId) {
             completion()
         }
+        // Lemtel SIP edge holds the INVITE until this device registers again: re-REGISTER right away.
+        CapacitorPjsip.shared?.triggerReregister()
         // Notify JS layer to show in-app incoming call UI.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             CapacitorPjsip.shared?.notifyBg("callReceived", ["from": from, "callId": callId, "source": "voip-push"])

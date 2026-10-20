@@ -11,7 +11,7 @@ const SCRIPT = resolve(import.meta.dirname, '../infra/lemtel-resilience/active-p
 const reason = (r) => (r.stderr.match(/reason=([a-z0-9_]+)/u) || [])[1];
 
 const CADDY_OK = 'site {\n  # LEMTEL_OPERATIONS_PORTAL_V1\n  handle @lemtel_operations_portal {\n    uri strip_prefix /lemtel-portal\n    root * /etc/caddy/lemtel-portal\n    try_files {path} /lemtel-portal.html\n    file_server\n  }\n}\nprobe {\n  # LEMTEL_OPERATIONS_PORTAL_V1\n}\n';
-function world({ caddyfile = CADDY_OK, privateCompose = 'services:\n  kong:\n    environment:\n      KONG_X: y\n', fenced = false, recovery = 'false', composeBreaks = false } = {}) {
+function world({ caddyfile = CADDY_OK, privateCompose = 'services:\n  kong:\n    environment:\n      KONG_X: y\n', fenced = false, recovery = 'false', composeBreaks = false, manyServices = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'lemtel-tc-'));
   const bin = join(root, 'bin'), fake = join(root, 'fake'), dir = join(root, 'srv/supabase'), fns = join(root, 'srv/supabase/volumes/functions'), caddy = join(root, 'srv/supabase/volumes/proxy/caddy');
   for (const d of [bin, fake, join(fns, '_shared'), join(fns, 'lemtel-onboarding-admin'), join(caddy, 'lemtel-portal/assets'), join(root, 'run'), join(root, 'var/lib/lemtel-ha')]) mkdirSync(d, { recursive: true });
@@ -51,7 +51,7 @@ case "$1" in
   exec) if [[ "$*" == *rolsuper* ]]; then echo t; exit 0; fi
     sql="$(cat)"; echo "sql $sql" >> "$F/log"
     case "$sql" in *pg_is_in_recovery*) echo ${recovery} ;; *"tablename IN"*) echo 4 ;; *"LIKE 'lemtel_pbx_"*) echo 0 ;; esac ;;
-  compose) case "$*" in *"config --services"*) ${composeBreaks ? `if grep -q LEMTEL_PBX "$LEMTEL_TC_TEST_ROOT/srv/supabase/docker-compose.lemtel-private.yml"; then exit 1; fi;` : ''} echo functions; echo kong ;; *"up -d --no-deps functions"*) touch "$F/recreated" ;; esac ;;
+  compose) case "$*" in *"config --services"*) ${composeBreaks ? `if grep -q LEMTEL_PBX "$LEMTEL_TC_TEST_ROOT/srv/supabase/docker-compose.lemtel-private.yml"; then exit 1; fi;` : ''} echo functions${manyServices ? '; for i in $(seq 1 20000); do echo svc$i || exit 141; done' : ''}; echo kong ;; *"up -d --no-deps functions"*) touch "$F/recreated" ;; esac ;;
 esac
 `;
   writeFileSync(join(bin, 'docker'), docker); chmodSync(join(bin, 'docker'), 0o755);
@@ -143,4 +143,11 @@ test('recreate keeps the functions container\'s own Compose chain (earlier activ
   assert.match(up, /compose\.lemtel-transactional-email\.yml/u, 'activation override kept');
   assert.match(up, /docker-compose\.lemtel-private\.yml/u, 'Lemtel override present');
   assert.match(up, /--env-file \S*\/srv\/supabase\/\.env/u);
+});
+
+test('check survives a long service list where functions is listed first (no SIGPIPE false negative under pipefail)', () => {
+  const w = world({ manyServices: true });
+  const r = w.run('check');
+  assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stderr, /functions_service_not_in_compose/u);
 });

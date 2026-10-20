@@ -10,7 +10,7 @@ describe("push internal et cache Commissions quinze minutes", () => {
     const config = read("supabase/config.toml");
     const migration = read("drizzle/migrations/0011_planipret_internal_trigger_secret.sql");
     const handler = read("supabase/functions/pp-row-push/index.ts");
-    expect(config).toContain("[functions.pp-row-push]\nverify_jwt = false");
+    expect(config).toMatch(/^\s*\[functions\.pp-row-push\]\s*\n\s*verify_jwt\s*=\s*false\s*$/m);
     expect(migration).toContain("vault.decrypted_secrets");
     expect(migration).toContain("PP_INTERNAL_TRIGGER_SECRET");
     expect(migration).toContain("'X-Planipret-Internal-Trigger', _internal_secret");

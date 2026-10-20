@@ -44,7 +44,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Verify release artifact validator
         working-directory: apps/ava-softphone-desktop
-        run: node --test scripts/validate-release-assets.test.mjs scripts/release-channel.test.mjs
+        run: node --test scripts/validate-release-assets.test.mjs scripts/release-channel.test.mjs scripts/azure-artifact-sign.test.mjs
       - name: Run the complete Lemtel Desktop test suite
         working-directory: apps/ava-softphone-desktop
         run: npm test
@@ -66,20 +66,27 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       windows_signed: ${{ steps.windows.outputs.signed }}
+      windows_signing_mode: ${{ steps.windows.outputs.mode }}
     steps:
       - id: windows
         name: Check Windows signing availability without revealing secrets
         env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # Azure Artifact Signing: repository variables only (identifiers, no secret; GitHub OIDC signs in).
+          AZ_TENANT: ${{ vars.LEMTEL_AZURE_TENANT_ID }}
+          AZ_CLIENT: ${{ vars.LEMTEL_AZURE_CLIENT_ID }}
+          AZ_SUBSCRIPTION: ${{ vars.LEMTEL_AZURE_SUBSCRIPTION_ID }}
+          AZ_ENDPOINT: ${{ vars.LEMTEL_AZURE_SIGNING_ENDPOINT }}
+          AZ_ACCOUNT: ${{ vars.LEMTEL_AZURE_SIGNING_ACCOUNT }}
+          AZ_PROFILE: ${{ vars.LEMTEL_AZURE_SIGNING_PROFILE }}
         shell: bash
         run: |
-          if [[ -n "$WIN_CSC_LINK" && -n "$WIN_CSC_KEY_PASSWORD" ]]; then
-            echo 'signed=true' >> "$GITHUB_OUTPUT"
-            echo 'Windows signed build enabled.'
+          if [[ -n "$AZ_TENANT" && -n "$AZ_CLIENT" && -n "$AZ_SUBSCRIPTION" && -n "$AZ_ENDPOINT" && -n "$AZ_ACCOUNT" && -n "$AZ_PROFILE" ]]; then
+            { echo 'signed=true'; echo 'mode=azure'; } >> "$GITHUB_OUTPUT"
+            echo 'Windows signed build enabled: Azure Artifact Signing (GitHub OIDC).'
           else
-            echo 'signed=false' >> "$GITHUB_OUTPUT"
-            echo 'Windows signed build disabled: Authenticode secrets are absent.'
+            # Public CAs no longer issue exportable (.pfx) code-signing keys; Azure Artifact Signing is the only path.
+            { echo 'signed=false'; echo 'mode=none'; } >> "$GITHUB_OUTPUT"
+            echo 'Windows signed build disabled: Azure Artifact Signing variables are not set.'
           fi
 
   build-mac:
@@ -159,10 +166,12 @@ jobs:
     needs: [verify, release-plan]
     runs-on: windows-2022
     environment: lemtel-hostinger-staging
+    permissions:
+      contents: read
+      id-token: write   # GitHub OIDC -> Azure (federated credential on environment lemtel-hostinger-staging)
     env:
-      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       WINDOWS_SIGNED: ${{ needs.release-plan.outputs.windows_signed }}
+      WINDOWS_SIGNING_MODE: ${{ needs.release-plan.outputs.windows_signing_mode }}
       VITE_LEMTEL_TARGET: ${{ vars.VITE_LEMTEL_TARGET }}
       # The desktop app reads the canonical Lemtel origin and key under its runtime names (src/lib/backendOrigin.ts).
       VITE_SUPABASE_URL: ${{ vars.VITE_LEMTEL_API_URL }}
@@ -187,14 +196,34 @@ jobs:
           VITE_LEMTEL_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_LEMTEL_HOSTED_ONBOARDING: approved
         run: node scripts/lemtel-hostinger-client-config-filter.mjs
+      - name: Sign in to Azure with GitHub OIDC (no secret)
+        if: needs.release-plan.outputs.windows_signing_mode == 'azure'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.LEMTEL_AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.LEMTEL_AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.LEMTEL_AZURE_SUBSCRIPTION_ID }}
+      - name: Install the Azure Artifact Signing module (pinned)
+        if: needs.release-plan.outputs.windows_signing_mode == 'azure'
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name TrustedSigning -RequiredVersion 0.4.1 -Repository PSGallery -Scope CurrentUser -Force
       - name: Install and build
         working-directory: apps/ava-softphone-desktop
         run: npm ci --no-audit --no-fund && npm run build
       - name: Package signed or explicitly unsigned Windows NSIS installer
         shell: pwsh
         working-directory: apps/ava-softphone-desktop
+        env:
+          LEMTEL_AZURE_SIGNING_ENDPOINT: ${{ vars.LEMTEL_AZURE_SIGNING_ENDPOINT }}
+          LEMTEL_AZURE_SIGNING_ACCOUNT: ${{ vars.LEMTEL_AZURE_SIGNING_ACCOUNT }}
+          LEMTEL_AZURE_SIGNING_PROFILE: ${{ vars.LEMTEL_AZURE_SIGNING_PROFILE }}
         run: |
-          if ($env:WINDOWS_SIGNED -eq 'true') {
+          if ($env:WINDOWS_SIGNING_MODE -eq 'azure') {
+            # scripts/azure-artifact-sign.cjs signs every binary (app, uninstaller, installer) before latest.yml is written.
+            $env:LEMTEL_AZURE_SIGNING = 'true'
+            $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
             npx electron-builder --win --x64 --publish never
           } else {
             $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
@@ -208,6 +237,13 @@ jobs:
           if ($installers.Count -ne 1 -or -not (Test-Path dist-electron/latest.yml)) { throw 'Installer or latest.yml missing' }
           $signature = Get-AuthenticodeSignature $installers[0].FullName
           if ($env:WINDOWS_SIGNED -eq 'true' -and $signature.Status -ne 'Valid') { throw "Invalid installer signature: $($signature.Status)" }
+          if ($env:WINDOWS_SIGNED -eq 'true') {
+            # Installed apps refuse an update whose signer differs from win.signtoolOptions.publisherName.
+            $expected = 'CN="Automatisation Assistant Virtuel IA Inc."|CN=Automatisation Assistant Virtuel IA Inc\.(,|$)'
+            if ($signature.SignerCertificate.Subject -notmatch $expected) { throw "Signer does not match publisherName: $($signature.SignerCertificate.Subject)" }
+            if ($null -eq $signature.TimeStamperCertificate) { throw 'Installer signature is not timestamped' }
+            Write-Host "Windows installer signed by: $($signature.SignerCertificate.Subject)"
+          }
           if ($env:WINDOWS_SIGNED -ne 'true') { Write-Host "Windows installer intentionally unsigned; SmartScreen warning is expected." }
       - uses: actions/upload-artifact@v4
         with:

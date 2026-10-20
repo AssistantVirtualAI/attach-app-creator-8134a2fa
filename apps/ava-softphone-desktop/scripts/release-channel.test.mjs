@@ -31,8 +31,15 @@ test("Windows release preserves explicit signing state and a working unsigned pa
   assert.match(workflow, /windows_signed/);
   assert.match(
     workflow,
-    /Windows signed build disabled: Authenticode secrets are absent/,
+    /Windows signed build disabled: Azure Artifact Signing variables are not set/,
   );
+  // Azure Artifact Signing: OIDC only (no client secret), pinned module, signer must equal publisherName.
+  assert.match(workflow, /id-token: write/);
+  assert.match(workflow, /uses: azure\/login@v2/);
+  assert.doesNotMatch(workflow, /AZURE_CLIENT_SECRET|client-secret/);
+  assert.match(workflow, /Install-Module -Name TrustedSigning -RequiredVersion 0\.4\.1/);
+  assert.match(workflow, /Signer does not match publisherName/);
+  assert.match(workflow, /Installer signature is not timestamped/);
   assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY = 'false'/);
   assert.match(
     workflow,

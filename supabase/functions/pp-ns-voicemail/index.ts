@@ -16,6 +16,7 @@ import {
   requirePlanipretBroker,
   nsFetch,
 } from "../_shared/planipret-ns.ts";
+import { normalizeVoicemail, providerFolder, voicemailRows } from "./voicemail.ts";
 
 const VALID_FOLDERS = new Set(["inbox", "saved", "deleted"]);
 
@@ -45,38 +46,39 @@ Deno.serve(async (req) => {
       if (!VALID_FOLDERS.has(folder)) {
         return jsonResponse({ error: `Dossier invalide: ${folder}. Valeurs: inbox, saved, deleted` }, 400);
       }
-
-
-      const res = await nsFetch(`${userBase}/voicemails/${folder}`, { method: "GET" });
+      const nsFolder = providerFolder(folder);
+      if (!nsFolder) return jsonResponse({ error: "Invalid folder" }, 400);
+      const res = await nsFetch(`${userBase}/voicemails/${nsFolder}`, { method: "GET" });
       if (!res.ok) {
-        const txt = await res.text();
-        return jsonResponse({ error: "NS-API voicemail fetch failed", status: res.status, body: txt }, 502);
+        await res.body?.cancel();
+        return jsonResponse({ error: "NS-API voicemail fetch failed", status: res.status }, 502);
       }
 
       const raw = await res.json();
-      const items: any[] = Array.isArray(raw) ? raw : (raw?.voicemails ?? raw?.data ?? []);
-
-      // Sync dans Supabase pour l'historique local
-      if (items.length > 0) {
-        const rows = items.map((v: any) => ({
-          user_id: ctx.profileId,
-          vm_id: v.vm_id ?? v.id ?? null,
-          from_number: v.from_number ?? v.caller ?? null,
-          from_name: v.from_name ?? v.caller_name ?? null,
-          duration_seconds: v.duration ?? v.duration_seconds ?? null,
-          folder,
-          is_read: v.is_read ?? v.read ?? false,
-          created_at: v.created_at ?? v.timestamp ?? new Date().toISOString(),
-        })).filter((r) => r.vm_id);
-
-        if (rows.length > 0) {
-          await supabase
-            .from("planipret_voicemails")
-            .upsert(rows, { onConflict: "vm_id" });
-        }
+      const now = new Date().toISOString();
+      const mapped = voicemailRows(raw).map((v) => normalizeVoicemail(v, folder, now));
+      if (mapped.some((v) => !v)) throw new Error("Voicemail identity missing");
+      const items = mapped.filter((v) => v !== null);
+      let syncFailed = false;
+      for (const item of items) {
+        const { vm_id: _vmId, created_at: _createdAt, ...values } = item;
+        const { data: existing, error: lookupError } = await supabase.from("planipret_voicemails")
+          .select("id,is_read,transcript").eq("user_id", ctx.profileId).eq("ns_vm_id", item.ns_vm_id).maybeSingle();
+        if (lookupError) { syncFailed = true; continue; }
+        const row = {
+          ...values, user_id: ctx.profileId, organization_id: ctx.organizationId,
+          is_read: existing?.is_read ?? item.is_read,
+          transcript: item.transcript ?? existing?.transcript ?? null,
+        };
+        // The table's user_id stores the Planipret profile ID, not auth.uid().
+        // Never use a global upsert: filename conflicts cannot change owners.
+        const result = existing
+          ? await supabase.from("planipret_voicemails").update(row).eq("id", existing.id).eq("user_id", ctx.profileId)
+          : await supabase.from("planipret_voicemails").insert(row);
+        if (result.error) syncFailed = true;
       }
-
-      return jsonResponse({ ok: true, count: items.length, folder, items });
+      if (syncFailed) console.error("[pp-ns-voicemail] local_sync_failed");
+      return jsonResponse({ ok: true, count: items.length, folder, items, sync_failed: syncFailed });
     }
 
     // ── URL audio d'un voicemail ─────────────────────────────────────────────
@@ -203,7 +205,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: `Action inconnue: ${action}` }, 400);
 
   } catch (e) {
-    console.error("[pp-ns-voicemail] Erreur:", e);
-    return jsonResponse({ error: (e as Error).message }, 500);
+    console.error("[pp-ns-voicemail] request_failed", { name: e instanceof Error ? e.name : "Error" });
+    return jsonResponse({ error: "Voicemail request failed" }, 500);
   }
 });

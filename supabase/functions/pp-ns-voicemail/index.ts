@@ -52,8 +52,10 @@ Deno.serve(async (req) => {
       for (const item of items) {
         const { vm_id: _vmId, created_at: _createdAt, ...values } = item;
         const { data: existing, error: lookupError } = await supabase.from("planipret_voicemails")
-          .select("id,is_read,transcript").eq("user_id", ctx.profileId).eq("ns_vm_id", item.ns_vm_id).maybeSingle();
+          .select("id,is_read,transcript,from_number,from_name").eq("user_id", ctx.profileId).eq("ns_vm_id", item.ns_vm_id).maybeSingle();
         if (lookupError) { syncFailed = true; continue; }
+        item.from_number = item.from_number ?? existing?.from_number ?? null;
+        item.from_name = item.from_name ?? existing?.from_name ?? null;
         const row = {
           ...values, user_id: ctx.profileId,
           is_read: existing?.is_read ?? item.is_read,

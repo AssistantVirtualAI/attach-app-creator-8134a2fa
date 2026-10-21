@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Deploy prepared voicemail loading fix only (2026-10-21): pp-ns-voicemail deployment confirmed; authenticated live inbox HTTP 200 with 9 messages and saved HTTP 200 with 0, both sync_failed=false. Nine messages visible in requester web Inbox. 15 tests passed. No call routing/native/frontend publication changes. Installed-phone confirmation remains with user.
+
 - [x] Prepare missing-voicemail correction: NS new/save/trash folders, filename and v2 metadata/audio fields, actual ns_vm_id persistence scoped to profile ID, non-destructive paired mobile merge. 15 focused tests and Deno check pass; preview build OK. No native/routing/webhook/migration/cron changes or deployment.
 - [x] Verify deployed voicemail retrieval against NS documentation (2026-10-21): authenticated requester list uses /voicemails/new, returns HTTP 200 and nine messages, persisted as nine profile-owned ns_vm_id rows and visible in the mobile web Inbox. All 84 profiles have a telephone link; 81 have linked accounts. Fifteen mapper tests and Deno check pass. No deployment in this verification.
 - [ ] Verify installed mobile voicemail access for every broker and actual playback: installed app needs paired mapping corrections in its next release; no other broker session/device tested. Audio metadata and downloads return HTTP 200, but one old message is a 44-byte empty WAV; full playback and notification delivery remain unproven. Existing mark-read/move/delete/forward provider contracts require a separately scoped review; do not assume undocumented PATCH paths work.

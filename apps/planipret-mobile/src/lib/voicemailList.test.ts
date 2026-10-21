@@ -8,6 +8,10 @@ const cached = (overrides: Partial<VoicemailListItem> = {}): VoicemailListItem =
 });
 
 describe("mobile voicemail lists", () => {
+  it("empty caller fields do not hide ANI or cached identity", () => {
+    expect(mergeVoicemailList([{ filename: "vm-1.wav", FromUser: "", NmsAni: "15147071203", FromName: "" }], [cached({ from_name: "Olivier Lachance" })], "broker-A", "inbox")[0])
+      .toMatchObject({ from_number: "15147071203", from_name: "Olivier Lachance" });
+  });
   it("prefers the directory contact name over provider caller ID", () => {
     expect(voicemailCaller({ from_number: "sip:15147071203@example.test", from_name: "Unknown" }, { contactsByPhone: { "5147071203": "Olivier Lachance" } }))
       .toEqual({ name: "Olivier Lachance", phone: "(514) 707-1203" });

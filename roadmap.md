@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Finish voicemail loading/playback isolation and caller identity, deploy only needed voicemail server changes, prepare mobile release handoff, verify authenticated live retrieval and distinguish device-only blockers; no routing/native configuration changes.
+
 - [x] Prepare paired voicemail caller presentation: account-isolated directory name, otherwise readable caller number, with phone sublabel when a name exists. 11 tests per tree pass; authenticated list loads nine messages. Existing identity-less records remain unknown; real identified voicemail and next installed mobile release required. No deployment or routing changes.
 
 - [x] Deploy prepared voicemail loading fix only (2026-10-21): pp-ns-voicemail deployment confirmed; authenticated live inbox HTTP 200 with 9 messages and saved HTTP 200 with 0, both sync_failed=false. Nine messages visible in requester web Inbox. 15 tests passed. No call routing/native/frontend publication changes. Installed-phone confirmation remains with user.

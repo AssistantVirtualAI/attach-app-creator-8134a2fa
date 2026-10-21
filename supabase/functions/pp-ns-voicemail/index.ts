@@ -16,7 +16,7 @@ import {
   requirePlanipretBroker,
   nsFetch,
 } from "../_shared/planipret-ns.ts";
-import { normalizeVoicemail, providerFolder, voicemailRows } from "./voicemail.ts";
+import { readVoicemailAudio, readVoicemailList, voicemailPath } from "./read.ts";
 
 const VALID_FOLDERS = new Set(["inbox", "saved", "deleted"]);
 
@@ -46,19 +46,8 @@ Deno.serve(async (req) => {
       if (!VALID_FOLDERS.has(folder)) {
         return jsonResponse({ error: `Dossier invalide: ${folder}. Valeurs: inbox, saved, deleted` }, 400);
       }
-      const nsFolder = providerFolder(folder);
-      if (!nsFolder) return jsonResponse({ error: "Invalid folder" }, 400);
-      const res = await nsFetch(`${userBase}/voicemails/${nsFolder}`, { method: "GET" });
-      if (!res.ok) {
-        await res.body?.cancel();
-        return jsonResponse({ error: "NS-API voicemail fetch failed", status: res.status }, 502);
-      }
-
-      const raw = await res.json();
       const now = new Date().toISOString();
-      const mapped = voicemailRows(raw).map((v) => normalizeVoicemail(v, folder, now));
-      if (mapped.some((v) => !v)) throw new Error("Voicemail identity missing");
-      const items = mapped.filter((v) => v !== null);
+      const items = await readVoicemailList(nsFetch, ctx.nsDomain, ctx.extension, folder, now);
       let syncFailed = false;
       for (const item of items) {
         const { vm_id: _vmId, created_at: _createdAt, ...values } = item;
@@ -85,20 +74,13 @@ Deno.serve(async (req) => {
     if (action === "audio") {
       const vmId = body?.vm_id ?? url.searchParams.get("vm_id");
       if (!vmId) return jsonResponse({ error: "vm_id requis" }, 400);
-      const folder = providerFolder(String(body?.folder ?? "inbox"));
-      if (!folder) return jsonResponse({ error: "Invalid folder" }, 400);
-      const res = await nsFetch(
-        `${userBase}/voicemails/${folder}/${encodeURIComponent(vmId)}`,
-        { method: "GET" }
-      );
-
-      if (!res.ok) {
-        await res.body?.cancel();
-        return jsonResponse({ error: "NS-API audio fetch failed", status: res.status }, 502);
-      }
-      const data = await res.json();
-      const item = Array.isArray(data) ? data[0] : (data?.data ?? data);
-      return jsonResponse({ ok: true, audio_url: item?.["file-access-url"] ?? item?.remotepath ?? item?.audio_url ?? null });
+      const folder = String(body?.folder ?? url.searchParams.get("folder") ?? "inbox");
+      if (typeof vmId !== "string") return jsonResponse({ error: "Invalid voicemail identity" }, 400);
+      try { voicemailPath(ctx.nsDomain, ctx.extension, folder, vmId); }
+      catch { return jsonResponse({ error: "Invalid voicemail folder or identity" }, 400); }
+      const audioUrl = await readVoicemailAudio(nsFetch, ctx.nsDomain, ctx.extension, folder, vmId);
+      if (!audioUrl) return jsonResponse({ error: "Voicemail audio unavailable" }, 404);
+      return jsonResponse({ ok: true, audio_url: audioUrl });
     }
 
     // ── marquer comme lu ─────────────────────────────────────────────────────

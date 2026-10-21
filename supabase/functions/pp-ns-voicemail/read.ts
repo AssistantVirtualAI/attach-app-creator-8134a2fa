@@ -31,7 +31,12 @@ export async function readVoicemailList(fetcher: Fetcher, domain: string, extens
       const row = Array.isArray(detail) ? detail[0] : detail?.data ?? detail;
       if (!row || typeof row !== "object") continue;
       const enriched = normalizeVoicemail({ ...row, filename: item.ns_vm_id }, folder, now);
-      if (enriched) Object.assign(item, enriched);
+      if (enriched) {
+        item.from_number = enriched.from_number ?? item.from_number;
+        item.from_name = enriched.from_name ?? item.from_name;
+        item.audio_url = enriched.audio_url ?? item.audio_url;
+        item.transcript = enriched.transcript ?? item.transcript;
+      }
     } catch { /* A metadata failure must not hide an existing message. */ }
   }
   return valid;

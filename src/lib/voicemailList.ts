@@ -40,8 +40,8 @@ export function mergeVoicemailList(provider: Record<string, any>[], local: Voice
     const date = item.received_at ?? item["recorded-datetime"] ?? item["created-datetime"] ?? item.filedate ?? item.created_at ?? item.timestamp;
     merged.set(key, {
       id: cached?.id ?? key, user_id: owner, ns_vm_id: key, folder: voicemailFolder(item.folder ?? folder),
-      from_number: item.FromUser ?? item.NmsAni ?? item.from_number ?? item.caller ?? cached?.from_number ?? null,
-      from_name: item.FromName ?? item.from_name ?? item.caller_name ?? cached?.from_name ?? null,
+      from_number: [item.FromUser, item.NmsAni, item.from_number, item.caller, cached?.from_number].find((value) => typeof value === "string" && value.trim())?.trim() ?? null,
+      from_name: [item.FromName, item.from_name, item.caller_name, cached?.from_name].find((value) => typeof value === "string" && value.trim())?.trim() ?? null,
       duration_seconds: Number.isFinite(duration) ? Math.max(0, Math.round(duration)) : cached?.duration_seconds ?? null,
       audio_url: item["file-access-url"] ?? item.remotepath ?? item.audio_url ?? cached?.audio_url ?? null,
       transcript: item.transcription ?? item.transcript ?? cached?.transcript ?? null,

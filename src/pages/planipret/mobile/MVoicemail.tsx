@@ -99,7 +99,7 @@ export default function MVoicemail() {
     }
   };
 
-  useEffect(() => { vmGen.current += 1; if (tab === "greeting") setLoading(false); load(); /* eslint-disable-next-line */ }, [profile?.user_id, tab]);
+  useEffect(() => { vmGen.current += 1; setItems([]); setExpanded(null); setForwardFor(null); if (tab === "greeting") setLoading(false); load(); /* eslint-disable-next-line */ }, [profile?.id, profile?.user_id, tab]);
   useEffect(() => () => { vmGen.current += 1; }, []);
   const vmLoadRef = useRef(load); vmLoadRef.current = load;
   // Greeting: no list refresh owner. Inbox/Saved: own folder only.
@@ -116,7 +116,7 @@ export default function MVoicemail() {
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [profile?.user_id]);
+  }, [profile?.id, profile?.user_id]);
 
   const filtered = items.filter((v) => voicemailFolder(v.folder) === tab);
   const unreadInbox = items.filter((v) => v.folder === "inbox" && !v.is_read).length;
@@ -405,7 +405,8 @@ function ActionBtn({ icon, label, onClick, danger }: { icon: React.ReactNode; la
 
 function AudioPlayer({ vm }: { vm: VM }) {
   const { t } = useMplanipretLang();
-  const [src, setSrc] = useState<string | null>(vm.audio_url);
+  // Persisted provider URLs expire: always request a fresh owner-checked URL.
+  const [src, setSrc] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [dur, setDur] = useState(vm.duration_seconds ?? 0);
@@ -413,30 +414,36 @@ function AudioPlayer({ vm }: { vm: VM }) {
   const [buffering, setBuffering] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const audioGeneration = useRef(0);
   const loadingAudio = !src;
 
   const fetchAudio = async () => {
+    const generation = ++audioGeneration.current;
     setLoadError(false);
     const id = vm.ns_vm_id ?? vm.id;
     try {
       const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id, folder: voicemailFolder(vm.folder) } });
       if (error) throw error;
+      if (generation !== audioGeneration.current) return;
       const url = (data as any)?.url ?? (data as any)?.audio_url;
       if (url) setSrc(url); else setLoadError(true);
     } catch {
-      setLoadError(true);
+      if (generation === audioGeneration.current) setLoadError(true);
     }
   };
 
   useEffect(() => {
-    if (src) return;
+    setSrc(null); setPlaying(false); setProgress(0); setBuffering(false);
     fetchAudio();
+    return () => { audioGeneration.current += 1; audioRef.current?.pause(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vm.id]);
+  }, [vm.id, vm.folder]);
 
-  const toggle = () => {
+  const toggle = async () => {
     const a = audioRef.current; if (!a) return;
-    if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
+    if (a.paused) {
+      try { await a.play(); } catch { setPlaying(false); setLoadError(true); }
+    } else { a.pause(); setPlaying(false); }
   };
 
   const cycleSpeed = () => {

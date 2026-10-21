@@ -6,7 +6,8 @@ import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail 
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { mergeVoicemailList, voicemailFolder } from "@/lib/voicemailList";
+import { mergeVoicemailList, voicemailFolder, voicemailCaller } from "@/lib/voicemailList";
+import { useSpeakerCtx } from "@/components/planipret/mobile/call/transcriptSpeakers";
 
 const PRIMARY = "var(--pp-brand-accent-2)";
 const ACCENT = "var(--pp-brand-accent)";
@@ -49,6 +50,7 @@ export default function MVoicemail() {
   const { profile, openDialer, registerRefresh, reloadProfile } = useOutletContext<PlanipretMobileContext>();
   const [tab, setTab] = useState<"greeting" | "inbox" | "saved">("greeting");
   const [items, setItems] = useState<VM[]>([]);
+  const callerDirectory = useSpeakerCtx(tab !== "greeting");
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [forwardFor, setForwardFor] = useState<VM | null>(null);
@@ -319,8 +321,11 @@ export default function MVoicemail() {
                           className={`text-[13px] truncate ${vm.is_read ? "font-medium" : "font-semibold"}`}
                           style={{ color: "var(--pp-text-primary)" }}
                         >
-                          {vm.from_name || vm.from_number || t("common.unknown")}
+                          {voicemailCaller(vm, callerDirectory).name || voicemailCaller(vm, callerDirectory).phone || t("common.unknown")}
                         </p>
+                        {voicemailCaller(vm, callerDirectory).name && voicemailCaller(vm, callerDirectory).phone && (
+                          <p className="text-[11px] truncate text-muted-foreground">{voicemailCaller(vm, callerDirectory).phone}</p>
+                        )}
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-[10.5px] text-slate-500">{fmtDate(vm.received_at ?? vm.created_at, lang, t)}</span>
                           <span className="w-1 h-1 rounded-full bg-slate-300" />

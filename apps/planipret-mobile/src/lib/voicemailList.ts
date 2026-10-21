@@ -1,3 +1,20 @@
+import { formatPublicPhone, normalizeCallEndpoint } from "./planipret/callPresentation";
+
+export function voicemailCaller(
+  vm: { from_number: string | null; from_name: string | null },
+  directory: { contactsByPhone?: Record<string, string>; internalByExt?: Record<string, string> },
+): { name: string | null; phone: string | null } {
+  const number = normalizeCallEndpoint(vm.from_number);
+  const digits = number?.replace(/\D/g, "") ?? "";
+  const key = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  const ext = number?.match(/^(\d{2,6})[a-z]?$/i)?.[1];
+  const matched = ext ? directory.internalByExt?.[ext] : directory.contactsByPhone?.[key];
+  const supplied = vm.from_name?.trim();
+  const usableName = supplied && !/^(unknown|anonymous|restricted|private|unavailable|inconnu|null)$/i.test(supplied)
+    && !/^<?sips?:/i.test(supplied) && !/^[+\d().\s-]+$/.test(supplied) ? supplied : null;
+  return { name: matched || usableName || null, phone: formatPublicPhone(number) };
+}
+
 export type VoicemailListItem = {
   id: string; user_id: string; ns_vm_id: string | null; folder: string;
   from_number: string | null; from_name: string | null; duration_seconds: number | null;

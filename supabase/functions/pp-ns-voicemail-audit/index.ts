@@ -3,7 +3,7 @@
 // (no audio URLs, caller names or numbers in the response). Never touches routing.
 import { corsHeaders, jsonResponse, nsFetch } from "../_shared/planipret-ns.ts";
 import { requirePlanipretAdmin } from "../_shared/ns-broker.ts";
-import { readVoicemailList } from "../pp-ns-voicemail/read.ts";
+import { readVoicemailList } from "./read.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

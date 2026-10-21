@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
           .select("id,is_read,transcript").eq("user_id", ctx.profileId).eq("ns_vm_id", item.ns_vm_id).maybeSingle();
         if (lookupError) { syncFailed = true; continue; }
         const row = {
-          ...values, user_id: ctx.profileId, organization_id: ctx.organizationId,
+          ...values, user_id: ctx.profileId,
           is_read: existing?.is_read ?? item.is_read,
           transcript: item.transcript ?? existing?.transcript ?? null,
         };

@@ -6,6 +6,7 @@ import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail 
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { mergeVoicemailList, voicemailFolder } from "@/lib/voicemailList";
 
 const PRIMARY = "var(--pp-brand-accent-2)";
 const ACCENT = "var(--pp-brand-accent)";
@@ -67,6 +68,7 @@ export default function MVoicemail() {
         body: { action: "list", folder },
       });
       if (error) throw error;
+      if (data?.error || data?.needs_link) throw new Error(data.error || "Telephone account not linked");
       const nsItems: any[] = ((data as any)?.items ?? []);
 
       // 2) Fallback / enrichissement cache local
@@ -76,30 +78,7 @@ export default function MVoicemail() {
         .eq("user_id", profile.id ?? profile.user_id)
         .order("created_at", { ascending: false });
 
-      const byVmId = new Map<string, VM>();
-      (local ?? []).forEach((r: any) => { if (r.vm_id || r.ns_vm_id) byVmId.set(r.vm_id ?? r.ns_vm_id, r); });
-
-      const merged: VM[] = nsItems.length
-        ? nsItems.map((v: any, i: number) => {
-            const id = v.vm_id ?? v.id ?? `ns-${i}`;
-            const enriched = byVmId.get(id);
-            return {
-              id: enriched?.id ?? id,
-              user_id: profile.user_id,
-              ns_vm_id: id,
-              folder,
-              from_number: v.from_number ?? v.caller ?? null,
-              from_name: v.from_name ?? v.caller_name ?? null,
-              duration_seconds: v.duration ?? v.duration_seconds ?? null,
-              audio_url: enriched?.audio_url ?? null,
-              transcript: enriched?.transcript ?? null,
-              is_read: v.is_read ?? v.read ?? enriched?.is_read ?? false,
-              received_at: v.created_at ?? v.timestamp ?? null,
-              created_at: v.created_at ?? new Date().toISOString(),
-              ...(enriched ?? {}),
-            } as VM;
-          })
-        : (local ?? []) as VM[];
+      const merged = mergeVoicemailList(nsItems, (local ?? []) as VM[], profile.id ?? profile.user_id, folder);
 
       if (!live()) return;
       setItems(merged);
@@ -112,7 +91,7 @@ export default function MVoicemail() {
         .select("*")
         .eq("user_id", profile.id ?? profile.user_id)
         .order("created_at", { ascending: false });
-      if (live()) setItems((data ?? []) as VM[]);
+      if (live()) setItems(mergeVoicemailList([], (data ?? []) as VM[], profile.id ?? profile.user_id, tab));
     } finally {
       if (live()) setLoading(false);
     }
@@ -130,14 +109,14 @@ export default function MVoicemail() {
       .channel(`mplanipret-vm-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "planipret_voicemails", filter: `user_id=eq.${profile.id ?? profile.user_id}` }, (payload) => {
         const v = payload.new as VM;
-        setItems((p) => [v, ...p]);
+        setItems((p) => mergeVoicemailList([], [v, ...p.filter((item) => item.id !== v.id)], profile.id ?? profile.user_id, tab));
         toast(`📬 ${t("voicemail.newFrom")} ${v.from_number ?? t("voicemail.unknownLower")}`);
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [profile?.user_id]);
 
-  const filtered = items.filter((v) => v.folder === tab);
+  const filtered = items.filter((v) => voicemailFolder(v.folder) === tab);
   const unreadInbox = items.filter((v) => v.folder === "inbox" && !v.is_read).length;
 
   const markRead = async (vm: VM) => {

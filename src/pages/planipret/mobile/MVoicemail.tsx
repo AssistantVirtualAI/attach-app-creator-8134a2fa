@@ -414,7 +414,7 @@ function AudioPlayer({ vm }: { vm: VM }) {
     setLoadError(false);
     const id = vm.ns_vm_id ?? vm.id;
     try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id } });
+      const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id, folder: voicemailFolder(vm.folder) } });
       if (error) throw error;
       const url = (data as any)?.url ?? (data as any)?.audio_url;
       if (url) setSrc(url); else setLoadError(true);

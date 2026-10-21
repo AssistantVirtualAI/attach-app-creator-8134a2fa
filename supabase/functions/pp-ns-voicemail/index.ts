@@ -85,32 +85,20 @@ Deno.serve(async (req) => {
     if (action === "audio") {
       const vmId = body?.vm_id ?? url.searchParams.get("vm_id");
       if (!vmId) return jsonResponse({ error: "vm_id requis" }, 400);
-
+      const folder = providerFolder(String(body?.folder ?? "inbox"));
+      if (!folder) return jsonResponse({ error: "Invalid folder" }, 400);
       const res = await nsFetch(
-        `${userBase}/voicemails/inbox/${encodeURIComponent(vmId)}/audio`,
+        `${userBase}/voicemails/${folder}/${encodeURIComponent(vmId)}`,
         { method: "GET" }
       );
 
       if (!res.ok) {
-        const txt = await res.text();
-        return jsonResponse({ error: "NS-API audio fetch failed", status: res.status, body: txt }, 502);
+        await res.body?.cancel();
+        return jsonResponse({ error: "NS-API audio fetch failed", status: res.status }, 502);
       }
-
-      const contentType = res.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) {
-        const data = await res.json();
-        return jsonResponse({ ok: true, audio_url: data.url ?? data.audio_url ?? null });
-      }
-
-      const audioBuffer = await res.arrayBuffer();
-      return new Response(audioBuffer, {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": contentType || "audio/wav",
-          "Content-Length": audioBuffer.byteLength.toString(),
-        },
-      });
+      const data = await res.json();
+      const item = Array.isArray(data) ? data[0] : (data?.data ?? data);
+      return jsonResponse({ ok: true, audio_url: item?.["file-access-url"] ?? item?.remotepath ?? item?.audio_url ?? null });
     }
 
     // ── marquer comme lu ─────────────────────────────────────────────────────

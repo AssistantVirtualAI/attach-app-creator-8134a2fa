@@ -19,7 +19,6 @@ async function getRows(fetcher: Fetcher, path: string) {
 export async function readVoicemailList(fetcher: Fetcher, domain: string, extension: string, folder: string, now: string) {
   const path = voicemailPath(domain, extension, folder);
   const raw = await getRows(fetcher, path);
-  try { const first = voicemailRows(raw)[0]; if (first) console.log("[pp-ns-voicemail] list_keys", Object.keys(first).join(",")); } catch { /* keys only */ }
   const items = voicemailRows(raw).map((row) => normalizeVoicemail(row, folder, now));
   if (items.some((item) => !item)) throw new Error("Voicemail identity missing");
   const valid = items.filter((item) => item !== null);

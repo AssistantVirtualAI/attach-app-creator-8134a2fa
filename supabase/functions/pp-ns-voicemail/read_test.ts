@@ -33,3 +33,8 @@ Deno.test("invalid folder and path identities fail closed", () => {
 Deno.test("provider failures never become an empty success", async () => {
   await assertRejects(() => readVoicemailList(() => Promise.resolve(new Response(null, { status: 401 })), "test", "1117", "inbox", now));
 });
+Deno.test("maps NS v2 voicemail-from-* caller fields", async () => {
+  const { normalizeVoicemail } = await import("./voicemail.ts");
+  const v = normalizeVoicemail({ filename: "vm-1.wav", "voicemail-from-name": "Olivier", "voicemail-from-user": "1117", "voicemail-from-caller-id-number": "15147071203" }, "new", "2026-01-01T00:00:00Z")!;
+  if (v.from_number !== "15147071203" || v.from_name !== "Olivier") throw new Error("caller not mapped");
+});

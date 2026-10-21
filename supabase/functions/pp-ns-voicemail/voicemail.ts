@@ -16,8 +16,8 @@ export function normalizeVoicemail(v: Record<string, any>, folder: string, now: 
   const isRead = v.is_read ?? v.read;
   return {
     vm_id: id, ns_vm_id: id,
-    from_number: [v.FromUser, v.NmsAni, v.from_number, v.caller].find((value) => typeof value === "string" && value.trim())?.trim() ?? null,
-    from_name: [v.FromName, v.from_name, v.caller_name].find((value) => typeof value === "string" && value.trim())?.trim() ?? null,
+    from_number: [v["voicemail-from-caller-id-number"], v.NmsAni, v["voicemail-from-user"], v.FromUser, v.from_number, v.caller].find((value) => typeof value === "string" && value.trim())?.trim() ?? null,
+    from_name: [v["voicemail-from-name"], v.FromName, v.from_name, v.caller_name].find((value) => typeof value === "string" && value.trim())?.trim() ?? null,
     duration_seconds: Number.isFinite(duration) ? Math.max(0, Math.round(duration)) : null,
     folder: appFolder(folder),
     is_read: isRead === undefined ? appFolder(folder) !== "inbox" : isRead === true || isRead === 1 || isRead === "yes" || isRead === "true",

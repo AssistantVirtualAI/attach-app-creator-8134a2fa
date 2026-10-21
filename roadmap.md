@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Fix missing Planipret mobile voicemail lists: validate documented folders/fields, owner-scoped local persistence and paired screens; no native/routing edits or deployment without request.
+
 - [ ] Verify SMS/missed-call/voicemail screen alerts for all brokers: SMS mapper deployment reported in previous turn, actual delivery still unverified. Read-only global audit 2026-10-20: 84 profiles, 81 linked; all three preferences enabled; 45 profiles have iOS tokens, 7 Android, 31 linked profiles have no active mobile token. Android Google rejects the configured signature (fresh pp-push-notify log); credential replacement requires authorized valid Google configuration. No voicemail rows platform-wide. Last 24h: one inbound SMS and two inbound missed rows have no matching alert evidence. All four row-push triggers enabled; no pp-row-push logs. Shared HTTP-response 401s cannot be attributed to row-push from aggregates alone. Blockers: Android credential, missing device registrations, live event/device verification and voicemail ingestion/subscription evidence. No broadcast test sent; no code/configuration/native/credential changes or deployment in this audit.
 
 - [x] Prepare admin feedback reply alerts in portal/mobile: server-derived reporter, existing push + fixed email template, stable comment-ID keys; 14 server + 6 portal + 6 mobile tests pass, Deno check and preview build OK.

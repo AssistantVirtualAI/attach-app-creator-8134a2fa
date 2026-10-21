@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { canRegisterToken, normalizeDeviceId } from "./pp-active-device.ts";
+import { canRegisterToken, normalizeDeviceId, deviceClaimMustDefer } from "./pp-active-device.ts";
 
 Deno.test("no active device yet: legacy registration allowed", () => {
   assertEquals(canRegisterToken(null, null), true);
@@ -14,5 +14,18 @@ Deno.test("active device B may register", () => {
 Deno.test("device id validation", () => {
   assertEquals(normalizeDeviceId("short"), null);
   assertEquals(normalizeDeviceId("abc'; drop--0000000"), null);
+  assertEquals(normalizeDeviceId("a".repeat(15)), null);
+  assertEquals(normalizeDeviceId("a".repeat(16)), "a".repeat(16));
+  assertEquals(normalizeDeviceId("a".repeat(128)), "a".repeat(128));
+  assertEquals(normalizeDeviceId("a".repeat(129)), null);
+  assertEquals(normalizeDeviceId(null), null);
   assertEquals(normalizeDeviceId("a1b2c3d4e5f6a7b8c9"), "a1b2c3d4e5f6a7b8c9");
+});
+
+Deno.test("device claim defers only for ringing and active calls", () => {
+  assertEquals(deviceClaimMustDefer("ringing"), true);
+  assertEquals(deviceClaimMustDefer("active"), true);
+  for (const state of ["ended", null, undefined, "unknown"]) {
+    assertEquals(deviceClaimMustDefer(state), false);
+  }
 });

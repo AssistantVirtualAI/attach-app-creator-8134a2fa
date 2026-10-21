@@ -3,6 +3,14 @@
 
 export const DEVICE_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
+export const ACTIVE_CALL_SESSION_STATES = ["ringing", "active"] as const;
+
+export function deviceClaimMustDefer(callState: unknown): boolean {
+  return ACTIVE_CALL_SESSION_STATES.includes(
+    String(callState) as (typeof ACTIVE_CALL_SESSION_STATES)[number],
+  );
+}
+
 export function normalizeDeviceId(v: unknown): string | null {
   const s = typeof v === "string" ? v.trim() : "";
   return DEVICE_ID_RE.test(s) ? s : null;

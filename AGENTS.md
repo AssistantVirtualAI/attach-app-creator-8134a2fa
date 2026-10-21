@@ -24,4 +24,4 @@
 - Call handoff is JWT-owned or Maestro-machine-key mapped server-side to one broker extension, targets only canonical <ext>x / <ext>M after registration verification, transfers only the remote leg and never hangs up the source (NS owns answer/rollback semantics); Maestro call events remain allowlisted, non-blocking and disabled unless PP_WIDGET_CALL_EVENTS=1.
 - Feedback reply alerts derive the reporter from the saved admin-authored comment server-side; reuse push and a fixed email template with comment-ID keys, never browser recipients.
 - Planipret mobile: one active device per broker (pp-mobile-device-claim); other devices' tokens get revoked_at (never deleted), all token readers filter it, sign-out waits for live calls.
-- Voicemail mapping is mirrored, profile-owned and non-destructive; names reuse the account-isolated speaker directory, never a global caller cache.
+- Voicemail: mirrored, profile-owned reads; verify audio filename membership, fetch fresh URLs, discard stale responses; preserve caller identity and use account-isolated names.

@@ -18555,6 +18555,14 @@ export type Database = {
         Args: { _answered_by: string; _call_id: string }
         Returns: boolean
       }
+      pp_claim_mobile_device: {
+        Args: { _device_id: string; _platform: string; _user_id: string }
+        Returns: {
+          active: boolean
+          deferred: boolean
+          replaced: boolean
+        }[]
+      }
       pp_norm_name: { Args: { t: string }; Returns: string }
       pp_run_billing_monthly: { Args: never; Returns: undefined }
       pp_run_commission_live_sync: { Args: never; Returns: undefined }

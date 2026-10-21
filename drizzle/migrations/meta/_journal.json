@@ -176,6 +176,13 @@
       "when": 1792531746297,
       "tag": "0024_single_mobile_device",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792544288621,
+      "tag": "0025_planipret_mobile_device_claim_active_call_guard",
+      "breakpoints": true
     }
   ]
 }

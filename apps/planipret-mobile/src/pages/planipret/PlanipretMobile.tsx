@@ -943,6 +943,18 @@ export default function PlanipretMobile() {
       setLoading(false);
       return;
     }
+    // Doit exister comme courtier actif dans NetSapiens (vérifié côté serveur).
+    try {
+      const { data: ns } = await supabase.functions.invoke("pp-ns-access-check", { body: {} });
+      if ((ns as { allowed?: boolean } | null)?.allowed === false) {
+        await supabase.auth.signOut();
+        toast.error("Votre compte n’est pas actif dans la téléphonie. Contactez votre administrateur.");
+        setProfile(null);
+        setAccessError("unauthenticated");
+        setLoading(false);
+        return;
+      }
+    } catch { /* réseau : les autres vérifications serveur restent en place */ }
     // Capture Microsoft 365 tokens once after Azure SSO redirect.
     try {
       const captured = sessionStorage.getItem("pp_ms_captured");

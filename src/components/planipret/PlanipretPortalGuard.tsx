@@ -11,6 +11,7 @@ const DENY_MESSAGES: Record<string, string> = {
   domain: "Ce compte Microsoft n'est pas un compte @planipret. Utilisez votre compte professionnel Planiprêt.",
   "wrong-portal": "Votre compte n'a pas accès à ce portail.",
   "no-did": "Accès réservé aux comptes ayant une extension et un numéro (DID) actifs.",
+  "ns-inactive": "Votre compte n’est pas actif dans la téléphonie. Contactez votre administrateur.",
 };
 
 /**

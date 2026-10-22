@@ -18,6 +18,7 @@ import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import { usePlanipretFavicon } from "@/hooks/usePlanipretFavicon";
 import PortalReturnButton from "@/components/planipret/PortalReturnButton";
+import PortalAvaLauncher from "@/components/planipret/portal/PortalAvaLauncher";
 
 export type BrokerCtx = { userId: string; authUserId: string; profile: any; softphone?: ReturnType<typeof useMplanipretSoftphone> };
 
@@ -267,6 +268,7 @@ export default function PlanipretBrokerLayout() {
         <main className="pa-main flex-1 min-w-0 p-4 md:p-7" style={{ overflowX: "clip", overflowY: "visible" }}>
           <Outlet context={{ userId, authUserId, profile, softphone } satisfies BrokerCtx} />
         </main>
+        <PortalAvaLauncher authUserId={authUserId || null} />
       </div>
 
       {/* Écran d'appel actif : entrant (sonnerie WebRTC) et sortant. */}

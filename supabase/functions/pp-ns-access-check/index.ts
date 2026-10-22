@@ -21,6 +21,27 @@ Deno.serve(async (req) => {
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const { data: sup } = await admin.rpc("is_super_admin", { _user_id: u.user.id });
+    const body = await req.json().catch(() => ({}));
+    if (body?.action === "audit" && sup === true) {
+      // Super-admin dry run: decision per linked broker, no names or numbers returned.
+      const { data: rows } = await admin.from("planipret_profiles")
+        .select("extension, ns_extension, ns_domain, user_id").not("user_id", "is", null);
+      const out: Array<{ extension: string; allowed: boolean; reason: string }> = [];
+      for (const r of rows ?? []) {
+        const e = String((r as any).ns_extension || (r as any).extension || "").trim();
+        const { data: s2 } = await admin.rpc("is_super_admin", { _user_id: (r as any).user_id });
+        let st: number | null = null; let nu: Record<string, unknown> | null = null;
+        if (s2 !== true && e) {
+          try {
+            const rr = await nsFetch(`/domains/${encodeURIComponent((r as any).ns_domain || "planipret.ca")}/users/${encodeURIComponent(e)}`, {}, { functionName: "pp-ns-access-check" });
+            st = rr.status; const b = await rr.json().catch(() => null); nu = Array.isArray(b) ? (b[0] ?? null) : b;
+          } catch { st = null; }
+        }
+        const d = decideNsAccess({ isSuperAdmin: s2 === true, extension: e, nsStatus: st, nsUser: nu });
+        out.push({ extension: e || "(none)", allowed: d.allowed, reason: d.reason });
+      }
+      return json({ total: out.length, denied: out.filter((o) => !o.allowed), counts: out.reduce((a: Record<string, number>, o) => { a[o.reason] = (a[o.reason] ?? 0) + 1; return a; }, {}) });
+    }
     const { data: p } = await admin.from("planipret_profiles")
       .select("extension, ns_extension, ns_domain").eq("user_id", u.user.id).maybeSingle();
     const ext = String((p as any)?.ns_extension || (p as any)?.extension || "").trim();

@@ -16,14 +16,21 @@ export function useSingleMobileDevice(userId: string | null | undefined, callSta
     let cancelled = false;
     const me = getMobileDeviceId();
     let channel: ReturnType<typeof supabase.channel> | null = null;
-    const verify = async () => { if (!(await checkThisDevice()) && !cancelled) setReplaced(true); };
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const isClaimed = () => { try { return localStorage.getItem(CLAIMED_KEY) === userId; } catch { return false; } };
+    const verify = async () => { if (!isClaimed()) return; if (!(await checkThisDevice()) && !cancelled) setReplaced(true); };
     void (async () => {
       if (!(await isNativeMobile()) || cancelled) return;
       let claimed: string | null = null;
       try { claimed = localStorage.getItem(CLAIMED_KEY); } catch { /* noop */ }
       if (claimed !== userId) {
-        await claimThisDevice();
-        try { localStorage.setItem(CLAIMED_KEY, userId); } catch { /* noop */ }
+        // Retry while a live call defers the switch; only a confirmed claim is remembered.
+        for (let attempt = 0; attempt < 40 && !cancelled; attempt++) {
+          const r = await claimThisDevice();
+          if (r.active) { try { localStorage.setItem(CLAIMED_KEY, userId); } catch { /* noop */ } break; }
+          await new Promise((res) => { retryTimer = setTimeout(res, r.retryAfterMs); });
+        }
+        try { if (localStorage.getItem(CLAIMED_KEY) !== userId) return; } catch { return; }
       } else {
         await verify();
       }
@@ -37,8 +44,14 @@ export function useSingleMobileDevice(userId: string | null | undefined, callSta
     })();
     const onVis = () => { if (document.visibilityState === "visible") void verify(); };
     document.addEventListener("visibilitychange", onVis);
+    // A normal sign-out forgets the claim so the next sign-in on this phone claims again.
+    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") { try { localStorage.removeItem(CLAIMED_KEY); } catch { /* noop */ } }
+    });
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      authSub.subscription.unsubscribe();
       document.removeEventListener("visibilitychange", onVis);
       if (channel) void supabase.removeChannel(channel);
     };

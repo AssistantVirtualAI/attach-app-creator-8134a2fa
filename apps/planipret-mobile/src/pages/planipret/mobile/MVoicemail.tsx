@@ -127,7 +127,7 @@ export default function MVoicemail() {
     await supabase.from("planipret_voicemails").update({ is_read: true }).eq("id", vm.id);
     if (vm.ns_vm_id) {
       supabase.functions.invoke("pp-ns-voicemail", {
-        body: { action: "mark-read", vm_id: vm.ns_vm_id },
+        body: { action: "mark-read", vm_id: vm.ns_vm_id, from_folder: vm.folder ?? "inbox" },
       }).catch(() => null);
     }
   };
@@ -136,7 +136,7 @@ export default function MVoicemail() {
     if (!confirm(t("voicemail.deleteConfirm"))) return;
     if (vm.ns_vm_id) {
       await supabase.functions.invoke("pp-ns-voicemail", {
-        body: { action: "delete", vm_id: vm.ns_vm_id },
+        body: { action: "delete", vm_id: vm.ns_vm_id, from_folder: vm.folder ?? "inbox" },
       }).catch(() => null);
     }
     await supabase.from("planipret_voicemails").delete().eq("id", vm.id);
@@ -147,7 +147,7 @@ export default function MVoicemail() {
   const saveVm = async (vm: VM) => {
     if (vm.ns_vm_id) {
       await supabase.functions.invoke("pp-ns-voicemail", {
-        body: { action: "move", vm_id: vm.ns_vm_id, folder: "saved" },
+        body: { action: "move", vm_id: vm.ns_vm_id, from_folder: vm.folder ?? "inbox", folder: "saved" },
       }).catch(() => null);
     }
     await supabase.from("planipret_voicemails").update({ folder: "saved" }).eq("id", vm.id);
@@ -603,7 +603,7 @@ function ForwardModal({ vm, onClose }: { vm: VM; onClose: () => void }) {
   const submit = async () => {
     if (!ext.trim()) return;
     setBusy(true);
-    const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "forward", vm_id: vm.ns_vm_id ?? vm.id, to_user: ext.trim() } });
+    const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "forward", vm_id: vm.ns_vm_id ?? vm.id, from_folder: vm.folder ?? "inbox", to_user: ext.trim() } });
     setBusy(false);
     if (error || (data as any)?.success === false) { toast.error(t("voicemail.forwardFailed")); return; }
     toast.success(t("voicemail.forwarded"));

@@ -1,3 +1,4 @@
+import { providerFolder } from "./voicemail.ts";
 // pp-ns-voicemail — Proxy NS-API v2 Voicemails pour Planiprêt.
 // AVA Planiprêt uniquement. Segmentation stricte par extension utilisateur.
 //
@@ -38,6 +39,8 @@ Deno.serve(async (req) => {
 
   // Base path NS-API segmenté par extension utilisateur
   const userBase = `/domains/${encodeURIComponent(ctx.nsDomain)}/users/${encodeURIComponent(ctx.extension)}`;
+  // Mutations target the same documented NS v2 folder the list reads (new/save/trash).
+  const srcFolder = providerFolder(String(body?.from_folder ?? body?.source_folder ?? "inbox")) ?? "new";
 
   try {
     // ── liste des voicemails ─────────────────────────────────────────────────
@@ -91,7 +94,7 @@ Deno.serve(async (req) => {
       if (!vmId) return jsonResponse({ error: "vm_id requis" }, 400);
 
       const res = await nsFetch(
-        `${userBase}/voicemails/inbox/${encodeURIComponent(vmId)}`,
+        `${userBase}/voicemails/${srcFolder}/${encodeURIComponent(vmId)}`,
         { method: "PATCH", body: JSON.stringify({ is_read: true }) }
       );
 
@@ -116,7 +119,7 @@ Deno.serve(async (req) => {
       if (!VALID_FOLDERS.has(folder)) return jsonResponse({ error: "Dossier invalide" }, 400);
 
       const res = await nsFetch(
-        `${userBase}/voicemails/inbox/${encodeURIComponent(vm_id)}/move`,
+        `${userBase}/voicemails/${srcFolder}/${encodeURIComponent(vm_id)}/move`,
         { method: "PATCH", body: JSON.stringify({ folder }) }
       );
 
@@ -140,7 +143,7 @@ Deno.serve(async (req) => {
       if (!vmId) return jsonResponse({ error: "vm_id requis" }, 400);
 
       const res = await nsFetch(
-        `${userBase}/voicemails/inbox/${encodeURIComponent(vmId)}`,
+        `${userBase}/voicemails/${srcFolder}/${encodeURIComponent(vmId)}`,
         { method: "DELETE" }
       );
 
@@ -164,7 +167,7 @@ Deno.serve(async (req) => {
       const { vm_id, to_user } = body ?? {};
       if (!vm_id || !to_user) return jsonResponse({ error: "vm_id et to_user requis" }, 400);
       const res = await nsFetch(
-        `${userBase}/voicemails/inbox/${encodeURIComponent(vm_id)}/forward`,
+        `${userBase}/voicemails/${srcFolder}/${encodeURIComponent(vm_id)}/forward`,
         { method: "POST", body: JSON.stringify({ to_user }) }
       );
       if (!res.ok) {

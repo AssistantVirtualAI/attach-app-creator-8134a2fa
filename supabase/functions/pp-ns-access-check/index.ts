@@ -22,7 +22,8 @@ Deno.serve(async (req) => {
 
     const { data: sup } = await admin.rpc("is_super_admin", { _user_id: u.user.id });
     const body = await req.json().catch(() => ({}));
-    if (body?.action === "audit" && sup === true) {
+    const { data: ppAdmin } = await admin.rpc("is_planipret_admin", { _user_id: u.user.id });
+    if (body?.action === "audit" && (sup === true || ppAdmin === true)) {
       // Super-admin dry run: decision per linked broker, no names or numbers returned.
       const { data: rows } = await admin.from("planipret_profiles")
         .select("extension, ns_extension, ns_domain, user_id").not("user_id", "is", null);

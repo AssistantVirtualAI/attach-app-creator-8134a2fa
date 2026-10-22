@@ -13072,6 +13072,7 @@ export type Database = {
           onboarding_step: number
           organization_id: string
           phone: string | null
+          portal_ava_enabled: boolean
           privacy_accepted_at: string | null
           privacy_version: string | null
           recording_consent: boolean
@@ -13185,6 +13186,7 @@ export type Database = {
           onboarding_step?: number
           organization_id?: string
           phone?: string | null
+          portal_ava_enabled?: boolean
           privacy_accepted_at?: string | null
           privacy_version?: string | null
           recording_consent?: boolean
@@ -13298,6 +13300,7 @@ export type Database = {
           onboarding_step?: number
           organization_id?: string
           phone?: string | null
+          portal_ava_enabled?: boolean
           privacy_accepted_at?: string | null
           privacy_version?: string | null
           recording_consent?: boolean

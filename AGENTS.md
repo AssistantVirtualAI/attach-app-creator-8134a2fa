@@ -25,3 +25,4 @@
 - Feedback reply alerts derive the reporter from the saved admin-authored comment server-side; reuse push and a fixed email template with comment-ID keys, never browser recipients.
 - Planipret mobile: one active device per broker (pp-mobile-device-claim); other devices' tokens get revoked_at (never deleted), all token readers filter it, sign-out waits for live calls.
 - Voicemail: mirrored, profile-owned reads; verify audio filename membership, fetch fresh URLs, discard stale responses; preserve caller identity and use account-isolated names.
+- Portal AVA reuses the mobile MAvaChat (same tools/endpoints) via PortalAvaLauncher, shown only when planipret_profiles.portal_ava_enabled is true; per-profile opt-in avoids exposing an untested portal surface to all brokers.

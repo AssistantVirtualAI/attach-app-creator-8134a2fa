@@ -1,0 +1,1 @@
+GRANT SELECT (portal_ava_enabled) ON public.planipret_profiles TO authenticated;

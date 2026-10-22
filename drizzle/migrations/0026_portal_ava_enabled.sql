@@ -1,0 +1,2 @@
+ALTER TABLE public.planipret_profiles ADD COLUMN IF NOT EXISTS portal_ava_enabled boolean NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.planipret_profiles.portal_ava_enabled IS 'Shows the app AVA chat/voice launcher inside the web portals for this profile.';

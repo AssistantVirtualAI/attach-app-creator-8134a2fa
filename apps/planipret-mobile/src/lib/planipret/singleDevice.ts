@@ -33,12 +33,21 @@ export async function isNativeMobile(): Promise<boolean> {
   return (await platform()) !== null;
 }
 
-export async function claimThisDevice(): Promise<void> {
+export type ClaimResult = { active: boolean; deferred: boolean; retryAfterMs: number };
+
+/** Server decides; deferred = a live call blocks the switch, caller must retry. */
+export async function claimThisDevice(): Promise<ClaimResult> {
   const p = await platform();
-  if (!p) return;
-  await supabase.functions.invoke("pp-mobile-device-claim", {
-    body: { action: "claim", device_id: getMobileDeviceId(), platform: p },
-  }).catch(() => undefined);
+  if (!p) return { active: true, deferred: false, retryAfterMs: 0 };
+  try {
+    const { data, error } = await supabase.functions.invoke("pp-mobile-device-claim", {
+      body: { action: "claim", device_id: getMobileDeviceId(), platform: p },
+    });
+    if (error || !data) return { active: false, deferred: true, retryAfterMs: 15_000 };
+    const d = data as { active?: boolean; deferred?: boolean; retry_after_seconds?: number };
+    if (d.active === true) return { active: true, deferred: false, retryAfterMs: 0 };
+    return { active: false, deferred: true, retryAfterMs: Math.max(5, Math.min(60, Number(d.retry_after_seconds) || 10)) * 1000 };
+  } catch { return { active: false, deferred: true, retryAfterMs: 15_000 }; }
 }
 
 /** true = still active (or unknown: never sign out on network errors). */

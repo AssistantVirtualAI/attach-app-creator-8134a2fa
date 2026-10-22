@@ -73,3 +73,7 @@
 - [x] Karl 1142 : 450 540-5253 assigné (appels/textos/numéro affiché relus), 438 953-5017 libéré; fiches locales resynchronisées; widget poussé pour tous.
 
 - [ ] Megan 1117 et Pierre 1197 ont deux numéros dans NetSapiens; le widget affiche le 438 tant que l’ancien n’est pas libéré — attente accord. Widget refuse Marc 1136 et Camille 1137 (erreur 500 côté Maestro).
+
+- [x] Megan 1117 keeps 514 880-1737, Pierre 1197 keeps 438 842-5105; other 438 numbers released, widget sync queued.
+- [x] NetSapiens-active gate for portal + mobile (pp-ns-access-check); audit 81/81 allowed. Installed app needs new release for its own check.
+- [ ] Android push: new Firebase service-account key required from user.

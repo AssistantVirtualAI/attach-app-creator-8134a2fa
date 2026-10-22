@@ -569,6 +569,23 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, kept: keep.length, released, deleted, failed });
     }
 
+    // Permanently delete ONE number from NetSapiens. Refused while it still routes to an extension.
+    if (action === "delete_number") {
+      const d0 = String(payload?.phone_number ?? "").replace(/\D/g, "");
+      const pn = d0.length === 10 ? `1${d0}` : d0;
+      if (!/^1\d{10}$/.test(pn)) return jsonResponse({ success: false, error: "phone_number invalide" }, 400);
+      const db = supaAdmin();
+      const cur = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${pn}`);
+      const row = Array.isArray(cur.data) ? cur.data[0] : cur.data;
+      const dest = String(row?.["dial-rule-translation-destination-user"] ?? "").trim();
+      if (cur.ok && dest && dest !== "[*]" && /^\d+[A-Za-z]?$/.test(dest)) return jsonResponse({ success: false, error: `Numéro encore assigné au poste ${dest}; libérez-le d'abord` }, 409);
+      const del = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${pn}`, { method: "DELETE" });
+      const ok = del.ok || del.status === 404;
+      if (ok) await db.from("planipret_did_assignments").delete().eq("phone_number_digits", pn);
+      await db.from("planipret_did_release_audit").insert({ domain, phone_number: pn, phone_number_e164: `+${pn}`, previous_extension: null, reason: "deleted_by_admin", dry_run: false, success: ok, write_status: del.status, triggered_by: (auth as any).profile?.user_id ?? null, source: "admin_delete" });
+      return jsonResponse({ success: ok, phone_number: pn, status: del.status });
+    }
+
     if (action === "unassign") {
       const { phone_number } = payload ?? {};
       if (!phone_number) return jsonResponse({ success: false, error: "phone_number requis" }, 400);

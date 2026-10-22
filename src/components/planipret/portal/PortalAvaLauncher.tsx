@@ -17,9 +17,12 @@ export default function PortalAvaLauncher({ authUserId }: { authUserId?: string 
   useEffect(() => {
     let cancelled = false;
     setAllowed(false);
-    if (!authUserId) return;
-    supabase.from("planipret_profiles").select("portal_ava_enabled").eq("user_id", authUserId).maybeSingle()
-      .then(({ data }) => { if (!cancelled) setAllowed(isPortalAvaAllowed(data as any)); });
+    (async () => {
+      const uid = authUserId || (await supabase.auth.getUser()).data.user?.id;
+      if (!uid || cancelled) return;
+      const { data } = await supabase.from("planipret_profiles").select("portal_ava_enabled").eq("user_id", uid).maybeSingle();
+      if (!cancelled) setAllowed(isPortalAvaAllowed(data as any));
+    })();
     return () => { cancelled = true; };
   }, [authUserId]);
 

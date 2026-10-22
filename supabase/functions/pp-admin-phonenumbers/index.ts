@@ -578,7 +578,7 @@ Deno.serve(async (req) => {
       const cur = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${pn}`);
       const row = Array.isArray(cur.data) ? cur.data[0] : cur.data;
       const dest = String(row?.["dial-rule-translation-destination-user"] ?? "").trim();
-      if (cur.ok && dest) return jsonResponse({ success: false, error: `Numéro encore assigné au poste ${dest}; libérez-le d'abord` }, 409);
+      if (cur.ok && dest && dest !== "[*]" && /^\d+[A-Za-z]?$/.test(dest)) return jsonResponse({ success: false, error: `Numéro encore assigné au poste ${dest}; libérez-le d'abord` }, 409);
       const del = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${pn}`, { method: "DELETE" });
       const ok = del.ok || del.status === 404;
       if (ok) await db.from("planipret_did_assignments").delete().eq("phone_number_digits", pn);

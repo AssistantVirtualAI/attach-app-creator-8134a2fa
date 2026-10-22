@@ -99,7 +99,7 @@ export async function resolvePortalAccess(): Promise<PortalAccess> {
     // Must exist as an active broker in NetSapiens (server-verified).
     try {
       const { data } = await supabase.functions.invoke("pp-ns-access-check", { body: {} });
-      if ((data as { allowed?: boolean } | null)?.allowed === false) return { state: "denied", reason: "ns-inactive" as any };
+      if ((data as { allowed?: boolean } | null)?.allowed === false) return { state: "denied", reason: "ns-inactive" };
     } catch { /* ignore: server-side gates remain */ }
   }
 

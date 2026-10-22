@@ -190,6 +190,13 @@
       "when": 1792709350927,
       "tag": "0026_portal_ava_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792709389397,
+      "tag": "0027_grant_portal_ava_enabled",
+      "breakpoints": true
     }
   ]
 }

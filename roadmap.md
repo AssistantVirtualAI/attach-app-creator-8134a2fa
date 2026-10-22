@@ -67,3 +67,9 @@
 - [x] SMS threads: read/unread, mark-all-read, device-local delete (hide)
 
 - [x] Claude tokens step 1: tracking deployed (41 AI functions, 2026-10-18); steps 2-4 (cache answers, trim prompts, Haiku test) wait on 3-7 days of measurements
+
+- [x] AVA chat/voix dans le portail admin et courtier pour Marc-Alexandre seulement (portal_ava_enabled).
+
+- [x] Karl 1142 : 450 540-5253 assigné (appels/textos/numéro affiché relus), 438 953-5017 libéré; fiches locales resynchronisées; widget poussé pour tous.
+
+- [ ] Megan 1117 et Pierre 1197 ont deux numéros dans NetSapiens; le widget affiche le 438 tant que l’ancien n’est pas libéré — attente accord. Widget refuse Marc 1136 et Camille 1137 (erreur 500 côté Maestro).

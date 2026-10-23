@@ -1,0 +1,200 @@
+# Planiprêt Mobile — builds CI/CD via Codemagic (artifacts uniquement).
+#
+# Règles permanentes :
+# - Aucun workflow n'envoie quoi que ce soit à l'App Store ou à Google Play.
+#   Le workflow « Upload mobile build to store processing » sera ajouté plus
+#   tard, séparément, manuel, sans soumission review ni rollout production.
+# - Déclenchement uniquement via la fonction serveur pp-mobile-build
+#   (bouton « Préparer une build mobile » du portail admin). Jamais sur push.
+# - Les identités de signature vivent dans Codemagic (groupes chiffrés),
+#   jamais dans Git, les logs ou le chat.
+# - Toute build s'arrête AVANT de produire un fichier si un gate échoue.
+
+workflows:
+  planipret-ios-artifact:
+    name: Planiprêt iOS — artifact signé (IPA)
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.planipret.mobile
+      groups:
+        - app_store_connect      # APP_STORE_CONNECT_KEY_ID / ISSUER_ID / PRIVATE_KEY (.p8)
+        - planipret_ios_signing  # certificat Apple Distribution + profil App Store existants
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events: []                 # jamais sur push — API serveur uniquement
+    scripts:
+      - name: Gates pré-build (versions, isolation Lemtel, secrets, tests, build web, parité)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          node scripts/release-gates.mjs --pre
+      - name: PJSIP iOS (bibliothèque SIP)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          bash scripts/ensure-pjsip-ios.sh
+      - name: Projet natif iOS (cap add/sync + config)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          if [ ! -d ios ]; then npx cap add ios; fi
+          PP_SKIP_AUTOSYNC=1 npx cap sync ios
+          node scripts/apply-native-config.mjs
+          node scripts/verify-ios-scene.mjs
+      - name: Signature iOS (keychain + profils)
+        script: |
+          set -e
+          keychain initialize
+          app-store-connect fetch-signing-files "com.planipret.mobile" \
+            --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Archive + export IPA
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          xcode-project build-ipa \
+            --workspace ios/App/App.xcworkspace \
+            --scheme App \
+            --ipa-directory ios/build
+      - name: Gates post-build iOS (SIP bundle, entitlements, signature, assets embarqués)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          node scripts/release-gates.mjs --post --ios
+    artifacts:
+      - apps/planipret-mobile/ios/build/*.ipa
+    publishing:
+      email:
+        recipients: []           # pas de diffusion automatique
+
+  planipret-android-artifact:
+    name: Planiprêt Android — artifact signé (AAB)
+    instance_type: linux_x2
+    max_build_duration: 90
+    environment:
+      groups:
+        - planipret_android_signing  # CM_KEYSTORE (base64), CM_KEYSTORE_PASSWORD, CM_KEY_ALIAS_PASSWORD (alias planipret)
+      vars:
+        CM_KEYSTORE_PATH: /tmp/planipret-upload.jks
+    triggering:
+      events: []
+    scripts:
+      - name: Gates pré-build (versions, isolation Lemtel, secrets, tests, build web, parité)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          node scripts/release-gates.mjs --pre
+      - name: Projet natif Android (cap add/sync + config)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          if [ ! -d android ]; then npx cap add android; fi
+          PP_SKIP_AUTOSYNC=1 npx cap sync android
+          node scripts/apply-native-config.mjs
+          node scripts/verify-android.mjs
+      - name: Keystore de release (depuis Codemagic, jamais depuis Git)
+        script: |
+          set -e
+          echo "$CM_KEYSTORE" | base64 --decode > "$CM_KEYSTORE_PATH"
+      - name: Bundle AAB signé
+        script: |
+          set -e
+          cd apps/planipret-mobile/android
+          ./gradlew :app:bundleRelease \
+            -Pandroid.injected.signing.store.file="$CM_KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password="$CM_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias=planipret \
+            -Pandroid.injected.signing.key.password="$CM_KEY_ALIAS_PASSWORD"
+      - name: Gates post-build Android (signature, targetSdk, google-services, assets embarqués)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          node scripts/release-gates.mjs --post --android
+    artifacts:
+      - apps/planipret-mobile/android/app/build/outputs/bundle/release/*.aab
+    publishing:
+      email:
+        recipients: []
+
+  planipret-release-artifacts:
+    name: Planiprêt — les deux artifacts (même commit)
+    instance_type: mac_mini_m2
+    max_build_duration: 150
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.planipret.mobile
+      groups:
+        - app_store_connect
+        - planipret_ios_signing
+        - planipret_android_signing
+      vars:
+        CM_KEYSTORE_PATH: /tmp/planipret-upload.jks
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events: []
+    scripts:
+      - name: Gates pré-build (une seule fois pour les deux plateformes)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          node scripts/release-gates.mjs --pre
+      - name: PJSIP iOS
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          bash scripts/ensure-pjsip-ios.sh
+      - name: Projets natifs iOS + Android
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          if [ ! -d ios ]; then npx cap add ios; fi
+          if [ ! -d android ]; then npx cap add android; fi
+          PP_SKIP_AUTOSYNC=1 npx cap sync ios
+          PP_SKIP_AUTOSYNC=1 npx cap sync android
+          node scripts/apply-native-config.mjs
+          node scripts/verify-ios-scene.mjs
+          node scripts/verify-android.mjs
+      - name: Signature iOS
+        script: |
+          set -e
+          keychain initialize
+          app-store-connect fetch-signing-files "com.planipret.mobile" \
+            --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Archive + export IPA
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          xcode-project build-ipa \
+            --workspace ios/App/App.xcworkspace \
+            --scheme App \
+            --ipa-directory ios/build
+      - name: Keystore Android + bundle AAB signé
+        script: |
+          set -e
+          echo "$CM_KEYSTORE" | base64 --decode > "$CM_KEYSTORE_PATH"
+          cd apps/planipret-mobile/android
+          ./gradlew :app:bundleRelease \
+            -Pandroid.injected.signing.store.file="$CM_KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password="$CM_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias=planipret \
+            -Pandroid.injected.signing.key.password="$CM_KEY_ALIAS_PASSWORD"
+      - name: Gates post-build (iOS + Android)
+        script: |
+          set -e
+          cd apps/planipret-mobile
+          node scripts/release-gates.mjs --post --ios --android
+    artifacts:
+      - apps/planipret-mobile/ios/build/*.ipa
+      - apps/planipret-mobile/android/app/build/outputs/bundle/release/*.aab
+    publishing:
+      email:
+        recipients: []

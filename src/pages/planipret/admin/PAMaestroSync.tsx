@@ -4,6 +4,7 @@ import { RefreshCw, CheckCircle2, XCircle, AlertTriangle, Activity, Server, Radi
 import PAMaestroStatus from "./PAMaestroStatus";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
+import { isMaestroSyncSuccessful } from "@/lib/planipret/maestroSyncOutcome";
 
 const ACCENT = "#2E9BDC";
 const SUCCESS = "#00D4AA";
@@ -320,7 +321,7 @@ export default function PAMaestroSync() {
       const k = r.action ?? "unknown";
       const b = m[k] ?? { total: 0, failed: 0 };
       b.total += 1;
-      if (!r.success) b.failed += 1;
+      if (!isMaestroSyncSuccessful(r)) b.failed += 1;
       m[k] = b;
     }
     return Object.entries(m).sort((a, b) => b[1].total - a[1].total);
@@ -638,7 +639,7 @@ export default function PAMaestroSync() {
                       {r.duration_ms ?? "—"}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
-                      <Pill ok={!!r.success} label={r.success ? t.ok : t.fail} />
+                      <Pill ok={isMaestroSyncSuccessful(r)} label={isMaestroSyncSuccessful(r) ? t.ok : t.fail} />
                     </td>
                   </tr>
                   {expanded === r.id && (

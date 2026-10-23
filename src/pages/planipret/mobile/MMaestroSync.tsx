@@ -8,6 +8,7 @@ import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Loader2, RotateCcw, Chevro
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { isMaestroSyncSuccessful } from "@/lib/planipret/maestroSyncOutcome";
 
 type LogRow = {
   id: string;
@@ -28,7 +29,7 @@ function matchesFilter(row: LogRow, filter: string) {
     case "recording": return /record/.test(a);
     case "summary": return /summary|coach|analys|resume/.test(a);
     case "sms": return /sms|message|texto/.test(a);
-    case "failed": return row.success === false;
+    case "failed": return !isMaestroSyncSuccessful(row);
     default: return true;
   }
 }
@@ -126,7 +127,7 @@ export default function MMaestroSync() {
 
         <ul className="space-y-2">
           {visible.map((r) => {
-            const ok = r.success === true;
+            const ok = isMaestroSyncSuccessful(r);
             const expanded = open === r.id;
             return (
               <li key={r.id} className="rounded-xl p-3" style={{ background: "#0A1628", border: "1px solid #0E2A45" }}>

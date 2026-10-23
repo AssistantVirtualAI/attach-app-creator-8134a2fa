@@ -240,7 +240,8 @@ export default function MAvaChat() {
     setRunningSuggestion(suggestion.id);
     try {
       if (suggestion.kind === "call") {
-        const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
+        const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.message;
+        const number = normalizeAvaSmsRecipient(suggestion.payload, lastUserText).number;
         if (!number) throw new Error(t("avaChat.callMissingNumber"));
         // Un seul propriétaire de l'appel : le dialer/softphone mobile.
         if (typeof outlet?.openDialer === "function") outlet.openDialer(number, true);
@@ -271,10 +272,11 @@ export default function MAvaChat() {
       }
 
       if (suggestion.kind === "sms") {
-        const recipient = normalizeAvaSmsRecipient(suggestion.payload);
+        const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.message;
+        const recipient = normalizeAvaSmsRecipient(suggestion.payload, lastUserText);
         const number = recipient.number;
         const body = recipient.message;
-        if (!number && !recipient.contactName) throw new Error(t("avaChat.callMissingNumber"));
+        if (!number && !recipient.contactName) throw new Error(t("avaChat.smsMissingNumber"));
         if (!body) throw new Error(t("avaChat.smsRefused"));
         const { data, error } = await supabase.functions.invoke("ava-tool-executor", {
           body: {
@@ -423,14 +425,14 @@ export default function MAvaChat() {
 
   if (!aiConsent) {
     return (
-      <div className="relative" style={{ height: "calc(100dvh - 242px)", minHeight: 400, background: "var(--pp-bg-base)" }}>
+      <div className="relative" style={{ height: "var(--pp-ava-h, calc(100dvh - 242px))", minHeight: 400, background: "var(--pp-bg-base)" }}>
         <AiConsentGate onAccept={() => setAiConsentState(true)} />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100dvh - 242px)", minHeight: 400, background: "var(--pp-bg-base)" }}>
+    <div className="flex flex-col" style={{ height: "var(--pp-ava-h, calc(100dvh - 242px))", minHeight: 400, background: "var(--pp-bg-base)" }}>
       <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
         <Sheet>
           <SheetTrigger asChild>

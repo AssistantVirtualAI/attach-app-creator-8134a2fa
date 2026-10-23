@@ -1,4 +1,6 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
+import { resolveCallerClient } from "@/lib/planipret/callerClient";
+import { formatPhoneDisplay } from "@/lib/planipret/ovPeer";
 import { Link } from "react-router-dom";
 import { MessageSquare, Phone, Sparkles, Users } from "lucide-react";
 import { OvCard, OvEmpty } from "./OvCard";
@@ -21,6 +23,41 @@ function StatusBadge({ call, lang }: { call: any; lang: "fr" | "en" }) {
   );
 }
 
+/** Resolves the broker's own Maestro client names for a list of numbers (scoped, cached). */
+function useClientNames(numbers: (string | null | undefined)[]) {
+  const key = Array.from(new Set(numbers.map((n) => String(n ?? "").replace(/\D/g, "").slice(-10)).filter((n) => n.length === 10))).join(",");
+  const [names, setNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let off = false;
+    const list = key ? key.split(",") : [];
+    Promise.all(list.map(async (n) => [n, (await resolveCallerClient(n)).name] as const)).then((r) => {
+      if (!off) setNames(Object.fromEntries(r.filter(([, v]) => !!v) as [string, string][]));
+    });
+    return () => { off = true; };
+  }, [key]);
+  return (n: unknown) => names[String(n ?? "").replace(/\D/g, "").slice(-10)] ?? null;
+}
+
+function PeerCell({ contact, client, number }: { contact: string | null; client: string | null; number: string | null }) {
+  const phone = formatPhoneDisplay(number);
+  const primary = contact || client || phone || "—";
+  const secondary = [client && client !== primary ? client : null, phone && phone !== primary ? phone : null].filter(Boolean).join(" · ");
+  return (
+    <div className="min-w-0">
+      <div className="truncate" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{primary}</div>
+      {secondary && <div className="truncate" style={{ fontSize: 11, color: "var(--pp-text-muted)", fontWeight: 400 }}>{secondary}</div>}
+    </div>
+  );
+}
+
+const callNumber = (c: any) => (c?.direction === "inbound" ? c?.from_number : c?.to_number) ?? null;
+const callContact = (c: any) => {
+  const n = c?.direction === "inbound" ? c?.from_name : c?.to_name;
+  const s = String(n ?? "").trim();
+  return s && /[a-zA-ZÀ-ÿ]/.test(s) ? s : null;
+};
+const msgNumber = (m: any) => (m?.direction === "inbound" ? m?.from_number : m?.to_number) ?? null;
+
 export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows: any[]; lang: "fr" | "en" }) {
   const { maxDur, avgDur } = useMemo(() => {
     const durs = rows.map((r) => Number(r.duration_seconds ?? 0));
@@ -32,6 +69,7 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
   }, [rows]);
 
   const quiet = useOv3dQuiet([rows.length, (rows[0] as any)?.id ?? null]);
+  const clientOf = useClientNames(rows.map(callNumber));
 
   return (
     <OvCard
@@ -62,8 +100,8 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
                 return (
                   <Row3D key={c.id} accent={accent}>
                     <td className="whitespace-nowrap">{fmtDateTime(c.created_at, lang)}</td>
-                    <td className="whitespace-nowrap" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
-                      {callPeer(c)}
+                    <td style={{ maxWidth: 220 }}>
+                      <PeerCell contact={callContact(c)} client={clientOf(callNumber(c))} number={callNumber(c) ?? callPeer(c)} />
                     </td>
                     <td className="whitespace-nowrap" style={{ minWidth: 116 }}>
                       <div className="flex items-center gap-1.5">
@@ -101,6 +139,7 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
 
 export const OvRecentMessages = memo(function OvRecentMessages({ rows, lang }: { rows: any[]; lang: "fr" | "en" }) {
   const quiet = useOv3dQuiet([rows.length, (rows[0] as any)?.id ?? null]);
+  const clientOf = useClientNames(rows.map(msgNumber));
 
   return (
     <OvCard
@@ -118,7 +157,7 @@ export const OvRecentMessages = memo(function OvRecentMessages({ rows, lang }: {
               <Link key={m.id} to="/planipret/broker/messages" className="block">
                 <div className="ov3d-tile" style={{ ["--ov3d-accent" as any]: accent }}>
                   <div className="flex items-center justify-between gap-2">
-                    <div style={{ fontSize: 12, color: "var(--pp-text-primary)", fontWeight: 600 }}>{m.peer}</div>
+                    <div style={{ fontSize: 12 }} className="min-w-0"><PeerCell contact={m.contact_name ?? null} client={clientOf(msgNumber(m))} number={msgNumber(m) ?? m.peer} /></div>
                     <Badge3D color={accent}>
                       {outbound ? (lang === "en" ? "Sent" : "Envoyé") : (lang === "en" ? "Received" : "Reçu")}
                     </Badge3D>

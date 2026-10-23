@@ -34,23 +34,34 @@ export default function PortalAvaLauncher({ authUserId }: { authUserId?: string 
         <button
           onClick={() => setOpen(true)}
           aria-label="Ouvrir AVA"
-          className="fixed bottom-6 right-6 z-[60] w-14 h-14 rounded-full shadow-lg bg-primary text-primary-foreground flex items-center justify-center hover:scale-105 transition"
+          title="AVA"
+          className="group fixed bottom-6 right-6 z-[60] w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-[0_8px_30px_hsl(var(--primary)/0.45)] ring-4 ring-primary/20 hover:ring-primary/40 hover:scale-105 transition-all"
         >
-          <img src={avaLogo.url} alt="" className="w-8 h-8 object-contain" />
+          <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping opacity-30 group-hover:opacity-0" />
+          <img src={avaLogo.url} alt="" className="relative w-9 h-9 object-contain" />
         </button>
       )}
       {open && (
-        <div className="fixed inset-y-0 right-0 z-[60] w-full sm:w-[440px] flex flex-col bg-background border-l border-border shadow-2xl">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-            <span className="text-sm font-semibold text-foreground">AVA</span>
-            <button onClick={() => setOpen(false)} aria-label="Fermer AVA" className="p-1 rounded hover:bg-muted text-foreground">
-              <X className="w-4 h-4" />
-            </button>
+        <>
+          <div className="fixed inset-0 z-[59] bg-background/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[60] inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:top-6 sm:w-[480px] flex flex-col overflow-hidden sm:rounded-2xl border border-border bg-card/95 backdrop-blur-xl shadow-2xl">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-gradient-to-r from-primary/15 to-transparent">
+              <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center">
+                <img src={avaLogo.url} alt="" className="w-6 h-6 object-contain" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-foreground leading-tight">AVA</div>
+                <div className="text-xs text-muted-foreground leading-tight">Assistante Planiprêt · Maestro connecté</div>
+              </div>
+              <button onClick={() => setOpen(false)} aria-label="Fermer AVA" className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div id="pp-mobile-frame" className="pp-portal-ava flex-1 min-h-0 flex flex-col overflow-hidden relative">
+              <MAvaChat />
+            </div>
           </div>
-          <div id="pp-mobile-frame" className="flex-1 min-h-0 overflow-y-auto relative">
-            <MAvaChat />
-          </div>
-        </div>
+        </>
       )}
     </>
   );

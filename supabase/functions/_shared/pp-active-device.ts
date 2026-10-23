@@ -16,10 +16,35 @@ export function normalizeDeviceId(v: unknown): string | null {
   return DEVICE_ID_RE.test(s) ? s : null;
 }
 
-/** A token may be stored only when no other device is the active one. */
-export function canRegisterToken(activeDeviceId: string | null, deviceId: string | null): boolean {
+/** A token may be stored only when no other device is the active one.
+ *  Exception: an installed app without device id (older release) may register
+ *  while the claimed active device has never stored a live token — otherwise the
+ *  broker's only working phone is locked out of calls, voicemail and alerts. */
+export function canRegisterToken(
+  activeDeviceId: string | null,
+  deviceId: string | null,
+  activeDeviceHasToken = true,
+): boolean {
   if (!activeDeviceId) return true; // no claim yet (older app versions): legacy behaviour
+  if (!deviceId && !activeDeviceHasToken) return true;
   return deviceId === activeDeviceId;
+}
+
+export async function activeDeviceHasLiveToken(admin: any, userId: string, activeDeviceId: string | null): Promise<boolean> {
+  if (!activeDeviceId) return false;
+  const { count } = await admin
+    .from("mobile_push_tokens")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("device_id", activeDeviceId)
+    .is("revoked_at", null);
+  return (count ?? 0) > 0;
+}
+
+export async function canUserRegisterToken(admin: any, userId: string, deviceId: string | null): Promise<boolean> {
+  const active = await readActiveDevice(admin, userId);
+  if (!active || deviceId) return canRegisterToken(active, deviceId);
+  return canRegisterToken(active, deviceId, await activeDeviceHasLiveToken(admin, userId, active));
 }
 
 export async function readActiveDevice(admin: any, userId: string): Promise<string | null> {

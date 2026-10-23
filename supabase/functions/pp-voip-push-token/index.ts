@@ -3,7 +3,7 @@
 // NetSapiens bridge can push VoIP notifications for incoming calls.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { canRegisterToken, normalizeDeviceId, readActiveDevice } from "../_shared/pp-active-device.ts";
+import { canUserRegisterToken, normalizeDeviceId } from "../_shared/pp-active-device.ts";
 
 const json = (body: unknown, status: number) => new Response(JSON.stringify(body), {
   status,
@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
 
   const admin = createClient(supabaseUrl, serviceKey);
   const deviceId = normalizeDeviceId(body?.device_id);
-  if (!canRegisterToken(await readActiveDevice(admin, userData.user.id), deviceId)) {
+  if (!(await canUserRegisterToken(admin, userData.user.id, deviceId))) {
     return json({ error: "device_not_active" }, 409);
   }
   const { error: upsertErr } = await admin

@@ -29,3 +29,9 @@ Deno.test("device claim defers only for ringing and active calls", () => {
     assertEquals(deviceClaimMustDefer(state), false);
   }
 });
+
+Deno.test("legacy app without device id registers only when the claimed device never stored a token", () => {
+  assertEquals(canRegisterToken("device-B-0000000000", null, false), true);
+  assertEquals(canRegisterToken("device-B-0000000000", null, true), false);
+  assertEquals(canRegisterToken("device-B-0000000000", "device-A-0000000000", false), false);
+});

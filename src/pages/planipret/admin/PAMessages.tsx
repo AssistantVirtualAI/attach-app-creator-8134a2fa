@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { X, ArrowDownLeft, ArrowUpRight, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { smsDeliveryLabel } from "@/lib/planipret/smsDelivery";
 import Pagination from "@/components/planipret/admin/Pagination";
 import DebugPanel, { type DebugEntry } from "@/components/planipret/admin/DebugPanel";
 import { TableErrorState, TableEmptyState } from "@/components/planipret/admin/TableStates";
@@ -303,7 +304,7 @@ export default function PAMessages() {
                   <td><Icon className="w-3.5 h-3.5" style={{ color: out ? SUCCESS : ACCENT }} /></td>
                   <td style={{ color: "var(--pp-text-secondary)" }}>{m.from_number}</td>
                   <td style={{ color: "var(--pp-text-secondary)" }}>{m.to_number}</td>
-                  <td className="truncate max-w-[300px]" style={{ color: "var(--pp-text-muted)" }}>{(m.body ?? "").slice(0, 60)}</td>
+                  <td className="max-w-[300px]" style={{ color: "var(--pp-text-muted)" }}><div className="truncate">{(m.body ?? "").slice(0, 60)}</div>{out && <div className="text-xs">{smsDeliveryLabel(m, lang)}</div>}</td>
                   <td style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>{new Date(m.created_at).toLocaleString("fr-CA")}</td>
                 </tr>
               );
@@ -339,7 +340,7 @@ export default function PAMessages() {
                       color: "var(--pp-text-primary)",
                     }}>
                     <p>{m.body}</p>
-                    <p style={{ fontSize: 10, color: "var(--pp-text-faint)", marginTop: 4 }}>{new Date(m.created_at).toLocaleString("fr-CA")}</p>
+                    <p style={{ fontSize: 10, color: "var(--pp-text-faint)", marginTop: 4 }}>{new Date(m.created_at).toLocaleString("fr-CA")}{out ? ` · ${smsDeliveryLabel(m, lang)}` : ""}</p>
                   </div>
                 );
               })}

@@ -20,6 +20,7 @@ import {
 } from "../_shared/planipret-ns.ts";
 import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS, TEST_SMS_BLOCK_MESSAGE } from "../_shared/pp-test-sms.ts";
 import { isAvaOriginated, isConfirmed } from "../_shared/ava-confirm.ts";
+import { mergeDeliveryEvidence } from "./delivery-evidence.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -298,7 +299,7 @@ function dedupeMergedMessages(messages: any[]) {
       const candidate = kept[index];
       const preferred = message.source === "local" && messageDirection(message) === "out" ? message : candidate;
       const provider = candidate.source !== "local" ? candidate : message.source !== "local" ? message : null;
-      kept[index] = { ...preferred, provider_status: provider?.status ?? preferred.provider_status };
+      kept[index] = mergeDeliveryEvidence(preferred, provider);
     }
   }
   return kept;

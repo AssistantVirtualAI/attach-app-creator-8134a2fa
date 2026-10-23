@@ -104,6 +104,7 @@ const PABrokerDailyReport = lazyWithRetry(() => import("./pages/planipret/admin/
 const PAMaestroHealth = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroHealth"));
 const PAMaestroPending = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroPending"));
 const PAMobileApp = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileApp"));
+const PAMobileBuild = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileBuild"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));
 const PAMessages = lazyWithRetry(() => import("./pages/planipret/admin/PAMessages"));
 const PAVoicemails = lazyWithRetry(() => import("./pages/planipret/admin/PAVoicemails"));
@@ -802,6 +803,7 @@ const App = () => (
                   <Route path="maestro" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroPending /></Suspense>} />
 
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
+                  <Route path="mobile-build" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileBuild /></Suspense>} />
                 </Route>
 
                 {/* Planipret Broker portal (per-broker view of their own data) */}

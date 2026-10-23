@@ -1,4 +1,5 @@
 // mobile-register-push: persist the device push token for the authenticated user.
+// Token values are never echoed in responses, logs or audit metadata.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { canRegisterToken, normalizeDeviceId, readActiveDevice } from "../_shared/pp-active-device.ts";
 
@@ -9,17 +10,32 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-Deno.serve(async (req) => {
+// deno-lint-ignore no-explicit-any
+type Client = any;
+export type Deps = {
+  userClient: (authHeader: string) => Client;
+  adminClient: () => Client;
+  canRegister: (admin: Client, userId: string, deviceId: string | null) => Promise<boolean>;
+  log: (msg: string, meta?: Record<string, unknown>) => void;
+};
+
+const defaultDeps: Deps = {
+  userClient: (authHeader) =>
+    createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    }),
+  adminClient: () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!),
+  canRegister: async (admin, userId, deviceId) => canRegisterToken(await readActiveDevice(admin, userId), deviceId),
+  log: (msg, meta) => console.warn(msg, meta ?? {}),
+};
+
+export async function handle(req: Request, deps: Deps = defaultDeps): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "unauthorized" }, 401);
-    const sb = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
+    const sb = deps.userClient(authHeader);
     const { data: u } = await sb.auth.getUser();
     if (!u?.user) return json({ error: "unauthorized" }, 401);
     const { data: __mobileAllowed } = await sb.rpc("my_platform_access_allowed", { _platform: "mobile" });
@@ -32,13 +48,9 @@ Deno.serve(async (req) => {
     const extension = String(body.extension || "");
     if (!token || !platform) return json({ error: "missing_fields" }, 400);
 
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
+    const admin = deps.adminClient();
     const deviceId = normalizeDeviceId(body.device_id);
-    if (platform !== "web" && !canRegisterToken(await readActiveDevice(admin, u.user.id), deviceId)) {
+    if (platform !== "web" && !(await deps.canRegister(admin, u.user.id, deviceId))) {
       return json({ error: "device_not_active" }, 409);
     }
     const { error: upErr } = await admin
@@ -55,7 +67,10 @@ Deno.serve(async (req) => {
         },
         { onConflict: "user_id,token" },
       );
-    if (upErr) console.warn("[mobile-register-push] upsert failed", upErr.message);
+    if (upErr) {
+      deps.log("[mobile-register-push] persist failed", { platform, code: upErr.code ?? null });
+      return json({ error: "token_persist_failed" }, 500);
+    }
 
     const { data: sp } = await sb.from("pbx_softphone_users")
       .select("organization_id").eq("portal_user_id", u.user.id).maybeSingle();
@@ -65,11 +80,14 @@ Deno.serve(async (req) => {
       user_id: u.user.id,
       action: "mobile_push_token_registered",
       resource_type: "mobile_device",
-      metadata: { platform, token_preview: token.slice(0, 12), extension },
+      metadata: { platform, extension },
     });
 
     return json({ ok: true });
-  } catch (e) {
-    return json({ error: String((e as Error).message || e) }, 500);
+  } catch (_e) {
+    deps.log("[mobile-register-push] unexpected error");
+    return json({ error: "internal_error" }, 500);
   }
-});
+}
+
+if (import.meta.main) Deno.serve((req) => handle(req));

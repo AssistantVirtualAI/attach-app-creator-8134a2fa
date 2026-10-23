@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Prepare evidence-based accepted/sending/delivered SMS presentation for all brokers and investigate Karl's existing messages through read-only provider/status evidence; no sends, number changes, deployment or native changes.
+- [x] Prepare evidence-based SMS presentation across broker/admin portal and both mobile React trees, preserving provider status during local deduplication. 18 focused tests passed; authenticated portal shows Accepted. Read-only NS session GET HTTP 200: Karl's two messages at 21:16:03/24 UTC remain sending, with no provider error or delivered confirmation. No sends, number changes, native edits or deployment.
+- [ ] Activate prepared pp-ns-sms status-preservation changes and validate installed-phone labels: requires explicit deployment/mobile release approval. Carrier delivery blocker for Karl remains unexplained by NS (sending, no error); provider trace required, no retries sent.
 
 - [x] Diagnose widget HTTP 500 from existing redacted evidence only; explicit success logging and consistent legacy-widget history classification prepared for both mobile web trees/admin history and statistics. 44 offline tests passed; preview build OK. October 23: 18 remote HTTP 500 for one broker, stored evidence only http_500; earlier same-broker 200 excludes permanent failure, not malformed identity/configuration. Detailed provider cause unavailable in retained traces. No deployment, data update, native change or Maestro send.
 

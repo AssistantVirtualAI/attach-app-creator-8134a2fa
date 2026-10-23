@@ -57,7 +57,7 @@ export default function PortalAvaLauncher({ authUserId }: { authUserId?: string 
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div id="pp-mobile-frame" className="pp-portal-ava flex-1 min-h-0 flex flex-col overflow-hidden relative">
+            <div id="pp-mobile-frame" className="pp-portal-ava flex-1 min-h-0 flex flex-col overflow-hidden relative" style={{ ["--pp-ava-h" as any]: "100%" }}>
               <MAvaChat />
             </div>
           </div>

@@ -79,3 +79,62 @@ Deno.test("resource events are gated and redact content", async () => {
     assertEquals(output.event, event);
   }
 });
+
+Deno.test("auto-release: 500 with known previous id releases then retries once", async () => {
+  const { postWidgetSyncWithAutoRelease } = await import("./maestro-widget-sync.ts");
+  const calls: unknown[] = [];
+  const fake = (async (_cfg: unknown, _path: string, opts: { body: unknown }) => {
+    calls.push(opts.body);
+    // First sync fails 500, release succeeds, retry succeeds.
+    return calls.length === 1 ? { ok: false, status: 500, data: { success: false } } : { ok: true, status: 200, data: null };
+  }) as any;
+  const releases: unknown[] = [];
+  const res = await postWidgetSyncWithAutoRelease({ url: "https://x", key: "k" },
+    { user_id: "285609", external_user_id: "1136" }, "285983", fake,
+    (r) => { releases.push(r); });
+  assertEquals(res.ok, true);
+  assertEquals(calls, [
+    { user_id: "285609", external_user_id: "1136" },
+    { user_id: "285983" },
+    { user_id: "285609", external_user_id: "1136" },
+  ]);
+  assertEquals(releases.length, 1);
+});
+
+Deno.test("auto-release: no previous id means no release attempt", async () => {
+  const { postWidgetSyncWithAutoRelease } = await import("./maestro-widget-sync.ts");
+  let calls = 0;
+  const fake = (async () => { calls++; return { ok: false, status: 500, data: null }; }) as any;
+  const res = await postWidgetSyncWithAutoRelease({ url: "https://x", key: "k" },
+    { user_id: "285609", external_user_id: "1136" }, null, fake);
+  assertEquals(res.ok, false);
+  assertEquals(calls, 1);
+});
+
+Deno.test("auto-release: failed release does not retry the sync", async () => {
+  const { postWidgetSyncWithAutoRelease } = await import("./maestro-widget-sync.ts");
+  let calls = 0;
+  const fake = (async () => { calls++; return { ok: false, status: 500, data: null }; }) as any;
+  const res = await postWidgetSyncWithAutoRelease({ url: "https://x", key: "k" },
+    { user_id: "285609", external_user_id: "1136" }, "285983", fake);
+  assertEquals(res.ok, false);
+  assertEquals(calls, 2); // sync + release only, no retry
+});
+
+Deno.test("auto-release: non-500 errors never trigger a release", async () => {
+  const { postWidgetSyncWithAutoRelease } = await import("./maestro-widget-sync.ts");
+  let calls = 0;
+  const fake = (async () => { calls++; return { ok: false, status: 502, data: null }; }) as any;
+  const res = await postWidgetSyncWithAutoRelease({ url: "https://x", key: "k" },
+    { user_id: "285609", external_user_id: "1136" }, "285983", fake);
+  assertEquals(res.ok, false);
+  assertEquals(calls, 1);
+});
+
+Deno.test("auto-release: release payload is logged with widget.auto_release action", async () => {
+  let inserted: any;
+  const admin = { from: () => ({ insert: (entry: unknown) => { inserted = entry; return Promise.resolve({ error: null }); } }) } as any;
+  await logWidgetSyncResult(admin, "owner", { user_id: "285983" }, { ok: true, status: 200 }, "widget.auto_release");
+  assertEquals(inserted.action, "widget.auto_release");
+  assertEquals(inserted.success, true);
+});

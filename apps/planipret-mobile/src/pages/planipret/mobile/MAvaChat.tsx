@@ -240,7 +240,8 @@ export default function MAvaChat() {
     setRunningSuggestion(suggestion.id);
     try {
       if (suggestion.kind === "call") {
-        const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
+        const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.message;
+        const number = normalizeAvaSmsRecipient(suggestion.payload, lastUserText).number;
         if (!number) throw new Error(t("avaChat.callMissingNumber"));
         // Un seul propriétaire de l'appel : le dialer/softphone mobile.
         if (typeof outlet?.openDialer === "function") outlet.openDialer(number, true);
@@ -271,10 +272,11 @@ export default function MAvaChat() {
       }
 
       if (suggestion.kind === "sms") {
-        const recipient = normalizeAvaSmsRecipient(suggestion.payload);
+        const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.message;
+        const recipient = normalizeAvaSmsRecipient(suggestion.payload, lastUserText);
         const number = recipient.number;
         const body = recipient.message;
-        if (!number && !recipient.contactName) throw new Error(t("avaChat.callMissingNumber"));
+        if (!number && !recipient.contactName) throw new Error(t("avaChat.smsMissingNumber"));
         if (!body) throw new Error(t("avaChat.smsRefused"));
         const { data, error } = await supabase.functions.invoke("ava-tool-executor", {
           body: {

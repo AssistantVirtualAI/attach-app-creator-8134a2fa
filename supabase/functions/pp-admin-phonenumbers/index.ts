@@ -265,6 +265,53 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: kept.verified && keptSms.ok && keptCid.ok, kept: keep, voice_verified: kept.verified, sms_verified: keptSms.ok, caller_id_verified: keptCid.ok, released });
     }
 
+    // Crée UN numéro manquant dans l'inventaire NS (POST phonenumbers), le
+    // route vers le poste et active les textos — avec relecture obligatoire.
+    // Portée : un seul numéro, sur approbation écrite explicite (incident
+    // 2026-07-30 : aucune réécriture en masse). Ne touche aucun autre numéro.
+    if (action === "create_number") {
+      const pn = String(payload?.phone_number ?? "").replace(/\D/g, "").replace(/^(\d{10})$/, "1$1");
+      const ext = String(payload?.extension ?? "").trim();
+      const name = payload?.name ? String(payload.name).slice(0, 80) : undefined;
+      if (!/^\d{11}$/.test(pn) || !/^\d{2,10}$/.test(ext)) {
+        return jsonResponse({ success: false, error: "phone_number (11 chiffres) et extension requis" }, 400);
+      }
+      const existing = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`);
+      if (existing.ok) {
+        return jsonResponse({ success: false, error: "number_already_exists", diagnostic: "Le numéro existe déjà dans NetSapiens — utilisez assign." }, 409);
+      }
+      const createBody = {
+        phonenumber: pn,
+        ...buildToUserDidPayload(ext, domain),
+        ...(name ? { "dial-rule-description": name } : {}),
+      };
+      const created = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers`, {
+        method: "POST",
+        body: JSON.stringify(createBody),
+      });
+      if (!created.ok) {
+        return jsonResponse({ success: false, error: "create_failed", status: created.status, detail: typeof created.data === "string" ? created.data.slice(0, 300) : created.data }, 502);
+      }
+      // Relecture voix : la destination doit être le poste demandé.
+      const live = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`);
+      const liveRow = Array.isArray(live.data) ? live.data[0] : live.data;
+      const liveDest = String(liveRow?.["dial-rule-translation-destination-user"] ?? "");
+      const voiceVerified = live.ok && liveDest === ext;
+      // Textos : route le DID SMS vers le poste, puis relit.
+      const sms = await assignSmsNumber(domain, pn, ext).catch(() => ({ ok: false, write_status: 0 }));
+      return jsonResponse({
+        success: voiceVerified && sms.ok,
+        phone_number: pn,
+        extension: ext,
+        voice_verified: voiceVerified,
+        sms_verified: sms.ok,
+        create_status: created.status,
+        diagnostic: voiceVerified && sms.ok
+          ? `Numéro +${pn} créé dans NetSapiens : appels → ${ext}, textos → ${ext} (confirmé par relecture).`
+          : `Créé (HTTP ${created.status}) mais relecture incomplète : voix ${voiceVerified ? "✓" : "✗"} (destination lue: ${liveDest || "VIDE"}), textos ${sms.ok ? "✓" : "✗"}.`,
+      });
+    }
+
     if (action === "assign") {
       const { phone_number, extension } = payload ?? {};
       if (!phone_number || !extension) {

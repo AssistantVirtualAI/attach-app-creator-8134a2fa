@@ -650,7 +650,7 @@ export default function PlanipretAdminLayout() {
         <main className="pa-main flex-1 min-w-0 p-5 md:p-7" style={{ overflowX: "clip", overflowY: "visible" }}>
           <Outlet context={{ profile, softphone }} />
         </main>
-        <PortalAvaLauncher authUserId={profile?.user_id ?? null} />
+        <PortalAvaLauncher authUserId={profile?.user_id ?? null} softphone={softphone} />
       </div>
 
       <PpActiveCallScreen softphone={softphone} />

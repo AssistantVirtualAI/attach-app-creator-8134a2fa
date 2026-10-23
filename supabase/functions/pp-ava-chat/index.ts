@@ -13,12 +13,33 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
+// Structured output drops undeclared keys of a free-form record (payload came
+// back as {}), so the fields actions rely on are declared explicitly.
+const S = z.string().optional();
+const PayloadSchema = z.object({
+  number: S, to: S, message: S, contact_name: S, action: S, title: S, due_at: S,
+  subject: S, body: S, email: S, query: S, client_id: S, broker_name: S, status: S,
+  period: S, route: S, setting: S, value: S, message_id: S, chat_id: S, content: S,
+  call_id: S, voicemail_id: S, destination: S, description: S, severity: S,
+}).passthrough();
 const SuggestionSchema = z.object({
   id: z.string(),
   label: z.string(),
   kind: z.enum(["call", "sms", "email", "reminder", "maestro_action", "ms365_action", "open_voice", "open_coach", "commission_action", "open_commissions", "feedback"]),
-  payload: z.record(z.string(), z.any()).optional(),
+  payload: PayloadSchema.optional(),
 });
+
+/** Fills a missing call/SMS target with the number the user typed (never guessed from a name). */
+export function fillSuggestionTargets(suggestions: any[], userMessage: string): any[] {
+  const m = String(userMessage ?? "").match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
+  const typed = m ? m[0].trim() : "";
+  return (suggestions ?? []).map((s) => {
+    if (s?.kind !== "sms" && s?.kind !== "call") return s;
+    const p = { ...(s.payload ?? {}) };
+    if (!p.number && !p.to && !p.contact_name && typed) p.number = typed;
+    return { ...s, payload: p };
+  });
+}
 
 const OutputSchema = z.object({
   reply: z.string(),
@@ -935,6 +956,8 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
         return json({ reply: L("Désolé, je rencontre un problème. Réessayez.", "Sorry, something went wrong. Please try again."), suggestions: [], error: String(e2) }, 200);
       }
     }
+
+    if (result && Array.isArray(result.suggestions)) result.suggestions = fillSuggestionTargets(result.suggestions, userMessage);
 
     // Persist chat to planipret_ava_conversations if we have a session
     let finalSessionId = sessionId;

@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
-  BarChart3, LogOut, Sun, Moon, ShieldCheck, ShieldAlert, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket, UserSquare2, AlertTriangle, FileText, Menu,
+  BarChart3, LogOut, Sun, Moon, ShieldCheck, ShieldAlert, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket, UserSquare2, AlertTriangle, FileText, Menu, Package,
 } from "lucide-react";
 import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
@@ -32,9 +32,9 @@ import PortalReturnButton from "@/components/planipret/PortalReturnButton";
 import PortalAvaLauncher from "@/components/planipret/portal/PortalAvaLauncher";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroBrokers" | "maestroClients" | "marketing" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls" | "brokerTelephony" | "brokerMonthly";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroBrokers" | "maestroClients" | "marketing" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls" | "brokerTelephony" | "brokerMonthly" | "mobileBuild";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroBrokers" | "maestroClients" | "marketing" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls" | "brokerTelephony" | "brokerMonthly";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "mobileDevices" | "mobileBuild" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroBrokers" | "maestroClients" | "marketing" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls" | "brokerTelephony" | "brokerMonthly";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -89,6 +89,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/integrations",    key: "integrations",    Icon: Plug,        badge: "integrations" },
       { to: "/planipret/admin/mobile-devices",  key: "mobileDevices",   Icon: Smartphone },
       { to: "/planipret/admin/mobile-app",      key: "mobileApp",       Icon: Rocket },
+      { to: "/planipret/admin/mobile-build",    key: "mobileBuild",     Icon: Package },
       { to: "/planipret/admin/hold-music",      key: "holdMusic",       Icon: Music },
       { to: "/planipret/admin/sip-diagnostic",  key: "sipDiagnostic",   Icon: PlugZap },
       { to: "/planipret/admin/call-test",       key: "callTest",        Icon: PlugZap },
@@ -176,6 +177,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/ava-tools-audit": "avaToolsAudit",
   "/planipret/admin/ava-confirmations": "avaConfirmations",
   "/planipret/admin/mobile-devices": "mobileDevices",
+  "/planipret/admin/mobile-build": "mobileBuild",
   "/planipret/admin/hold-music": "holdMusic",
   "/planipret/admin/sip-diagnostic": "sipDiagnostic",
   "/planipret/admin/call-test": "callTest",
@@ -503,6 +505,7 @@ export default function PlanipretAdminLayout() {
                     : key === "didReconcile" ? (lang === "en" ? "DID reconciliation" : "Réconciliation DID")
                     : key === "phoneNumbers" ? (lang === "en" ? "Phone numbers" : "Numéros de téléphone")
                     : key === "mobileApp" ? (lang === "en" ? "Mobile app" : "Application mobile")
+                    : key === "mobileBuild" ? (lang === "en" ? "Mobile build" : "Build mobile")
                     : key === "avaToolsAudit" ? (lang === "en" ? "AVA tools audit" : "Audit outils AVA")
                     : key);
                 return (

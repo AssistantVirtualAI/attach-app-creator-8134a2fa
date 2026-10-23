@@ -45,8 +45,9 @@ export async function syncBrokerToWidget(
   let crmId = sel.crmId ?? null;
   let ext = sel.extension ?? null;
   let uid = sel.userId ?? null;
+  let prevCrmId: string | null = null;
   if (!crmId) {
-    let q = admin.from("planipret_profiles").select("user_id, extension, ns_extension, maestro_broker_id").limit(1);
+    let q = admin.from("planipret_profiles").select("user_id, extension, ns_extension, maestro_broker_id, previous_maestro_broker_id").limit(1);
     if (uid) q = q.eq("user_id", uid);
     else if (ext) q = q.or(`extension.eq.${ext},ns_extension.eq.${ext}`);
     else return { ok: false, status: 0, skipped: "not_linked" };

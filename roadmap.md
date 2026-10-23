@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Diagnose widget HTTP 500 from existing redacted evidence only; prepare explicit success logging and consistent legacy-widget history classification with offline tests. No deployment, data update or Maestro send.
+
 - [x] Finish remaining voicemail server/mobile read fixes: owner-checked filename/audio reads, individual metadata enrichment, caller fallback, fresh URLs/stale-request guard and account/tab reset; server deployed, 35 focused tests pass, live requester nine messages and WAV retrieval HTTP 200, absent filename 404. Release handoff prepared; routing/native untouched.
 
 - [x] Prepare paired voicemail caller presentation: account-isolated directory name, otherwise readable caller number, with phone sublabel when a name exists. 11 tests per tree pass; authenticated list loads nine messages. Existing identity-less records remain unknown; real identified voicemail and next installed mobile release required. No deployment or routing changes.

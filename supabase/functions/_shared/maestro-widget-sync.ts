@@ -62,14 +62,20 @@ export async function syncBrokerToWidget(
     return { ok: true, status: 0, skipped: "debounced" };
   }
   const res = await postWidgetSync(await getMaestroTelecomConfig(admin), payload);
+  await logWidgetSyncResult(admin, uid, payload, res);
+  return res;
+}
+
+/** Persist only the redacted transport outcome, never provider content or credentials. */
+export async function logWidgetSyncResult(admin: SupabaseClient, uid: string | null, payload: WidgetSyncPayload, res: WidgetSyncResult) {
   try {
     await admin.from("planipret_maestro_sync_log").insert({
       user_id: uid, action: payload.external_user_id ? "widget.sync" : "widget.release",
       maestro_endpoint: "POST /sync", request_body: { has_external: !!payload.external_user_id },
       response_body: res.ok ? null : { error: res.error_code ?? res.skipped }, response_status: res.status,
+      success: res.ok,
     });
   } catch { /* best effort */ }
-  return res;
 }
 
 /** Fire-and-forget; never blocks or fails the caller. */

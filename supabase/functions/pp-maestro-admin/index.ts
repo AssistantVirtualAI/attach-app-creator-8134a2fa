@@ -18,6 +18,7 @@ import {
   mirrorCallAnalysisToMaestro,
 } from "../_shared/maestro-telecom.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isMaestroSyncSuccessful } from "../_shared/maestro-sync-outcome.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -46,13 +47,13 @@ Deno.serve(async (req) => {
       const since = new Date(Date.now() - 24 * 3600_000).toISOString();
       const { data: recent } = await admin
         .from("planipret_maestro_sync_log")
-        .select("success, action, response_status, created_at")
+        .select("success, action, response_status, response_body, created_at")
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(500);
       const rows = recent ?? [];
       const total = rows.length;
-      const failed = rows.filter((r: any) => !r.success).length;
+      const failed = rows.filter((r) => !isMaestroSyncSuccessful(r)).length;
       const lastCall = rows.find((r: any) => String(r.action ?? "").startsWith("call.") && !String(r.action ?? "").startsWith("call.analysis"));
       const lastSms = rows.find((r: any) => String(r.action ?? "").startsWith("sms."));
       const lastAnalysis = rows.find((r: any) => String(r.action ?? "").startsWith("call.analysis"));
@@ -226,12 +227,13 @@ Deno.serve(async (req) => {
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(limit);
-      if (body.only_failures) q = q.eq("success", false);
+      if (body.only_failures) q = q.or("success.eq.false,success.is.null");
       if (body.action_like) q = q.like("action", String(body.action_like));
       if (body.action_eq) q = q.eq("action", String(body.action_eq));
       const { data, error } = await q;
       if (error) return jsonResponse({ error: error.message }, 500);
-      return jsonResponse({ ok: true, entries: data ?? [], count: data?.length ?? 0 });
+      const entries = (data ?? []).filter((r) => !body.only_failures || !isMaestroSyncSuccessful(r));
+      return jsonResponse({ ok: true, entries, count: entries.length });
     }
 
     if (action === "stats") {
@@ -239,7 +241,7 @@ Deno.serve(async (req) => {
       const since = new Date(Date.now() - hours * 3600_000).toISOString();
       const { data } = await admin
         .from("planipret_maestro_sync_log")
-        .select("action, success, response_status, duration_ms, created_at")
+        .select("action, success, response_status, response_body, duration_ms, created_at")
         .gte("created_at", since)
         .limit(5000);
       const rows = data ?? [];
@@ -248,7 +250,7 @@ Deno.serve(async (req) => {
         const k = String((r as any).action ?? "unknown");
         const b = byAction[k] ?? { total: 0, failed: 0, avg_ms: 0 };
         b.total += 1;
-        if (!(r as any).success) b.failed += 1;
+        if (!isMaestroSyncSuccessful(r)) b.failed += 1;
         b.avg_ms += Number((r as any).duration_ms ?? 0);
         byAction[k] = b;
       }

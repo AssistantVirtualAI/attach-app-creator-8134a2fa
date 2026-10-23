@@ -957,6 +957,8 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
       }
     }
 
+    if (result && Array.isArray(result.suggestions)) result.suggestions = fillSuggestionTargets(result.suggestions, userMessage);
+
     // Persist chat to planipret_ava_conversations if we have a session
     let finalSessionId = sessionId;
     if (mode === "chat" && userMessage) {

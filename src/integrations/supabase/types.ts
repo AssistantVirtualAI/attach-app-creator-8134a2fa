@@ -13073,6 +13073,7 @@ export type Database = {
           organization_id: string
           phone: string | null
           portal_ava_enabled: boolean
+          previous_maestro_broker_id: string | null
           privacy_accepted_at: string | null
           privacy_version: string | null
           recording_consent: boolean
@@ -13187,6 +13188,7 @@ export type Database = {
           organization_id?: string
           phone?: string | null
           portal_ava_enabled?: boolean
+          previous_maestro_broker_id?: string | null
           privacy_accepted_at?: string | null
           privacy_version?: string | null
           recording_consent?: boolean
@@ -13301,6 +13303,7 @@ export type Database = {
           organization_id?: string
           phone?: string | null
           portal_ava_enabled?: boolean
+          previous_maestro_broker_id?: string | null
           privacy_accepted_at?: string | null
           privacy_version?: string | null
           recording_consent?: boolean

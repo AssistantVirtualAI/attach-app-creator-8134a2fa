@@ -37,6 +37,26 @@ export async function postWidgetSync(
   return r.ok ? { ok: true, status: r.status } : { ok: false, status: r.status, error_code: r.status === 0 ? "network" : `http_${r.status}`, detail: redactDetail(r.data ?? r.error) };
 }
 
+/**
+ * Sync with one automatic recovery: Maestro rejects a sync with HTTP 500 when
+ * the extension is still bound to a previous CRM account (duplicate
+ * sip_username). When a previous CRM id is known, release it once and retry
+ * the sync a single time. Never loops.
+ */
+export async function postWidgetSyncWithAutoRelease(
+  cfg: MaestroTelecomConfig, payload: WidgetSyncPayload, prevCrmId: string | null,
+  fetcher: typeof maestroTelecomFetch = maestroTelecomFetch,
+  onRelease?: (releaseRes: WidgetSyncResult) => void | Promise<void>,
+): Promise<WidgetSyncResult> {
+  let res = await postWidgetSync(cfg, payload, fetcher);
+  if (!res.ok && res.status === 500 && payload.external_user_id && prevCrmId && prevCrmId !== payload.user_id) {
+    const releaseRes = await postWidgetSync(cfg, { user_id: prevCrmId }, fetcher);
+    await onRelease?.(releaseRes);
+    if (releaseRes.ok) res = await postWidgetSync(cfg, payload, fetcher);
+  }
+  return res;
+}
+
 /** Explicit ids win (needed for deletes, where the profile is gone). */
 export async function syncBrokerToWidget(
   admin: SupabaseClient,
@@ -45,14 +65,16 @@ export async function syncBrokerToWidget(
   let crmId = sel.crmId ?? null;
   let ext = sel.extension ?? null;
   let uid = sel.userId ?? null;
+  let prevCrmId: string | null = null;
   if (!crmId) {
-    let q = admin.from("planipret_profiles").select("user_id, extension, ns_extension, maestro_broker_id").limit(1);
+    let q = admin.from("planipret_profiles").select("user_id, extension, ns_extension, maestro_broker_id, previous_maestro_broker_id").limit(1);
     if (uid) q = q.eq("user_id", uid);
     else if (ext) q = q.or(`extension.eq.${ext},ns_extension.eq.${ext}`);
     else return { ok: false, status: 0, skipped: "not_linked" };
     const { data } = await q.maybeSingle();
     if (!data) return { ok: false, status: 0, skipped: "not_linked" };
     crmId = (data as any).maestro_broker_id ?? null;
+    prevCrmId = (data as any).previous_maestro_broker_id ?? null;
     uid = (data as any).user_id ?? uid;
     ext = ext ?? (data as any).ns_extension ?? (data as any).extension ?? null;
   }
@@ -61,16 +83,18 @@ export async function syncBrokerToWidget(
   if (!sel.force && shouldDebounce(`${payload.user_id}:${payload.external_user_id ?? "-"}`)) {
     return { ok: true, status: 0, skipped: "debounced" };
   }
-  const res = await postWidgetSync(await getMaestroTelecomConfig(admin), payload);
+  const cfg = await getMaestroTelecomConfig(admin);
+  const res = await postWidgetSyncWithAutoRelease(cfg, payload, prevCrmId, maestroTelecomFetch,
+    (releaseRes) => logWidgetSyncResult(admin, uid, { user_id: String(prevCrmId) }, releaseRes, "widget.auto_release"));
   await logWidgetSyncResult(admin, uid, payload, res);
   return res;
 }
 
 /** Persist only the redacted transport outcome, never provider content or credentials. */
-export async function logWidgetSyncResult(admin: SupabaseClient, uid: string | null, payload: WidgetSyncPayload, res: WidgetSyncResult) {
+export async function logWidgetSyncResult(admin: SupabaseClient, uid: string | null, payload: WidgetSyncPayload, res: WidgetSyncResult, actionOverride?: string) {
   try {
     await admin.from("planipret_maestro_sync_log").insert({
-      user_id: uid, action: payload.external_user_id ? "widget.sync" : "widget.release",
+      user_id: uid, action: actionOverride ?? (payload.external_user_id ? "widget.sync" : "widget.release"),
       maestro_endpoint: "POST /sync", request_body: { has_external: !!payload.external_user_id },
       response_body: res.ok ? null : { error: res.error_code ?? res.skipped, ...(res.detail !== undefined ? { provider_response: res.detail } : {}) }, response_status: res.status,
       success: res.ok,

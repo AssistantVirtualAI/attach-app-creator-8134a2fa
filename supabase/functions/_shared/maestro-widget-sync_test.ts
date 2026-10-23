@@ -51,7 +51,7 @@ Deno.test("debounce blocks repeat within window", () => {
 Deno.test("provider failure is redacted", async () => {
   const fake = (async () => ({ ok: false, status: 500, data: { secret: "x", body: "raw" } })) as any;
   const r = await postWidgetSync({ url: "https://x", key: "k" }, { user_id: "1" }, fake);
-  assertEquals(r, { ok: false, status: 500, error_code: "http_500" });
+  assertEquals(r, { ok: false, status: 500, error_code: "http_500", detail: { secret: "[redacted]", body: "raw" } });
 });
 Deno.test("not configured makes no request", async () => {
   let called = false;

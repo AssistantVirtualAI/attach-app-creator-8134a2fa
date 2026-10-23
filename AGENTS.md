@@ -1,5 +1,7 @@
 # Project Architecture Rules
 
+- SMS presentation shares a mirrored evidence classifier; local sent/HTTP acceptance never proves delivery, and deduplication must retain explicit provider status.
+
 - Maestro widget history writes explicit transport success; mirrored classifiers infer legacy null success only for widget sync/release 2xx without failure evidence, preserving explicit business outcomes and access scopes.
 
 - Planipret read/hidden SMS and missed-call state is mirrored, local per user/device; never delete history or call/notification records.

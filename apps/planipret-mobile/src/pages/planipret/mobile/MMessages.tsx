@@ -32,6 +32,7 @@ import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365Connec
 import { useMs365Status } from "@/hooks/useMs365Status";
 import { canSendWithSmsAvailability, getSmsAvailability, type SmsAvailability } from "@/lib/planipret/smsAvailability";
 import { getSmsSubmission, type SmsSubmission } from "@/lib/planipret/smsSendGuard";
+import { smsDeliveryLabel, preserveSmsDelivery } from "@/lib/planipret/smsDelivery";
 import { emailBodyCache } from "@/lib/planipret/persistentMediaCache";
 
 import DOMPurify from "dompurify";
@@ -213,6 +214,9 @@ type NsMessage = {
   created_at?: string;
   sent_at?: string;
   read_at?: string | null;
+  status?: string;
+  provider_status?: string;
+  metadata?: Record<string, unknown>;
 };
 
 const threadId = (t: any) =>
@@ -285,7 +289,8 @@ const dedupeMessages = (list: any[], myExt: string, peer?: string) => {
     });
     if (idx === -1) { kept.push(m); continue; }
     // conserve la version sortante si l'une des deux l'est
-    if (!msgIsOut(kept[idx], myExt, peer) && msgIsOut(m, myExt, peer)) kept[idx] = m;
+    if (!msgIsOut(kept[idx], myExt, peer) && msgIsOut(m, myExt, peer)) kept[idx] = preserveSmsDelivery(m, kept[idx]);
+    else kept[idx] = preserveSmsDelivery(kept[idx], m);
   }
   return kept;
 };
@@ -876,11 +881,11 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       if (v) {
         console.info("[pp-ns-sms] verification", v);
         if (!v.saved) {
-          toast.warning("Envoyé, mais non enregistré dans l'historique.", { duration: 6000 });
+          toast.warning("Accepté, mais non enregistré dans l'historique.", { duration: 6000 });
         } else if (!v.did_match) {
-          toast.warning(`Envoyé avec le numéro ${v.stored_from ?? "?"} au lieu de ${v.expected_from ?? "?"}.`, { duration: 8000 });
+          toast.warning(`Accepté avec le numéro ${v.stored_from ?? "?"} au lieu de ${v.expected_from ?? "?"}.`, { duration: 8000 });
         } else {
-          toast.success(`Envoyé depuis ${v.stored_from} · enregistré`, { duration: 2500 });
+          toast.success(`Accepté depuis ${v.stored_from} · enregistré`, { duration: 2500 });
         }
       }
       // Refresh from server to reconcile optimistic message
@@ -1002,7 +1007,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
                     {body && <p className="whitespace-pre-wrap break-words">{body}</p>}
                   </div>
                   <p className={`text-[10px] mt-1 ${out ? "text-right" : "text-left"}`} style={{ color: "var(--pp-text-faint)" }}>
-                    {fmtTime(msgTime(m), lang, t)}{String(m.id ?? "").startsWith("tmp-") ? ` · ${t("common.sending")}` : ""}
+                    {fmtTime(msgTime(m), lang, t)}{out ? ` · ${smsDeliveryLabel(m, lang)}` : ""}
                   </p>
                 </div>
               </div>

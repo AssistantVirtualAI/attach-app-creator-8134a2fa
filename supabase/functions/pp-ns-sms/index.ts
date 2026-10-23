@@ -20,6 +20,7 @@ import {
 } from "../_shared/planipret-ns.ts";
 import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS, TEST_SMS_BLOCK_MESSAGE } from "../_shared/pp-test-sms.ts";
 import { isAvaOriginated, isConfirmed } from "../_shared/ava-confirm.ts";
+import { mergeDeliveryEvidence } from "./delivery-evidence.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -294,7 +295,12 @@ function dedupeMergedMessages(messages: any[]) {
       return differentSources || messageDirection(candidate) !== messageDirection(message);
     });
     if (index === -1) kept.push(message);
-    else if (message.source === "local" && messageDirection(message) === "out") kept[index] = message;
+    else {
+      const candidate = kept[index];
+      const preferred = message.source === "local" && messageDirection(message) === "out" ? message : candidate;
+      const provider = candidate.source !== "local" ? candidate : message.source !== "local" ? message : null;
+      kept[index] = mergeDeliveryEvidence(preferred, provider);
+    }
   }
   return kept;
 }
@@ -309,7 +315,7 @@ async function getLocalMessages(supabase: any, userId: string, limit = 500): Pro
   try {
     const { data, error } = await supabase
       .from("planipret_phone_messages")
-      .select("id,direction,to_number,from_number,body,thread_id,sent_at,read_at")
+      .select("id,direction,to_number,from_number,body,thread_id,sent_at,read_at,status,metadata,ns_message_id")
       .eq("user_id", userId)
       .order("sent_at", { ascending: false })
       .limit(limit);
@@ -473,6 +479,8 @@ Deno.serve(async (req) => {
             body: row.body,
             timestamp: row.sent_at,
             source: "local",
+            status: row.status,
+            provider_status: row.metadata?.status ?? null,
           }))
           .filter((m: any) => !seen.has(`${String(m.text).trim()}|${String(m.timestamp).slice(0, 16)}`));
         messages = dedupeMergedMessages([...messages, ...merged]).sort(

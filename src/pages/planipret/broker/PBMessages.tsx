@@ -5,6 +5,7 @@ import { MessageSquare, Send, Trash2, X } from "lucide-react";
 import { useSmsThreadState, smsThreadKey, isHidden } from "@/lib/planipret/smsThreadState";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { toast } from "sonner";
+import { smsDeliveryLabel } from "@/lib/planipret/smsDelivery";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import Pagination from "@/components/planipret/admin/Pagination";
@@ -111,7 +112,7 @@ export default function PBMessages() {
       });
       if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error);
       setDraft("");
-      toast.success(lang === "en" ? "Message sent" : "Message envoyé");
+      toast.success(lang === "en" ? "Message accepted" : "Message accepté");
       await load();
     } catch (e: any) {
       toast.error(e?.message || (lang === "en" ? "Send failed" : "Envoi impossible"));
@@ -224,7 +225,7 @@ export default function PBMessages() {
                     color: m.direction === "outbound" ? "#fff" : "var(--pp-text-primary)",
                   }}>
                     <div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
-                    <div style={{ fontSize: 10, opacity: 0.7, marginTop: 3 }}>{fmtDateTime(m.sent_at ?? m.created_at, lang)}</div>
+                    <div style={{ fontSize: 10, opacity: 0.7, marginTop: 3 }}>{fmtDateTime(m.sent_at ?? m.created_at, lang)}{m.direction === "outbound" ? ` · ${smsDeliveryLabel(m, lang)}` : ""}</div>
                   </button>
                 </div>
               ))}
@@ -257,7 +258,7 @@ export default function PBMessages() {
               <Meta label={lang === "en" ? "From" : "De"} value={detail.from_number} />
               <Meta label={lang === "en" ? "To" : "À"} value={detail.to_number} />
               <Meta label={lang === "en" ? "Direction" : "Direction"} value={detail.direction} />
-              <Meta label={lang === "en" ? "Status" : "Statut"} value={detail.status} />
+              <Meta label={lang === "en" ? "Status" : "Statut"} value={detail.direction === "outbound" ? smsDeliveryLabel(detail, lang) : detail.status} />
               <Meta label={lang === "en" ? "Sent" : "Envoyé"} value={fmtDateTime(detail.sent_at ?? detail.created_at, lang)} />
               <Meta label={lang === "en" ? "Read" : "Lu"} value={detail.read_at ? fmtDateTime(detail.read_at, lang) : "—"} />
             </dl>

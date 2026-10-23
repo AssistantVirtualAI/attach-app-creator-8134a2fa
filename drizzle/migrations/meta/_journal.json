@@ -204,6 +204,13 @@
       "when": 1792709784630,
       "tag": "0028_device_claim_ignore_stale_calls",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792792067207,
+      "tag": "0029_track_previous_maestro_broker_id",
+      "breakpoints": true
     }
   ]
 }

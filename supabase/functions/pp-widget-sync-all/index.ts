@@ -10,6 +10,11 @@ Deno.serve(async (req) => {
     if ("error" in auth) return auth.error;
     const { admin } = auth;
     const body = await req.json().catch(() => ({}));
+    // Release a CRM user's widget association: posts { user_id } without external_user_id.
+    if (body?.action === "release" && typeof body?.crm_id === "string" && body.crm_id.trim()) {
+      const res = await syncBrokerToWidget(admin, { crmId: body.crm_id.trim(), released: true, force: true });
+      return jsonResponse({ success: res.ok, status: res.status, error: res.error_code ?? null, detail: (res as any).detail ?? null });
+    }
     let q = admin.from("planipret_profiles").select("user_id, extension, ns_extension, maestro_broker_id, email, status");
     if (typeof body?.user_id === "string") q = q.eq("user_id", body.user_id);
     const { data, error } = await q;

@@ -72,8 +72,9 @@
 
 - [x] Karl 1142 : 450 540-5253 assigné (appels/textos/numéro affiché relus), 438 953-5017 libéré; fiches locales resynchronisées; widget poussé pour tous.
 
-- [ ] Megan 1117 et Pierre 1197 ont deux numéros dans NetSapiens; le widget affiche le 438 tant que l’ancien n’est pas libéré — attente accord. Widget refuse Marc 1136 et Camille 1137 (erreur 500 côté Maestro).
+- [ ] Confirm widget read-back for Megan 1117 and Pierre 1197, and identify the remaining Maestro HTTP 500. Previous authorized synchronization reported 38 accepted and 45 not linked; not rechecked in the Android verification.
 
-- [x] Megan 1117 keeps 514 880-1737, Pierre 1197 keeps 438 842-5105; other 438 numbers released, widget sync queued.
+- [x] Latest authorized number change supersedes the earlier Pierre choice: Megan 1117 keeps 514 880-1737; Pierre 1197 keeps 438 953-5072. Previous turn reported deletion of 438 953-4992 and 438 842-5105 from NetSapiens and synchronization of local profiles.
 - [x] NetSapiens-active gate for portal + mobile (pp-ns-access-check); audit 81/81 allowed. Installed app needs new release for its own check.
-- [ ] Android push: new Firebase service-account key required from user.
+- [ ] Android push: replacement FCM_SERVICE_ACCOUNT_JSON securely saved. Live authorized verification 2026-10-22 tested all six Android-linked accounts/seven active tokens: zero Android accepted, six SENDER_ID_MISMATCH and one UNREGISTERED; existing sender removed the unregistered token. Google credential exchange now succeeds, but installed registrations and sender project do not match. Match Firebase project to the installed app before requesting another secure replacement; no new deployment or native change in verification. 81 linked brokers: 41 with an active mobile token, 40 without. Real SMS/missed-call/voicemail/task phone receipt still unverified.
+- [x] Prepare Manus daily summary 2026-10-22 with current Android evidence and explicit separation of earlier reported deployments, current source tests, mobile-release requirements and real-phone blockers. 28 focused tests passed in this verification.

@@ -7,7 +7,7 @@ import { getMaestroTelecomConfig, maestroTelecomFetch, type MaestroTelecomConfig
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined;
 
 export type WidgetSyncPayload = { user_id: string; external_user_id?: string };
-export type WidgetSyncResult = { ok: boolean; status: number; skipped?: "not_linked" | "debounced" | "not_configured"; error_code?: string };
+export type WidgetSyncResult = { ok: boolean; status: number; skipped?: "not_linked" | "debounced" | "not_configured"; error_code?: string; detail?: unknown };
 
 const lastSent = new Map<string, number>();
 export const DEBOUNCE_MS = 30_000;
@@ -34,7 +34,7 @@ export async function postWidgetSync(
 ): Promise<WidgetSyncResult> {
   if (!cfg.url || !cfg.key) return { ok: false, status: 0, skipped: "not_configured" };
   const r = await fetcher(cfg, "/sync", { method: "POST", body: payload, maxAttempts: 4, timeoutMs: 10_000 });
-  return r.ok ? { ok: true, status: r.status } : { ok: false, status: r.status, error_code: r.status === 0 ? "network" : `http_${r.status}` };
+  return r.ok ? { ok: true, status: r.status } : { ok: false, status: r.status, error_code: r.status === 0 ? "network" : `http_${r.status}`, detail: redactDetail(r.data ?? r.error) };
 }
 
 /** Explicit ids win (needed for deletes, where the profile is gone). */
@@ -72,7 +72,7 @@ export async function logWidgetSyncResult(admin: SupabaseClient, uid: string | n
     await admin.from("planipret_maestro_sync_log").insert({
       user_id: uid, action: payload.external_user_id ? "widget.sync" : "widget.release",
       maestro_endpoint: "POST /sync", request_body: { has_external: !!payload.external_user_id },
-      response_body: res.ok ? null : { error: res.error_code ?? res.skipped }, response_status: res.status,
+      response_body: res.ok ? null : { error: res.error_code ?? res.skipped, ...(res.detail !== undefined ? { provider_response: res.detail } : {}) }, response_status: res.status,
       success: res.ok,
     });
   } catch { /* best effort */ }
@@ -134,4 +134,14 @@ export function queueWidgetResourceEvent(admin: SupabaseClient, owner: string, e
     if (cfg.url && cfg.key) await maestroTelecomFetch(cfg, "/sync", { method: "POST", body: payload, maxAttempts: 2, timeoutMs: 5000 });
   })().catch(() => console.warn("[widget-resource] delivery_failed"));
   if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(task);
+}
+
+/** Provider error body, truncated, with phone numbers, emails and tokens masked. */
+export function redactDetail(v: unknown): unknown {
+  if (v == null) return undefined;
+  const t = (typeof v === "string" ? v : JSON.stringify(v)).slice(0, 1000)
+    .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "[email]")
+    .replace(/\+?\d[\d\s().-]{8,}\d/g, "[num]")
+    .replace(/(bearer|token|key|secret|password)("?\s*[:=]\s*"?)[^"\s,}]+/gi, "$1$2[redacted]");
+  try { return JSON.parse(t); } catch { return t; }
 }

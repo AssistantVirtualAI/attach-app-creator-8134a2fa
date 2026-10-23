@@ -54,6 +54,7 @@ export async function syncBrokerToWidget(
     const { data } = await q.maybeSingle();
     if (!data) return { ok: false, status: 0, skipped: "not_linked" };
     crmId = (data as any).maestro_broker_id ?? null;
+    prevCrmId = (data as any).previous_maestro_broker_id ?? null;
     uid = (data as any).user_id ?? uid;
     ext = ext ?? (data as any).ns_extension ?? (data as any).extension ?? null;
   }
@@ -62,7 +63,19 @@ export async function syncBrokerToWidget(
   if (!sel.force && shouldDebounce(`${payload.user_id}:${payload.external_user_id ?? "-"}`)) {
     return { ok: true, status: 0, skipped: "debounced" };
   }
-  const res = await postWidgetSync(await getMaestroTelecomConfig(admin), payload);
+  const cfg = await getMaestroTelecomConfig(admin);
+  let res = await postWidgetSync(cfg, payload);
+  // Maestro rejects a sync when the extension is still bound to a previous CRM
+  // account (duplicate sip_username). Release the known previous account once,
+  // then retry the sync a single time.
+  if (!res.ok && res.status === 500 && payload.external_user_id && prevCrmId && prevCrmId !== payload.user_id) {
+    const releasePayload: WidgetSyncPayload = { user_id: prevCrmId };
+    const releaseRes = await postWidgetSync(cfg, releasePayload);
+    await logWidgetSyncResult(admin, uid, releasePayload, releaseRes, "widget.auto_release");
+    if (releaseRes.ok) {
+      res = await postWidgetSync(cfg, payload);
+    }
+  }
   await logWidgetSyncResult(admin, uid, payload, res);
   return res;
 }

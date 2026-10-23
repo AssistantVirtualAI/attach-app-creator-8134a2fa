@@ -37,6 +37,26 @@ export async function postWidgetSync(
   return r.ok ? { ok: true, status: r.status } : { ok: false, status: r.status, error_code: r.status === 0 ? "network" : `http_${r.status}`, detail: redactDetail(r.data ?? r.error) };
 }
 
+/**
+ * Sync with one automatic recovery: Maestro rejects a sync with HTTP 500 when
+ * the extension is still bound to a previous CRM account (duplicate
+ * sip_username). When a previous CRM id is known, release it once and retry
+ * the sync a single time. Never loops.
+ */
+export async function postWidgetSyncWithAutoRelease(
+  cfg: MaestroTelecomConfig, payload: WidgetSyncPayload, prevCrmId: string | null,
+  fetcher: typeof maestroTelecomFetch = maestroTelecomFetch,
+  onRelease?: (releaseRes: WidgetSyncResult) => void | Promise<void>,
+): Promise<WidgetSyncResult> {
+  let res = await postWidgetSync(cfg, payload, fetcher);
+  if (!res.ok && res.status === 500 && payload.external_user_id && prevCrmId && prevCrmId !== payload.user_id) {
+    const releaseRes = await postWidgetSync(cfg, { user_id: prevCrmId }, fetcher);
+    await onRelease?.(releaseRes);
+    if (releaseRes.ok) res = await postWidgetSync(cfg, payload, fetcher);
+  }
+  return res;
+}
+
 /** Explicit ids win (needed for deletes, where the profile is gone). */
 export async function syncBrokerToWidget(
   admin: SupabaseClient,
@@ -64,18 +84,8 @@ export async function syncBrokerToWidget(
     return { ok: true, status: 0, skipped: "debounced" };
   }
   const cfg = await getMaestroTelecomConfig(admin);
-  let res = await postWidgetSync(cfg, payload);
-  // Maestro rejects a sync when the extension is still bound to a previous CRM
-  // account (duplicate sip_username). Release the known previous account once,
-  // then retry the sync a single time.
-  if (!res.ok && res.status === 500 && payload.external_user_id && prevCrmId && prevCrmId !== payload.user_id) {
-    const releasePayload: WidgetSyncPayload = { user_id: prevCrmId };
-    const releaseRes = await postWidgetSync(cfg, releasePayload);
-    await logWidgetSyncResult(admin, uid, releasePayload, releaseRes, "widget.auto_release");
-    if (releaseRes.ok) {
-      res = await postWidgetSync(cfg, payload);
-    }
-  }
+  const res = await postWidgetSyncWithAutoRelease(cfg, payload, prevCrmId, maestroTelecomFetch,
+    (releaseRes) => logWidgetSyncResult(admin, uid, { user_id: String(prevCrmId) }, releaseRes, "widget.auto_release"));
   await logWidgetSyncResult(admin, uid, payload, res);
   return res;
 }

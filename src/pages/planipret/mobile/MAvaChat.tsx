@@ -40,7 +40,9 @@ const MUTATING_ACTIONS = new Set([
 const CONFIRM_RE = /^(oui|ok|okay|confirm[eé]?|confirm[eé] pour envoyer|j['’]?autorise|autorise|vas-y|go|envoie|envoyer|appelle|appel|cr[eé]e|supprime|delete|yes|yep|approved?|approuv[eé])\b/i;
 const CANCEL_RE = /^(non|annule|annuler|stop|cancel|cancelled?|no|n\b)/i;
 
-export default function MAvaChat() {
+export type AvaHost = { openDialer?: (number?: string, autoDial?: boolean) => void; softphone?: any };
+
+export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
   const [userId, setUserId] = useState<string | null>(null);
   const [voiceAgentAllowed, setVoiceAgentAllowed] = useState(false);
   const [chatAllowed, setChatAllowed] = useState(true);
@@ -65,7 +67,8 @@ export default function MAvaChat() {
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const avaContext = useAvaContext();
-  const outlet = useOutletContext<PlanipretMobileContext>() as any;
+  const outletCtx = useOutletContext<PlanipretMobileContext>() as any;
+  const outlet = host ?? outletCtx;
   const { t, lang } = useMplanipretLang();
 
   const switchMode = (m: "chat" | "voice") => { setMode(m); localStorage.setItem("ava_mode", m); };

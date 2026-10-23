@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import MAvaChat from "@/pages/planipret/mobile/MAvaChat";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
@@ -10,7 +11,16 @@ export function isPortalAvaAllowed(row: { portal_ava_enabled?: boolean | null } 
   return row?.portal_ava_enabled === true;
 }
 
-export default function PortalAvaLauncher({ authUserId }: { authUserId?: string | null }) {
+export default function PortalAvaLauncher({ authUserId, softphone }: { authUserId?: string | null; softphone?: any }) {
+  // Same call owner as the portal dialer: the portal softphone (mirror of the app's openDialer).
+  const host = {
+    softphone,
+    openDialer: async (number?: string) => {
+      if (!number || !softphone?.placeCall) { toast.error("Appel impossible"); return; }
+      const res = await softphone.placeCall(number);
+      if (res?.via === "none") toast.error(res.error || "Appel impossible");
+    },
+  };
   const [allowed, setAllowed] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -58,7 +68,7 @@ export default function PortalAvaLauncher({ authUserId }: { authUserId?: string 
               </button>
             </div>
             <div id="pp-mobile-frame" className="pp-portal-ava flex-1 min-h-0 flex flex-col overflow-hidden relative" style={{ ["--pp-ava-h" as any]: "100%" }}>
-              <MAvaChat />
+              <MAvaChat host={host} />
             </div>
           </div>
         </>

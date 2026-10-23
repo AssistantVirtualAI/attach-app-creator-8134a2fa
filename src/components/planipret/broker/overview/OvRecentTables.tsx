@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { resolveCallerClient } from "@/lib/planipret/callerClient";
+import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { formatPhoneDisplay } from "@/lib/planipret/ovPeer";
 import { Link } from "react-router-dom";
 import { MessageSquare, Phone, Sparkles, Users } from "lucide-react";
@@ -70,6 +71,7 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
 
   const quiet = useOv3dQuiet([rows.length, (rows[0] as any)?.id ?? null]);
   const clientOf = useClientNames(rows.map(callNumber));
+  const peerNames = useCallerNames(rows.map((r) => callNumber(r) ?? callPeer(r)));
 
   return (
     <OvCard
@@ -101,7 +103,7 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
                   <Row3D key={c.id} accent={accent}>
                     <td className="whitespace-nowrap">{fmtDateTime(c.created_at, lang)}</td>
                     <td style={{ maxWidth: 220 }}>
-                      <PeerCell contact={callContact(c)} client={clientOf(callNumber(c))} number={callNumber(c) ?? callPeer(c)} />
+                      <PeerCell contact={callContact(c) || peerNames[callNumber(c) ?? callPeer(c)] || null} client={clientOf(callNumber(c))} number={callNumber(c) ?? callPeer(c)} />
                     </td>
                     <td className="whitespace-nowrap" style={{ minWidth: 116 }}>
                       <div className="flex items-center gap-1.5">
@@ -140,6 +142,7 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
 export const OvRecentMessages = memo(function OvRecentMessages({ rows, lang }: { rows: any[]; lang: "fr" | "en" }) {
   const quiet = useOv3dQuiet([rows.length, (rows[0] as any)?.id ?? null]);
   const clientOf = useClientNames(rows.map(msgNumber));
+  const peerNames = useCallerNames(rows.map((m) => msgNumber(m) ?? m.peer));
 
   return (
     <OvCard
@@ -157,7 +160,7 @@ export const OvRecentMessages = memo(function OvRecentMessages({ rows, lang }: {
               <Link key={m.id} to="/planipret/broker/messages" className="block">
                 <div className="ov3d-tile" style={{ ["--ov3d-accent" as any]: accent }}>
                   <div className="flex items-center justify-between gap-2">
-                    <div style={{ fontSize: 12 }} className="min-w-0"><PeerCell contact={m.contact_name ?? null} client={clientOf(msgNumber(m))} number={msgNumber(m) ?? m.peer} /></div>
+                    <div style={{ fontSize: 12 }} className="min-w-0"><PeerCell contact={m.contact_name || peerNames[msgNumber(m) ?? m.peer] || null} client={clientOf(msgNumber(m))} number={msgNumber(m) ?? m.peer} /></div>
                     <Badge3D color={accent}>
                       {outbound ? (lang === "en" ? "Sent" : "Envoyé") : (lang === "en" ? "Received" : "Reçu")}
                     </Badge3D>

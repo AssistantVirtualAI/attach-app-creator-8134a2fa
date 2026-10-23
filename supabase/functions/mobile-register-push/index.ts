@@ -1,7 +1,7 @@
 // mobile-register-push: persist the device push token for the authenticated user.
 // Token values are never echoed in responses, logs or audit metadata.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { canRegisterToken, normalizeDeviceId, readActiveDevice } from "../_shared/pp-active-device.ts";
+import { canUserRegisterToken, normalizeDeviceId } from "../_shared/pp-active-device.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +25,7 @@ const defaultDeps: Deps = {
       global: { headers: { Authorization: authHeader } },
     }),
   adminClient: () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!),
-  canRegister: async (admin, userId, deviceId) => canRegisterToken(await readActiveDevice(admin, userId), deviceId),
+  canRegister: (admin, userId, deviceId) => canUserRegisterToken(admin, userId, deviceId),
   log: (msg, meta) => console.warn(msg, meta ?? {}),
 };
 

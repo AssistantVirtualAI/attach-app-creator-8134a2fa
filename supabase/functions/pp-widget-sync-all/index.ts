@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
 
     let sent = 0, failed = 0, notLinked = 0;
     const errors: Record<string, number> = {};
+    const details: unknown[] = [];
     for (let i = 0; i < rows.length; i += 5) {
       const batch = rows.slice(i, i + 5);
       const results = await Promise.all(batch.map((r: any) => syncBrokerToWidget(admin, {
@@ -31,10 +32,10 @@ Deno.serve(async (req) => {
       for (const res of results) {
         if (res.skipped === "not_linked") notLinked++;
         else if (res.ok) sent++;
-        else { failed++; const k = res.error_code ?? res.skipped ?? "unknown"; errors[k] = (errors[k] ?? 0) + 1; }
+        else { failed++; const k = res.error_code ?? res.skipped ?? "unknown"; errors[k] = (errors[k] ?? 0) + 1; if (body?.user_id && (res as any).detail !== undefined) details.push({ status: res.status, provider_response: (res as any).detail }); }
       }
     }
-    return jsonResponse({ success: failed === 0, total: rows.length, sent, failed, not_linked: notLinked, errors });
+    return jsonResponse({ success: failed === 0, total: rows.length, sent, failed, not_linked: notLinked, errors, ...(body?.user_id ? { details } : {}) });
   } catch {
     return jsonResponse({ success: false, error: "internal" }, 200);
   }

@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Allow portal new messages/replies to internal extensions through existing pp-ns-sms chat dispatch, independent of external sender DID; preserve test-send prohibition and sender ownership, verify tests and no-send composer state.
+- [x] Portal new messages/replies accept numeric internal extensions (113) through existing pp-ns-sms chat dispatch, independent of external sender DID; 10 recipient/composer tests pass, signed-in browser shows internal destination and enabled Send. No message dispatched, no delivery assertion, no server/native change or publication; test-send prohibition preserved.
 
 - [x] Checked Jannie limits 1/25/200/500/2000: reported total stays 200. Existing GET probe with offset=200, page=2 and per_page=1&page=201 returns exactly the same first 2500 bytes as baseline (probe truncates; cannot claim full response identity). No documented upstream continuation found.
 - [x] Identified all 28 unlinked broker profiles; corrected 18 by unique exact email in the 1206-entry Maestro broker directory, validated target customer reads, conflict-guarded update of only blank maestro_telecom_user_id, read-back confirmed. CRM IDs/numbers/roles untouched.

@@ -10,6 +10,8 @@
 // Any other role is rejected with 403.
 
 import { commissionDataVersion } from "../_shared/commission-version.ts";
+import { cachedPaidDeposits } from "../_shared/commission-paid-cache.ts";
+import { claimCommissionRefresh, paidSourceFilters, reusableCommissionSnapshot } from "../_shared/commission-snapshot-policy.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
@@ -589,7 +591,9 @@ async function handler(req: Request): Promise<Response> {
 
     /** Parcourt toutes les pages de dépôts pour un jeton donné. */
     async function fetchAllDeposits(src: Src, _single: boolean) {
-      return collectPaidDeposits(src.token, { ...filters, ...(src.usersId ? { users_id: src.usersId } : {}) }, cid);
+      const mid = src.usersId ?? activeReportScope.usersId ?? filters.users_id;
+      if (!mid) return collectPaidDeposits(src.token, filters, cid);
+      return cachedPaidDeposits(admin, authenticatedUser.id, String(mid), src.token, filters, cid);
     }
 
     async function collectPaidSources(sources: Src[]) {
@@ -859,6 +863,9 @@ async function sha(text: string) {
 }
 function stableBody(b: any) {
   const { force, refresh, ...rest } = b ?? {};
+  if (["summary", "by_agent", "analytics", "pending"].includes(String(rest.action ?? "summary")) && rest.filters) {
+    rest.filters = paidSourceFilters(rest.filters);
+  }
   const sort = (v: any): any => Array.isArray(v) ? v.map(sort) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sort(v[k])])) : v;
   return sort(rest);
 }
@@ -912,18 +919,21 @@ Deno.serve(async (req) => {
     // re-running them here overwrote the Déboursées dashboards with a report
     // payload. They refresh themselves (stale-while-revalidate) on next read.
     let wq = admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body")
-      .not("cache_key", "like", "stats:%");
+      .not("cache_key", "like", "stats:%")
+      .not("cache_key", "like", "paid-rows:%");
     if (version) wq = wq.or(`data_version.is.null,data_version.neq.${version}`);
     const { data: rows } = await wq.gt("last_accessed_at", new Date(Date.now() - 2 * 3_600_000).toISOString())
-      .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("last_accessed_at", { ascending: false }).limit(12);
+      .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("last_accessed_at", { ascending: false }).limit(2);
     let ok = 0, failed = 0;
-    await Promise.allSettled((rows ?? []).map(async (row: any) => {
-      await admin.from("planipret_commission_snapshots").update({ refreshing_until: new Date(Date.now() + 10 * 60_000).toISOString() }).eq("cache_key", row.cache_key);
+    for (const row of rows ?? []) {
+      if (!await claimCommissionRefresh(admin, row.cache_key, null)) continue;
       const h = new Headers({ Authorization: `Bearer ${SERVICE_KEY}`, "x-ava-internal-user-id": row.user_id, "Content-Type": "application/json" });
-      const { data } = await runFresh(new Request(req.url, { method: "POST", headers: h }), JSON.stringify(row.request_body));
-      if (data?.ok === true) { await store(admin, row.cache_key, row.user_id, row.request_body, data, false); ok++; }
-      else { failed++; await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", row.cache_key); }
-    }));
+      try {
+        const { data } = await runFresh(new Request(req.url, { method: "POST", headers: h }), JSON.stringify(row.request_body));
+        if (data?.ok === true) { await store(admin, row.cache_key, row.user_id, row.request_body, data, false); ok++; }
+        else { failed++; await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", row.cache_key); }
+      } catch { failed++; await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", row.cache_key); }
+    }
     if (ok) await notifyUpdated();
     return new Response(JSON.stringify({ ok: true, refreshed: ok, failed }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -946,15 +956,14 @@ Deno.serve(async (req) => {
   const version = await commissionDataVersion(admin);
   const sameVersion = !!snap && !!version && snap.data_version === version;
 
-  if (snap && (force ? age < FORCE_MIN_MS : (sameVersion || age < FRESH_MS))) {
+  if (reusableCommissionSnapshot(snap, version, FRESH_MS)) {
     admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", key).then(() => {});
     return out(snap.payload, true, snap.fetched_at);
   }
   if (snap && !force) {
     // Stale: answer instantly, refresh in the background once.
     const busy = snap.refreshing_until && new Date(snap.refreshing_until).getTime() > Date.now();
-    if (!busy) {
-      await admin.from("planipret_commission_snapshots").update({ refreshing_until: new Date(Date.now() + 10 * 60_000).toISOString(), last_accessed_at: new Date().toISOString() }).eq("cache_key", key);
+    if (!busy && await claimCommissionRefresh(admin, key, snap.refreshing_until ?? null)) {
       const job = runFresh(req, bodyText).then(async ({ data }) => {
         if (data?.ok === true) await store(admin, key, userId, norm, data);
         else await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", key);

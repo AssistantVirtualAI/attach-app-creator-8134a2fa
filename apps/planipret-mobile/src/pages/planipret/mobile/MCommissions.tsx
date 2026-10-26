@@ -2,7 +2,7 @@
 // Données financières sensibles : lecture seule, aucune donnée mise en cache
 // hors de la session, aucun jeton Maestro côté client.
 import PendingCommissionsCard, { TeamSplitPanel } from "@/components/planipret/commissions/PendingCommissionsCard";
-import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
+import { paidCommissionPeriod } from "@/lib/planipret/paidCommissionPeriod";
 import { useCommissionLive } from "@/hooks/useCommissionLive";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
@@ -69,7 +69,7 @@ const PER_PAGE = 25;
 
 
 const cad = (n: number) =>
-  new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);
+  new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 const cad2 = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD" }).format(n || 0);
 const numOf = (v: unknown) => {
@@ -98,20 +98,12 @@ const mask = (name: string | null | undefined) => {
 
 /** Fenêtre de dates America/Toronto pour la période choisie. */
 function rangeFor(period: Period, customFrom: string, customTo: string) {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Toronto" }));
-  const iso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const now = new Date();
+  const [year, month] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(now).split("-").map(Number);
   if (period === "custom") return { from: customFrom, to: customTo };
-  if (period === "year") return { from: `${now.getFullYear()}-01-01`, to: iso(now) };
-  if (period === "ytd") return { from: `${now.getFullYear()}-01-01`, to: iso(now) };
-  if (period === "quarter") {
-    const q = Math.floor(now.getMonth() / 3);
-    return { from: iso(new Date(now.getFullYear(), q * 3, 1)), to: iso(new Date(now.getFullYear(), q * 3 + 3, 0)) };
-  }
-  return {
-    from: iso(new Date(now.getFullYear(), now.getMonth(), 1)),
-    to: iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-  };
+  const p = period === "ytd" ? "year" : period;
+  const r = paidCommissionPeriod(year, p, p === "quarter" ? Math.ceil(month / 3) : month, now);
+  return { from: r.date_from, to: r.date_to };
 }
 
 export default function MCommissions() {
@@ -127,7 +119,7 @@ export default function MCommissions() {
   const [sp] = useSearchParams();
   const spPeriod = sp.get("period");
   const [period, setPeriod] = useState<Period>(
-    (["month", "quarter", "year", "ytd", "custom"] as string[]).includes(String(spPeriod)) ? (spPeriod as Period) : "month",
+    (["month", "quarter", "year", "ytd", "custom"] as string[]).includes(String(spPeriod)) ? (spPeriod as Period) : "year",
   );
   const [customFrom, setCustomFrom] = useState(sp.get("date_from") ?? "");
   const [customTo, setCustomTo] = useState(sp.get("date_to") ?? "");
@@ -438,8 +430,6 @@ export default function MCommissions() {
 
       {section === "paid" && (
         <div className="mb-4">
-          <h2 className="flex items-center gap-2 text-base font-bold mt-1 mb-3">{fr ? "Analyse détaillée" : "Detailed analysis"}</h2>
-          <RegisterCommissions lang={fr ? "fr" : "en"} scope={isAdmin ? "admin" : "broker"} />
           <Button variant="outline" className="w-full min-h-11 mt-3" onClick={() => navigate("tableaux")}>
             {fr ? "Graphiques par courtier" : "Broker charts"}
           </Button>

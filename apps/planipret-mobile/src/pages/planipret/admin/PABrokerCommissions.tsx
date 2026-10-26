@@ -11,6 +11,7 @@ import { PAPage, PAPageHeader, PACard, PATable, PAToolbar, PAStats, PAStat } fro
 import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 import { useCommissionLive } from "@/hooks/useCommissionLive";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { paidCommissionPeriod } from "@/lib/planipret/paidCommissionPeriod";
 
 type Kind = "paid" | "pending";
 type Broker = { id: string; name: string };
@@ -21,7 +22,7 @@ type Detail = { total: number; files: number; volume: number; months: Month[]; p
 
 const MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 const MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const cad = (n: number) => (n || 0).toLocaleString("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
+const cad = (n: number) => (n || 0).toLocaleString("fr-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const exact = (n: number) => (n || 0).toLocaleString("fr-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const compactCad = (n: number) => new Intl.NumberFormat("fr-CA", { notation: "compact", style: "currency", currency: "CAD", maximumFractionDigits: 1 }).format(n || 0);
 
@@ -75,11 +76,7 @@ export default function PABrokerCommissions({ selfOnly = false }: { selfOnly?: b
     const hit = list.find((r) => r.users_id === b.id);
     return hit ? { ...b, name: hit.name } : b;
   }));
-  const range = (y: number) => {
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(new Date());
-    const to = `${y}-12-31` > today ? today : `${y}-12-31`;
-    return { date_from: `${y}-01-01`, date_to: to };
-  };
+  const range = (y: number) => paidCommissionPeriod(y);
   const allView = !selfOnly && !broker;
 
   useEffect(() => {
@@ -220,10 +217,10 @@ export default function PABrokerCommissions({ selfOnly = false }: { selfOnly?: b
       {allView ? (
         <>
           <PAStats>
-            <PAStat label={`${kindLabel}${kind === "paid" ? ` ${year}` : ""}`} value={exact(totals.amount)} icon={<WalletCards className="h-4 w-4" />} />
-            <PAStat label={fr ? "Dossiers (Base)" : "Files (Base)"} value={totals.files.toLocaleString("fr-CA")} icon={<BriefcaseBusiness className="h-4 w-4" />} />
-            <PAStat label={fr ? "Volume (Base)" : "Volume (Base)"} value={cad(totals.volume)} icon={<Landmark className="h-4 w-4" />} />
-            <PAStat label={fr ? "Courtiers" : "Brokers"} value={String(sorted.length)} icon={<Users className="h-4 w-4" />} />
+            <PAStat label={`${kindLabel}${kind === "paid" ? ` ${year}` : ""}`} value={rows ? exact(totals.amount) : "—"} icon={<WalletCards className="h-4 w-4" />} />
+            <PAStat label={fr ? "Dossiers (Base)" : "Files (Base)"} value={rows ? totals.files.toLocaleString("fr-CA") : "—"} icon={<BriefcaseBusiness className="h-4 w-4" />} />
+            <PAStat label={fr ? "Volume (Base)" : "Volume (Base)"} value={rows ? cad(totals.volume) : "—"} icon={<Landmark className="h-4 w-4" />} />
+            <PAStat label={fr ? "Courtiers" : "Brokers"} value={rows ? String(sorted.length) : "—"} icon={<Users className="h-4 w-4" />} />
           </PAStats>
           <PACard title={`${fr ? "Tous les courtiers" : "All brokers"} — ${kindLabel}`} subtitle={fr ? "Cliquez sur un courtier pour voir son détail." : "Click a broker to see the detail."}>
             <PATable>

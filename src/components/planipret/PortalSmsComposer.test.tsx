@@ -42,10 +42,11 @@ describe("PortalSmsComposer", () => {
     expect(mocks.invoke.mock.calls[1][1].body.idempotency_key).toBe(first);
   });
 
-  it("does not send when closing an unsent draft", () => {
+  it("does not send when closing an unsent draft", async () => {
     const { onClose } = setup();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onClose).toHaveBeenCalledOnce();
     expect(mocks.invoke).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send" })).toBeEnabled());
   });
 });

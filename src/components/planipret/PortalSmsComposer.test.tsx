@@ -2,16 +2,19 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PortalSmsComposer from "./PortalSmsComposer";
 
-const mocks = vi.hoisted(() => ({ invoke: vi.fn(), success: vi.fn() }));
+const mocks = vi.hoisted(() => ({ invoke: vi.fn(), success: vi.fn(), availability: vi.fn() }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { functions: { invoke: mocks.invoke } } }));
 vi.mock("sonner", () => ({ toast: { success: mocks.success } }));
 vi.mock("@/lib/planipret/smsAvailability", () => ({
-  getSmsAvailability: async () => ({ state: "ready", primaryNumber: "+15145550100" }),
+  getSmsAvailability: (...args: unknown[]) => mocks.availability(...args),
   normalizeSmsNumber: (value: string) => value.replace(/\D/g, "").length === 10 ? `+1${value.replace(/\D/g, "")}` : null,
 }));
 
 describe("PortalSmsComposer", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.availability.mockResolvedValue({ state: "ready", primaryNumber: "+15145550100" });
+  });
   const setup = () => {
     const onClose = vi.fn();
     const onSent = vi.fn();
@@ -70,5 +73,25 @@ describe("PortalSmsComposer", () => {
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     expect(onSent).not.toHaveBeenCalled();
     expect(mocks.success).not.toHaveBeenCalled();
+  });
+
+  it("submits extension 113 even without an external sender DID", async () => {
+    mocks.availability.mockResolvedValue({ state: "unavailable", primaryNumber: null });
+    mocks.invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    setup();
+    fireEvent.change(screen.getByLabelText("Recipient"), { target: { value: "113" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("pp-ns-sms", { body: {
+      action: "send", to: "113", message: "Bonjour client", idempotency_key: expect.stringContaining("pp-sms-v1:"),
+    } }));
+  });
+
+  it("still blocks external SMS when no sender DID is available", async () => {
+    mocks.availability.mockResolvedValue({ state: "unavailable", primaryNumber: null });
+    setup();
+    await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });

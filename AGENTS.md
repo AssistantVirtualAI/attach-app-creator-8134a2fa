@@ -3,6 +3,7 @@
 - Let Vite infer the HMR protocol and port from the browser origin so local HTTP verification and hosted HTTPS previews both connect without hardcoded secure localhost sockets.
 
 - Portal SMS creation and replies share PortalSmsComposer and the existing JWT-owned pp-ns-sms endpoint; admin compose identity comes from the authenticated session rather than an optional display profile. Never submit a selected broker/sender, automatically retry dispatch, or label acceptance as delivery, preventing impersonation and duplicate texts.
+- Portal extension destinations use a dedicated recipient classifier, not external DID normalization; the existing server owns internal chat dispatch and sender identity, so a missing external DID cannot block extension chat.
 
 - SMS presentation shares a mirrored evidence classifier; local sent/HTTP acceptance never proves delivery, and deduplication must retain explicit provider status.
 

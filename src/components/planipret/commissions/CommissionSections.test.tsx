@@ -4,7 +4,7 @@ import CommissionSections from "./CommissionSections";
 
 vi.mock("./PendingCommissionsCard", () => ({ default: ({ cacheScope }: any) => <p>pending-{cacheScope}</p> }));
 vi.mock("./RegisterCommissions", () => ({ default: ({ scope }: any) => <p>paid-{scope}</p> }));
-vi.mock("./PaidDepositsCard", () => ({ default: () => <p>paid-overview</p> }));
+vi.mock("./PaidDepositsCard", () => ({ default: ({ scope }: any) => <p>paid-{scope}</p> }));
 
 describe("Commission status sections", () => {
   it("separates pending and paid on one page", () => {

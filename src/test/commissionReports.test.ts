@@ -77,9 +77,10 @@ describe("commission upstream responses", () => {
   it("reads every paid page and rejects malformed lists", async () => {
     const originalFetch = globalThis.fetch;
     let pages = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (input: any) => {
       pages++;
-      return new Response(JSON.stringify({ data: [{ amount: 10 }], meta: { last_page: 12 } }));
+      const page = Number(new URL(String(input)).searchParams.get("page"));
+      return new Response(JSON.stringify({ data: [{ number: `contract-${page}`, amount: 10 }], meta: { last_page: 12, total: 12 } }));
     }) as typeof fetch;
     try {
       const result = await collectPaidDeposits("test", { commission_type: "base" }, "cid");

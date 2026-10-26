@@ -6,7 +6,7 @@ const inflight = new Map<string, Promise<Awaited<ReturnType<typeof collectPaidDe
 
 /** Already-authorized broker credential only; tokens never enter keys or payloads. */
 export async function cachedPaidDeposits(admin: any, userId: string, brokerId: string, token: string, filters: NormalizedFilters, cid: string) {
-  const financial = paidSourceFilters(filters, brokerId);
+  const financial = paidSourceFilters({ ...filters }, brokerId);
   const key = `paid-rows:${await sha256Hex(stableJson({ userId, brokerId, financial }))}`;
   const version = await commissionDataVersion(admin);
   const { data: snap } = await admin.from("planipret_commission_snapshots")

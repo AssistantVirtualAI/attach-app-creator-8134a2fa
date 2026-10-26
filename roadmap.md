@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Identify the exact paid lines behind the 1316 global discrepancy; correct shared server snapshot/projection consistency without changing financial rules, then verify all-broker portal/mobile parity. No deployment or installed native release authorized by this request.
+
 - [x] Prepare CPU guards: unchanged-version refresh reuse, atomic existing-snapshot refresh lease, worker-local single-flight stats, sequential two-report warming, year directory from buckets, no repeated advisory AI for stats, shared per-user/broker/filter paid rows for summary/deposits/by_agent. 43 focused tests pass; financial formulas unchanged, no deployment or sync initiated.
 - [ ] Verify CPU fix and complete synchronization live: requires explicit complete backend deployment approval; current logs still show report CPU failure at 19:59 UTC and finished sync rows only partial batch counts, so all-broker completion is not proven.
 - [ ] Received/paid once under disbursed Wednesday transition: requirement saved; stored provider rows expose no commission status or immutable commission ID. Need authoritative Maestro field/endpoint mapping before safe transition deduplication; do not invent fields, merge pending or drop legitimate equal commissions.

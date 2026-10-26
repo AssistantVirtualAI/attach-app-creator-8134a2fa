@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Audit Jannie Brassard and every broker's complete Maestro customer endpoint against portal/mobile listing, pagination and owner scope; read-only, no native changes or deployment.
+
 - [x] Add new SMS and own-line replies to broker/admin portal pages through shared PortalSmsComposer and existing authenticated pp-ns-sms; six tests pass (owned sender payload, single attempt, retained retry key, cancellation), preview build OK. No server/native edits, sends or publication.
 - [x] Resolve portal verification blockers: fixed hardcoded local secure HMR socket and admin composer identity derived from an optional profile. Signed-in SMS page and new composer visibly verified; Send disabled on blank draft; 14 composer/error/idempotency/provider-evidence tests pass, preview build OK. No service/native changes or publication.
 - [ ] Verify real new SMS/reply delivery: extension 113 belongs to requester but is an internal chat destination, not an external SMS recipient; permanent server safeguards reject test messages. Need an approved external recipient and explicit resolution of test-send prohibition. No messages sent; live delivery/error handling remains unverified.

@@ -17,11 +17,14 @@ function fmt(sec: number) {
 export default function PpCallPill({
   snap,
   onHangup,
+  elapsedSeconds,
 }: {
   snap: PpSipSnapshot;
   onHangup: () => void;
+  elapsedSeconds?: number;
 }) {
-  const elapsed = useCurrentCallElapsed(snap.callState, snap.startedAt);
+  const fallbackElapsed = useCurrentCallElapsed(snap.callState, snap.startedAt, snap.callId);
+  const elapsed = elapsedSeconds ?? fallbackElapsed;
   const path = useLocation().pathname;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 

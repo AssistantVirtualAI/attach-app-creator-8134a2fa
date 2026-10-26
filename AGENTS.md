@@ -6,6 +6,7 @@
 
 - Portal SMS creation and replies share PortalSmsComposer and the existing JWT-owned pp-ns-sms endpoint; admin compose identity comes from the authenticated session rather than an optional display profile. Never submit a selected broker/sender, automatically retry dispatch, or label acceptance as delivery, preventing impersonation and duplicate texts.
 - Portal extension destinations use a dedicated recipient classifier, not external DID normalization; the existing server owns internal chat dispatch and sender identity, so a missing external DID cannot block extension chat.
+- Explicit SMS-test exceptions are checked server-side against owner, recipient, exact body, fixed idempotency key and expiry; the default shared test prohibition stays intact, preventing a browser-controlled general override.
 
 - SMS presentation shares a mirrored evidence classifier; local sent/HTTP acceptance never proves delivery, and deduplication must retain explicit provider status.
 

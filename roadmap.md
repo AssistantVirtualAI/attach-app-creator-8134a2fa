@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Apply narrowly scoped, expiring user-approved cell SMS test exception; deploy only pp-ns-sms and attempt one send with fixed idempotency key, report service evidence separately from handset receipt.
+- [x] User-approved cell test: owner/recipient/body/key/expiry exception deployed only to pp-ns-sms; 3 tests pass. Exactly one send returned HTTP 200 ok; one history read returned one matching outbound entry with status sent and no error, no explicit delivered evidence. Exception expires 2026-10-26 23:20 UTC; no retry or frontend publication.
+- [ ] Confirm actual approved test SMS receipt: waiting for the user’s phone confirmation; service sent status does not prove delivery.
 
 - [ ] Verify two consecutive handset calls (same and different numbers), full/minimized duration zero after hangup and starts only at answer: blocked on physical handset and updated installed app. Presentation-only ring/stale timestamp guard and shared screen/pill clock prepared with automated lifecycle tests; no native/telephony changes or publication. Installed native answer-event semantics remain unverified.
 

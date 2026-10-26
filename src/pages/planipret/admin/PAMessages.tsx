@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useOutletContext, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import PortalSmsComposer from "@/components/planipret/PortalSmsComposer";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,7 +76,6 @@ const DICT = {
 };
 
 export default function PAMessages() {
-  const { profile } = useOutletContext<{ profile: { user_id?: string } | null }>();
   const [authUserId, setAuthUserId] = useState("");
   useEffect(() => {
     let current = true;

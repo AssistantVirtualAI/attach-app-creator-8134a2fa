@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Reconcile Sandra pending categories against October 26 Maestro screenshot and live endpoint: investigate Bonus 2 and Override one-cent differences, retain own-files-only, no native edits or unrequested deployment.
+
 - [x] Prepare Manus Android M handoff (2026-10-26): documented exact React/server selection paths, all-broker 1142M/1117M tests, TLS media-engine prerequisite, protected W/x/routing/number invariants, missing separate native source/version access and real-device gates. Specification only, no application/native edits, build or deployment.
 - [x] Audit all 84 profile extensions for live non-expired NS registrations (2026-10-26): 13 M, 1 W (Karl 1142), 39 x; 71 have no live M, all device-list reads HTTP 200. One additional legacy 1197_mobile binding. Suffix/registration is not proof of a handset audio engine: some M holders are SIP.js, one KeepAlive, others have no UA.
 - [ ] Implement requested all-broker mobile M / portal W / widget x separation: blocked on coordinated installed Android/native repository update and device validation; do not switch M transport/credentials beneath current iOS clients or disconnect Karl's existing W client. No native change, reprovisioning, routing/number change or deployment authorized/performed in this audit.

@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Reset current-call duration after hangup in both mirrored web presentations; verify terminal states with retained timestamps and next-call reset. No native/transport changes, calls or publication.
+- [x] Reset current-call duration synchronously after hangup in both mirrored web presentations through shared elapsed hook; 7 tests pass, including ended/idle with retained 91:31 timestamp, next-call reset and held time. Preview build OK. No native/transport changes, calls or publication; installed-device validation requires next app release and a real call.
 
 - [x] Portal new messages/replies accept numeric internal extensions (113) through existing pp-ns-sms chat dispatch, independent of external sender DID; 10 recipient/composer tests pass, signed-in browser shows internal destination and enabled Send. No message dispatched, no delivery assertion, no server/native change or publication; test-send prohibition preserved.
 

@@ -3,7 +3,7 @@ import { num, type CommissionDepositRow } from "./commission-reports.ts";
 const dated = (r: CommissionDepositRow) => /^\d{4}-\d{2}-\d{2}/.test(String(r.date_trans ?? "").trim());
 const cents = (n: number) => Math.round(n * 100) / 100;
 
-/** Amounts retain all categories and multiplicities; only files/volume are own Base. */
+/** Amounts keep all categories; units = distinct received Base contracts, volume = distinct contract+loan. */
 export function paidBrokerProjection(rows: CommissionDepositRow[]) {
   const buckets = new Map<string, { users_id: number | null; name: string; total: number; count: number; files: Set<string>; loans: Map<string, number> }>();
   for (const r of rows) {
@@ -13,11 +13,10 @@ export function paidBrokerProjection(rows: CommissionDepositRow[]) {
     const key = id == null ? `n:${name.toLowerCase()}` : `id:${id}`;
     const b = buckets.get(key) ?? { users_id: id, name, total: 0, count: 0, files: new Set<string>(), loans: new Map<string, number>() };
     b.total += num(r.amount); b.count++;
-    const own = r.target_name_id == null || id == null || String(r.target_name_id) === String(id);
-    const loan = num(r.loan_amt); const contract = String(r.number ?? "").trim();
-    if (own && !String(r.date_trans).startsWith("0000") && String(r.commission_type ?? "base").toLowerCase() === "base" && Number(r.is_adjustment) !== 1 && loan > 0 && contract) {
+        const loan = num(r.loan_amt); const contract = String(r.number ?? "").trim();
+    if (!String(r.date_trans).startsWith("0000") && String(r.commission_type ?? "base").toLowerCase() === "base" && Number(r.is_adjustment) !== 1 && loan > 0 && contract) {
       const tranche = `${contract}|${loan}`;
-      b.files.add(tranche); b.loans.set(tranche, loan);
+      b.files.add(contract); b.loans.set(tranche, loan);
     }
     buckets.set(key, b);
   }

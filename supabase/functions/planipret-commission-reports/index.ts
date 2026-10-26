@@ -644,23 +644,21 @@ async function handler(req: Request): Promise<Response> {
       }, 200, cid);
     }
 
-    // Paid files/volume — same rule as pending: base, non-adjustment rows of
-    // the receiving broker's own files (target = receiver), dated, positive
-    // loan; one count per contract, volume sums distinct contract+loan.
+    // Paid files/volume (Maestro "Unités"): every dated, non-adjustment Base
+    // row received by the broker (target_name is not a team filter), positive
+    // loan; one unit per contract, volume sums distinct contract+loan.
     const paidBaseFiles = (rows: CommissionDepositRow[]) => {
       const per = new Map<string, { files: Set<string>; vol: Map<string, number> }>();
       for (const r of rows as any[]) {
         if (String(r.commission_type ?? "base").toLowerCase() !== "base") continue;
         if (Number(r.is_adjustment) === 1) continue;
         const rec = r.agent_name_id != null ? String(r.agent_name_id) : "";
-        const tgt = r.target_name_id != null ? String(r.target_name_id) : rec;
-        if (rec && tgt && rec !== tgt) continue;
         const d = String(r.date_trans ?? "");
         if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
         const loan = num(r.loan_amt); const c = String(r.number ?? "").trim();
         if (!c || loan <= 0) continue;
         const e = per.get(rec) ?? { files: new Set<string>(), vol: new Map<string, number>() };
-        e.files.add(`${c}|${loan}`); e.vol.set(`${c}|${loan}`, loan); per.set(rec, e);
+        e.files.add(c); e.vol.set(`${c}|${loan}`, loan); per.set(rec, e);
       }
       const out = new Map<string, { files: number; volume: number }>();
       let files = 0, volume = 0;
@@ -746,7 +744,7 @@ async function handler(req: Request): Promise<Response> {
         summary.deal_count = b.files;
         summary.total_loan_volume = b.volume;
         (summary as any).files_rule = "own_base_unique_contracts";
-        (summary as any).months = baseMonths(all as any[], { receiver: (r) => String(r.agent_name_id ?? ""), owner: (r) => r.target_name_id != null ? String(r.target_name_id) : null, skip: (r) => Number(r.is_adjustment) === 1 });
+        (summary as any).months = baseMonths(all as any[], { receiver: (r) => String(r.agent_name_id ?? ""), owner: () => null, skip: (r) => Number(r.is_adjustment) === 1, contractUnits: true });
       }
       const validationScope = { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode };
       const paidDq = profileRows(all as any[], null);
@@ -776,7 +774,7 @@ async function handler(req: Request): Promise<Response> {
             const amt = num(r.amount); const n = String(r.number ?? "");
             const vol = unique_volume ? num(r.loan_amt) : 0;
             const isBase = String((r as any).commission_type ?? "base").toLowerCase() === "base" && Number((r as any).is_adjustment) !== 1 && num(r.loan_amt) > 0;
-            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { const k = `${n}|${num(r.loan_amt)}`; if (!x.vk.has(k)) { x.vk.add(k); x.volume += num(r.loan_amt); } x.files.add(k); } };
+            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { const k = `${n}|${num(r.loan_amt)}`; if (!x.vk.has(k)) { x.vk.add(k); x.volume += num(r.loan_amt); } x.files.add(n); } };
             apply(b);
             if (b === team) { const m = mem.get(t) ?? { name: String(target).trim(), b: mk() }; apply(m.b); mem.set(t, m); }
           }
@@ -835,7 +833,7 @@ async function handler(req: Request): Promise<Response> {
 // Month buckets shared by paid and pending (same rule as the cards):
 // commission = every dated row; files/volume = receiver's own base rows,
 // dated, positive loan, one count per contract+loan tranche (same key as volume).
-function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r: any) => string | null; skip?: (r: any) => boolean }) {
+function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r: any) => string | null; skip?: (r: any) => boolean; contractUnits?: boolean }) {
   const m = new Map<string, { month: string; commission: number; files: Set<string>; vol: Map<string, number> }>();
   for (const r of rows) {
     const d = String(r.date_trans ?? "");
@@ -850,7 +848,7 @@ function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r
     const loan = Number(r.loan_amt ?? r.loan_amount ?? 0) || 0;
     const c = String(r.number ?? r.contract_id ?? "").trim();
     if (!c || loan <= 0) continue;
-    b.files.add(`${rec}|${c}|${loan}`); b.vol.set(`${rec}|${c}|${loan}`, loan);
+    b.files.add(opts.contractUnits ? `${rec}|${c}` : `${rec}|${c}|${loan}`); b.vol.set(`${rec}|${c}|${loan}`, loan);
   }
   return [...m.values()].sort((a, b) => a.month.localeCompare(b.month)).map((b) => ({
     month: b.month, commission: Math.round(b.commission * 100) / 100, files: b.files.size,
@@ -962,7 +960,7 @@ Deno.serve(async (req) => {
   const norm = stableBody(body);
   // Revision namespaces old independently collected action payloads out, without
   // deleting records or changing the global financial data version.
-  const revision = ["summary", "analytics", "deposits", "by_agent"].includes(action) ? "paid-unified-v1|" : "";
+  const revision = ["summary", "analytics", "deposits", "by_agent"].includes(action) ? "paid-unified-v2|" : "";
   const key = await sha(`${revision}${userId}|${JSON.stringify(norm)}`);
   const { data: snap } = await admin.from("planipret_commission_snapshots").select("payload,fetched_at,refreshing_until,data_version").eq("cache_key", key).maybeSingle();
   const force = body?.force === true || body?.refresh === true;

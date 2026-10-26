@@ -22,6 +22,7 @@ import { formatSipParty } from "@/lib/planipret/sip/formatSipParty";
 import { callUi, useCallUi } from "@/lib/planipret/callUiStore";
 import PpCallPill from "./PpCallPill";
 import PpCallDiagnosticPanel from "./PpCallDiagnosticPanel";
+import { useCurrentCallElapsed } from "@/hooks/useCurrentCallElapsed";
 
 type Contact = {
   id?: string;
@@ -69,7 +70,7 @@ export default function PpActiveCallScreen({
 
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [elapsed, setElapsed] = useState(0);
+  const elapsed = useCurrentCallElapsed(snap.callState, snap.startedAt);
   const [view, setView] = useState<"main" | "keypad" | "transfer" | "addcall">("main");
   const [dtmfBuf, setDtmfBuf] = useState("");
   const [transferQuery, setTransferQuery] = useState("");
@@ -134,7 +135,7 @@ export default function PpActiveCallScreen({
 
   // Reset transient state each new call
   useEffect(() => {
-    if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); setLineError(null); callUi.reset(); }
+    if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setLineError(null); callUi.reset(); }
   }, [active]);
 
   // Un appel entrant — ou un appel en attente — doit revenir en plein écran.
@@ -166,15 +167,6 @@ export default function PpActiveCallScreen({
     if (snap.callState === "idle" || snap.callState === "ended") resetRecordingNotice();
   }, [snap.callState]);
 
-
-  // Duration timer for connected calls
-  useEffect(() => {
-    if (snap.callState !== "active" || !snap.startedAt) return;
-    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - (snap.startedAt ?? Date.now())) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [snap.callState, snap.startedAt]);
 
   // Load internal contacts when entering transfer / add-call view (once)
   useEffect(() => {

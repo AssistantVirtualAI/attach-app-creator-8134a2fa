@@ -6,6 +6,7 @@ import { Phone, PhoneOff, Users } from "lucide-react";
 import { callUi } from "@/lib/planipret/callUiStore";
 import type { PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { formatSipParty } from "@/lib/planipret/sip/formatSipParty";
+import { useCurrentCallElapsed } from "@/hooks/useCurrentCallElapsed";
 
 function fmt(sec: number) {
   const m = Math.floor(sec / 60);
@@ -20,7 +21,7 @@ export default function PpCallPill({
   snap: PpSipSnapshot;
   onHangup: () => void;
 }) {
-  const [elapsed, setElapsed] = useState(0);
+  const elapsed = useCurrentCallElapsed(snap.callState, snap.startedAt);
   const path = useLocation().pathname;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
@@ -43,14 +44,6 @@ export default function PpCallPill({
       window.visualViewport?.removeEventListener("resize", check);
     };
   }, []);
-
-  useEffect(() => {
-    if (snap.callState !== "active" || !snap.startedAt) return;
-    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - (snap.startedAt ?? Date.now())) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [snap.callState, snap.startedAt]);
 
   const party = formatSipParty(snap.remoteIdentity, "fr", snap.remoteNumber);
   const label = snap.conference ? "Conférence" : party.name;

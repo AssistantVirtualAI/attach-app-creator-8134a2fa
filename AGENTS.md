@@ -1,5 +1,7 @@
 # Project Architecture Rules
 
+- Both call-screen presentations use the mirrored useCurrentCallElapsed hook, deriving duration only from connected states; this resets terminal/ringing displays synchronously without changing call transport or history.
+
 - Let Vite infer the HMR protocol and port from the browser origin so local HTTP verification and hosted HTTPS previews both connect without hardcoded secure localhost sockets.
 
 - Portal SMS creation and replies share PortalSmsComposer and the existing JWT-owned pp-ns-sms endpoint; admin compose identity comes from the authenticated session rather than an optional display profile. Never submit a selected broker/sender, automatically retry dispatch, or label acceptance as delivery, preventing impersonation and duplicate texts.

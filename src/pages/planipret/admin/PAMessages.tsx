@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useOutletContext, useSearchParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import PortalSmsComposer from "@/components/planipret/PortalSmsComposer";
 import { supabase } from "@/integrations/supabase/client";
-import { X, ArrowDownLeft, ArrowUpRight, RefreshCw } from "lucide-react";
+import { X, ArrowDownLeft, ArrowUpRight, RefreshCw, Plus, Send } from "lucide-react";
 import { toast } from "sonner";
 import { smsDeliveryLabel } from "@/lib/planipret/smsDelivery";
 import Pagination from "@/components/planipret/admin/Pagination";
@@ -74,6 +76,10 @@ const DICT = {
 };
 
 export default function PAMessages() {
+  const { profile } = useOutletContext<{ profile: { user_id?: string } | null }>();
+  const authUserId = profile?.user_id ?? "";
+  const [composeTarget, setComposeTarget] = useState<{ number: string } | null>(null);
+  const [threadOwner, setThreadOwner] = useState<string | null>(null);
   const { lang } = useMplanipretLang();
   const t = DICT[lang];
   const [params, setParams] = useSearchParams();
@@ -180,6 +186,7 @@ export default function PAMessages() {
     const peerKey = d10(peerNum);
     const lineKey = d10(lineNum);
     setThreadKey(peerNum);
+    setThreadOwner(m.user_id ?? null);
     setThread([]);
     const suffix = peerKey.slice(-8) || peerKey;
     const { data } = await supabase
@@ -229,6 +236,8 @@ export default function PAMessages() {
       <DebugPanel entries={debug} />
 
       <NsSyncBar features={["messages", "cdrs"]} onReload={() => load(page, pageSize)} />
+
+      {authUserId && <div className="flex justify-end"><Button onClick={() => setComposeTarget({ number: "" })}><Plus />{lang === "en" ? "New text message" : "Nouveau texto"}</Button></div>}
 
 
 
@@ -345,9 +354,11 @@ export default function PAMessages() {
                 );
               })}
             </div>
+            {authUserId && threadOwner === authUserId && <div className="mt-4 flex justify-end"><Button onClick={() => { setComposeTarget({ number: threadKey ?? "" }); setThread(null); }}><Send />{lang === "en" ? "Reply" : "Répondre"}</Button></div>}
           </div>
         </div>
       )}
+      <PortalSmsComposer target={composeTarget} userId={authUserId} lang={lang} onClose={() => setComposeTarget(null)} onSent={() => void load(page, pageSize)} />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageSquare, Send, Trash2, X } from "lucide-react";
+import { MessageSquare, Send, Trash2, X, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import PortalSmsComposer from "@/components/planipret/PortalSmsComposer";
 import { useSmsThreadState, smsThreadKey, isHidden } from "@/lib/planipret/smsThreadState";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { toast } from "sonner";
@@ -23,7 +25,7 @@ type Thread = { key: string; peer: string; last: any; messages: any[]; unread: n
 const THREADS_PER_PAGE = 20;
 
 export default function PBMessages() {
-  const { userId } = useOutletContext<BrokerCtx>();
+  const { userId, authUserId } = useOutletContext<BrokerCtx>();
   const { lang } = useMplanipretLang();
   const [params, setParams] = useSearchParams();
 
@@ -36,8 +38,7 @@ export default function PBMessages() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
+  const [composeTarget, setComposeTarget] = useState<{ number: string } | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
   const { state: smsState, act: smsAct } = useSmsThreadState(userId);
 
@@ -102,24 +103,8 @@ export default function PBMessages() {
       .eq("user_id", userId);
   }, [active?.key]);
 
-  const send = async () => {
-    const body = draft.trim();
-    if (!body || !active || sending) return;
-    setSending(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-sms", {
-        body: { action: "send", to: active.peer, message: body },
-      });
-      if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error);
-      setDraft("");
-      toast.success(lang === "en" ? "Message accepted" : "Message accepté");
-      await load();
-    } catch (e: any) {
-      toast.error(e?.message || (lang === "en" ? "Send failed" : "Envoi impossible"));
-    } finally {
-      setSending(false);
-    }
-  };
+  const canCompose = Boolean(userId && userId === authUserId);
+  useEffect(() => { setComposeTarget(null); }, [userId, authUserId]);
 
   return (
     <PAPage>
@@ -136,6 +121,8 @@ export default function PBMessages() {
         title={lang === "en" ? "My texts" : "Mes textos"}
         subtitle={`${totalThreads} ${lang === "en" ? "conversations" : "conversations"} · ${rows.length} ${lang === "en" ? "messages" : "messages"}`}
       />
+
+      {canCompose && <div className="flex justify-end"><Button onClick={() => setComposeTarget({ number: "" })}><Plus />{lang === "en" ? "New text message" : "Nouveau texto"}</Button></div>}
 
       <div className="pp-card flex flex-wrap gap-2" style={{ padding: 12 }}>
         <select value={period} onChange={(e) => patch({ period: e.target.value })} className="pp-input" style={{ fontSize: 12 }}>
@@ -230,19 +217,12 @@ export default function PBMessages() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2 p-3" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-              <input value={draft} onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-                placeholder={lang === "en" ? "Write a message…" : "Écrire un message…"}
-                className="pp-input flex-1" style={{ fontSize: 13 }} />
-              <button onClick={() => void send()} disabled={sending || !draft.trim()}
-                className="pp-btn-primary flex items-center gap-1.5 disabled:opacity-50">
-                <Send className="w-3.5 h-3.5" />{lang === "en" ? "Send" : "Envoyer"}
-              </button>
-            </div>
+            {canCompose && active && <div className="flex justify-end p-3"><Button onClick={() => setComposeTarget({ number: active.peer })}><Send />{lang === "en" ? "Reply" : "Répondre"}</Button></div>}
           </div>
         </div>
       )}
+
+      <PortalSmsComposer target={composeTarget} userId={authUserId} lang={lang} onClose={() => setComposeTarget(null)} onSent={() => void load()} />
 
       {detail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setDetail(null)}>

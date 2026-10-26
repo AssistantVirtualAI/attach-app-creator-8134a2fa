@@ -1,5 +1,7 @@
 # Project Architecture Rules
 
+- Portal SMS creation and replies share PortalSmsComposer and the existing JWT-owned pp-ns-sms endpoint; never submit a selected broker/sender, automatically retry dispatch, or label acceptance as delivery, preventing impersonation and duplicate texts.
+
 - SMS presentation shares a mirrored evidence classifier; local sent/HTTP acceptance never proves delivery, and deduplication must retain explicit provider status.
 
 - Maestro widget history writes explicit transport success; mirrored classifiers infer legacy null success only for widget sync/release 2xx without failure evidence, preserving explicit business outcomes and access scopes.

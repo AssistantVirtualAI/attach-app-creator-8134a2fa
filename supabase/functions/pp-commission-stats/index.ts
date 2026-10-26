@@ -37,6 +37,7 @@ import { validateCommissionOutput } from "../_shared/commission-validation.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const statsInflight = new Map<string, Promise<Response>>();
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -131,11 +132,9 @@ Deno.serve(async (req) => {
     const FRESH_MS = 15 * 60_000; // register changes at most every 30 min
     // Stale-while-revalidate: an older validated snapshot is shown instantly
     // while a single background refresh rebuilds it (never a long wait).
-    const STALE_MS = 7 * 24 * 60 * 60_000;
     // A refresh request never blocks the screen: when a snapshot exists it is
     // served instantly and rebuilt in the background (the global rebuild is
     // too heavy to run while the user waits).
-    const force = body?.force === true || body?.refresh === true;
     const { data: snap } = await admin
       .from("planipret_commission_snapshots")
       .select("payload,fetched_at,refreshing_until,data_version")
@@ -144,9 +143,7 @@ Deno.serve(async (req) => {
     let staleSnap: any = null;
     // Only a real stats payload (with KPIs) may be served from this key.
     if (snap?.payload?.ok === true && snap.payload.kpi) {
-      const age = Date.now() - new Date(snap.fetched_at).getTime();
       const version = await commissionDataVersion(admin);
-      const sameVersion = !!version && snap.data_version === version;
       if (reusableCommissionSnapshot(snap, version, FRESH_MS)) {
         admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", cacheKey).then(() => {});
         return json({ ...snap.payload, cache: { cached: true, stale: false, fetched_at: snap.fetched_at } });
@@ -1096,14 +1093,21 @@ Deno.serve(async (req) => {
     if (staleSnap) {
       const until = staleSnap.refreshing_until ? new Date(staleSnap.refreshing_until).getTime() : 0;
       if (until < Date.now() && await claimCommissionRefresh(admin, cacheKey, staleSnap.refreshing_until ?? null)) {
-        const bg = compute().catch((e) => console.warn("[pp-commission-stats] background refresh failed", e));
+        const bg = compute().catch(async (e) => {
+          console.warn("[pp-commission-stats] background refresh failed", e);
+          await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", cacheKey);
+        });
         // deno-lint-ignore no-explicit-any
         const rt = (globalThis as any).EdgeRuntime;
         if (rt?.waitUntil) rt.waitUntil(bg);
       }
       return json({ ...staleSnap.payload, cache: { cached: true, stale: true, fetched_at: staleSnap.fetched_at } });
     }
-    return await compute();
+    const running = statsInflight.get(cacheKey);
+    if (running) return (await running).clone();
+    const job = compute().finally(() => statsInflight.delete(cacheKey));
+    statsInflight.set(cacheKey, job);
+    return (await job).clone();
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

@@ -854,7 +854,6 @@ function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r
 }
 // ---- Server-side snapshot cache (fresh 15 min, stale served instantly) ----
 const FRESH_MS = 15 * 60_000;
-const FORCE_MIN_MS = 2 * 60_000;
 const CACHEABLE = new Set(["summary", "pending", "analytics", "deposits", "by_agent", "agents", "institutions"]);
 
 async function sha(text: string) {
@@ -918,7 +917,7 @@ Deno.serve(async (req) => {
     // `stats:` keys belong to pp-commission-stats (different payload shape);
     // re-running them here overwrote the Déboursées dashboards with a report
     // payload. They refresh themselves (stale-while-revalidate) on next read.
-    let wq = admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body")
+    let wq = admin.from("planipret_commission_snapshots").select("cache_key,user_id,request_body,refreshing_until")
       .not("cache_key", "like", "stats:%")
       .not("cache_key", "like", "paid-rows:%");
     if (version) wq = wq.or(`data_version.is.null,data_version.neq.${version}`);
@@ -926,7 +925,7 @@ Deno.serve(async (req) => {
       .or(`refreshing_until.is.null,refreshing_until.lt.${new Date().toISOString()}`).order("last_accessed_at", { ascending: false }).limit(2);
     let ok = 0, failed = 0;
     for (const row of rows ?? []) {
-      if (!await claimCommissionRefresh(admin, row.cache_key, null)) continue;
+      if (!await claimCommissionRefresh(admin, row.cache_key, row.refreshing_until ?? null)) continue;
       const h = new Headers({ Authorization: `Bearer ${SERVICE_KEY}`, "x-ava-internal-user-id": row.user_id, "Content-Type": "application/json" });
       try {
         const { data } = await runFresh(new Request(req.url, { method: "POST", headers: h }), JSON.stringify(row.request_body));
@@ -949,12 +948,10 @@ Deno.serve(async (req) => {
   const norm = stableBody(body);
   const key = await sha(`${userId}|${JSON.stringify(norm)}`);
   const { data: snap } = await admin.from("planipret_commission_snapshots").select("payload,fetched_at,refreshing_until,data_version").eq("cache_key", key).maybeSingle();
-  const age = snap ? Date.now() - new Date(snap.fetched_at).getTime() : Infinity;
   const force = body?.force === true || body?.refresh === true;
   // Same data version as the last change probe => figures are unchanged:
   // serve the stored copy with no Maestro call, whatever its age.
   const version = await commissionDataVersion(admin);
-  const sameVersion = !!snap && !!version && snap.data_version === version;
 
   if (reusableCommissionSnapshot(snap, version, FRESH_MS)) {
     admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", key).then(() => {});

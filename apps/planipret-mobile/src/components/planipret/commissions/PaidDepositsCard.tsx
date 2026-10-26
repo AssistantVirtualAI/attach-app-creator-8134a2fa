@@ -15,6 +15,7 @@ type Agent = { users_id: number | null; name: string; total: number; count: numb
 type Summary = {
   total_commission: number; deposit_count: number; total_loan_volume: number; deal_count: number;
   top_institutions?: { institution: string; amount: number; count: number }[];
+  months?: { month: string; commission: number; files: number; volume: number }[];
   by_date?: { date: string; amount: number; count: number }[];
   truncated?: boolean;
 };
@@ -94,10 +95,9 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
   const list = (agents ?? []).filter((x) => x.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const months = useMemo(() => {
     const m = new Map<string, { amount: number; count: number }>();
-    for (const d of summary?.by_date ?? []) {
-      if (!/^\d{4}-\d{2}/.test(d.date)) continue;
-      const k = d.date.slice(0, 7); const cur = m.get(k) ?? { amount: 0, count: 0 };
-      cur.amount += d.amount; cur.count += d.count; m.set(k, cur);
+    for (const d of summary?.months ?? []) {
+      const k = d.month; const cur = m.get(k) ?? { amount: 0, count: 0 };
+      cur.amount += d.commission; cur.count += d.files; m.set(k, cur);
     }
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, v]) => ({
       month, label: new Intl.DateTimeFormat(fr ? "fr-CA" : "en-CA", { month: "short" }).format(new Date(`${month}-15T12:00:00`)), ...v,

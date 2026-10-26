@@ -11,6 +11,7 @@
 
 import { commissionDataVersion } from "../_shared/commission-version.ts";
 import { cachedPaidDeposits } from "../_shared/commission-paid-cache.ts";
+import { paidBrokerProjection, paidReportRequest } from "../_shared/commission-paid-projection.ts";
 import { claimCommissionRefresh, paidSourceFilters, reusableCommissionSnapshot } from "../_shared/commission-snapshot-policy.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -739,6 +740,7 @@ async function handler(req: Request): Promise<Response> {
       }
 
       const summary = summarize(all, truncated);
+      const brokerProjection = paidBrokerProjection(all);
       {
         const b = paidBaseOut(all);
         summary.deal_count = b.files;
@@ -789,6 +791,9 @@ async function handler(req: Request): Promise<Response> {
         validation,
         source_identity: { source: "paid_deposits", endpoint: "/api/main/commissions/reports/deposits", users_id: filters.users_id ?? null, generated_at: validation.checked_at },
         analytics: paidAnalytics(all),
+        ...brokerProjection,
+        scanned: all.length,
+        truncated,
         paid_split,
         total_available: total,
         coverage,
@@ -870,7 +875,9 @@ function stableBody(b: any) {
 }
 async function runFresh(req: Request, bodyText: string) {
   const h = new Headers(req.headers); h.delete("content-length");
-  const r = await handler(new Request(req.url, { method: "POST", headers: h, body: bodyText }));
+  let canonicalBody = bodyText;
+  try { canonicalBody = JSON.stringify(paidReportRequest(JSON.parse(bodyText))); } catch { /* handler validates malformed requests */ }
+  const r = await handler(new Request(req.url, { method: "POST", headers: h, body: canonicalBody }));
   const text = await r.text();
   let data: any = null; try { data = JSON.parse(text); } catch { /* */ }
   return { r, text, data };
@@ -899,6 +906,13 @@ Deno.serve(async (req) => {
   const bodyText = await req.text();
   let body: any = {}; try { body = JSON.parse(bodyText || "{}"); } catch { /* */ }
   const action = String(body?.action ?? "summary");
+  // The two paid screens must consume one report snapshot, not two Maestro reads.
+  if (action === "by_agent") {
+    body = paidReportRequest(body);
+    const headers = new Headers(req.headers); headers.delete("content-length");
+    req = new Request(req.url, { method: "POST", headers, body: JSON.stringify(body) });
+  }
+  const effectiveBodyText = JSON.stringify(body);
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_KEY, { auth: { persistSession: false } });
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
@@ -946,7 +960,10 @@ Deno.serve(async (req) => {
   if (!userId) { const f = await runFresh(req, bodyText); return new Response(f.text, { status: f.r.status, headers: f.r.headers }); }
 
   const norm = stableBody(body);
-  const key = await sha(`${userId}|${JSON.stringify(norm)}`);
+  // Revision namespaces old independently collected action payloads out, without
+  // deleting records or changing the global financial data version.
+  const revision = ["summary", "analytics", "deposits", "by_agent"].includes(action) ? "paid-unified-v1|" : "";
+  const key = await sha(`${revision}${userId}|${JSON.stringify(norm)}`);
   const { data: snap } = await admin.from("planipret_commission_snapshots").select("payload,fetched_at,refreshing_until,data_version").eq("cache_key", key).maybeSingle();
   const force = body?.force === true || body?.refresh === true;
   // Same data version as the last change probe => figures are unchanged:
@@ -961,7 +978,7 @@ Deno.serve(async (req) => {
     // Stale: answer instantly, refresh in the background once.
     const busy = snap.refreshing_until && new Date(snap.refreshing_until).getTime() > Date.now();
     if (!busy && await claimCommissionRefresh(admin, key, snap.refreshing_until ?? null)) {
-      const job = runFresh(req, bodyText).then(async ({ data }) => {
+      const job = runFresh(req, effectiveBodyText).then(async ({ data }) => {
         if (data?.ok === true) await store(admin, key, userId, norm, data);
         else await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", key);
       }).catch(() => {});
@@ -969,7 +986,7 @@ Deno.serve(async (req) => {
     }
     return out(snap.payload, true, snap.fetched_at, true);
   }
-  const { r, text, data } = await runFresh(req, bodyText);
+  const { r, text, data } = await runFresh(req, effectiveBodyText);
   if (data?.ok === true) { await store(admin, key, userId, norm, data); return out(data, false, new Date().toISOString()); }
   // Failure never becomes $0: fall back to last good copy when present.
   if (snap) return out(snap.payload, true, snap.fetched_at, true);

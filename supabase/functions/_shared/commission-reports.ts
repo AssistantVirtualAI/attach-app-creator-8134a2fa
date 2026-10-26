@@ -297,7 +297,7 @@ export async function collectPaidDeposits(token: string, filters: NormalizedFilt
       if (clean) { reads.length = 0; reads.push(read); break; }
       if (expected && mergeDepositReads(reads as any).length >= expected && attempt > 0) break;
     }
-    rows.push(...(reads.length === 1 ? reads[0] : mergeDepositReads(reads as any) as CommissionDepositRow[]));
+    rows.push(...(reads.length === 1 ? reads[0] : mergeDepositReads(reads as any) as unknown as CommissionDepositRow[]));
   }
   return { rows, truncated, total: rows.length, fatal: null };
 }

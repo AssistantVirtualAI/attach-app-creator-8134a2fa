@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Read-only clientele audit: 56 linked profiles queried with admin-owned reads, 56 successful responses, matching requested scope, first/last reported pages reachable; Jannie returns total 200, full limit-500 read returns 200. Portal/mobile use maestro-actions; no customer records emitted, no native/deployment/provider mutations.
+- [ ] Prove full Maestro clientele for every broker: 47/56 queried accounts return exactly 200 clients (possible upstream cap; no authoritative CRM export/count compared), 28/81 broker profiles have no stored Telecom identity. Endpoint pagination/owner labels alone do not prove complete CRM ownership or installed-app parity; requires Maestro's authoritative count/pagination contract and verified identity mappings.
+
 - [x] Add new SMS and own-line replies to broker/admin portal pages through shared PortalSmsComposer and existing authenticated pp-ns-sms; six tests pass (owned sender payload, single attempt, retained retry key, cancellation), preview build OK. No server/native edits, sends or publication.
 - [x] Resolve portal verification blockers: fixed hardcoded local secure HMR socket and admin composer identity derived from an optional profile. Signed-in SMS page and new composer visibly verified; Send disabled on blank draft; 14 composer/error/idempotency/provider-evidence tests pass, preview build OK. No service/native changes or publication.
 - [ ] Verify real new SMS/reply delivery: extension 113 belongs to requester but is an internal chat destination, not an external SMS recipient; permanent server safeguards reject test messages. Need an approved external recipient and explicit resolution of test-send prohibition. No messages sent; live delivery/error handling remains unverified.

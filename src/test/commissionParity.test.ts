@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const FILES = [
+  "lib/planipret/paidCommissionPeriod.ts",
+  "components/planipret/commissions/CommissionSections.tsx",
   "pages/planipret/mobile/MCommissions.tsx",
   "components/planipret/commissions/PendingCommissionsCard.tsx",
   "components/planipret/mobile/MCommissionCharts.tsx",

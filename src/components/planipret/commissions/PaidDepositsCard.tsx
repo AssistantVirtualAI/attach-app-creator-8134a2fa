@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import "./pendingCommissions.css";
 import { readStatsCache, statsCacheKey, writeStatsCache, isStatsCacheFresh } from "@/lib/planipret/commissionsCache";
 import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
+import { paidCommissionPeriod } from "@/lib/planipret/paidCommissionPeriod";
 
-type Agent = { users_id: number | null; name: string; total: number; count: number; loan_volume: number };
+type Agent = { users_id: number | null; name: string; total: number; count: number; files: number; loan_volume: number };
 type Summary = {
   total_commission: number; deposit_count: number; total_loan_volume: number; deal_count: number;
   top_institutions?: { institution: string; amount: number; count: number }[];
@@ -38,14 +39,7 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
   useCommissionLive(() => setReload((n) => n + 1));
 
   const range = useMemo(() => {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const last = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
-    const r = gran === "year" ? { date_from: `${year}-01-01`, date_to: `${year}-12-31` }
-      : gran === "quarter" ? { date_from: `${year}-${pad((idx - 1) * 3 + 1)}-01`, date_to: `${year}-${pad(idx * 3)}-${last(year, idx * 3)}` }
-      : { date_from: `${year}-${pad(idx)}-01`, date_to: `${year}-${pad(idx)}-${last(year, idx)}` };
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(new Date());
-    if (r.date_to > today) r.date_to = today;
-    return r;
+    return paidCommissionPeriod(year, gran, idx);
   }, [year, gran, idx]);
 
   const key = statsCacheKey(isAdmin ? "admin" : "broker", ["paid-overview-v1", scope, range.date_from, range.date_to, agent]);
@@ -61,6 +55,7 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
     const v = c?.value as { summary?: Summary; agents?: Agent[] } | undefined;
     setSummary(v?.summary ?? null);
     if (v?.agents) setAgents(v.agents);
+    else if (!agent) setAgents(null);
     if (reload === 0 && isStatsCacheFresh(c)) return;
     setLoading(true); setError(null);
     (async () => {
@@ -79,6 +74,7 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
             : (fr ? "Rapport des déboursées indisponible." : "Paid report unavailable."));
         }
         const ad = a ? ((a as any)?.data ?? a) : null;
+        if (a && ((a as any)?.error || !ad?.ok)) throw new Error(fr ? "Rapport des courtiers indisponible." : "Broker report unavailable.");
         if (cancelled) return;
         setSummary(sd.summary);
         if (ad?.ok) setAgents(ad.agents);
@@ -149,7 +145,7 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
           <label className="flex flex-wrap items-center gap-2 text-xs"><Users className="h-4 w-4" />{fr ? "Courtier" : "Broker"}
             <select aria-label={fr ? "Courtier déboursé" : "Paid broker"} value={agent} onChange={(e) => { setAgent(e.target.value); setTab("overview"); }}>
               <option value="">{fr ? "Vue globale — tous les courtiers" : "Global view — all brokers"}</option>
-              {(agents ?? []).filter((x) => x.users_id != null && (String(x.users_id) === agent || x.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))).map((x) => <option key={x.users_id!} value={String(x.users_id)}>{x.name}</option>)}
+              {(agents ?? []).filter((x) => x.users_id != null && (String(x.users_id) === agent || x.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))).map((x) => <option key={String(x.users_id)} value={String(x.users_id)}>{x.name}</option>)}
             </select>
           </label>
         </>}
@@ -220,7 +216,7 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
               {(summary.top_institutions?.length ?? 0) > 0 && (
                 <Panel title={fr ? "Prêteurs" : "Lenders"} icon={<Landmark className="h-4 w-4" />}>
                   <div className="pending-scroll"><table className="pending-table"><thead><tr><th>{fr ? "Prêteur" : "Lender"}</th><th>{fr ? "Commission" : "Commission"}</th><th>{fr ? "Dépôts" : "Deposits"}</th><th>{fr ? "Part" : "Share"}</th></tr></thead>
-                    <tbody>{summary.top_institutions!.map((t, i) => <tr key={t.institution}><td><span style={{ color: TONES[i % TONES.length] }}>● </span>{t.institution}</td><td>{exactCad(t.amount)}</td><td>{t.count}</td><td>{total ? (100 * t.amount / total).toFixed(1) : "0.0"} %</td></tr>)}</tbody></table></div>
+                    <tbody>{summary.top_institutions?.map((t, i) => <tr key={t.institution}><td><span style={{ color: TONES[i % TONES.length] }}>● </span>{t.institution}</td><td>{exactCad(t.amount)}</td><td>{t.count}</td><td>{total ? (100 * t.amount / total).toFixed(1) : "0.0"} %</td></tr>)}</tbody></table></div>
                 </Panel>
               )}
             </div>
@@ -229,14 +225,14 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
           {(tab === "brokers" || (tab === "overview" && showBrokers)) && showBrokers && (
             <Panel title={fr ? "Commissions déboursées par courtier" : "Paid commissions by broker"} icon={<Users className="h-4 w-4" />}>
               <div className="pending-scroll"><table className="pending-table">
-                <thead><tr><th>#</th><th>{fr ? "Courtier" : "Broker"}</th><th>{fr ? "Déboursé" : "Paid"}</th><th>{fr ? "Dépôts" : "Deposits"}</th><th>Volume</th><th>{fr ? "Part" : "Share"}</th></tr></thead>
+                <thead><tr><th>#</th><th>{fr ? "Courtier" : "Broker"}</th><th>{fr ? "Déboursé" : "Paid"}</th><th>{fr ? "Dossiers (Base)" : "Files (Base)"}</th><th>Volume</th><th>{fr ? "Part" : "Share"}</th></tr></thead>
                 <tbody>{list.map((x, i) => (
                   <tr key={`${x.users_id}-${x.name}`} role="button" tabIndex={0} className="cursor-pointer" onClick={() => x.users_id != null && setAgent(String(x.users_id))} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && x.users_id != null) setAgent(String(x.users_id)); }}>
-                    <td>{i + 1}</td><td className="font-semibold">{x.name}</td><td>{exactCad(x.total)}</td><td>{x.count}</td><td>{cad(x.loan_volume)}</td>
+                    <td>{i + 1}</td><td className="font-semibold">{x.name}</td><td>{exactCad(x.total)}</td><td>{x.files}</td><td>{exactCad(x.loan_volume)}</td>
                     <td>{total ? Math.round(100 * x.total / total) : 0} % <ChevronRight className="inline w-3 h-3" /></td>
                   </tr>
                 ))}</tbody>
-                <tfoot><tr><td /><td>{fr ? "Total" : "Total"}</td><td>{exactCad(list.reduce((s, x) => s + x.total, 0))}</td><td>{list.reduce((s, x) => s + x.count, 0)}</td><td>{cad(list.reduce((s, x) => s + x.loan_volume, 0))}</td><td /></tr></tfoot>
+                <tfoot><tr><td /><td>{fr ? "Total" : "Total"}</td><td>{exactCad(list.reduce((s, x) => s + x.total, 0))}</td><td>{list.reduce((s, x) => s + x.files, 0)}</td><td>{exactCad(list.reduce((s, x) => s + x.loan_volume, 0))}</td><td /></tr></tfoot>
               </table></div>
               {list.length === 0 && <p className="py-6 text-center text-[12px] text-muted-foreground">{fr ? "Aucun courtier trouvé." : "No brokers found."}</p>}
             </Panel>

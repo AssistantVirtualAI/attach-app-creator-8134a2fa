@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Fix global statistics CPU by reusing validated snapshots and removing unnecessary recalculations; verify sync outcome without changing commission calculation rules. Combine received/paid once under disbursed on Wednesday transition, without Maestro status writes; require verified provider identity/status evidence.
+
 - [x] Prepare shared official paid-report screens and Toronto date cutoff, cents, own-file table counts and aggregate request identity across portal/mobile React; 39 tests pass and preview build OK. Connected UI verifies mobile Sandra 1454037.60 / 426 / 126781923.30. No native changes or deployment.
 - [ ] Complete all-broker financial snapshot parity: connected Commissions global summary shows 13085761.96 versus Broker commissions by_agent 13087077.96 with identical 3654 files / 1264712056.58 volume. Existing action-specific server snapshots contain differing rows; requires server snapshot/collector correction and explicitly approved complete deployment, then all-broker/UI read-back. Installed mobile validation requires separately approved release. Do not claim identical global amounts yet.
 

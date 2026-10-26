@@ -35,7 +35,7 @@ describe("current call duration", () => {
     expect(result.current).toBe(2);
   });
 
-  it("keeps elapsed time while held and returns zero without a start time", () => {
+  it("keeps the same clock through hold and a missing timestamp update", () => {
     vi.useFakeTimers();
     vi.setSystemTime(100_000);
     const { result, rerender } = renderHook(({ state, start }: { state: string; start: number | null }) => useCurrentCallElapsed(state, start), {
@@ -48,7 +48,7 @@ describe("current call duration", () => {
     expect(result.current).toBe(11);
   });
 
-  it.each(["same-number", "different-number"])("excludes ringing on two consecutive calls (%s)", () => {
+  it("excludes ringing on two consecutive dialogs even with an identical stale timestamp", () => {
     vi.useFakeTimers();
     vi.setSystemTime(100_000);
     const { result, rerender } = renderHook(({ state, id }) => useCurrentCallElapsed(state, 10_000, id), {

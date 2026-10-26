@@ -120,7 +120,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
   return (
     <div
       className="absolute inset-x-0 top-0 z-[60] flex flex-col overflow-hidden"
-      style={{ height: lockedHeight ? `${lockedHeight}px` : "100svh", background: "rgba(4,11,22,0.45)", backdropFilter: "blur(6px)", contain: "layout paint size" }}
+      style={{ height: lockedHeight ? `${lockedHeight}px` : "100svh", background: "rgba(4,11,22,0.82)", contain: "layout paint size" }}
       onClick={onClose}
       role="dialog"
       aria-modal="true"

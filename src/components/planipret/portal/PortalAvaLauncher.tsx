@@ -53,8 +53,8 @@ export default function PortalAvaLauncher({ authUserId, softphone }: { authUserI
       )}
       {open && (
         <>
-          <div className="fixed inset-0 z-[59] bg-background/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
-          <div className="fixed z-[60] inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:top-6 sm:w-[480px] flex flex-col overflow-hidden sm:rounded-2xl border border-border bg-card/95 backdrop-blur-xl shadow-2xl">
+          <div className="fixed inset-0 z-[59] bg-background/70" onClick={() => setOpen(false)} />
+          <div className="fixed z-[60] inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:top-6 sm:w-[480px] flex flex-col overflow-hidden sm:rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-gradient-to-r from-primary/15 to-transparent">
               <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center">
                 <img src={avaLogo.url} alt="" className="w-6 h-6 object-contain" />

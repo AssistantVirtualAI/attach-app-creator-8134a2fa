@@ -436,7 +436,7 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100dvh - 242px)", minHeight: 400, background: "var(--pp-bg-base)" }}>
-      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 100%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full"><Menu className="w-5 h-5" /></Button>
@@ -617,7 +617,7 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 backdrop-blur-xl px-3 pb-3 pt-2" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 70%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
+      <div className="sticky bottom-0 z-10 backdrop-blur-xl px-3 pb-3 pt-2" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 100%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
        <div className="flex items-end gap-2 max-w-3xl w-full mx-auto rounded-full pl-2 pr-1.5 py-1.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", boxShadow: "0 10px 30px -10px rgba(124,58,237,0.25)" }}>
         <button
           onClick={recording ? stopRec : startRec}
@@ -653,7 +653,7 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
       </div>
 
       {pendingConfirm && (
-        <div className="sticky bottom-0 left-0 right-0 z-20 px-3 py-2 flex flex-col gap-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 92%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
+        <div className="sticky bottom-0 left-0 right-0 z-20 px-3 py-2 flex flex-col gap-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 100%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
           <div className="text-sm" style={{ color: "var(--pp-text-primary)" }}>{t("avaChat.confirmPrefix")} : {pendingConfirm.label}</div>
           <div className="flex gap-2">
             <Button variant="ghost" className="flex-1" onClick={() => setPendingConfirm(null)}>{t("avaChat.cancel")}</Button>

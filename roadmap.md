@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Verify upstream client pagination/cap, recover complete per-broker lists where documented, identify 28 missing mappings and correct only uniquely proven associations; compare portal/mobile IDs to Maestro and report remaining blockers without widening broker access.
+
 - [x] Read-only clientele audit: 56 linked profiles queried with admin-owned reads, 56 successful responses, matching requested scope, first/last reported pages reachable; Jannie returns total 200, full limit-500 read returns 200. Portal/mobile use maestro-actions; no customer records emitted, no native/deployment/provider mutations.
 - [ ] Prove full Maestro clientele for every broker: 47/56 queried accounts return exactly 200 clients (possible upstream cap; no authoritative CRM export/count compared), 28/81 broker profiles have no stored Telecom identity. Endpoint pagination/owner labels alone do not prove complete CRM ownership or installed-app parity; requires Maestro's authoritative count/pagination contract and verified identity mappings.
 

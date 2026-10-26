@@ -1,6 +1,6 @@
 # Project Architecture Rules
 
-- Both call-screen presentations use the mirrored useCurrentCallElapsed hook, deriving duration only from connected states; this resets terminal/ringing displays synchronously without changing call transport or history.
+- The persistent call screen owns the mirrored useCurrentCallElapsed clock and passes elapsed seconds to the minimized pill; observed ringing-to-connected and dialog changes establish a fresh start, preventing native ring/stale timestamps and minimization from diverging without changing transport or history.
 
 - Let Vite infer the HMR protocol and port from the browser origin so local HTTP verification and hosted HTTPS previews both connect without hardcoded secure localhost sockets.
 

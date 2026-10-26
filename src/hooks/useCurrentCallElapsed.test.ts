@@ -45,6 +45,40 @@ describe("current call duration", () => {
     act(() => vi.advanceTimersByTime(1000));
     expect(result.current).toBe(11);
     rerender({ state: "active", start: null });
+    expect(result.current).toBe(11);
+  });
+
+  it.each(["same-number", "different-number"])("excludes ringing on two consecutive calls (%s)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    const { result, rerender } = renderHook(({ state, id }) => useCurrentCallElapsed(state, 10_000, id), {
+      initialProps: { state: "ringing-in", id: "first-dialog" },
+    });
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(result.current).toBe(0);
+    rerender({ state: "active", id: "first-dialog" });
+    expect(result.current).toBe(0);
+    act(() => vi.advanceTimersByTime(5000));
+    expect(result.current).toBe(5);
+    rerender({ state: "ended", id: "first-dialog" });
+    expect(result.current).toBe(0);
+    rerender({ state: "ringing-out", id: "second-dialog" });
+    act(() => vi.advanceTimersByTime(20_000));
+    expect(result.current).toBe(0);
+    rerender({ state: "active", id: "second-dialog" });
+    expect(result.current).toBe(0);
+    act(() => vi.advanceTimersByTime(2000));
+    expect(result.current).toBe(2);
+  });
+
+  it("resets a new dialog even if an ended update was skipped", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    const { result, rerender } = renderHook(({ id }) => useCurrentCallElapsed("active", 10_000, id), {
+      initialProps: { id: "first-dialog" },
+    });
+    expect(result.current).toBe(90);
+    rerender({ id: "second-dialog" });
     expect(result.current).toBe(0);
   });
 });

@@ -1,4 +1,5 @@
 import { commissionDataVersion } from "../_shared/commission-version.ts";
+import { claimCommissionRefresh, reusableCommissionSnapshot } from "../_shared/commission-snapshot-policy.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
@@ -146,11 +147,11 @@ Deno.serve(async (req) => {
       const age = Date.now() - new Date(snap.fetched_at).getTime();
       const version = await commissionDataVersion(admin);
       const sameVersion = !!version && snap.data_version === version;
-      if (force ? age < 2 * 60_000 : (sameVersion || age < FRESH_MS)) {
+      if (reusableCommissionSnapshot(snap, version, FRESH_MS)) {
         admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", cacheKey).then(() => {});
         return json({ ...snap.payload, cache: { cached: true, stale: false, fetched_at: snap.fetched_at } });
       }
-      if (age < STALE_MS) staleSnap = snap;
+      staleSnap = snap;
     }
 
   const compute = async (): Promise<Response> => {
@@ -595,10 +596,9 @@ Deno.serve(async (req) => {
 
     // Yearly history for the year filter
     const availableYearsRes = await admin
-      .from("planipret_commission_register")
+      .from("planipret_commission_broker_aggregates")
       .select("fiscal_year")
-      .not("fiscal_year", "is", null)
-      .limit(100000);
+      .eq("kind", "reg");
     const availableYears = Array.from(
       new Set(((availableYearsRes.data ?? []) as any[]).map((r) => r.fiscal_year as number)),
     ).sort((a, b) => b - a);
@@ -1017,6 +1017,7 @@ Deno.serve(async (req) => {
       truncated: false,
       summary: validationSummary,
       scope: { role: isAdmin ? "admin" : "broker", mode: isAdmin && scope === "all" ? (agent ? "selected_broker" : "all_brokers") : "own", users_id: myMaestroId },
+      skipAi: true,
     });
     if (!validation.validated) return json({ error: "Les commissions déboursées n'ont pas passé le contrôle final. La dernière version validée reste affichée.", validation }, 200);
 
@@ -1094,11 +1095,7 @@ Deno.serve(async (req) => {
 
     if (staleSnap) {
       const until = staleSnap.refreshing_until ? new Date(staleSnap.refreshing_until).getTime() : 0;
-      if (until < Date.now()) {
-        await admin.from("planipret_commission_snapshots").update({
-          refreshing_until: new Date(Date.now() + 3 * 60_000).toISOString(),
-          last_accessed_at: new Date().toISOString(),
-        }).eq("cache_key", cacheKey);
+      if (until < Date.now() && await claimCommissionRefresh(admin, cacheKey, staleSnap.refreshing_until ?? null)) {
         const bg = compute().catch((e) => console.warn("[pp-commission-stats] background refresh failed", e));
         // deno-lint-ignore no-explicit-any
         const rt = (globalThis as any).EdgeRuntime;

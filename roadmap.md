@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Verify Karl 1142 mobile registration without routing/number changes (2026-10-26): authenticated NS device reads show 1142W registered with Planipret Softphone 1.0, 1142x registered with SIP.js, 1142M unregistered. Android implementation deliberately uses W/WSS; M absence is not an Android connection failure. Resolver logs confirm web requests for Karl. Last inbound SIP trace has 180 Ringing, then No Answer CANCEL after 30 seconds; no answered destination INVITE proven.
+- [ ] Resolve Karl Android answer/ringback failure: requires installed-app diagnostic at Answer and native release identification from the separate protected repository; current server evidence does not identify a safe repair. No device reprovisioning, native edits, deployment, calls, routing or number changes performed.
+
 - [x] Prepare evidence-based SMS presentation across broker/admin portal and both mobile React trees, preserving provider status during local deduplication. 18 focused tests passed; authenticated portal shows Accepted. Read-only NS session GET HTTP 200: Karl's two messages at 21:16:03/24 UTC remain sending, with no provider error or delivered confirmation. No sends, number changes, native edits or deployment.
 - [ ] Activate prepared pp-ns-sms status-preservation changes and validate installed-phone labels: requires explicit deployment/mobile release approval. Carrier delivery blocker for Karl remains unexplained by NS (sending, no error); provider trace required, no retries sent.
 

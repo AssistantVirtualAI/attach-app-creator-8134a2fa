@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Reset current-call duration after hangup in both mirrored web presentations; verify terminal states with retained timestamps and next-call reset. No native/transport changes, calls or publication.
+
 - [x] Portal new messages/replies accept numeric internal extensions (113) through existing pp-ns-sms chat dispatch, independent of external sender DID; 10 recipient/composer tests pass, signed-in browser shows internal destination and enabled Send. No message dispatched, no delivery assertion, no server/native change or publication; test-send prohibition preserved.
 
 - [x] Checked Jannie limits 1/25/200/500/2000: reported total stays 200. Existing GET probe with offset=200, page=2 and per_page=1&page=201 returns exactly the same first 2500 bytes as baseline (probe truncates; cannot claim full response identity). No documented upstream continuation found.

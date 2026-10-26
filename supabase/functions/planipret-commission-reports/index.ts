@@ -644,23 +644,21 @@ async function handler(req: Request): Promise<Response> {
       }, 200, cid);
     }
 
-    // Paid files/volume — same rule as pending: base, non-adjustment rows of
-    // the receiving broker's own files (target = receiver), dated, positive
-    // loan; one count per contract, volume sums distinct contract+loan.
+    // Paid files/volume (Maestro "Unités"): every dated, non-adjustment Base
+    // row received by the broker (target_name is not a team filter), positive
+    // loan; one unit per contract, volume sums distinct contract+loan.
     const paidBaseFiles = (rows: CommissionDepositRow[]) => {
       const per = new Map<string, { files: Set<string>; vol: Map<string, number> }>();
       for (const r of rows as any[]) {
         if (String(r.commission_type ?? "base").toLowerCase() !== "base") continue;
         if (Number(r.is_adjustment) === 1) continue;
         const rec = r.agent_name_id != null ? String(r.agent_name_id) : "";
-        const tgt = r.target_name_id != null ? String(r.target_name_id) : rec;
-        if (rec && tgt && rec !== tgt) continue;
         const d = String(r.date_trans ?? "");
         if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d.startsWith("0000")) continue;
         const loan = num(r.loan_amt); const c = String(r.number ?? "").trim();
         if (!c || loan <= 0) continue;
         const e = per.get(rec) ?? { files: new Set<string>(), vol: new Map<string, number>() };
-        e.files.add(`${c}|${loan}`); e.vol.set(`${c}|${loan}`, loan); per.set(rec, e);
+        e.files.add(c); e.vol.set(`${c}|${loan}`, loan); per.set(rec, e);
       }
       const out = new Map<string, { files: number; volume: number }>();
       let files = 0, volume = 0;

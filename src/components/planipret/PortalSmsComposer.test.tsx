@@ -49,4 +49,26 @@ describe("PortalSmsComposer", () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole("button", { name: "Send" })).toBeEnabled());
   });
+
+  it("keeps a server-rejected draft without reporting success or retrying", async () => {
+    mocks.invoke.mockResolvedValue({ data: { ok: false, error: "Test messages are disabled", error_code: "test_sms_blocked" }, error: null });
+    const { onSent, onClose } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("alert");
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.success).not.toHaveBeenCalled();
+    expect(onSent).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Message")).toHaveValue("Bonjour client");
+  });
+
+  it("does not accept an incomplete service response", async () => {
+    mocks.invoke.mockResolvedValue({ data: {}, error: null });
+    const { onSent } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("alert");
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(onSent).not.toHaveBeenCalled();
+    expect(mocks.success).not.toHaveBeenCalled();
+  });
 });

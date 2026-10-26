@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useOutletContext, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import PortalSmsComposer from "@/components/planipret/PortalSmsComposer";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,8 +76,18 @@ const DICT = {
 };
 
 export default function PAMessages() {
-  const { profile } = useOutletContext<{ profile: { user_id?: string } | null }>();
-  const authUserId = profile?.user_id ?? "";
+  const [authUserId, setAuthUserId] = useState("");
+  useEffect(() => {
+    let current = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (current) setAuthUserId(data.session?.user.id ?? "");
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUserId(session?.user.id ?? "");
+      setComposeTarget(null);
+    });
+    return () => { current = false; data.subscription.unsubscribe(); };
+  }, []);
   const [composeTarget, setComposeTarget] = useState<{ number: string } | null>(null);
   const [threadOwner, setThreadOwner] = useState<string | null>(null);
   const { lang } = useMplanipretLang();

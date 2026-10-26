@@ -968,6 +968,28 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async complete_task(ctx, p) {
+    const allWords = /^(toutes?|tous|all|everything|toutes? (les|mes) t[aâ]ches?.*|les \d+ t[aâ]ches?.*)$/i;
+    const wantsAll = p?.all === true || allWords.test(String(p?.search ?? p?.query ?? "").trim());
+    if (wantsAll) {
+      const list: any = await taskApi(ctx, { action: "list", status: "pending", filter: "open", page: 1, limit: 200 });
+      const tasks: any[] = Array.isArray(list?.tasks) ? list.tasks : [];
+      if (!tasks.length) return { success: true, completed_count: 0, total: 0, message: "Aucune tâche ouverte." };
+      if (p?.confirmed !== true) {
+        return { success: false, needs_confirmation: true, error: "confirmation_required", total: tasks.length,
+          message: `Je vais terminer tes ${tasks.length} tâches ouvertes. Confirmes-tu ? Rappelle complete_task avec all=true et confirmed=true.` };
+      }
+      const done: string[] = []; const failed: Array<{ task_id: string; error: string }> = [];
+      for (const t of tasks) {
+        const id = String(t?.id ?? "");
+        if (!/^\d+$/.test(id)) continue;
+        const r: any = await taskApi(ctx, { action: "complete", task_id: id });
+        if (r?.success && r?.completed !== false) done.push(id);
+        else failed.push({ task_id: id, error: String(r?.error ?? "unknown") });
+      }
+      if (done.length) await broadcastTasks(ctx, "completed", null);
+      return { success: failed.length === 0, completed: failed.length === 0, completed_count: done.length,
+        failed_count: failed.length, total: tasks.length, failed };
+    }
     const found = await resolveTaskRef(ctx, p);
     if (!found.task_id) return found.result;
     const r: any = await taskApi(ctx, { action: "complete", task_id: found.task_id });

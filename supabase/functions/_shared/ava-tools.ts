@@ -206,9 +206,11 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       task_id: { type: "string", description: "ID de la tâche" },
       confirmed: { type: "boolean", description: "true seulement après confirmation explicite du courtier" },
     }, ["task_id"]),
-    mk("complete_task", "Marque une tâche terminée dans Maestro (fermeture officielle + relecture). Fournir task_id OU search (titre/nom du client). Demande confirmation. Ne dis « terminée » que si le résultat contient completed=true.", {
+    mk("complete_task", "Marque une tâche terminée dans Maestro (fermeture officielle + relecture). Fournir task_id OU search (titre/nom du client). Pour terminer TOUTES les tâches ouvertes, passer all=true et confirmed=true (après confirmation explicite) — ne jamais mettre « toutes » dans search. Ne dis « terminée » que si le résultat contient completed=true (ou le compte completed_count).", {
       task_id: { type: "string", description: "ID de la tâche (optionnel si search)" },
       search: { type: "string", description: "Texte de la tâche ou nom du client pour la retrouver" },
+      all: { type: "boolean", description: "true pour terminer toutes les tâches ouvertes du courtier" },
+      confirmed: { type: "boolean", description: "true seulement après confirmation explicite (requis avec all)" },
     }),
     mk("reschedule_task", "Reporte une tâche à une nouvelle date/heure (America/Toronto). Fournir task_id OU search. Demande confirmation.", {
       task_id: { type: "string", description: "ID de la tâche (optionnel si search)" },

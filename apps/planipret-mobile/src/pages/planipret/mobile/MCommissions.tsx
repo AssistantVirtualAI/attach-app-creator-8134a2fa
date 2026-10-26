@@ -446,7 +446,7 @@ export default function MCommissions() {
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Kpi icon={<Wallet className="w-4 h-4" />} label={fr ? "Commissions" : "Commissions"} value={cad(summary.total_commission)} />
             <Kpi icon={<Receipt className="w-4 h-4" />} label={fr ? "Unités uniques" : "Unique units"} value={String(summary.deal_count)} />
-            <Kpi icon={<TrendingUp className="w-4 h-4" />} label={fr ? "Moyenne" : "Average"} value={cad(summary.average_commission)} />
+            <Kpi icon={<TrendingUp className="w-4 h-4" />} label={fr ? "Moyenne / dossier" : "Average / file"} value={summary.deal_count ? cad(summary.total_commission / summary.deal_count) : "—"} />
             <Kpi icon={<Building2 className="w-4 h-4" />} label={fr ? "Volume de prêts" : "Loan volume"} value={cad(summary.total_loan_volume)} />
           </div>
 

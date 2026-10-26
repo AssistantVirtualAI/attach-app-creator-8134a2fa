@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Audit all 84 profile extensions for live non-expired NS registrations (2026-10-26): 13 M, 1 W (Karl 1142), 39 x; 71 have no live M, all device-list reads HTTP 200. One additional legacy 1197_mobile binding. Suffix/registration is not proof of a handset audio engine: some M holders are SIP.js, one KeepAlive, others have no UA.
+- [ ] Implement requested all-broker mobile M / portal W / widget x separation: blocked on coordinated installed Android/native repository update and device validation; do not switch M transport/credentials beneath current iOS clients or disconnect Karl's existing W client. No native change, reprovisioning, routing/number change or deployment authorized/performed in this audit.
+
 - [x] Verify Karl 1142 mobile registration without routing/number changes (2026-10-26): authenticated NS device reads show 1142W registered with Planipret Softphone 1.0, 1142x registered with SIP.js, 1142M unregistered. Android implementation deliberately uses W/WSS; M absence is not an Android connection failure. Resolver logs confirm web requests for Karl. Last inbound SIP trace has 180 Ringing, then No Answer CANCEL after 30 seconds; no answered destination INVITE proven.
 - [ ] Resolve Karl Android answer/ringback failure: requires installed-app diagnostic at Answer and native release identification from the separate protected repository; current server evidence does not identify a safe repair. No device reprovisioning, native edits, deployment, calls, routing or number changes performed.
 

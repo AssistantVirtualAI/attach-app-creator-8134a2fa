@@ -1,5 +1,6 @@
 import { commissionDataVersion } from "../_shared/commission-version.ts";
 import { claimCommissionRefresh, reusableCommissionSnapshot } from "../_shared/commission-snapshot-policy.ts";
+import { cachedPaidDeposits } from "../_shared/commission-paid-cache.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
@@ -223,7 +224,7 @@ Deno.serve(async (req) => {
     if (selectedProfile?.user_id && selectedProfile?.maestro_broker_id) {
       const brokerToken = await getUserMaestroAccessToken(admin, String(selectedProfile.user_id));
       if (!brokerToken) return json({ error: "Votre compte Maestro doit être reconnecté pour consulter les chiffres actuels." }, 200);
-      const paid = await collectPaidDeposits(brokerToken, {
+      const paid = await cachedPaidDeposits(admin, user.id, String(selectedProfile.maestro_broker_id), brokerToken, {
         users_id: String(selectedProfile.maestro_broker_id),
         date_from: `${year - 1}-01-01 00:00:00`, date_to: `${year}-12-31 23:59:59`,
       }, cid);

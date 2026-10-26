@@ -1,4 +1,6 @@
 import { commissionDataVersion } from "../_shared/commission-version.ts";
+import { claimCommissionRefresh, reusableCommissionSnapshot } from "../_shared/commission-snapshot-policy.ts";
+import { cachedPaidDeposits } from "../_shared/commission-paid-cache.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
@@ -36,6 +38,7 @@ import { validateCommissionOutput } from "../_shared/commission-validation.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const statsInflight = new Map<string, Promise<Response>>();
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -130,11 +133,9 @@ Deno.serve(async (req) => {
     const FRESH_MS = 15 * 60_000; // register changes at most every 30 min
     // Stale-while-revalidate: an older validated snapshot is shown instantly
     // while a single background refresh rebuilds it (never a long wait).
-    const STALE_MS = 7 * 24 * 60 * 60_000;
     // A refresh request never blocks the screen: when a snapshot exists it is
     // served instantly and rebuilt in the background (the global rebuild is
     // too heavy to run while the user waits).
-    const force = body?.force === true || body?.refresh === true;
     const { data: snap } = await admin
       .from("planipret_commission_snapshots")
       .select("payload,fetched_at,refreshing_until,data_version")
@@ -143,14 +144,12 @@ Deno.serve(async (req) => {
     let staleSnap: any = null;
     // Only a real stats payload (with KPIs) may be served from this key.
     if (snap?.payload?.ok === true && snap.payload.kpi) {
-      const age = Date.now() - new Date(snap.fetched_at).getTime();
       const version = await commissionDataVersion(admin);
-      const sameVersion = !!version && snap.data_version === version;
-      if (force ? age < 2 * 60_000 : (sameVersion || age < FRESH_MS)) {
+      if (reusableCommissionSnapshot(snap, version, FRESH_MS)) {
         admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", cacheKey).then(() => {});
         return json({ ...snap.payload, cache: { cached: true, stale: false, fetched_at: snap.fetched_at } });
       }
-      if (age < STALE_MS) staleSnap = snap;
+      staleSnap = snap;
     }
 
   const compute = async (): Promise<Response> => {
@@ -225,7 +224,7 @@ Deno.serve(async (req) => {
     if (selectedProfile?.user_id && selectedProfile?.maestro_broker_id) {
       const brokerToken = await getUserMaestroAccessToken(admin, String(selectedProfile.user_id));
       if (!brokerToken) return json({ error: "Votre compte Maestro doit être reconnecté pour consulter les chiffres actuels." }, 200);
-      const paid = await collectPaidDeposits(brokerToken, {
+      const paid = await cachedPaidDeposits(admin, user.id, String(selectedProfile.maestro_broker_id), brokerToken, {
         users_id: String(selectedProfile.maestro_broker_id),
         date_from: `${year - 1}-01-01 00:00:00`, date_to: `${year}-12-31 23:59:59`,
       }, cid);
@@ -595,10 +594,9 @@ Deno.serve(async (req) => {
 
     // Yearly history for the year filter
     const availableYearsRes = await admin
-      .from("planipret_commission_register")
+      .from("planipret_commission_broker_aggregates")
       .select("fiscal_year")
-      .not("fiscal_year", "is", null)
-      .limit(100000);
+      .eq("kind", "reg");
     const availableYears = Array.from(
       new Set(((availableYearsRes.data ?? []) as any[]).map((r) => r.fiscal_year as number)),
     ).sort((a, b) => b - a);
@@ -1017,6 +1015,7 @@ Deno.serve(async (req) => {
       truncated: false,
       summary: validationSummary,
       scope: { role: isAdmin ? "admin" : "broker", mode: isAdmin && scope === "all" ? (agent ? "selected_broker" : "all_brokers") : "own", users_id: myMaestroId },
+      skipAi: true,
     });
     if (!validation.validated) return json({ error: "Les commissions déboursées n'ont pas passé le contrôle final. La dernière version validée reste affichée.", validation }, 200);
 
@@ -1094,19 +1093,22 @@ Deno.serve(async (req) => {
 
     if (staleSnap) {
       const until = staleSnap.refreshing_until ? new Date(staleSnap.refreshing_until).getTime() : 0;
-      if (until < Date.now()) {
-        await admin.from("planipret_commission_snapshots").update({
-          refreshing_until: new Date(Date.now() + 3 * 60_000).toISOString(),
-          last_accessed_at: new Date().toISOString(),
-        }).eq("cache_key", cacheKey);
-        const bg = compute().catch((e) => console.warn("[pp-commission-stats] background refresh failed", e));
+      if (until < Date.now() && await claimCommissionRefresh(admin, cacheKey, staleSnap.refreshing_until ?? null)) {
+        const bg = compute().catch(async (e) => {
+          console.warn("[pp-commission-stats] background refresh failed", e);
+          await admin.from("planipret_commission_snapshots").update({ refreshing_until: null }).eq("cache_key", cacheKey);
+        });
         // deno-lint-ignore no-explicit-any
         const rt = (globalThis as any).EdgeRuntime;
         if (rt?.waitUntil) rt.waitUntil(bg);
       }
       return json({ ...staleSnap.payload, cache: { cached: true, stale: true, fetched_at: staleSnap.fetched_at } });
     }
-    return await compute();
+    const running = statsInflight.get(cacheKey);
+    if (running) return (await running).clone();
+    const job = compute().finally(() => statsInflight.delete(cacheKey));
+    statsInflight.set(cacheKey, job);
+    return (await job).clone();
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

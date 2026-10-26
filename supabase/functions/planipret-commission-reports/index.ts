@@ -960,7 +960,7 @@ Deno.serve(async (req) => {
   const norm = stableBody(body);
   // Revision namespaces old independently collected action payloads out, without
   // deleting records or changing the global financial data version.
-  const revision = ["summary", "analytics", "deposits", "by_agent"].includes(action) ? "paid-unified-v1|" : "";
+  const revision = ["summary", "analytics", "deposits", "by_agent"].includes(action) ? "paid-unified-v2|" : "";
   const key = await sha(`${revision}${userId}|${JSON.stringify(norm)}`);
   const { data: snap } = await admin.from("planipret_commission_snapshots").select("payload,fetched_at,refreshing_until,data_version").eq("cache_key", key).maybeSingle();
   const force = body?.force === true || body?.refresh === true;

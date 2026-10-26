@@ -875,7 +875,9 @@ function stableBody(b: any) {
 }
 async function runFresh(req: Request, bodyText: string) {
   const h = new Headers(req.headers); h.delete("content-length");
-  const r = await handler(new Request(req.url, { method: "POST", headers: h, body: bodyText }));
+  let canonicalBody = bodyText;
+  try { canonicalBody = JSON.stringify(paidReportRequest(JSON.parse(bodyText))); } catch { /* handler validates malformed requests */ }
+  const r = await handler(new Request(req.url, { method: "POST", headers: h, body: canonicalBody }));
   const text = await r.text();
   let data: any = null; try { data = JSON.parse(text); } catch { /* */ }
   return { r, text, data };

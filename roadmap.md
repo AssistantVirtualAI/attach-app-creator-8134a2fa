@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Add new SMS and own-line replies to broker/admin portal pages through shared PortalSmsComposer and existing authenticated pp-ns-sms; six tests pass (owned sender payload, single attempt, retained retry key, cancellation), preview build OK. No server/native edits, sends or publication.
+- [ ] Verify signed-in portal SMS controls visually and real delivery: browser preview shows “Preview reconnecting”, preventing page verification; no unsolicited test SMS sent. Real delivery requires an explicitly approved recipient/message.
+
 - [x] Prepare unified paid summary/by-agent server snapshot with both projections, canonical refresh/warm paths, revisioned paid cache identity, and cents totals. 44 tests pass; no paid/pending merge, financial-rule/native edit, data update or deployment.
 - [x] Deployed unified paid snapshot (2026-10-26 20:2x UTC): global summary and by_agent both 13083211.96 / 3654 files / 1264712056.58 volume; all 27 brokers' by_agent rows equal their selected-broker summary (amount, files, volume). Connected UI confirms both portal pages identical. Old 1316 split came from separate action snapshots.
 

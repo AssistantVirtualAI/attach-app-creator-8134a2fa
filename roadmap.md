@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Enable new SMS and replies on portal pages using the existing authenticated sender, safe submission guards, and accepted-not-delivered feedback; verify without sending unsolicited texts or changing native apps.
+
 - [x] Prepare unified paid summary/by-agent server snapshot with both projections, canonical refresh/warm paths, revisioned paid cache identity, and cents totals. 44 tests pass; no paid/pending merge, financial-rule/native edit, data update or deployment.
 - [x] Deployed unified paid snapshot (2026-10-26 20:2x UTC): global summary and by_agent both 13083211.96 / 3654 files / 1264712056.58 volume; all 27 brokers' by_agent rows equal their selected-broker summary (amount, files, volume). Connected UI confirms both portal pages identical. Old 1316 split came from separate action snapshots.
 

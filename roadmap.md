@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] User-approved cell test: owner/recipient/body/key/expiry exception deployed only to pp-ns-sms; 3 tests pass. Exactly one send returned HTTP 200 ok; one history read returned one matching outbound entry with status sent and no error, no explicit delivered evidence. Exception expires 2026-10-26 23:20 UTC; no retry or frontend publication.
+- [ ] Confirm actual approved test SMS receipt: waiting for the user’s phone confirmation; service sent status does not prove delivery.
+
 - [ ] Verify two consecutive handset calls (same and different numbers), full/minimized duration zero after hangup and starts only at answer: blocked on physical handset and updated installed app. Presentation-only ring/stale timestamp guard and shared screen/pill clock prepared with automated lifecycle tests; no native/telephony changes or publication. Installed native answer-event semantics remain unverified.
 
 - [x] Reset current-call duration synchronously after hangup in both mirrored web presentations through shared elapsed hook; 7 tests pass, including ended/idle with retained 91:31 timestamp, next-call reset and held time. Preview build OK. No native/transport changes, calls or publication; installed-device validation requires next app release and a real call.

@@ -21,6 +21,7 @@ import {
 import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS, TEST_SMS_BLOCK_MESSAGE } from "../_shared/pp-test-sms.ts";
 import { isAvaOriginated, isConfirmed } from "../_shared/ava-confirm.ts";
 import { mergeDeliveryEvidence } from "./delivery-evidence.ts";
+import { approvedSmsTest } from "./approved-sms-test.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -538,8 +539,8 @@ Deno.serve(async (req) => {
         return jsonResponse({ ok: false, error: "Paramètres manquants: 'to' et 'message' sont requis", missing: { to: !to, message: !message } }, 400);
       }
 
-      // Blocage permanent : aucun texto de test n'est envoyé, sans exception.
-      if (blockTestSms(ctx.userId, message)) {
+      // General test ban remains; only the user's time-limited explicit test is exempt.
+      if (blockTestSms(ctx.userId, message) && !approvedSmsTest(ctx.userId, to, message, idempotencyKey)) {
         console.warn("[pp-ns-sms] test SMS blocked", { userId: ctx.userId, to });
         return jsonResponse({
           ok: false,

@@ -233,27 +233,71 @@ export async function commissionGet(path: string, token: string, correlationId: 
   return last ?? { ok: false, status: 502, data: { message: "network_error" }, durationMs: Date.now() - started };
 }
 
+/** Exact fingerprint of one Maestro line (all fields, key order independent). */
+export function depositFingerprint(row: Record<string, unknown>): string {
+  return JSON.stringify(Object.keys(row).sort().map((k) => [k, row[k]]));
+}
+
+/**
+ * Merge several complete reads of the same Maestro bucket. Maestro paging is
+ * not stable (a line can be repeated on one page and skipped on another), so a
+ * line keeps the smallest multiplicity seen among the reads that contain it:
+ * a paging repeat (2 in one read, 1 in others) collapses to 1, while genuinely
+ * identical lines present in every read are kept.
+ */
+export function mergeDepositReads<T extends Record<string, unknown>>(reads: T[][]): T[] {
+  const best = new Map<string, { row: T; n: number }>();
+  for (const read of reads) {
+    const counts = new Map<string, { row: T; n: number }>();
+    for (const row of read) {
+      const k = depositFingerprint(row);
+      const c = counts.get(k); if (c) c.n++; else counts.set(k, { row, n: 1 });
+    }
+    for (const [k, c] of counts) {
+      const b = best.get(k);
+      if (!b || c.n < b.n) best.set(k, c);
+    }
+  }
+  const out: T[] = [];
+  for (const { row, n } of best.values()) for (let i = 0; i < n; i++) out.push(row);
+  return out;
+}
+
+const hasRepeat = (rows: Record<string, unknown>[]) => new Set(rows.map(depositFingerprint)).size !== rows.length;
+
 /** Paid deposits only: never substitutes pending rows or treats a failed bucket as zero. */
 export async function collectPaidDeposits(token: string, filters: NormalizedFilters, cid: string) {
   const rows: CommissionDepositRow[] = [];
   let truncated = false;
   const types = filters.commission_type ? [filters.commission_type] : [...COMMISSION_TYPES];
   for (const type of types) {
-    for (let page = 1; page <= 100; page++) {
-      const qs = buildDepositQuery({ ...filters, order_by: "number", sort: "asc", commission_type: type, page, per_page: 200 });
-      const result = await commissionGet(`${PAID_COMMISSION_PATH}?${qs}`, token, cid);
-      if (!result.ok) return { rows: [], truncated: false, total: 0, fatal: result };
-      if (!Array.isArray(result.data?.data)) {
-        return { rows: [], truncated: false, total: 0, fatal: { ...result, ok: false, status: 502, data: { message: "maestro_contract_error" } } };
+    const reads: CommissionDepositRow[][] = [];
+    let expected = 0;
+    // Up to 3 complete reads: stop at the first read with no repeated line and
+    // the count Maestro announces, else merge reads to recover skipped lines.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const read: CommissionDepositRow[] = [];
+      for (let page = 1; page <= 100; page++) {
+        const qs = buildDepositQuery({ ...filters, order_by: "number", sort: "asc", commission_type: type, page, per_page: 200 });
+        const result = await commissionGet(`${PAID_COMMISSION_PATH}?${qs}`, token, cid);
+        if (!result.ok) return { rows: [], truncated: false, total: 0, fatal: result };
+        if (!Array.isArray(result.data?.data)) {
+          return { rows: [], truncated: false, total: 0, fatal: { ...result, ok: false, status: 502, data: { message: "maestro_contract_error" } } };
+        }
+        const batch: CommissionDepositRow[] = result.data.data;
+        read.push(...batch.map((row) => ({ ...row, commission_type: row.commission_type ?? type })));
+        const metaTotal = Number(result.data?.meta?.total);
+        if (Number.isFinite(metaTotal) && metaTotal > 0) expected = metaTotal;
+        const lastPage = Number(result.data?.meta?.last_page ?? 1);
+        if (page >= lastPage || batch.length === 0) break;
+        if (page === 100) truncated = true;
       }
-      const batch: CommissionDepositRow[] = result.data.data;
-      rows.push(...batch.map((row) => ({
-        ...row, commission_type: row.commission_type ?? type,
-      })));
-      const lastPage = Number(result.data?.meta?.last_page ?? 1);
-      if (page >= lastPage || batch.length === 0) break;
-      if (page === 100) truncated = true;
+      reads.push(read);
+      const clean = !hasRepeat(read as any) && (!expected || read.length === expected);
+      if (clean) { reads.length = 0; reads.push(read); break; }
+      if (expected && mergeDepositReads(reads as any).length >= expected && attempt > 0) break;
     }
+    rows.push(...(reads.length === 1 ? reads[0] : mergeDepositReads(reads as any) as unknown as CommissionDepositRow[]));
   }
   return { rows, truncated, total: rows.length, fatal: null };
 }

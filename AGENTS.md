@@ -32,3 +32,4 @@
 - Portal AVA reuses the mobile MAvaChat (same tools/endpoints) via PortalAvaLauncher, shown only when planipret_profiles.portal_ava_enabled is true; per-profile opt-in avoids exposing an untested portal surface to all brokers.
 - Portal and mobile sign-in require the broker to exist as an active NetSapiens user (pp-ns-access-check, read-only, decide.ts); denial only on proof (404/disabled/no extension), NS outages never lock everyone out.
 - Planipret mobile builds run on Codemagic only (codemagic.yaml, artifacts-only workflows planipret-ios-artifact / planipret-android-artifact / planipret-release-artifacts), triggered solely by the pp-mobile-build edge function from the admin portal; never on push, never any store upload without a separate approved workflow.
+- Maestro paid deposits are read per bucket with up to 3 complete reads merged by exact-line fingerprint (minimum multiplicity) until the announced count is reached; Maestro paging repeats and skips lines.

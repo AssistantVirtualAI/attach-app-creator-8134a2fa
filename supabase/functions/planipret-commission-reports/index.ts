@@ -744,7 +744,7 @@ async function handler(req: Request): Promise<Response> {
         summary.deal_count = b.files;
         summary.total_loan_volume = b.volume;
         (summary as any).files_rule = "own_base_unique_contracts";
-        (summary as any).months = baseMonths(all as any[], { receiver: (r) => String(r.agent_name_id ?? ""), owner: (r) => r.target_name_id != null ? String(r.target_name_id) : null, skip: (r) => Number(r.is_adjustment) === 1 });
+        (summary as any).months = baseMonths(all as any[], { receiver: (r) => String(r.agent_name_id ?? ""), owner: () => null, skip: (r) => Number(r.is_adjustment) === 1, contractUnits: true });
       }
       const validationScope = { role, users_id: filters.users_id ?? null, mode: activeReportScope.mode };
       const paidDq = profileRows(all as any[], null);
@@ -774,7 +774,7 @@ async function handler(req: Request): Promise<Response> {
             const amt = num(r.amount); const n = String(r.number ?? "");
             const vol = unique_volume ? num(r.loan_amt) : 0;
             const isBase = String((r as any).commission_type ?? "base").toLowerCase() === "base" && Number((r as any).is_adjustment) !== 1 && num(r.loan_amt) > 0;
-            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { const k = `${n}|${num(r.loan_amt)}`; if (!x.vk.has(k)) { x.vk.add(k); x.volume += num(r.loan_amt); } x.files.add(k); } };
+            const apply = (x: ReturnType<typeof mk>) => { x.amount += amt; if (n && isBase) { const k = `${n}|${num(r.loan_amt)}`; if (!x.vk.has(k)) { x.vk.add(k); x.volume += num(r.loan_amt); } x.files.add(n); } };
             apply(b);
             if (b === team) { const m = mem.get(t) ?? { name: String(target).trim(), b: mk() }; apply(m.b); mem.set(t, m); }
           }
@@ -833,7 +833,7 @@ async function handler(req: Request): Promise<Response> {
 // Month buckets shared by paid and pending (same rule as the cards):
 // commission = every dated row; files/volume = receiver's own base rows,
 // dated, positive loan, one count per contract+loan tranche (same key as volume).
-function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r: any) => string | null; skip?: (r: any) => boolean }) {
+function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r: any) => string | null; skip?: (r: any) => boolean; contractUnits?: boolean }) {
   const m = new Map<string, { month: string; commission: number; files: Set<string>; vol: Map<string, number> }>();
   for (const r of rows) {
     const d = String(r.date_trans ?? "");
@@ -848,7 +848,7 @@ function baseMonths(rows: any[], opts: { receiver: (r: any) => string; owner: (r
     const loan = Number(r.loan_amt ?? r.loan_amount ?? 0) || 0;
     const c = String(r.number ?? r.contract_id ?? "").trim();
     if (!c || loan <= 0) continue;
-    b.files.add(`${rec}|${c}|${loan}`); b.vol.set(`${rec}|${c}|${loan}`, loan);
+    b.files.add(opts.contractUnits ? `${rec}|${c}` : `${rec}|${c}|${loan}`); b.vol.set(`${rec}|${c}|${loan}`, loan);
   }
   return [...m.values()].sort((a, b) => a.month.localeCompare(b.month)).map((b) => ({
     month: b.month, commission: Math.round(b.commission * 100) / 100, files: b.files.size,

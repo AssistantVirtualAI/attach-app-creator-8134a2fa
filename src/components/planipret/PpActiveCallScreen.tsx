@@ -70,7 +70,7 @@ export default function PpActiveCallScreen({
 
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const elapsed = useCurrentCallElapsed(snap.callState, snap.startedAt);
+  const elapsed = useCurrentCallElapsed(snap.callState, snap.startedAt, snap.callId);
   const [view, setView] = useState<"main" | "keypad" | "transfer" | "addcall">("main");
   const [dtmfBuf, setDtmfBuf] = useState("");
   const [transferQuery, setTransferQuery] = useState("");
@@ -282,7 +282,7 @@ export default function PpActiveCallScreen({
 
   return (
     <>
-    {minimized && !isIncoming && <PpCallPill snap={snap} onHangup={() => hangup()} />}
+    {minimized && !isIncoming && <PpCallPill snap={snap} elapsedSeconds={elapsed} onHangup={() => hangup()} />}
     <AnimatePresence>
       <motion.div
         key="pp-in-call"

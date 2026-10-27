@@ -12,6 +12,7 @@ class Query implements PromiseLike<{ data: any; error: any }> {
   private mode: "select" | "update" | "delete" = "select";
   private patch: Row | null = null;
   private limitN = 1000;
+  private offsetN = 0;
   private failInsert = false;
 
   constructor(private rows: Row[], private opts: { uniqueOn?: string[]; onInsertError?: () => boolean } = {}) {}
@@ -29,6 +30,7 @@ class Query implements PromiseLike<{ data: any; error: any }> {
   }
   order(_col: string, _o?: any) { return this; }
   limit(n: number) { this.limitN = n; return this; }
+  range(from: number, to: number) { this.offsetN = from; this.limitN = to - from + 1; return this; }
 
   insert(row: Row | Row[]) {
     const list = Array.isArray(row) ? row : [row];
@@ -69,7 +71,7 @@ class Query implements PromiseLike<{ data: any; error: any }> {
       for (const r of hits) Object.assign(r, this.patch);
       return { data: hits, error: null };
     }
-    return { data: hits.slice(0, this.limitN), error: null };
+    return { data: hits.slice(this.offsetN, this.offsetN + this.limitN), error: null };
   }
 
   async maybeSingle() {

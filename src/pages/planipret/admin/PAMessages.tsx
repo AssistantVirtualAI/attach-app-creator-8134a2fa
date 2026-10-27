@@ -13,6 +13,7 @@ import { getPlanipretBrokerDirectory } from "@/lib/planipret/adminDirectory";
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { matchesSmsThreadPair, d10, type SmsThreadPairing } from "@/lib/planipret/adminSmsThread";
 import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
 import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
 import ppBanner from "@/assets/planipret/banner-messages.jpg";

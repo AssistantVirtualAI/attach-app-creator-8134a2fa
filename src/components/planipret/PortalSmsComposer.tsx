@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getPpContacts } from "@/lib/ppContactsCache";
 import { portalSmsContacts, filterPortalSmsContacts, type PortalSmsContact } from "@/lib/planipret/portalSmsContacts";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getSmsAvailability, type SmsAvailability } from "@/lib/planipret/smsAvailability";
 import { isInternalMessageRecipient, normalizePortalMessageRecipient } from "@/lib/planipret/portalMessageRecipient";
 import { getSmsSubmission, type SmsSubmission } from "@/lib/planipret/smsSendGuard";

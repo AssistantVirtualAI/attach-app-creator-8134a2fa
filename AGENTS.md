@@ -7,6 +7,7 @@
 - Portal SMS creation and replies share PortalSmsComposer and the existing JWT-owned pp-ns-sms endpoint; admin compose identity comes from the authenticated session rather than an optional display profile. Never submit a selected broker/sender, automatically retry dispatch, or label acceptance as delivery, preventing impersonation and duplicate texts.
 - Portal SMS recipient selection uses authenticated contact, directory and Maestro-client reads; dialogs use global design-system fields rather than page-scoped input CSS, preserving ownership and readability outside the page tree.
 - Direct conversation replies reuse PortalSmsComposer in inline mode keyed by authenticated user and thread; only the history scrolls, and all send validation/idempotency remains shared with new messages.
+- Native mobile initialization validates extension, device, username and auth-user as one canonical M identity before using credentials; never rewrite W/x credentials to M. Widget association keeps the base external_user_id until Maestro confirms a separate registration override contract.
 - Portal extension destinations use a dedicated recipient classifier, not external DID normalization; the existing server owns internal chat dispatch and sender identity, so a missing external DID cannot block extension chat.
 - Explicit SMS-test exceptions are checked server-side against owner, recipient, exact body, fixed idempotency key and expiry; the default shared test prohibition stays intact, preventing a browser-controlled general override.
 

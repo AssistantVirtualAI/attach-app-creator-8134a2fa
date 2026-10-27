@@ -458,9 +458,10 @@ Deno.serve(async (req) => {
         console.warn("[pp-ns-sms] internal-thread error:", error.message);
         return jsonResponse({ error: "internal_thread_failed" }, 500);
       }
+      // Seulement les messages écrits par le correspondant : la moitié du
+      // courtier est déjà dans son propre historique (miroirs inclus).
       const messages = (data ?? []).filter((r: any) =>
-        String(r.from_number ?? "").replace(/\D/g, "") === pair.own ||
-        String(r.to_number ?? "").replace(/\D/g, "") === pair.own,
+        String(r.from_number ?? "").replace(/\D/g, "") === pair.peer,
       );
       return jsonResponse({ ok: true, count: messages.length, messages });
     }

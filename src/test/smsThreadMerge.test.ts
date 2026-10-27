@@ -31,3 +31,34 @@ describe("mergeSmsThreadMessages", () => {
     expect(mergeSmsThreadMessages([{ body: "no id" }], null as any)).toEqual([]);
   });
 });
+
+describe("mergeSmsThreadMessages — webhook mirror duplicates", () => {
+  it("collapses a peer reply logged twice (own inbound mirror + peer outbound row)", () => {
+    const own = [
+      { id: "sent", direction: "outbound", body: "Bonjour Jannie", created_at: "2026-10-26T21:58:36Z" },
+      { id: "mirror", direction: "inbound", body: "Bonjour Marc!", created_at: "2026-10-26T21:59:18Z" },
+    ];
+    const extra = [
+      { id: "peer-row", direction: "outbound", body: "Bonjour Marc!", created_at: "2026-10-26T21:59:18Z", _peerAuthored: true },
+    ];
+    const merged = mergeSmsThreadMessages(own, extra);
+    expect(merged.filter((m) => m.body === "Bonjour Marc!")).toHaveLength(1);
+    expect(merged.map((m) => m.id)).toEqual(["sent", "mirror"]);
+  });
+
+  it("keeps distinct messages with the same body sent in different minutes", () => {
+    const own = [{ id: "a", body: "ok", created_at: "2026-10-26T21:59:18Z" }];
+    const extra = [{ id: "b", body: "ok", created_at: "2026-10-26T22:01:00Z", _peerAuthored: true }];
+    expect(mergeSmsThreadMessages(own, extra)).toHaveLength(2);
+  });
+});
+
+describe("mergeSmsThreadMessages — admin-sync duplicates", () => {
+  it("collapses copies re-imported with another id but the same sent_at", () => {
+    const extra = [
+      { id: "p1", direction: "outbound", body: "Bonjour Marc!", created_at: "2026-10-26T21:59:18.380Z", sent_at: "2026-10-26T21:59:18.289Z", _peerAuthored: true },
+      { id: "p2", direction: "outbound", body: "Bonjour Marc!", created_at: "2026-10-26T22:21:06.048Z", sent_at: "2026-10-26T21:59:18Z", _peerAuthored: true },
+    ];
+    expect(mergeSmsThreadMessages([], extra)).toHaveLength(1);
+  });
+});

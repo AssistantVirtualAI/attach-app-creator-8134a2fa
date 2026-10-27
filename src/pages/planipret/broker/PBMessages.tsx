@@ -122,7 +122,8 @@ export default function PBMessages() {
     void supabase.functions.invoke("pp-ns-sms", {
       body: { action: "internal-thread", peer: activeInternalPeer },
     }).then(({ data, error }) => {
-      if (!cancelled) setInternalExtra(error ? [] : (data as any)?.messages ?? []);
+      // _peerAuthored : écrit par le correspondant, jamais par ce courtier.
+      if (!cancelled) setInternalExtra(error ? [] : (((data as any)?.messages ?? []) as any[]).map((m) => ({ ...m, _peerAuthored: true })));
     });
     return () => { cancelled = true; };
   }, [activeInternalPeer]);
@@ -230,18 +231,23 @@ export default function PBMessages() {
               )}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-2">
-              {ordered.map((m) => (
-                <div key={m.id} className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}>
+              {ordered.map((m) => {
+                // Les réponses du correspondant interne arrivent avec
+                // direction « outbound » de son profil : alignées à gauche.
+                const mine = !m._peerAuthored && m.direction === "outbound" && (!m.user_id || m.user_id === userId);
+                return (
+                <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                   <button onClick={() => setDetail(m)} className="text-left" style={{
                     maxWidth: "72%", borderRadius: 14, padding: "8px 12px", fontSize: 13,
-                    background: m.direction === "outbound" ? "var(--pp-brand-accent-2)" : "rgba(16,185,129,0.16)",
-                    color: m.direction === "outbound" ? "#fff" : "var(--pp-text-primary)",
+                    background: mine ? "var(--pp-brand-accent-2)" : "rgba(16,185,129,0.16)",
+                    color: mine ? "#fff" : "var(--pp-text-primary)",
                   }}>
                     <div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
-                    <div style={{ fontSize: 10, opacity: 0.7, marginTop: 3 }}>{fmtDateTime(m.sent_at ?? m.created_at, lang)}{m.direction === "outbound" ? ` · ${smsDeliveryLabel(m, lang)}` : ""}</div>
+                    <div style={{ fontSize: 10, opacity: 0.7, marginTop: 3 }}>{fmtDateTime(m.sent_at ?? m.created_at, lang)}{mine ? ` · ${smsDeliveryLabel(m, lang)}` : ""}</div>
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
             {canCompose && active && <PortalSmsComposer key={`${authUserId}:${active.key}`} inline target={{ number: active.peer }} userId={authUserId} lang={lang} onClose={() => {}} onSent={() => void load()} />}
           </div>

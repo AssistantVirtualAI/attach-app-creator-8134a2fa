@@ -9,6 +9,7 @@
 - Direct conversation replies reuse PortalSmsComposer in inline mode keyed by authenticated user and thread; only the history scrolls, and all send validation/idempotency remains shared with new messages.
 - Native mobile initialization validates extension, device, username and auth-user as one canonical M identity before using credentials; never rewrite W/x credentials to M. Widget association keeps the base external_user_id until Maestro confirms a separate registration override contract.
 - Portal extension destinations use a dedicated recipient classifier, not external DID normalization; the existing server owns internal chat dispatch and sender identity, so a missing external DID cannot block extension chat.
+- Full conversation views merge the two halves of an internal extension thread through pp-ns-sms `internal-thread` (JWT extension ↔ peer, internal-only peer, peer-authored rows only); duplicates collapse on body + displayed minute, and authorship renders from row ownership, never from the direction field alone. Admin thread pairing must accept both the broker DID and extension as the line side.
 - Explicit SMS-test exceptions are checked server-side against owner, recipient, exact body, fixed idempotency key and expiry; the default shared test prohibition stays intact, preventing a browser-controlled general override.
 
 - SMS presentation shares a mirrored evidence classifier; local sent/HTTP acceptance never proves delivery, and deduplication must retain explicit provider status.

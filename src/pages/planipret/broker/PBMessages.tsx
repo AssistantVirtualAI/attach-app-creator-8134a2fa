@@ -122,7 +122,8 @@ export default function PBMessages() {
     void supabase.functions.invoke("pp-ns-sms", {
       body: { action: "internal-thread", peer: activeInternalPeer },
     }).then(({ data, error }) => {
-      if (!cancelled) setInternalExtra(error ? [] : (data as any)?.messages ?? []);
+      // _peerAuthored : écrit par le correspondant, jamais par ce courtier.
+      if (!cancelled) setInternalExtra(error ? [] : (((data as any)?.messages ?? []) as any[]).map((m) => ({ ...m, _peerAuthored: true })));
     });
     return () => { cancelled = true; };
   }, [activeInternalPeer]);

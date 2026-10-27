@@ -74,7 +74,9 @@ export default function PBMessages() {
     const map = new Map<string, Thread>();
     for (const m of rows) {
       const peer = msgPeer(m);
-      const key = m.thread_id || peer;
+      // One conversation per phone number/person: group by normalized peer digits, not per-send thread ids.
+      const digits = String(peer ?? "").replace(/\D/g, "");
+      const key = (digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits) || m.thread_id || String(peer);
       const existing = map.get(key);
       if (existing) {
         existing.messages.push(m);

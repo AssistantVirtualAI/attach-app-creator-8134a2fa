@@ -196,16 +196,17 @@ export default function PAMessages() {
   }, []);
 
   const openThread = async (m: any) => {
-    const d10 = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
     const outbound = m.direction === "outbound";
     const peerNum = outbound ? m.to_number : m.from_number;
     const lineNum = outbound ? m.from_number : m.to_number;
-    const peerKey = d10(peerNum);
-    const lineKey = d10(lineNum);
     // Les textos du courtier partent du DID, mais les réponses mirées par le
     // webhook arrivent sur son poste : l'autre moitié du fil porte soit le
     // DID, soit le poste du courtier — jamais un seul des deux.
-    const brokerExt = d10(extOfUser.get(String(m.user_id ?? "")) ?? "");
+    const pairing: SmsThreadPairing = {
+      peerKey: d10(peerNum),
+      lineKey: d10(lineNum),
+      brokerExt: d10(extOfUser.get(String(m.user_id ?? "")) ?? "") || undefined,
+    };
     const isLine = (side: string) =>
       Boolean(side) && (!lineKey || side === lineKey || (brokerExt && side === brokerExt) || (!brokerExt && side.length <= 6));
     setThreadKey(peerNum);

@@ -14,6 +14,14 @@ Codes: `method_not_allowed` (405), `unauthorized` (401), `authentication_or_prof
 
 Register the widget ONLY as `<ext>x`, never `<ext>M` or legacy `<ext>W`. Do not auto-answer; accept transferred calls as normal incoming calls. Profiles/extensions/domains are resolved server-side. Registrations are checked before transfer; v45 Device registration fields are used only if the registrations endpoint returns 404/405.
 
+## Widget registration contract to confirm with Scott
+
+The current telecom `/sync` association contract sends `{user_id, external_user_id}` where `external_user_id` remains the base subscriber extension (for example `1117`), not a SIP device. Omitting it releases the association. Do not replace it with `1117x` or add an undocumented field to the live webhook.
+
+Required outcome for every broker: Maestro widget registers and authenticates only as `<ext>x`; mobile native registration/authentication uses only `<ext>M`; portal web phone remains `<ext>W`. Scott must confirm the accepted field and semantics for a widget device override (for example whether a separate `sip_username` is supported) or implement the x selection inside Maestro. A webhook acceptance alone does not prove that the widget changed its registration.
+
+Before activation, validate the contract on an approved account, then read back the actual non-expired client holders for x/M/W and physically answer inbound calls from the widget and phone. The mobile candidate rejects mismatched device/username/auth-user credentials rather than rewriting W/x into M. Android currently retains the separate W/WSS compatibility path: migration requires its native engine and coordinated release, not a live transport or password rewrite.
+
 The backend transfers the provider-reported remote leg to `sip:<ext>x@domain` or `sip:<ext>M@domain`; it never hangs up the source. NS must own answer/completion and rollback. The supplied docs do not specify a 20-second timeout/no-voicemail option or remote-leg field contract: these guarantees require provider verification, not an invented parameter. Missing remote-leg evidence is refused. The UI deliberately does not declare success from HTTP acceptance or local termination alone; confirmed-success signaling remains pending.
 
 ## Notifications (disabled until Scott approves)

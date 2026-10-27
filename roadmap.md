@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Prepare strict native mobile credential validation for every broker: exact base extension + M device/username/auth-user before native initialization, rejects W/x/mismatched credentials without rewriting suffix/password. Both web trees mirrored; 18 identity/native ownership tests pass in each; preview build OK. No native binary, transport, routing, number, live registration or deployment changes.
+- [ ] Activate all-broker mobile M and widget x separation: Android W/WSS compatibility path needs coordinated native-engine release and physical incoming-answer/audio verification; installed version unverified. Widget `/sync` only documents base external_user_id association; Scott must confirm separate device override field or implement x selection. Contract requirements documented; no invented webhook fields or association changes sent.
+
 - [x] Add direct broker conversation replies through shared authenticated SMS composer, keyed by user/thread; history scrolls independently from reply box. Signed-in broker page confirms editable reply and enabled Send; 18 focused tests pass including accepted/rejected inline replies and no automatic retries; preview build OK. No live send or publication; provider delivery not asserted.
 
 - [x] Restore readable portal SMS fields and authenticated recipient selection in shared broker/admin composer; 16 tests pass for numeric destinations, named contact selection, internal extension 113, rejection and idempotency. Signed-in portal verifies editable dark fields, enabled Send and contact selection; preview build OK. No live message or publication. Actual delivery and every broker's own signed-in UI remain unverified without authorized account/device checks.

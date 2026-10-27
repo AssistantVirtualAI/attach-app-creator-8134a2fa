@@ -102,7 +102,7 @@ export async function sendNativeAlertPush(
     const androidTokens = tokens.filter((t: any) => t.platform === "android");
     if (androidTokens.length) {
       const sa = parseServiceAccount(
-        config.fcm_service_account_json ?? Deno.env.get("FCM_SERVICE_ACCOUNT_JSON"),
+        Deno.env.get("FCM_SERVICE_ACCOUNT_JSON") ?? config.fcm_service_account_json,
       );
       if (sa) {
         for (const row of androidTokens) {

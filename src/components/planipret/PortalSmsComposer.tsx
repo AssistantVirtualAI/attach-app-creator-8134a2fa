@@ -12,12 +12,13 @@ import { getSmsAvailability, type SmsAvailability } from "@/lib/planipret/smsAva
 import { isInternalMessageRecipient, normalizePortalMessageRecipient } from "@/lib/planipret/portalMessageRecipient";
 import { getSmsSubmission, type SmsSubmission } from "@/lib/planipret/smsSendGuard";
 
-export default function PortalSmsComposer({ target, userId, lang, onClose, onSent }: {
+export default function PortalSmsComposer({ target, userId, lang, onClose, onSent, inline = false }: {
   target: { number: string } | null;
   userId: string;
   lang: "en" | "fr";
   onClose: () => void;
   onSent: () => void;
+  inline?: boolean;
 }) {
   const [recipient, setRecipient] = useState("");
   const [body, setBody] = useState("");
@@ -46,7 +47,7 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
     setContactsLoading(Boolean(target && userId));
     submission.current = null;
     if (target && userId) void getSmsAvailability(true).then((value) => { if (current) setAvailability(value); });
-    if (target && userId) void Promise.allSettled([
+    if (target && userId && !inline) void Promise.allSettled([
       getPpContacts("list"), getPpContacts("directory"), getPpContacts("maestro_clients"),
     ]).then((results) => {
       if (!current) return;
@@ -55,7 +56,7 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
       setContactsLoading(false);
     });
     return () => { current = false; };
-  }, [target, userId]);
+  }, [target?.number, Boolean(target), userId, inline]);
 
   const to = normalizePortalMessageRecipient(recipient);
   const internal = isInternalMessageRecipient(recipient);
@@ -75,6 +76,8 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
       });
       if (error || data?.error || data?.ok !== true) throw new Error(error?.message ?? data?.error ?? tr("Envoi non confirmé.", "Submission not confirmed."));
       toast.success(tr("Message accepté", "Message accepted"));
+      setBody("");
+      submission.current = null;
       onSent();
       onClose();
     } catch (error) {
@@ -85,13 +88,12 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
     }
   };
 
-  return <Dialog open={Boolean(target)} onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
-    <DialogContent className="w-[calc(100%-2rem)] max-w-lg max-h-[85vh] overflow-y-auto text-foreground" onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }} onPointerDownOutside={(e) => { if (busy) e.preventDefault(); }}>
-      <DialogHeader>
+  const content = <>
+      {!inline && <DialogHeader>
         <DialogTitle>{tr("Nouveau texto", "New text message")}</DialogTitle>
         <DialogDescription>{internal ? tr(`Message interne — poste ${to}`, `Internal message — extension ${to}`) : availability?.primaryNumber ? tr(`De : ${availability.primaryNumber}`, `From: ${availability.primaryNumber}`) : tr("Votre ligne de courtier", "Your broker line")}</DialogDescription>
-      </DialogHeader>
-      <div className="grid gap-2">
+      </DialogHeader>}
+      {!inline && <div className="grid gap-2">
         <label htmlFor="portal-sms-recipient" className="text-sm font-medium">{tr("Destinataire", "Recipient")}</label>
         <Input id="portal-sms-recipient" className="min-w-0 text-foreground" autoComplete="off" value={recipient} disabled={busy} onFocus={() => setPickerOpen(true)} onChange={(e) => { setRecipient(e.target.value); setSelected(null); setPickerOpen(true); }} placeholder={tr("Nom, poste ou numéro de téléphone", "Name, extension or phone number")} />
         {selected && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Check className="h-4 w-4 text-primary" /><span>{selected.name} · {selected.number}</span></div>}
@@ -106,16 +108,21 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
           {contactsError && <p role="status" className="border-t border-input p-3 text-sm text-muted-foreground">{tr("Certains contacts sont indisponibles. Vous pouvez saisir un numéro ou un poste.", "Some contacts are unavailable. You can enter a number or extension.")}</p>}
         </div>}
         {recipient.trim() && !to && <p className="text-sm text-muted-foreground">{tr("Sélectionnez un contact ou entrez un numéro valide.", "Select a contact or enter a valid number.")}</p>}
-      </div>
-      <label className="grid gap-2 text-sm">Message
-        <Textarea className="w-full min-w-0 min-h-32 resize-y text-foreground" value={body} disabled={busy} onChange={(e) => setBody(e.target.value)} placeholder={tr("Votre message…", "Your message…")} />
+      </div>}
+      <label className="grid gap-2 text-sm font-medium">{inline ? tr("Répondre", "Reply") : "Message"}
+        <Textarea className={`w-full min-w-0 resize-y text-foreground ${inline ? "min-h-20 max-h-40" : "min-h-32"}`} value={body} disabled={busy} onChange={(e) => setBody(e.target.value)} placeholder={inline ? tr("Votre réponse…", "Your reply…") : tr("Votre message…", "Your message…")} />
       </label>
       {!internal && availability?.state === "unavailable" && <p role="alert" className="text-sm text-destructive">{tr("Aucun numéro SMS actif pour votre poste.", "No active SMS number for your extension.")}</p>}
       {failure && <p role="alert" className="text-sm text-destructive break-words">{failure}</p>}
-      <DialogFooter className="gap-2 border-t border-border pt-4">
-        <Button variant="outline" disabled={busy} onClick={onClose}>{tr("Annuler", "Cancel")}</Button>
+      <div className={`flex justify-end gap-2 ${inline ? "" : "border-t border-border pt-4"}`}>
+        {!inline && <Button variant="outline" disabled={busy} onClick={onClose}>{tr("Annuler", "Cancel")}</Button>}
         <Button disabled={!ready} onClick={() => void send()}>{busy ? <Loader2 className="animate-spin" /> : <Send />}{tr("Envoyer", "Send")}</Button>
-      </DialogFooter>
+      </div>
+    </>;
+  if (inline) return <div className="grid shrink-0 gap-3 border-t border-border bg-background p-3 text-foreground" aria-label={tr("Réponse à la conversation", "Conversation reply")}>{content}</div>;
+  return <Dialog open={Boolean(target)} onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
+    <DialogContent className="w-[calc(100%-2rem)] max-w-lg max-h-[85vh] overflow-y-auto text-foreground" onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }} onPointerDownOutside={(e) => { if (busy) e.preventDefault(); }}>
+      {content}
     </DialogContent>
   </Dialog>;
 }

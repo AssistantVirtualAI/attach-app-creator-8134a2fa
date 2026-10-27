@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageSquare, Send, Trash2, X, Plus } from "lucide-react";
+import { MessageSquare, Trash2, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PortalSmsComposer from "@/components/planipret/PortalSmsComposer";
 import { useSmsThreadState, smsThreadKey, isHidden } from "@/lib/planipret/smsThreadState";
@@ -157,7 +157,7 @@ export default function PBMessages() {
         <div className="pp-card"><PPEmptyState icon={<MessageSquare className="w-5 h-5" />} title={lang === "en" ? "No messages" : "Aucun message"} /></div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-          <div className="pp-card flex flex-col" style={{ padding: 0, maxHeight: "70vh" }}>
+          <div className="pp-card flex min-h-0 flex-col" style={{ padding: 0, maxHeight: "70vh" }}>
             <div className="overflow-y-auto flex-1">
               {pageThreads.map((t) => (
                 <button key={t.key} onClick={() => setActiveKey(t.key)}
@@ -188,7 +188,7 @@ export default function PBMessages() {
           </div>
 
           <div className="pp-card flex flex-col" style={{ padding: 0, maxHeight: "70vh" }}>
-            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
+            <div className="shrink-0 px-4 py-3" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
               <span className="pp-heading" style={{ fontSize: 14, fontWeight: 700 }}>{active ? peerLabel(active.peer) : ""}</span>
               {active && (
                 <button aria-label={lang === "en" ? "Delete conversation" : "Supprimer la conversation"}
@@ -205,7 +205,7 @@ export default function PBMessages() {
                 </button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-2">
               {ordered.map((m) => (
                 <div key={m.id} className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}>
                   <button onClick={() => setDetail(m)} className="text-left" style={{
@@ -219,7 +219,7 @@ export default function PBMessages() {
                 </div>
               ))}
             </div>
-            {canCompose && active && <div className="flex justify-end p-3"><Button onClick={() => setComposeTarget({ number: active.peer })}><Send />{lang === "en" ? "Reply" : "Répondre"}</Button></div>}
+            {canCompose && active && <PortalSmsComposer key={`${authUserId}:${active.key}`} inline target={{ number: active.peer }} userId={authUserId} lang={lang} onClose={() => {}} onSent={() => void load()} />}
           </div>
         </div>
       )}

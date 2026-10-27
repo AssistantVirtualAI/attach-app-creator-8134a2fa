@@ -44,6 +44,8 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
     setAvailability(null);
     setContacts([]);
     setSelected(null);
+    setSuggestions([]);
+    setAiBusy(null);
     setPickerOpen(!target?.number);
     setContactsError(false);
     setContactsLoading(Boolean(target && userId));

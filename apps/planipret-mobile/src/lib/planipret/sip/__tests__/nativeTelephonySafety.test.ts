@@ -189,4 +189,25 @@ describe("native telephony safety invariants", () => {
     expect(generator).toContain("Aucun REGISTER de fond au démarrage");
     expect(verifier).toContain("wake-only service");
   });
+
+  it("keeps <ext>M on PJSIP: the WSS keep-alive never registers it on a pjsua binary", () => {
+    const ka = read("ios/App/App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift");
+    expect(ka).toMatch(/var nativeEngineOwnsAor: Bool = \{\s*#if canImport\(pjsua\)\s*return true/);
+    expect(ka).toContain("nativeEngineOwnsAor=false refused — pjsua linked");
+    for (const fn of ["func startSipService", "private func wakeForPush", "private func connect()", "private func sendRegister"]) {
+      const body = ka.slice(ka.indexOf(fn), ka.indexOf(fn) + 400);
+      expect(body, fn).toContain("if nativeEngineOwnsAor");
+    }
+  });
+
+  it("answers inbound calls only through pjsua 200 OK and fulfils CallKit after the result", () => {
+    const callKit = read("ios/App/App/Plugins/PpVoipCall/PpVoipCall.swift");
+    const engine = read("ios/App/App/Plugins/PpPjsip/PpPjsipEngine.swift");
+    const answer = callKit.slice(callKit.indexOf("perform action: CXAnswerCallAction"));
+    expect(answer.indexOf("PjsipEngine.shared.answer")).toBeLessThan(answer.indexOf("if ok { action.fulfill() } else { action.fail() }"));
+    expect(engine).toContain("pjsua_call_answer(target, 200, nil, nil)");
+    expect(engine).toContain("pendingAnswerCompletions.append(completion)");
+    expect(engine).toContain("answerCompletions[Int32(target), default: []].append(completion)");
+    expect(engine).toContain('"reason": "incoming_invite_missing"');
+  });
 });

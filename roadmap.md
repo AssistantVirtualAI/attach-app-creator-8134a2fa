@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Restore readable portal SMS fields and authenticated recipient selection in shared broker/admin composer; 16 tests pass for numeric destinations, named contact selection, internal extension 113, rejection and idempotency. Signed-in portal verifies editable dark fields, enabled Send and contact selection; preview build OK. No live message or publication. Actual delivery and every broker's own signed-in UI remain unverified without authorized account/device checks.
+
 - [x] Prepare AVA live-first broker-owned task retrieval and contextual search before pagination; stale/truncated search cannot select a task. 54 focused tests pass, preview build OK; no deployment, task mutation or native edit.
 - [ ] Verify prepared AVA task retrieval against live Maestro and installed app for all brokers: requires deployment authorization; screenshot account remains unidentified. Existing upstream scan stays bounded and partial evidence is explicitly refused, not claimed complete.
 

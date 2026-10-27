@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 // Commissions par courtier — même source validée que les pages Commissions :
 // planipret-commission-reports (déboursées : summary/by_agent ; en attente :
 // pending). Dossiers/volume = lignes Base du courtier, contrats uniques.
@@ -50,7 +51,10 @@ export default function PABrokerCommissions({ selfOnly = false }: { selfOnly?: b
   const [year, setYear] = useState(thisYear);
   const [kind, setKind] = useState<Kind>("paid");
   const [brokers, setBrokers] = useState<Broker[]>([]);
-  const [broker, setBroker] = useState<string>(""); // "" = tous les courtiers
+  // Courtier sélectionné conservé dans l'URL : survit à un remontage.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const broker = searchParams.get("broker") ?? ""; // "" = tous les courtiers
+  const setBroker = (id: string) => setSearchParams((p) => { const n = new URLSearchParams(p); if (id) n.set("broker", id); else n.delete("broker"); return n; }, { replace: true });
   const [rows, setRows] = useState<Row[] | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailPy, setDetailPy] = useState<Detail | null>(null);

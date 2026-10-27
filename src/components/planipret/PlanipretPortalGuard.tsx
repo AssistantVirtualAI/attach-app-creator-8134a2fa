@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
@@ -25,6 +25,9 @@ export default function PlanipretPortalGuard({ portal, children }: { portal: Por
   const [state, setState] = useState<"checking" | "anon" | "denied" | "ready">("checking");
   const [reason, setReason] = useState<string>("");
   const [redirect, setRedirect] = useState<string | null>(null);
+  // Utilisateur déjà validé : un retour sur l'onglet ré-émet SIGNED_IN
+  // (rafraîchissement de session) — ne jamais démonter la page pour ça.
+  const readyUserRef = useRef<string | null>(null);
 
   /** Vrai pendant ~20 s après un callback Microsoft réussi. */
   const justSignedIn = () => {
@@ -80,14 +83,16 @@ export default function PlanipretPortalGuard({ portal, children }: { portal: Por
     }
 
     logPortalLogin({ portal, outcome: "success", email: access.email, path: location.pathname });
+    try { readyUserRef.current = (await supabase.auth.getSession()).data.session?.user?.id ?? null; } catch { /* ignore */ }
     setState("ready");
   };
 
   useEffect(() => { void evaluate(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [portal]);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") { setState("anon"); return; }
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") { readyUserRef.current = null; setState("anon"); return; }
+      if (event === "SIGNED_IN" && readyUserRef.current && session?.user?.id === readyUserRef.current) return;
       if (event === "SIGNED_IN" || event === "USER_UPDATED") void evaluate();
     });
     return () => sub.subscription.unsubscribe();

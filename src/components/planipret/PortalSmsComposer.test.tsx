@@ -125,4 +125,28 @@ describe("PortalSmsComposer", () => {
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
+
+  it("submits an inline reply to the current thread and clears only an accepted draft", async () => {
+    mocks.invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    const onSent = vi.fn();
+    render(<PortalSmsComposer inline target={{ number: "113" }} userId="broker-a" lang="en" onClose={() => {}} onSent={onSent} />);
+    fireEvent.change(screen.getByLabelText("Reply"), { target: { value: "Reply to this conversation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSent).toHaveBeenCalledOnce());
+    expect(mocks.invoke).toHaveBeenCalledWith("pp-ns-sms", { body: { action: "send", to: "113", message: "Reply to this conversation", idempotency_key: expect.any(String) } });
+    expect(screen.getByLabelText("Reply")).toHaveValue("");
+    expect(mocks.contacts).not.toHaveBeenCalled();
+  });
+
+  it("retains an inline reply on server rejection without retries", async () => {
+    mocks.invoke.mockResolvedValue({ data: { ok: false, error: "Submission refused" }, error: null });
+    const onSent = vi.fn();
+    render(<PortalSmsComposer inline target={{ number: "113" }} userId="broker-a" lang="en" onClose={() => {}} onSent={onSent} />);
+    fireEvent.change(screen.getByLabelText("Reply"), { target: { value: "Keep my draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("Reply")).toHaveValue("Keep my draft");
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(onSent).not.toHaveBeenCalled();
+  });
 });

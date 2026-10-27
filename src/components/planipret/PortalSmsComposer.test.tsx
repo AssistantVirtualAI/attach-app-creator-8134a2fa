@@ -8,7 +8,10 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: { functions: { invo
 vi.mock("sonner", () => ({ toast: { success: mocks.success } }));
 vi.mock("@/lib/planipret/smsAvailability", () => ({
   getSmsAvailability: (...args: unknown[]) => mocks.availability(...args),
-  normalizeSmsNumber: (value: string) => value.replace(/\D/g, "").length === 10 ? `+1${value.replace(/\D/g, "")}` : null,
+  normalizeSmsNumber: (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    return digits.length === 10 ? `+1${digits}` : digits.length === 11 ? `+${digits}` : null;
+  },
 }));
 
 describe("PortalSmsComposer", () => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Loader2, UserRound, Check } from "lucide-react";
+import { Send, Loader2, UserRound, Check, Sparkles, Lightbulb, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,8 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
   const [contactsError, setContactsError] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selected, setSelected] = useState<PortalSmsContact | null>(null);
+  const [aiBusy, setAiBusy] = useState<"improve" | "suggest" | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const submission = useRef<SmsSubmission | null>(null);
   const sending = useRef(false);
   const tr = (fr: string, en: string) => lang === "en" ? en : fr;
@@ -42,6 +44,8 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
     setAvailability(null);
     setContacts([]);
     setSelected(null);
+    setSuggestions([]);
+    setAiBusy(null);
     setPickerOpen(!target?.number);
     setContactsError(false);
     setContactsLoading(Boolean(target && userId));
@@ -88,6 +92,29 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
     }
   };
 
+  const aiAssist = async (action: "improve" | "suggest") => {
+    if (aiBusy || busy) return;
+    if (action === "improve" && !body.trim()) return;
+    setAiBusy(action);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-sms-assist", {
+        body: { action, text: body.trim(), lang },
+      });
+      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? "ai_unavailable");
+      if (action === "improve" && typeof data?.text === "string" && data.text.trim()) {
+        setBody(data.text.trim());
+        toast.success(tr("Texte amélioré", "Text improved"));
+      }
+      if (action === "suggest" && Array.isArray(data?.suggestions)) {
+        setSuggestions(data.suggestions.filter((s: unknown) => typeof s === "string" && s.trim()));
+      }
+    } catch {
+      toast.error(tr("L'aide IA est indisponible pour le moment.", "AI assist is unavailable right now."));
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
   const content = <>
       {!inline && <DialogHeader>
         <DialogTitle>{tr("Nouveau texto", "New text message")}</DialogTitle>
@@ -109,9 +136,46 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
         </div>}
         {recipient.trim() && !to && <p className="text-sm text-muted-foreground">{tr("Sélectionnez un contact ou entrez un numéro valide.", "Select a contact or enter a valid number.")}</p>}
       </div>}
-      <label className="grid gap-2 text-sm font-medium">{inline ? tr("Répondre", "Reply") : "Message"}
-        <Textarea className={`w-full min-w-0 resize-y text-foreground ${inline ? "min-h-20 max-h-40" : "min-h-32"}`} value={body} disabled={busy} onChange={(e) => setBody(e.target.value)} placeholder={inline ? tr("Votre réponse…", "Your reply…") : tr("Votre message…", "Your message…")} />
-      </label>
+      <div className="grid gap-2">
+        <span className="text-sm font-medium">{inline ? tr("Répondre", "Reply") : "Message"}</span>
+        <div className="rounded-lg border border-input bg-muted/40 p-2 transition-colors focus-within:border-primary focus-within:bg-background focus-within:ring-2 focus-within:ring-primary/20">
+          <Textarea
+            className={`w-full min-w-0 resize-y border-0 bg-transparent p-1 text-foreground shadow-none focus-visible:ring-0 ${inline ? "min-h-20 max-h-40" : "min-h-28"}`}
+            value={body}
+            disabled={busy}
+            autoCorrect="on"
+            autoCapitalize="sentences"
+            spellCheck
+            lang={lang}
+            onChange={(e) => { setBody(e.target.value); if (suggestions.length) setSuggestions([]); }}
+            placeholder={inline ? tr("Votre réponse…", "Your reply…") : tr("Votre message…", "Your message…")}
+          />
+          <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+            <div className="flex items-center gap-1">
+              <Button type="button" variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground" disabled={busy || aiBusy !== null || !body.trim()} onClick={() => void aiAssist("improve")}>
+                {aiBusy === "improve" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {tr("Améliorer", "Improve")}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground" disabled={busy || aiBusy !== null} onClick={() => void aiAssist("suggest")}>
+                {aiBusy === "suggest" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lightbulb className="h-3.5 w-3.5" />}
+                {tr("Suggestions", "Suggestions")}
+              </Button>
+            </div>
+            <span className="text-xs text-muted-foreground" aria-live="polite">{body.length}</span>
+          </div>
+        </div>
+        {suggestions.length > 0 && <div className="grid gap-1.5 rounded-lg border border-border bg-muted/30 p-2" role="group" aria-label={tr("Suggestions IA", "AI suggestions")}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">{tr("Suggestions IA — touchez pour utiliser", "AI suggestions — tap to use")}</span>
+            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground" onClick={() => setSuggestions([])} aria-label={tr("Fermer les suggestions", "Dismiss suggestions")}><X className="h-3.5 w-3.5" /></Button>
+          </div>
+          {suggestions.map((s) => (
+            <button key={s} type="button" disabled={busy} onClick={() => { setBody(s); setSuggestions([]); }} className="rounded-md border border-border bg-background px-2.5 py-1.5 text-left text-xs text-foreground transition-colors hover:border-primary hover:bg-primary/5">
+              {s}
+            </button>
+          ))}
+        </div>}
+      </div>
       {!internal && availability?.state === "unavailable" && <p role="alert" className="text-sm text-destructive">{tr("Aucun numéro SMS actif pour votre poste.", "No active SMS number for your extension.")}</p>}
       {failure && <p role="alert" className="text-sm text-destructive break-words">{failure}</p>}
       <div className={`flex justify-end gap-2 ${inline ? "" : "border-t border-border pt-4"}`}>

@@ -22,6 +22,7 @@ import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS, TEST_SMS_BLOCK_MESS
 import { isAvaOriginated, isConfirmed } from "../_shared/ava-confirm.ts";
 import { mergeDeliveryEvidence } from "./delivery-evidence.ts";
 import { approvedSmsTest } from "./approved-sms-test.ts";
+import { internalThreadPair, internalThreadOrFilter } from "../_shared/pp-internal-thread.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -458,7 +459,8 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "internal_thread_failed" }, 500);
       }
       const messages = (data ?? []).filter((r: any) =>
-        String(r.from_number ?? "").replace(/\D/g, "") === own || String(r.to_number ?? "").replace(/\D/g, "") === own,
+        String(r.from_number ?? "").replace(/\D/g, "") === pair.own ||
+        String(r.to_number ?? "").replace(/\D/g, "") === pair.own,
       );
       return jsonResponse({ ok: true, count: messages.length, messages });
     }

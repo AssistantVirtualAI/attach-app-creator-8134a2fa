@@ -103,7 +103,9 @@ export default function PBMessages() {
       .eq("user_id", userId);
   }, [active?.key]);
 
-  const canCompose = Boolean(userId && userId === authUserId);
+  // Broker context is always the signed-in broker's own profile; the server
+  // derives sender identity from the JWT, so the auth uid alone gates compose.
+  const canCompose = Boolean(userId && authUserId);
   useEffect(() => { setComposeTarget(null); }, [userId, authUserId]);
 
   return (

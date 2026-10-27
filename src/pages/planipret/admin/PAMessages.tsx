@@ -207,12 +207,10 @@ export default function PAMessages() {
       lineKey: d10(lineNum),
       brokerExt: d10(extOfUser.get(String(m.user_id ?? "")) ?? "") || undefined,
     };
-    const isLine = (side: string) =>
-      Boolean(side) && (!lineKey || side === lineKey || (brokerExt && side === brokerExt) || (!brokerExt && side.length <= 6));
     setThreadKey(peerNum);
     setThreadOwner(m.user_id ?? null);
     setThread([]);
-    const suffix = peerKey.slice(-8) || peerKey;
+    const suffix = pairing.peerKey.slice(-8) || pairing.peerKey;
     const { data } = await supabase
       .from("planipret_phone_messages")
       .select("*")

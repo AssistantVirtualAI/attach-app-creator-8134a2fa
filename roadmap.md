@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Investigate Megan voicemail/call failures, persistent app-icon badge after clearing, and all-broker SMS/voicemail/missed-call/due-task/email alerts; verify provider evidence without sending tests, native changes, data mutations or deployment. Report remaining real-device/release blockers.
+
 - [x] User-approved cell test: owner/recipient/body/key/expiry exception deployed only to pp-ns-sms; 3 tests pass. Exactly one send returned HTTP 200 ok; one history read returned one matching outbound entry with status sent and no error, no explicit delivered evidence. Exception expires 2026-10-26 23:20 UTC; no retry or frontend publication.
 - [ ] Confirm actual approved test SMS receipt: waiting for the user’s phone confirmation; service sent status does not prove delivery.
 

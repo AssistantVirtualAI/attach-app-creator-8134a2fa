@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import PortalSmsComposer from "@/components/planipret/PortalSmsComposer";
@@ -131,6 +131,17 @@ export default function PAMessages() {
       setBrokers(directory.brokers);
     })();
   }, []);
+
+  // user_id → poste du courtier, pour rattacher les réponses mirées sur le
+  // poste au fil ouvert depuis une ligne DID.
+  const extOfUser = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of brokers) {
+      const ext = String(b.extension ?? b.ns_extension ?? "").replace(/\D/g, "");
+      if (b.user_id && ext) map.set(String(b.user_id), ext);
+    }
+    return map;
+  }, [brokers]);
 
   const brokerName = (m: any) => m.planipret_profiles?.full_name ?? m.metadata?.user_name ?? m.metadata?.extension_name ?? (m.metadata?.extension ? `Ext. ${m.metadata.extension}` : "—");
 

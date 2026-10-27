@@ -219,10 +219,7 @@ export default function PAMessages() {
       .limit(500);
     const seen = new Set<string>();
     const rows = (data ?? []).filter((r: any) => {
-      const a = d10(r.from_number);
-      const b = d10(r.to_number);
-      const pairOk = (a === peerKey && isLine(b)) || (b === peerKey && isLine(a));
-      if (!pairOk) return false;
+      if (!matchesSmsThreadPair(r.from_number, r.to_number, pairing)) return false;
       const k = `${r.direction}|${String(r.body ?? "").trim()}|${String(r.created_at ?? "").slice(0, 16)}`;
       if (seen.has(k)) return false;
       seen.add(k);

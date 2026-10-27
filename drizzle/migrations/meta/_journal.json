@@ -211,6 +211,13 @@
       "when": 1792792067207,
       "tag": "0029_track_previous_maestro_broker_id",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793129825659,
+      "tag": "0030_grant_ava_chat_enabled_select",
+      "breakpoints": true
     }
   ]
 }

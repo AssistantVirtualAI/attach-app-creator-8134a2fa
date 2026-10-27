@@ -1,0 +1,1 @@
+GRANT SELECT (ava_chat_enabled) ON public.planipret_profiles TO authenticated;

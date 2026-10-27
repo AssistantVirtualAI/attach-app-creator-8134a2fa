@@ -126,7 +126,7 @@ export default function MCommissions() {
   const [commissionType, setCommissionType] = useState<string>(
     (COMMISSION_TYPES as readonly string[]).includes(String(sp.get("commission_type"))) ? String(sp.get("commission_type")) : "",
   );
-  const [splitType, setSplitType] = useState<string>("");
+  const [splitType, setSplitType] = useState<string>("planipret");
   const [numberPrefix, setNumberPrefix] = useState<string>("");
   const [orderBy, setOrderBy] = useState<string>("date_trans");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -160,7 +160,7 @@ export default function MCommissions() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Sheet edits a draft; reports reload only on « Appliquer ».
   type Draft = { commissionType: string; institutionId: string; agentId: string; splitType: string; numberPrefix: string; orderBy: string; sortDir: "asc" | "desc" };
-  const [draft, setDraft] = useState<Draft>({ commissionType: "", institutionId: "", agentId: "", splitType: "", numberPrefix: "", orderBy: "date_trans", sortDir: "desc" });
+  const [draft, setDraft] = useState<Draft>({ commissionType: "", institutionId: "", agentId: "", splitType: "planipret", numberPrefix: "", orderBy: "date_trans", sortDir: "desc" });
   const [avaPref, setAvaPref] = useState<boolean | null>(null);
   const [chartRefreshToken, setChartRefreshToken] = useState(0);
 
@@ -614,7 +614,6 @@ export default function MCommissions() {
               <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Type de partage" : "Split type"}</div>
               <select value={draft.splitType} onChange={(e) => setDraft((d) => ({ ...d, splitType: e.target.value }))}
                 className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
-                <option value="">{fr ? "Tous" : "All"}</option>
                 {SPLIT_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>

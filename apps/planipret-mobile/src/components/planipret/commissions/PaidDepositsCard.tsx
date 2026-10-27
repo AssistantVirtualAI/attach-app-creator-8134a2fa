@@ -43,7 +43,7 @@ export default function PaidDepositsCard({ lang = "fr", scope }: { lang?: "fr" |
     return paidCommissionPeriod(year, gran, idx);
   }, [year, gran, idx]);
 
-  const key = statsCacheKey(isAdmin ? "admin" : "broker", ["paid-overview-v1", scope, range.date_from, range.date_to, agent]);
+  const key = statsCacheKey(isAdmin ? "admin" : "broker", ["paid-overview-planipret-v2", scope, range.date_from, range.date_to, agent]);
   const cached = readStatsCache(key)?.value as { summary?: Summary; agents?: Agent[] } | undefined;
   const [summary, setSummary] = useState<Summary | null>(cached?.summary ?? null);
   const [agents, setAgents] = useState<Agent[] | null>(cached?.agents ?? null);

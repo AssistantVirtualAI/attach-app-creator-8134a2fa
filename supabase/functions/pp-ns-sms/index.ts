@@ -22,6 +22,7 @@ import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS, TEST_SMS_BLOCK_MESS
 import { isAvaOriginated, isConfirmed } from "../_shared/ava-confirm.ts";
 import { mergeDeliveryEvidence } from "./delivery-evidence.ts";
 import { approvedSmsTest } from "./approved-sms-test.ts";
+import { internalThreadPair, internalThreadOrFilter } from "../_shared/pp-internal-thread.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -437,6 +438,31 @@ Deno.serve(async (req) => {
         } catch { /* ignore */ }
       }
       return jsonResponse({ ok: true, count: threads.length, threads, maestro_inbox: maestroInbox, ns_warning: nsWarning });
+    }
+
+    if (action === "internal-thread") {
+      // Fil interne complet entre le poste du courtier (dérivé du JWT) et un
+      // autre poste. Les réponses du correspondant appartiennent à son profil
+      // (miroir reçu), donc RLS les cache au demandeur : lecture serveur des
+      // deux sens, strictement limitée à la paire (poste ↔ poste).
+      const pair = internalThreadPair(ctx.extension, pick("peer"));
+      if (!pair) return jsonResponse({ error: "invalid_peer" }, 400);
+      const limit = Math.min(Number(pick("limit") ?? 500) || 500, 500);
+      const { data, error } = await supabase
+        .from("planipret_phone_messages")
+        .select("id,user_id,direction,to_number,from_number,body,thread_id,sent_at,created_at,read_at,status,ns_message_id")
+        .or(internalThreadOrFilter(pair.own, pair.peer))
+        .order("created_at", { ascending: true })
+        .limit(limit);
+      if (error) {
+        console.warn("[pp-ns-sms] internal-thread error:", error.message);
+        return jsonResponse({ error: "internal_thread_failed" }, 500);
+      }
+      const messages = (data ?? []).filter((r: any) =>
+        String(r.from_number ?? "").replace(/\D/g, "") === pair.own ||
+        String(r.to_number ?? "").replace(/\D/g, "") === pair.own,
+      );
+      return jsonResponse({ ok: true, count: messages.length, messages });
     }
 
     if (action === "messages") {

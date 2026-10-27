@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import PortalSmsComposer from "@/components/planipret/PortalSmsComposer";
@@ -13,6 +13,7 @@ import { getPlanipretBrokerDirectory } from "@/lib/planipret/adminDirectory";
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { matchesSmsThreadPair, d10, type SmsThreadPairing } from "@/lib/planipret/adminSmsThread";
 import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
 import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
 import ppBanner from "@/assets/planipret/banner-messages.jpg";
@@ -132,6 +133,17 @@ export default function PAMessages() {
     })();
   }, []);
 
+  // user_id → poste du courtier, pour rattacher les réponses mirées sur le
+  // poste au fil ouvert depuis une ligne DID.
+  const extOfUser = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of brokers) {
+      const ext = String(b.extension ?? b.ns_extension ?? "").replace(/\D/g, "");
+      if (b.user_id && ext) map.set(String(b.user_id), ext);
+    }
+    return map;
+  }, [brokers]);
+
   const brokerName = (m: any) => m.planipret_profiles?.full_name ?? m.metadata?.user_name ?? m.metadata?.extension_name ?? (m.metadata?.extension ? `Ext. ${m.metadata.extension}` : "—");
 
   const load = async (p = page, ps = pageSize) => {
@@ -184,21 +196,22 @@ export default function PAMessages() {
     // eslint-disable-next-line
   }, []);
 
-  // Un fil = une paire (ligne du courtier ↔ numéro du client). On compare sur
-  // les 10 derniers chiffres, sinon +1 514…, 514… et (514) … créent des fils
-  // différents — et une simple correspondance sur un seul numéro affichait
-  // tous les textos de la ligne du courtier.
   const openThread = async (m: any) => {
-    const d10 = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
     const outbound = m.direction === "outbound";
     const peerNum = outbound ? m.to_number : m.from_number;
     const lineNum = outbound ? m.from_number : m.to_number;
-    const peerKey = d10(peerNum);
-    const lineKey = d10(lineNum);
+    // Les textos du courtier partent du DID, mais les réponses mirées par le
+    // webhook arrivent sur son poste : l'autre moitié du fil porte soit le
+    // DID, soit le poste du courtier — jamais un seul des deux.
+    const pairing: SmsThreadPairing = {
+      peerKey: d10(peerNum),
+      lineKey: d10(lineNum),
+      brokerExt: d10(extOfUser.get(String(m.user_id ?? "")) ?? "") || undefined,
+    };
     setThreadKey(peerNum);
     setThreadOwner(m.user_id ?? null);
     setThread([]);
-    const suffix = peerKey.slice(-8) || peerKey;
+    const suffix = pairing.peerKey.slice(-8) || pairing.peerKey;
     const { data } = await supabase
       .from("planipret_phone_messages")
       .select("*")
@@ -207,10 +220,7 @@ export default function PAMessages() {
       .limit(500);
     const seen = new Set<string>();
     const rows = (data ?? []).filter((r: any) => {
-      const a = d10(r.from_number);
-      const b = d10(r.to_number);
-      const pairOk = (a === peerKey && (!lineKey || b === lineKey)) || (b === peerKey && (!lineKey || a === lineKey));
-      if (!pairOk) return false;
+      if (!matchesSmsThreadPair(r.from_number, r.to_number, pairing)) return false;
       const k = `${r.direction}|${String(r.body ?? "").trim()}|${String(r.created_at ?? "").slice(0, 16)}`;
       if (seen.has(k)) return false;
       seen.add(k);

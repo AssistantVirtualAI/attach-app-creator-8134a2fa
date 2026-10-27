@@ -439,6 +439,33 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: true, count: threads.length, threads, maestro_inbox: maestroInbox, ns_warning: nsWarning });
     }
 
+    if (action === "internal-thread") {
+      // Fil interne complet entre le poste du courtier (dérivé du JWT) et un
+      // autre poste. Les réponses du correspondant appartiennent à son profil
+      // (miroir reçu), donc RLS les cache au demandeur : lecture serveur des
+      // deux sens, strictement limitée à la paire (poste ↔ poste).
+      const own = String(ctx.extension ?? "").replace(/\D/g, "");
+      const peer = String(pick("peer") ?? "").replace(/\D/g, "");
+      if (!own || peer.length < 2 || peer.length > 6) {
+        return jsonResponse({ error: "invalid_peer" }, 400);
+      }
+      const limit = Math.min(Number(pick("limit") ?? 500) || 500, 500);
+      const { data, error } = await supabase
+        .from("planipret_phone_messages")
+        .select("id,user_id,direction,to_number,from_number,body,thread_id,sent_at,created_at,read_at,status,ns_message_id")
+        .or(`and(from_number.eq.${own},to_number.eq.${peer}),and(from_number.eq.${peer},to_number.eq.${own})`)
+        .order("created_at", { ascending: true })
+        .limit(limit);
+      if (error) {
+        console.warn("[pp-ns-sms] internal-thread error:", error.message);
+        return jsonResponse({ error: "internal_thread_failed" }, 500);
+      }
+      const messages = (data ?? []).filter((r: any) =>
+        String(r.from_number ?? "").replace(/\D/g, "") === own || String(r.to_number ?? "").replace(/\D/g, "") === own,
+      );
+      return jsonResponse({ ok: true, count: messages.length, messages });
+    }
+
     if (action === "messages") {
       const threadId = pick("thread_id") as string | undefined;
       if (!threadId) return jsonResponse({ error: "thread_id requis" }, 400);

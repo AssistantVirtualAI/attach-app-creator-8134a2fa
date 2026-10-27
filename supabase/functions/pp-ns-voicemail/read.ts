@@ -18,8 +18,18 @@ async function getRows(fetcher: Fetcher, path: string) {
 
 export async function readVoicemailList(fetcher: Fetcher, domain: string, extension: string, folder: string, now: string) {
   const path = voicemailPath(domain, extension, folder);
-  const raw = await getRows(fetcher, path);
-  const items = voicemailRows(raw).map((row) => normalizeVoicemail(row, folder, now));
+  const rows = [...voicemailRows(await getRows(fetcher, path))];
+  // Provider pages at 20 rows; read further pages (read-only), stop when no new file appears.
+  const key = (r: any) => r?.filename ?? r?.ns_vm_id ?? r?.vm_id ?? r?.id;
+  const seen = new Set(rows.map(key));
+  for (let page = 0; rows.length >= 20 && page < 25; page++) {
+    let next: any[] = [];
+    try { next = voicemailRows(await getRows(fetcher, `${path}?start=${rows.length}&limit=100`)); } catch { break; }
+    const fresh = next.filter((r) => key(r) && !seen.has(key(r)));
+    if (!fresh.length) break;
+    fresh.forEach((r) => { seen.add(key(r)); rows.push(r); });
+  }
+  const items = rows.map((row) => normalizeVoicemail(row, folder, now));
   if (items.some((item) => !item)) throw new Error("Voicemail identity missing");
   const valid = items.filter((item) => item !== null);
   // List responses may contain only file metadata; caller fields are documented

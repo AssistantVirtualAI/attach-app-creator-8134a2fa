@@ -2,7 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PortalSmsComposer from "./PortalSmsComposer";
 
-const mocks = vi.hoisted(() => ({ invoke: vi.fn(), success: vi.fn(), availability: vi.fn() }));
+const mocks = vi.hoisted(() => ({ invoke: vi.fn(), success: vi.fn(), availability: vi.fn(), contacts: vi.fn() }));
+vi.mock("@/lib/ppContactsCache", () => ({ getPpContacts: (...args: unknown[]) => mocks.contacts(...args) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { functions: { invoke: mocks.invoke } } }));
 vi.mock("sonner", () => ({ toast: { success: mocks.success } }));
 vi.mock("@/lib/planipret/smsAvailability", () => ({
@@ -14,6 +15,7 @@ describe("PortalSmsComposer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.availability.mockResolvedValue({ state: "ready", primaryNumber: "+15145550100" });
+    mocks.contacts.mockResolvedValue([]);
   });
   const setup = () => {
     const onClose = vi.fn();
@@ -91,6 +93,32 @@ describe("PortalSmsComposer", () => {
     mocks.availability.mockResolvedValue({ state: "unavailable", primaryNumber: null });
     setup();
     await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("selects a broker-owned named contact and sends to their number, never their name or sender", async () => {
+    mocks.contacts.mockImplementation(async (source: string) => source === "maestro_clients" ? [{ full_name: "Janie Breard", cell_phone: "5145550188" }] : []);
+    mocks.invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    const { onSent } = setup();
+    fireEvent.change(screen.getByLabelText("Recipient"), { target: { value: "Janie" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Janie Breard +15145550188" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSent).toHaveBeenCalledOnce());
+    expect(mocks.invoke).toHaveBeenCalledWith("pp-ns-sms", { body: { action: "send", to: "+15145550188", message: "Bonjour client", idempotency_key: expect.any(String) } });
+  });
+
+  it("keeps manual number entry working when contacts fail", async () => {
+    mocks.contacts.mockRejectedValue(new Error("Contacts unavailable"));
+    mocks.invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    const { onSent } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSent).toHaveBeenCalledOnce());
+  });
+
+  it("does not submit a typed contact name until a numeric recipient is selected", async () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("Recipient"), { target: { value: "Janie Breard" } });
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

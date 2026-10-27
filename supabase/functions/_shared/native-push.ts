@@ -16,7 +16,7 @@ export type NativePushResult = { delivered: number; ios: number; android: number
 export async function sendNativeAlertPush(
   admin: any,
   userId: string,
-  opts: { title: string; body?: string; data?: Record<string, string>; category?: string; threadId?: string; sound?: string },
+  opts: { title: string; body?: string; data?: Record<string, string>; category?: string; threadId?: string; sound?: string; badge?: number },
 ): Promise<NativePushResult> {
   const out: NativePushResult = { delivered: 0, ios: 0, android: 0 };
   try {
@@ -54,7 +54,8 @@ export async function sendNativeAlertPush(
             aps: {
               alert: { title: opts.title, body: opts.body ?? "" },
               sound: opts.sound ?? "default",
-              badge: 1,
+              // Read state is local per device; never force a fixed badge count.
+              ...(typeof opts.badge === "number" ? { badge: Math.max(0, Math.floor(opts.badge)) } : {}),
               "thread-id": opts.threadId ?? opts.category ?? "planipret",
               "mutable-content": 1,
             },

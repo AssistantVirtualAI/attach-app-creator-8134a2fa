@@ -9,7 +9,9 @@ export function mergeSmsThreadMessages(own: any[], extra: any[]): any[] {
   for (const m of [...(own ?? []), ...(extra ?? [])]) {
     if (!m?.id) continue;
     if (byId.has(m.id)) continue;
-    const contentKey = `${String(m.body ?? "").trim()}|${String(m.created_at ?? "").slice(0, 16)}`;
+    // Le sync admin recrée parfois la même réponse avec un autre id mais le
+    // même sent_at : on dédoublonne sur le moment affiché, pas sur created_at.
+    const contentKey = `${String(m.body ?? "").trim()}|${String(m.sent_at ?? m.created_at ?? "").slice(0, 16)}`;
     const keptId = byContent.get(contentKey);
     if (keptId) continue;
     byId.set(m.id, m);

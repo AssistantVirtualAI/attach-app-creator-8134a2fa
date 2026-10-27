@@ -52,3 +52,13 @@ describe("mergeSmsThreadMessages — webhook mirror duplicates", () => {
     expect(mergeSmsThreadMessages(own, extra)).toHaveLength(2);
   });
 });
+
+describe("mergeSmsThreadMessages — admin-sync duplicates", () => {
+  it("collapses copies re-imported with another id but the same sent_at", () => {
+    const extra = [
+      { id: "p1", direction: "outbound", body: "Bonjour Marc!", created_at: "2026-10-26T21:59:18.380Z", sent_at: "2026-10-26T21:59:18.289Z", _peerAuthored: true },
+      { id: "p2", direction: "outbound", body: "Bonjour Marc!", created_at: "2026-10-26T22:21:06.048Z", sent_at: "2026-10-26T21:59:18Z", _peerAuthored: true },
+    ];
+    expect(mergeSmsThreadMessages([], extra)).toHaveLength(1);
+  });
+});

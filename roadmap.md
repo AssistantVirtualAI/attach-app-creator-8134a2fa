@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Restore readable portal SMS fields and broker-owned recipient selection; verify new/reply submission and errors without unauthorized live texts or publication.
+
 - [x] Prepare AVA live-first broker-owned task retrieval and contextual search before pagination; stale/truncated search cannot select a task. 54 focused tests pass, preview build OK; no deployment, task mutation or native edit.
 - [ ] Verify prepared AVA task retrieval against live Maestro and installed app for all brokers: requires deployment authorization; screenshot account remains unidentified. Existing upstream scan stays bounded and partial evidence is explicitly refused, not claimed complete.
 

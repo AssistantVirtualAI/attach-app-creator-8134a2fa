@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchesSmsThreadPair } from "./adminSmsThread";
+import { matchesSmsThreadPair } from "@/lib/planipret/adminSmsThread";
 
 // Scenario from the reported bug: the broker texts a client from the DID
 // +14388427217, the client's replies are mirrored by the webhook onto the

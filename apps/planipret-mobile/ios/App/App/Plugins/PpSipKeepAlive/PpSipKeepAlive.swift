@@ -436,7 +436,16 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
     }
     @objc func declareNativeEngineOwnsAor(_ call: CAPPluginCall) {
-      let owns = call.getBool("owns") ?? true
+      var owns = call.getBool("owns") ?? true
+      #if canImport(pjsua)
+      // Binaire avec PJSIP lié : `<ext>M` appartient au moteur natif TLS. Une
+      // restitution demandée par la WebView (sonde échouée, reload) relançait
+      // la pile WSS sur la même ligne et détournait les INVITE entrants.
+      if !owns {
+        NSLog("[PpSipKeepAlive] nativeEngineOwnsAor=false refused — pjsua linked")
+        owns = true
+      }
+      #endif
       DispatchQueue.main.async {
         nativeEngineOwnsAor = owns
         NSLog("[PpSipKeepAlive] nativeEngineOwnsAor=%@", owns ? "true" : "false")

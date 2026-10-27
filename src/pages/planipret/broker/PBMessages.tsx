@@ -5,6 +5,7 @@ import { MessageSquare, Trash2, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PortalSmsComposer from "@/components/planipret/PortalSmsComposer";
 import { isInternalMessageRecipient } from "@/lib/planipret/portalMessageRecipient";
+import { mergeSmsThreadMessages } from "@/lib/planipret/smsThreadMerge";
 import { useSmsThreadState, smsThreadKey, isHidden } from "@/lib/planipret/smsThreadState";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { toast } from "sonner";
@@ -126,16 +127,10 @@ export default function PBMessages() {
     return () => { cancelled = true; };
   }, [activeInternalPeer]);
 
-  const ordered = useMemo(() => {
-    if (!active) return [];
-    const byId = new Map<string, any>();
-    for (const m of [...active.messages, ...(activeInternalPeer ? internalExtra : [])]) {
-      if (m?.id) byId.set(m.id, m);
-    }
-    return Array.from(byId.values()).sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
-  }, [active?.key, activeInternalPeer, internalExtra]);
+  const ordered = useMemo(
+    () => mergeSmsThreadMessages(active?.messages ?? [], activeInternalPeer ? internalExtra : []),
+    [active?.key, activeInternalPeer, internalExtra],
+  );
 
   return (
     <PAPage>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Loader2, UserRound, Check } from "lucide-react";
+import { Send, Loader2, UserRound, Check, Sparkles, Lightbulb, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,8 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
   const [contactsError, setContactsError] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selected, setSelected] = useState<PortalSmsContact | null>(null);
+  const [aiBusy, setAiBusy] = useState<"improve" | "suggest" | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const submission = useRef<SmsSubmission | null>(null);
   const sending = useRef(false);
   const tr = (fr: string, en: string) => lang === "en" ? en : fr;

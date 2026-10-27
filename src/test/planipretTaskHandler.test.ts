@@ -477,6 +477,22 @@ describe("planipret task handler — list & isolation", () => {
     expect(listFetch).not.toHaveBeenCalled();
   });
 
+  it.each([USER, OTHER])("AVA reads live owned tasks and searches before the 200-row page for %s", async (owner) => {
+    const cachedAdmin = createMockAdmin({ planipret_tasks_projection: [
+      { user_id: owner, task_id: "old", deleted_at: null, payload: { id: "old", notes: "Stale", status: "pending" } },
+    ] });
+    const live = Array.from({ length: 201 }, (_, i) => ({ id: String(i + 1), notes: "Other task", status: "pending" }));
+    live.push({ id: "954606", notes: "Contrat new function copy client #273968", status: "pending" });
+    const listFetch = vi.fn(async () => ({ ok: true, tasks: live, endpoint: "/api/main/tasks", status: 200, complete: true }));
+    const { deps } = makeDeps({ admin: cachedAdmin, userId: owner, listFetch });
+    const out = await handleTaskRequest({ action: "list", source: "ava", filter: "open", search: "#273968", limit: 200 }, deps);
+    expect(out.body.source).toBe("api");
+    expect((out.body.tasks as any[]).map(t => t.id)).toEqual(["954606"]);
+    expect(out.body.total).toBe(1);
+    expect(listFetch).toHaveBeenCalled();
+    expect(cachedAdmin.db.planipret_tasks_projection.map(t => t.task_id)).toEqual(["old"]);
+  });
+
   it("falls back to the projection when the upstream list is unavailable", async () => {
     const { deps } = makeDeps({
       admin,

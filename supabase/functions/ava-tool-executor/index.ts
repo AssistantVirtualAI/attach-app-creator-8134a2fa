@@ -191,14 +191,12 @@ async function resolveTaskRef(ctx: Ctx, p: any): Promise<{ task_id?: string; lab
   if (id && /^\d+$/.test(id)) return { task_id: id, result: { success: true } };
   const q = String(p?.search ?? p?.query ?? (id || "")).trim().toLowerCase();
   if (!q) return { result: { success: false, error: "clarification_needed", message: "Quelle tâche ? Donne son titre ou le nom du client." } };
-  const list: any = await taskApi(ctx, { action: "list", status: "pending", filter: "open", page: 1, limit: 200 });
+  const list: any = await taskApi(ctx, { action: "list", filter: "open", search: q, page: 1, limit: 200 });
+  if (list?.source !== "api" || list?.upstream_truncated || list?.has_more) {
+    return { result: { success: false, error: "task_lookup_unverified", message: "La recherche Maestro est indisponible ou partielle. Aucune tâche n’a été modifiée." } };
+  }
   const tasks: any[] = Array.isArray(list?.tasks) ? list.tasks : [];
-  const norm = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const words = norm(q).split(/\s+/).filter((w) => w.length > 1);
-  const matches = tasks.filter((t) => {
-    const hay = norm([t?.notes, t?.title, t?.description, t?.client_name, t?.target_name, t?.target?.name].join(" "));
-    return words.length > 0 && words.every((w) => hay.includes(w));
-  });
+  const matches = tasks;
   const label = (t: any) => String(t?.notes ?? t?.title ?? t?.description ?? `#${t?.id}`).slice(0, 80);
   if (matches.length === 1) return { task_id: String(matches[0].id), label: label(matches[0]), result: { success: true } };
   if (!matches.length) return { result: { success: false, error: "task_not_found", message: "Aucune tâche ouverte ne correspond. Précise le titre ou le nom du client." } };
@@ -891,7 +889,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   async list_tasks(ctx, p) {
     return await taskApi(ctx, {
       action: "list",
-      status: p?.status ?? "pending",
+      status: p?.status,
       filter: p?.filter ?? "open",
       from: p?.from, to: p?.to,
       page: p?.page ?? 1,

@@ -26,6 +26,7 @@ import {
   toApiDateTime,
   type NormalizedTask,
 } from "./planipret-tasks.ts";
+import { matchesAvaTaskSearch } from "./ava-task-search.ts";
 
 export interface ApiResponse { status: number; ok: boolean; data: any }
 
@@ -639,6 +640,7 @@ export async function handleTaskRequest(
     // Only the protected scheduled synchronizer may use the broader bounded
     // scan. Interactive mobile and portal lists stay inside a small Edge budget.
     const fullSync = deps.allowFullSync === true && String(body?.source ?? "") === "tasks_sweeper";
+    const avaRead = String(body?.source ?? "") === "ava";
 
     // Admins may inspect another broker's tasks (portal broker toggle).
     // Brokers are always locked to their own Maestro id.
@@ -753,7 +755,7 @@ export async function handleTaskRequest(
       } catch { projectionOwner = null; }
     }
     const projected = fullSync || !projectionOwner ? [] : await loadProjection(admin, projectionOwner).catch(() => []);
-    if (projected.length) {
+    if (projected.length && !avaRead) {
       all = projected;
     } else if (token) {
       for (const candidate of ownerCandidates) {
@@ -796,7 +798,7 @@ export async function handleTaskRequest(
 
 
     let src: "api" | "projection" | "unavailable";
-    if (projected.length) {
+    if (projected.length && !avaRead) {
       src = "projection";
     } else if (upstream.ok) {
       src = "api";
@@ -808,9 +810,9 @@ export async function handleTaskRequest(
       // full mirror; the interactive list only refreshes open tasks (capped).
       const openAll = all.filter((t: any) => String(t?.status ?? "").toLowerCase() !== "complete");
       const openOnly = fullSync ? openAll : openAll.slice(0, 500);
-      if (!overrideBroker) {
+      if (!overrideBroker && !avaRead) {
         await syncProjection(admin, userId, openOnly, { full: false }).catch(() => {});
-      } else {
+      } else if (overrideBroker && !avaRead) {
         try {
           const { data: owner } = await admin
             .from("planipret_profiles").select("user_id")
@@ -829,7 +831,8 @@ export async function handleTaskRequest(
 
     const now = nowFn();
     const counts = taskCounts(all, now);
-    const filtered = filterTasks(all, filter, now);
+    const search = String(body?.search ?? "").trim();
+    const filtered = filterTasks(all, filter, now).filter((task) => !search || matchesAvaTaskSearch(task, search));
     const pageOut = paginate(filtered, page, limit);
     const buckets = bucketTasks(pageOut.items, now);
 

@@ -92,6 +92,29 @@ export default function PortalSmsComposer({ target, userId, lang, onClose, onSen
     }
   };
 
+  const aiAssist = async (action: "improve" | "suggest") => {
+    if (aiBusy || busy) return;
+    if (action === "improve" && !body.trim()) return;
+    setAiBusy(action);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-sms-assist", {
+        body: { action, text: body.trim(), lang },
+      });
+      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? "ai_unavailable");
+      if (action === "improve" && typeof data?.text === "string" && data.text.trim()) {
+        setBody(data.text.trim());
+        toast.success(tr("Texte amélioré", "Text improved"));
+      }
+      if (action === "suggest" && Array.isArray(data?.suggestions)) {
+        setSuggestions(data.suggestions.filter((s: unknown) => typeof s === "string" && s.trim()));
+      }
+    } catch {
+      toast.error(tr("L'aide IA est indisponible pour le moment.", "AI assist is unavailable right now."));
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
   const content = <>
       {!inline && <DialogHeader>
         <DialogTitle>{tr("Nouveau texto", "New text message")}</DialogTitle>

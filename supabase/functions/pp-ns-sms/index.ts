@@ -444,16 +444,13 @@ Deno.serve(async (req) => {
       // autre poste. Les réponses du correspondant appartiennent à son profil
       // (miroir reçu), donc RLS les cache au demandeur : lecture serveur des
       // deux sens, strictement limitée à la paire (poste ↔ poste).
-      const own = String(ctx.extension ?? "").replace(/\D/g, "");
-      const peer = String(pick("peer") ?? "").replace(/\D/g, "");
-      if (!own || peer.length < 2 || peer.length > 6) {
-        return jsonResponse({ error: "invalid_peer" }, 400);
-      }
+      const pair = internalThreadPair(ctx.extension, pick("peer"));
+      if (!pair) return jsonResponse({ error: "invalid_peer" }, 400);
       const limit = Math.min(Number(pick("limit") ?? 500) || 500, 500);
       const { data, error } = await supabase
         .from("planipret_phone_messages")
         .select("id,user_id,direction,to_number,from_number,body,thread_id,sent_at,created_at,read_at,status,ns_message_id")
-        .or(`and(from_number.eq.${own},to_number.eq.${peer}),and(from_number.eq.${peer},to_number.eq.${own})`)
+        .or(internalThreadOrFilter(pair.own, pair.peer))
         .order("created_at", { ascending: true })
         .limit(limit);
       if (error) {

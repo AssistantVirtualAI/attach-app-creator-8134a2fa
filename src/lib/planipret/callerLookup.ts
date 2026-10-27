@@ -5,6 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const cache = new Map<string, string>();
+/** phone → colleague extension, when the number belongs to a broker. */
+const extCache = new Map<string, string>();
+export const colleagueExtensionOf = (phone: string) => extCache.get((phone || "").trim()) ?? null;
 const negative = new Map<string, number>(); // phone → expiresAt (ms epoch)
 const inflight = new Map<string, Promise<string | null>>();
 const NEGATIVE_TTL_MS = 60_000;
@@ -34,6 +37,7 @@ export async function lookupCaller(phone: string | null | undefined): Promise<st
       const d = data as any;
       if (d?.found && d?.name) {
         cache.set(p, d.name);
+        if (d.source === "broker" && d.extension) extCache.set(p, String(d.extension));
         negative.delete(p);
         return d.name as string;
       }

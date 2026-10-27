@@ -16,6 +16,7 @@ import Pagination from "@/components/planipret/admin/Pagination";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 import { fmtDateTime, msgPeer } from "@/lib/planipret/brokerFormat";
+import { colleagueExtensionOf } from "@/lib/planipret/callerLookup";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { brokerSelect, searchFilter, periodStartISO, PERIOD_OPTIONS, type BrokerPeriod } from "@/lib/planipret/brokerAccess";
 import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
@@ -72,10 +73,15 @@ export default function PBMessages() {
 
   useEffect(() => { void load(); }, [userId, period, direction, status, search]);
 
+  // Le DID d'un collègue et son poste désignent la même personne : on
+  // rattache le fil DID au fil du poste (une seule conversation).
+  const rowPeers = useMemo(() => Array.from(new Set(rows.map((m) => String(msgPeer(m) ?? "")).filter(Boolean))), [rows]);
+  const peerNames = useCallerNames(rowPeers);
   const threads = useMemo<Thread[]>(() => {
     const map = new Map<string, Thread>();
     for (const m of rows) {
-      const peer = msgPeer(m);
+      const rawPeer = msgPeer(m);
+      const peer = colleagueExtensionOf(String(rawPeer ?? "")) ?? rawPeer;
       // One conversation per phone number/person: group by normalized peer digits, not per-send thread ids.
       const digits = String(peer ?? "").replace(/\D/g, "");
       const key = (digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits) || m.thread_id || String(peer);
@@ -88,7 +94,7 @@ export default function PBMessages() {
       }
     }
     return Array.from(map.values()).filter((t) => !isHidden(smsState, smsThreadKey(t.key, t.peer), t.last.sent_at ?? t.last.created_at));
-  }, [rows, smsState]);
+  }, [rows, smsState, peerNames]);
 
   const totalThreads = threads.length;
   const pageThreads = threads.slice((page - 1) * THREADS_PER_PAGE, page * THREADS_PER_PAGE);

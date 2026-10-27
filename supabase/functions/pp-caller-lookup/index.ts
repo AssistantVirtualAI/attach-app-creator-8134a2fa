@@ -12,6 +12,8 @@ interface LookupResult {
   company?: string | null;
   photo_url?: string | null;
   email?: string | null;
+  /** Colleague's internal extension (broker source only). */
+  extension?: string | null;
   crm_meta?: { stage?: string; score?: number; tags?: any } | null;
   ms_meta?: { mobile?: string; business?: string[]; email?: string } | null;
 }
@@ -213,6 +215,7 @@ Deno.serve(async (req) => {
             phone_normalized: normalized,
             email: data.email,
             photo_url: data.avatar_url,
+            extension: String(data.extension ?? data.ns_extension ?? "").trim() || null,
           };
           cache.set(ckey, { at: Date.now(), v });
           return json(v);

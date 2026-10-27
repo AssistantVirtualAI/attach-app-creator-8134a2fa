@@ -93,7 +93,6 @@ export default function PBMessages() {
   const contactNames = useCallerNames(pageThreads.map((t) => t.peer));
   const peerLabel = (peer: string) => contactNames[peer] ?? peer;
   const active = pageThreads.find((t) => t.key === activeKey) ?? pageThreads[0] ?? null;
-  const ordered = active ? [...active.messages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) : [];
 
   useEffect(() => {
     if (!active || active.unread === 0) return;
@@ -109,6 +108,22 @@ export default function PBMessages() {
   // derives sender identity from the JWT, so the auth uid alone gates compose.
   const canCompose = Boolean(userId && authUserId);
   useEffect(() => { setComposeTarget(null); }, [userId, authUserId]);
+
+  // Les réponses internes d'un autre poste appartiennent au profil du
+  // correspondant (miroir reçu) : RLS les cache. Le fil complet des
+  // conversations entre postes passe par l'endpoint JWT pp-ns-sms.
+  const [internalExtra, setInternalExtra] = useState<any[]>([]);
+  const activeInternalPeer = active && isInternalMessageRecipient(String(active.peer ?? "")) ? String(active.peer).trim() : null;
+  useEffect(() => {
+    if (!activeInternalPeer) { setInternalExtra([]); return; }
+    let cancelled = false;
+    void supabase.functions.invoke("pp-ns-sms", {
+      body: { action: "internal-thread", peer: activeInternalPeer },
+    }).then(({ data, error }) => {
+      if (!cancelled) setInternalExtra(error ? [] : (data as any)?.messages ?? []);
+    });
+    return () => { cancelled = true; };
+  }, [activeInternalPeer]);
 
   return (
     <PAPage>

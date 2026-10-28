@@ -13,6 +13,7 @@
 //              et relecture obligatoire (aucune écriture "aveugle")
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { requirePlanipretAdmin } from "../_shared/ns-broker.ts";
+import { assignSmsNumber, verifySmsNumber } from "../_shared/pp-did-routing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,8 +67,6 @@ function destOf(x: any): string | null {
   return d && d !== "[*]" ? d : null;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 /** Le PBX est éventuellement cohérent : on relit jusqu'à 3 fois avant de conclure à une dérive. */
 async function readDest(domain: string, pn: string, ext: string, attempts = 3) {
   let last: any = null;
@@ -75,7 +74,6 @@ async function readDest(domain: string, pn: string, ext: string, attempts = 3) {
     const r = await ns(pnPath(domain, pn));
     last = r;
     if (destOf(r.data) === ext) return { dest: ext, raw: r };
-    if (i < attempts - 1) await sleep(600);
   }
   return { dest: destOf(last?.data), raw: last };
 }
@@ -123,12 +121,15 @@ Deno.serve(async (req) => {
     const offset = Number(body?.offset ?? 0);
     const limit = Math.min(Number(body?.limit ?? 50), 100);
 
-    const db = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_KEY);
+    const dbUrl = Deno.env.get("SUPABASE_URL");
+    if (!dbUrl) return json({ success: false, error: "Backend not configured" }, 500);
+    const db = createClient(dbUrl, SERVICE_KEY);
 
     // Source de vérité AVA : table des assignations.
     const { data: rows, error } = await db
       .from("planipret_did_assignments")
-      .select("phone_number_digits, phone_number_e164, extension")
+      .select("phone_number_digits, phone_number_e164, extension, domain")
+      .eq("domain", domain)
       .order("phone_number_digits", { ascending: true });
     if (error) return json({ success: false, error: error.message }, 500);
 
@@ -167,7 +168,17 @@ Deno.serve(async (req) => {
       for (const { pn, ext } of slice) {
         const check = await readDest(domain, pn, ext);
         const cur = check.raw;
-        if (check.dest === ext) { ok++; continue; }
+        if (check.dest === ext && cur.ok) {
+          const sms = await verifySmsNumber(domain, pn, ext);
+          if (sms.ok) { ok++; continue; }
+          if (action === "repair") {
+            // Voice ownership is already proved. Only its SMS counterpart moves.
+            const repaired = await assignSmsNumber(domain, pn, ext);
+            if (repaired.ok) { ok++; continue; }
+          }
+          drift.push({ phone_number: pn, expected: ext, live: check.dest, sms_owner: sms.owner, sms_verified: false, status: sms.status });
+          continue;
+        }
         if (action === "verify") {
           drift.push({ phone_number: pn, expected: ext, live: check.dest, status: cur?.status });
           continue;
@@ -178,7 +189,11 @@ Deno.serve(async (req) => {
 
         await ns(pnPath(domain, pn), { method: "PUT", body: JSON.stringify(payload) });
         const back = await readDest(domain, pn, ext); // relecture obligatoire
-        if (back.dest === ext) ok++;
+        if (back.raw.ok && back.dest === ext) {
+          const sms = await assignSmsNumber(domain, pn, ext);
+          if (sms.ok) ok++;
+          else drift.push({ phone_number: pn, expected: ext, live: back.dest, sms_verified: false });
+        }
         else drift.push({ phone_number: pn, expected: ext, live: back.dest, status: back.raw?.status });
       }
       return json({

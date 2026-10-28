@@ -641,7 +641,10 @@ Deno.serve(async (req) => {
           return j({ success: true, profile: normalizeContact(obj), contracts, contracts_error, raw: obj });
         }
 
-        const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 30000 });
+        const fullKey = `full:${action}:${telecomUserId}:${String(payload.search ?? "")}`;
+        const fullCached = !refresh ? cacheGet(fullKey) as any : null;
+        const r = fullCached ?? await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 30000 });
+        if (r.ok && !fullCached) cacheSet(fullKey, { ok: true, status: r.status, data: r.data });
         if (!r.ok) {
           console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
           const derived = action === "list_clients"

@@ -147,7 +147,7 @@ function normalizeContact(c: any) {
 const CACHE_TTL = 90_000; // 90 secondes
 // Maestro defaults /users/{id}/clients to 200 rows; its `limit` param lifts it.
 // We always request the full list so no broker is capped on our side.
-export const MAESTRO_FULL_LIST_LIMIT = 10000;
+export const MAESTRO_FULL_LIST_LIMIT = 50000;
 const _listCache = new Map<string, { ts: number; data: unknown }>();
 const PROFILE_CACHE_TTL = 5 * 60_000;
 const _profileCache = new Map<string, { ts: number; data: Record<string, unknown> | null }>();

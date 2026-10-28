@@ -13,6 +13,7 @@ export function formatCommissionAnswer(data: any, lang: "fr" | "en", lenders = f
   const fr = lang === "fr";
   const money = (v: number) => new Intl.NumberFormat(fr ? "fr-CA" : "en-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 2 }).format(v);
   if (data?.success === false || data?.error) return String(data?.message ?? data?.error ?? (fr ? "Chiffres indisponibles." : "Figures unavailable."));
+  if (!data?.paid && !data?.pending && data?.message) return String(data.message);
   const lines = [String(data?.scope ?? ""), String(data?.period ?? "")].filter(Boolean);
   if (lenders && Array.isArray(data?.paid?.lenders)) {
     lines.push(fr ? "Prêteur | Dossiers | Volume déboursé" : "Lender | Files | Paid mortgage volume");
@@ -31,5 +32,11 @@ export function formatCommissionAnswer(data: any, lang: "fr" | "en", lenders = f
     }
   }
   if (lenders && !Array.isArray(data?.paid?.lenders)) lines.push(String(data?.paid_error ?? (fr ? "Tableau des prêteurs indisponible." : "Lender table unavailable.")));
+  if (!lenders && Array.isArray(data?.paid_by_broker)) {
+    lines.push(fr ? "Courtier | Déboursées | Dossiers | Volume" : "Broker | Paid | Files | Volume");
+    for (const row of data.paid_by_broker) {
+      if (typeof row.amount === "number" && typeof row.loan_volume === "number") lines.push(`${row.name} | ${money(row.amount)} | ${row.files ?? "—"} | ${money(row.loan_volume)}`);
+    }
+  }
   return lines.join("\n") || String(data?.message ?? (fr ? "Chiffres indisponibles." : "Figures unavailable."));
 }

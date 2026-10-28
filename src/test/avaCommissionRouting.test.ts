@@ -26,6 +26,11 @@ describe("Marc's AVA financial questions", () => {
     const answer = formatCommissionAnswer({ scope: "tous les courtiers", paid: { lenders } }, "en", true);
     expect(answer).toContain("Lender 19 | 20 | $2,000,000.00");
   });
+  it("retains the global broker table and shared-tool messages", () => {
+    const answer = formatCommissionAnswer({ paid_by_broker: [{ name: "Francis Marois", amount: 1234.56, files: 7, loan_volume: 2500000 }] }, "en");
+    expect(answer).toContain("Francis Marois | $1,234.56 | 7 | $2,500,000.00");
+    expect(formatCommissionAnswer({ success: true, message: "Validated lender breakdown" }, "en")).toBe("Validated lender breakdown");
+  });
   it("refuses unavailable/out-of-team figures without invented zero totals", () => {
     const answer = formatCommissionAnswer({ paid: { not_in_team: true, message: "Not in your team" } }, "en");
     expect(answer).toBe("Not in your team");

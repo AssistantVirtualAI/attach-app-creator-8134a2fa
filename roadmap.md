@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Resolve Marc's AVA commission/lender questions incorrectly returning clients, and repeated portal refreshes; verify shared routing and same-account session stability, then prepare a truthful reply. No deployment, publication or native changes authorized.
+
 - [x] Prepare shared voice/SMS ownership for existing and new brokers: assignment replaces stale SMS ownership, checks target user-specific inventory and known old-owner removal; single_did/create reuse shared assignment; existing guardian verify/repair checks SMS within the assignment domain with fresh voice-owner proof. 12 mocked tests pass; preview build OK. No live SMS, deployment, cron change or bulk routing correction.
 - [ ] Activate and verify shared voice/SMS ownership for all existing brokers against live NetSapiens: awaiting deployment and live all-broker audit/correction authorization; mocked tests do not establish live broker assignments.
 

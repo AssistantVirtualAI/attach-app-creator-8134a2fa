@@ -145,6 +145,9 @@ function normalizeContact(c: any) {
  * fetch the full list once and page locally from the cached copy.
  * ------------------------------------------------------------------ */
 const CACHE_TTL = 90_000; // 90 secondes
+// Maestro defaults /users/{id}/clients to 200 rows; its `limit` param lifts it.
+// We always request the full list so no broker is capped on our side.
+export const MAESTRO_FULL_LIST_LIMIT = 10000;
 const _listCache = new Map<string, { ts: number; data: unknown }>();
 const PROFILE_CACHE_TTL = 5 * 60_000;
 const _profileCache = new Map<string, { ts: number; data: Record<string, unknown> | null }>();
@@ -368,8 +371,8 @@ Deno.serve(async (req) => {
             return j({ success: false, contacts: [], error: "Intégration Maestro non configurée." });
           }
           const q = String(payload.query ?? "").trim();
-          const path = `/users/${telecomUserId}/clients${q ? `?search=${encodeURIComponent(q)}` : ""}`;
-          const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
+          const path = `/users/${telecomUserId}/clients?limit=${MAESTRO_FULL_LIST_LIMIT}${q ? `&search=${encodeURIComponent(q)}` : ""}`;
+          const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 30000 });
           if (!r.ok) {
             console.warn("maestro list_contacts non-ok", r.status, r.data);
             const derived = await clientsFromCommunications(tCfg, telecomUserId, q).catch(() => null);
@@ -589,7 +592,8 @@ Deno.serve(async (req) => {
 
         const qs: string[] = [];
         if (payload.search) qs.push(`search=${encodeURIComponent(String(payload.search))}`);
-        if (payload.limit) qs.push(`limit=${encodeURIComponent(String(payload.limit))}`);
+        // Always fetch the full Maestro list; paging is applied locally below.
+        if (action === "list_clients" || action === "list_brokers") qs.push(`limit=${MAESTRO_FULL_LIST_LIMIT}`);
         const q = qs.length ? `?${qs.join("&")}` : "";
 
         let path = "";
@@ -637,7 +641,7 @@ Deno.serve(async (req) => {
           return j({ success: true, profile: normalizeContact(obj), contracts, contracts_error, raw: obj });
         }
 
-        const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
+        const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 30000 });
         if (!r.ok) {
           console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
           const derived = action === "list_clients"
@@ -678,8 +682,8 @@ Deno.serve(async (req) => {
           if (!filtered.length) {
             const rAll = await maestroTelecomFetch(
               tCfg,
-              action === "list_clients" ? `/users/${telecomUserId}/clients` : `/users/${telecomUserId}/brokers`,
-              { method: "GET", timeoutMs: 15000 },
+              `${action === "list_clients" ? `/users/${telecomUserId}/clients` : `/users/${telecomUserId}/brokers`}?limit=${MAESTRO_FULL_LIST_LIMIT}`,
+              { method: "GET", timeoutMs: 30000 },
             );
             if (rAll.ok) {
               const dAll: any = rAll.data;

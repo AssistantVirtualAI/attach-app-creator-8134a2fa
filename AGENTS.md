@@ -1,5 +1,8 @@
 # Project Architecture Rules
 
+- AVA financial questions take precedence over directory/history context, execute shared commission tools and render validated figures deterministically; unknown actions never fall back to client lists.
+- Commission screens refresh on server update broadcasts or explicit refresh only; returning to a visible tab consumes a pending update without timed polling or unconditional refetches, preserving selected brokers.
+
 - The persistent call screen owns the mirrored useCurrentCallElapsed clock and passes elapsed seconds to the minimized pill; observed ringing-to-connected and dialog changes establish a fresh start, preventing native ring/stale timestamps and minimization from diverging without changing transport or history.
 
 - Let Vite infer the HMR protocol and port from the browser origin so local HTTP verification and hosted HTTPS previews both connect without hardcoded secure localhost sockets.

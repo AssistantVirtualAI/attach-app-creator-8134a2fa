@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Prepare Marc's shared AVA financial-routing correction: volume/units/lenders bypass client prefetch and AI history, commission suggestions dispatch to the shared executor, unknown actions no longer default to clients; deterministic replies retain scope and validated figures. Remove 60-second polling/unconditional tab refresh in both web trees; pending server updates consumed on return. 37 focused tests pass; preview build OK. Signed-in Francis detail loaded, broker/URL retained after tab visibility/focus and three simulated minutes, zero automatic report requests. No deployment/publication/native change.
+- [ ] Confirm Marc's corrected AVA answers end-to-end in the live portal: awaits authorization to deploy pp-ava-chat and ava-tool-executor and publish portal changes; current hosted functions still use the previous logic. Installed-app refresh changes require the next approved release.
+
 - [x] Prepare shared voice/SMS ownership for existing and new brokers: assignment replaces stale SMS ownership, checks target user-specific inventory and known old-owner removal; single_did/create reuse shared assignment; existing guardian verify/repair checks SMS within the assignment domain with fresh voice-owner proof. 12 mocked tests pass; preview build OK. No live SMS, deployment, cron change or bulk routing correction.
 - [ ] Activate and verify shared voice/SMS ownership for all existing brokers against live NetSapiens: awaiting deployment and live all-broker audit/correction authorization; mocked tests do not establish live broker assignments.
 

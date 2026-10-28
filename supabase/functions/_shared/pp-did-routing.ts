@@ -93,8 +93,6 @@ export function safeDidPayload(extension: string, domain: string, current: any, 
   };
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 /** Le PBX est éventuellement cohérent : on relit jusqu'à 3 fois. */
 export async function readDidRouting(domain: string, pn: string, expected?: string, attempts = 3) {
   let last: any = null;
@@ -104,7 +102,6 @@ export async function readDidRouting(domain: string, pn: string, expected?: stri
     if (!expected || dest === expected) {
       return { ...routingSnapshotOf(last.data), status: last.status, ok: last.ok, raw: last.data };
     }
-    if (i < attempts - 1) await sleep(600);
   }
   return { ...routingSnapshotOf(last?.data), status: last?.status, ok: !!last?.ok, raw: last?.data };
 }
@@ -214,15 +211,67 @@ export async function listLiveDids(domain: string): Promise<Map<string, string>>
   return map;
 }
 
-/** Route the texting side of a number to one extension (NS smsnumbers), then read back. */
+function smsRows(raw: any): any[] {
+  if (Array.isArray(raw)) return raw;
+  if (!raw || typeof raw !== "object") return [];
+  for (const key of ["smsnumbers", "data", "items", "results"]) {
+    if (Array.isArray(raw[key])) return raw[key];
+  }
+  return raw.number || raw.phonenumber ? [raw] : [];
+}
+
+function hasSmsNumber(raw: any, pn: string) {
+  return smsRows(raw).some((row) => pbxNumberId(row.number ?? row.phonenumber ?? row.phone_number) === pn);
+}
+
+/** User-specific inventory is authoritative when assigned numbers disappear from the domain pool. */
+export async function verifySmsNumber(domain: string, rawNumber: string, extension: string) {
+  const pn = pbxNumberId(rawNumber);
+  const prefix = `/domains/${encodeURIComponent(domain)}`;
+  const [route, user] = await Promise.all([
+    nsCall(`${prefix}/smsnumbers/${pn}`),
+    nsCall(`${prefix}/users/${encodeURIComponent(extension)}/smsnumbers`),
+  ]);
+  const live = one(route.data);
+  const owner = route.ok ? String(live?.dest ?? "").trim() : null;
+  // A known contradictory route must never be hidden by a stale user inventory.
+  const routeMatches = route.ok ? owner === extension : route.status === 404;
+  return { ok: routeMatches && user.ok && hasSmsNumber(user.data, pn), owner, status: user.status };
+}
+
+/** Replace SMS ownership, then verify target membership and removal from the known old owner. */
 export async function assignSmsNumber(domain: string, rawNumber: string, extension: string | null) {
   const pn = pbxNumberId(rawNumber);
+  if (!/^1\d{10}$/.test(pn) || (extension !== null && !/^[0-9]{2,10}$/.test(extension))) {
+    return { ok: false, write_status: 0 };
+  }
   const path = `/domains/${encodeURIComponent(domain)}/smsnumbers/${pn}`;
+  const before = await nsCall(path);
+  const previous = before.ok ? String(one(before.data)?.dest ?? "").trim() : "";
   const body = extension ? { application: "user", dest: extension } : { application: "available", dest: "" };
   const w = await nsCall(path, { method: "PUT", body: JSON.stringify(body) });
-  const r = await nsCall(path);
-  const live = Array.isArray(r.data) ? r.data[0] : r.data;
-  return { ok: (extension ? String(live?.dest ?? "") === extension : String(live?.application ?? "") === "available"), write_status: w.status };
+  if (!w.ok) return { ok: false, write_status: w.status };
+  const target = extension ? await verifySmsNumber(domain, pn, extension) : null;
+  const released = extension ? null : await nsCall(path);
+  let oldOwnerRemoved = true;
+  if (/^[0-9]{2,10}$/.test(previous) && previous !== extension) {
+    const old = await nsCall(`/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(previous)}/smsnumbers`);
+    oldOwnerRemoved = old.status === 404 || (old.ok && !hasSmsNumber(old.data, pn));
+  }
+  const verified = target?.ok ?? (released?.ok && String(one(released.data)?.application ?? "") === "available");
+  return { ok: !!verified && oldOwnerRemoved, write_status: w.status };
+}
+
+/** Existing accounts: never repair SMS without a fresh proof of the expected voice owner. */
+export async function reconcileVoiceSmsNumber(domain: string, rawNumber: string, extension: string, repair = false) {
+  const voice = await readDidRouting(domain, pbxNumberId(rawNumber), extension, 1);
+  if (!voice.ok || voice.destination_user !== extension) {
+    return { ok: false, repaired: false, owner: null, status: voice.status };
+  }
+  const sms = await verifySmsNumber(domain, rawNumber, extension);
+  if (sms.ok || !repair) return { ...sms, repaired: false };
+  const result = await assignSmsNumber(domain, rawNumber, extension);
+  return { ...sms, ok: result.ok, repaired: result.ok };
 }
 
 /** Met le numéro comme caller ID du poste (appels + textos sortants), puis relit. */
@@ -276,7 +325,7 @@ export async function assignNumberToExtension(
   if (!voice.verified) return { ...base, success: false, error_code: "voice_failed", diagnostic: voice.diagnostic };
   base.steps.sms = (await assignSmsNumber(domain, pn, ext).catch(() => ({ ok: false }))).ok;
   base.steps.caller_id = (await setExtensionCallerId(domain, ext, pn).catch(() => ({ ok: false }))).ok;
-  if (opts.releaseOthers) {
+  if (opts.releaseOthers && base.steps.sms && base.steps.caller_id) {
     const dids = await listLiveDids(domain);
     for (const [other, dest] of dids) {
       if (other === pn || dest !== ext) continue;

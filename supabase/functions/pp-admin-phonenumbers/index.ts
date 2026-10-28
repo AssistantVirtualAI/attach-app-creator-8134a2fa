@@ -2,7 +2,7 @@
 // Actions: list, assign, unassign, sync_assignments
 import { corsHeaders, jsonResponse, requirePlanipretAdmin, supaAdmin } from "../_shared/ns-broker.ts";
 import { queueWidgetSync } from "../_shared/maestro-widget-sync.ts";
-import { assignDidToExtension, assignNumberToExtension, assignSmsNumber, releaseDid, setExtensionCallerId } from "../_shared/pp-did-routing.ts";
+import { assignNumberToExtension, assignSmsNumber, releaseDid } from "../_shared/pp-did-routing.ts";
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
 const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
@@ -248,21 +248,13 @@ Deno.serve(async (req) => {
       const keep = String(payload?.keep ?? "").replace(/\D/g, "").replace(/^(\d{10})$/, "1$1");
       const name = payload?.name ? String(payload.name) : undefined;
       if (!/^\d{2,6}$/.test(ext) || keep.length !== 11) return jsonResponse({ success: false, error: "extension et keep requis" }, 400);
-      const pr = await nsFetch(`/domains/${encodeURIComponent(domain)}/phonenumbers?limit=1000`);
-      const sr = await nsFetch(`/domains/${encodeURIComponent(domain)}/smsnumbers?limit=1000`);
-      const voice = (Array.isArray(pr.data) ? pr.data : []).filter((x: any) => String(x?.["dial-rule-translation-destination-user"] ?? "") === ext).map((x: any) => String(x.phonenumber));
-      const texts = (Array.isArray(sr.data) ? sr.data : []).filter((x: any) => x?.application === "user" && String(x?.dest ?? "") === ext).map((x: any) => String(x.number));
-      const kept = await assignDidToExtension(domain, keep, ext, name);
-      const keptSms = await assignSmsNumber(domain, keep, ext);
-      const keptCid = kept.verified ? await setExtensionCallerId(domain, ext, keep).catch(() => ({ ok: false })) : { ok: false };
-      const released: any[] = [];
-      for (const n of voice.filter((n: string) => n !== keep)) released.push({ n, voice: (await releaseDid(domain, n)).released });
-      for (const n of texts.filter((n: string) => n !== keep)) released.push({ n, sms: (await assignSmsNumber(domain, n, null)).ok });
+      const result = await assignNumberToExtension(domain, keep, ext, { description: name, releaseOthers: true });
+      const released = result.steps.released.map((r) => ({ n: r.number, voice: r.ok, sms: r.ok }));
       const db = supaAdmin();
       const now = new Date().toISOString();
-      await db.from("planipret_did_assignments").upsert({ phone_number_e164: `+${keep}`, phone_number_digits: keep, extension: ext, display_name: name ?? null, callerid_name: name ?? null, status: "assigned", domain, source: "admin_ui", updated_at: now }, { onConflict: "phone_number_e164" });
-      for (const r of released) await db.from("planipret_did_assignments").update({ extension: null, display_name: null, callerid_name: null, status: "available", updated_at: now }).eq("phone_number_digits", r.n);
-      return jsonResponse({ success: kept.verified && keptSms.ok && keptCid.ok, kept: keep, voice_verified: kept.verified, sms_verified: keptSms.ok, caller_id_verified: keptCid.ok, released });
+      if (result.steps.voice) await db.from("planipret_did_assignments").upsert({ phone_number_e164: `+${keep}`, phone_number_digits: keep, extension: ext, display_name: name ?? null, callerid_name: name ?? null, status: "assigned", domain, source: "admin_ui", updated_at: now }, { onConflict: "phone_number_e164" });
+      for (const r of released.filter((r) => r.voice && r.sms)) await db.from("planipret_did_assignments").update({ extension: null, display_name: null, callerid_name: null, status: "available", updated_at: now }).eq("phone_number_digits", r.n);
+      return jsonResponse({ ...result, kept: keep, voice_verified: result.steps.voice, sms_verified: result.steps.sms, caller_id_verified: result.steps.caller_id, released });
     }
 
     // Crée UN numéro manquant dans l'inventaire NS (POST phonenumbers), le
@@ -298,17 +290,19 @@ Deno.serve(async (req) => {
       const liveDest = String(liveRow?.["dial-rule-translation-destination-user"] ?? "");
       const voiceVerified = live.ok && liveDest === ext;
       // Textos : route le DID SMS vers le poste, puis relit.
-      const sms = await assignSmsNumber(domain, pn, ext).catch(() => ({ ok: false, write_status: 0 }));
+      const assignment = voiceVerified ? await assignNumberToExtension(domain, pn, ext, { description: name }) : null;
+      const sms = { ok: assignment?.steps.sms ?? false };
       return jsonResponse({
-        success: voiceVerified && sms.ok,
+        success: assignment?.success ?? false,
         phone_number: pn,
         extension: ext,
         voice_verified: voiceVerified,
         sms_verified: sms.ok,
+        caller_id_verified: assignment?.steps.caller_id ?? false,
         create_status: created.status,
-        diagnostic: voiceVerified && sms.ok
+        diagnostic: assignment?.diagnostic ?? (voiceVerified && sms.ok
           ? `Numéro +${pn} créé dans NetSapiens : appels → ${ext}, textos → ${ext} (confirmé par relecture).`
-          : `Créé (HTTP ${created.status}) mais relecture incomplète : voix ${voiceVerified ? "✓" : "✗"} (destination lue: ${liveDest || "VIDE"}), textos ${sms.ok ? "✓" : "✗"}.`,
+          : `Créé (HTTP ${created.status}) mais relecture incomplète : voix ${voiceVerified ? "✓" : "✗"} (destination lue: ${liveDest || "VIDE"}), textos ${sms.ok ? "✓" : "✗"}.`),
       });
     }
 

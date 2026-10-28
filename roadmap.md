@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Enforce shared voice/SMS ownership for existing and new brokers, verify user-specific SMS membership and stale-owner removal with regression tests; no live SMS, deployment or bulk routing change without authorization.
+
 - [x] Apply Scott's paid-report parameters in both web trees: annual 2026 begins 2025-12-30, paid defaults to planipret, pending and explicit filters preserved, prior presentation caches bypassed. 28 tests pass; preview build OK. Signed-in portal Commissions and Broker commissions show global $13,217,011.38 / 4,109 units / $1,543,444,203.27; Sandra detail and mobile web screen show $1,467,993.84 / 589 units / $185,730,801.44. No publication, deployment or native binary.
 - [ ] Confirm Scott corrections in the published portal and installed phone app: waiting for publication/mobile release authorization and physical-device verification; preview verification is not an installed-app confirmation.
 

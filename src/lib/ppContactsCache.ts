@@ -122,7 +122,7 @@ async function fetchMaestroList(kind: "clients" | "brokers", limit: number, refr
   const pageSize = Math.max(1, Math.min(limit, 500));
   const all: any[] = [];
   const seen = new Set<string>();
-  for (let offset = 0, page = 0; page < 20; page++, offset += pageSize) {
+  for (let offset = 0, page = 0; page < 100; page++, offset += pageSize) {
     const { data, error } = await supabase.functions.invoke("maestro-actions", {
       body: { action: kind === "clients" ? "list_clients" : "list_brokers", payload: { limit: pageSize, offset, refresh: refresh && page === 0 } },
     });

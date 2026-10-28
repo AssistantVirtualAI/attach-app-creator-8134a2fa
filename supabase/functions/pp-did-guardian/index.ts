@@ -13,7 +13,7 @@
 //              et relecture obligatoire (aucune écriture "aveugle")
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { requirePlanipretAdmin } from "../_shared/ns-broker.ts";
-import { assignSmsNumber, verifySmsNumber } from "../_shared/pp-did-routing.ts";
+import { reconcileVoiceSmsNumber } from "../_shared/pp-did-routing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -169,13 +169,8 @@ Deno.serve(async (req) => {
         const check = await readDest(domain, pn, ext);
         const cur = check.raw;
         if (check.dest === ext && cur.ok) {
-          const sms = await verifySmsNumber(domain, pn, ext);
+          const sms = await reconcileVoiceSmsNumber(domain, pn, ext, action === "repair");
           if (sms.ok) { ok++; continue; }
-          if (action === "repair") {
-            // Voice ownership is already proved. Only its SMS counterpart moves.
-            const repaired = await assignSmsNumber(domain, pn, ext);
-            if (repaired.ok) { ok++; continue; }
-          }
           drift.push({ phone_number: pn, expected: ext, live: check.dest, sms_owner: sms.owner, sms_verified: false, status: sms.status });
           continue;
         }
@@ -190,7 +185,7 @@ Deno.serve(async (req) => {
         await ns(pnPath(domain, pn), { method: "PUT", body: JSON.stringify(payload) });
         const back = await readDest(domain, pn, ext); // relecture obligatoire
         if (back.raw.ok && back.dest === ext) {
-          const sms = await assignSmsNumber(domain, pn, ext);
+          const sms = await reconcileVoiceSmsNumber(domain, pn, ext, true);
           if (sms.ok) ok++;
           else drift.push({ phone_number: pn, expected: ext, live: back.dest, sms_verified: false });
         }

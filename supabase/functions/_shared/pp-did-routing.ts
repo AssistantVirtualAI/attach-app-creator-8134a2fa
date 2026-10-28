@@ -262,6 +262,18 @@ export async function assignSmsNumber(domain: string, rawNumber: string, extensi
   return { ok: !!verified && oldOwnerRemoved, write_status: w.status };
 }
 
+/** Existing accounts: never repair SMS without a fresh proof of the expected voice owner. */
+export async function reconcileVoiceSmsNumber(domain: string, rawNumber: string, extension: string, repair = false) {
+  const voice = await readDidRouting(domain, pbxNumberId(rawNumber), extension, 1);
+  if (!voice.ok || voice.destination_user !== extension) {
+    return { ok: false, repaired: false, owner: null, status: voice.status };
+  }
+  const sms = await verifySmsNumber(domain, rawNumber, extension);
+  if (sms.ok || !repair) return { ...sms, repaired: false };
+  const result = await assignSmsNumber(domain, rawNumber, extension);
+  return { ...sms, ok: result.ok, repaired: result.ok };
+}
+
 /** Met le numéro comme caller ID du poste (appels + textos sortants), puis relit. */
 export async function setExtensionCallerId(domain: string, extension: string, rawNumber: string | null) {
   const path = `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}`;

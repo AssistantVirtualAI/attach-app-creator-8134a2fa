@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { assignNumberToExtension } from "./pp-did-routing.ts";
+import { assignNumberToExtension, reconcileVoiceSmsNumber } from "./pp-did-routing.ts";
 
 type Store = { pn: Record<string, any>; sms: Record<string, any>; users: Record<string, any> };
 function mock(store: Store, opts: { failCid?: boolean; hiddenPool?: boolean; staleOwner?: string; missingTarget?: boolean; smsWriteFail?: boolean } = {}) {
@@ -106,4 +106,35 @@ Deno.test("refus fournisseur SMS : aucune réussite annoncée", async () => {
   const r = await assignNumberToExtension(D, "4389534902", "1372");
   assertEquals(r.success, false);
   assertEquals(r.steps.sms, false);
+});
+
+Deno.test("vérification des comptes existants reste en lecture seule", async () => {
+  const s: Store = { pn: { "14389534902": { "dial-rule-translation-destination-user": "1372" } }, sms: { "14389534902": { application: "user", dest: "1103" } }, users: { "1372": {}, "1103": {} } };
+  mock(s);
+  const before = JSON.stringify(s);
+  const result = await reconcileVoiceSmsNumber(D, "4389534902", "1372");
+  assertEquals(result.ok, false);
+  assertEquals(result.repaired, false);
+  assertEquals(JSON.stringify(s), before);
+});
+
+Deno.test("réparation SMS des comptes existants suit le propriétaire voix pour tous les postes", async () => {
+  for (const ext of ["1372", "1117", "1136", "1284"]) {
+    const s: Store = { pn: { "14389534902": { "dial-rule-translation-destination-user": ext } }, sms: { "14389534902": { application: "user", dest: "1103" } }, users: { [ext]: {}, "1103": {} } };
+    mock(s);
+    const result = await reconcileVoiceSmsNumber(D, "4389534902", ext, true);
+    assertEquals(result.ok, true);
+    assertEquals(result.repaired, true);
+    assertEquals(s.sms["14389534902"].dest, ext);
+    assertEquals(s.pn["14389534902"]["dial-rule-translation-destination-user"], ext);
+  }
+});
+
+Deno.test("réparation SMS refuse une propriété voix différente et ne modifie rien", async () => {
+  const s: Store = { pn: { "14389534902": { "dial-rule-translation-destination-user": "1117" } }, sms: { "14389534902": { application: "user", dest: "1103" } }, users: { "1372": {}, "1103": {}, "1117": {} } };
+  mock(s);
+  const before = JSON.stringify(s);
+  const result = await reconcileVoiceSmsNumber(D, "4389534902", "1372", true);
+  assertEquals(result.ok, false);
+  assertEquals(JSON.stringify(s), before);
 });

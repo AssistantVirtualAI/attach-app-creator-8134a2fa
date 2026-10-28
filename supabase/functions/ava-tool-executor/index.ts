@@ -2041,6 +2041,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
           personal: d.paid_split?.personal ?? null, team: d.paid_split?.team ?? null,
           team_members: (d.paid_split?.team_members ?? []).slice(0, 15),
           top_institutions: (s.top_institutions ?? []).slice(0, 5),
+          lenders: d.analytics?.lenders ?? null,
         };
         lines.push(`Déboursées (${range.label}): ${fmtCad(member ? member.amount : s.total_commission)}`);
       }

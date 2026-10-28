@@ -1,13 +1,10 @@
 // Near real-time commission refresh shared by portal and mobile screens.
 // The server broadcasts "updated" (no figures) whenever a commission
 // snapshot is saved; screens then re-read their own scoped snapshot.
-// Fallback: re-read every 60 s while the screen is visible.
+// No timed polling or unconditional tab-focus reloads.
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { invalidateCommissionCache } from "@/lib/planipret/commissionClientCache";
-
-const THROTTLE_MS = 20_000;
-const POLL_MS = 60_000;
 
 // One shared subscription for every mounted screen.
 const listeners = new Set<() => void>();
@@ -23,7 +20,7 @@ function ensureChannel() {
         listeners.forEach((l) => l());
       })
       .subscribe();
-  } catch { channel = null; /* polling fallback still runs */ }
+  } catch { channel = null; /* explicit refresh remains available */ }
 }
 function releaseChannel() {
   if (listeners.size || !channel) return;
@@ -35,20 +32,17 @@ export function useCommissionLive(onUpdate: () => void) {
   const cb = useRef(onUpdate);
   cb.current = onUpdate;
   useEffect(() => {
-    let last = Date.now();
+    let pending = false;
     const fire = () => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      if (Date.now() - last < THROTTLE_MS) return;
-      last = Date.now();
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") { pending = true; return; }
+      pending = false;
       cb.current();
     };
     listeners.add(fire);
     ensureChannel();
-    const id = setInterval(fire, POLL_MS);
-    const onVis = () => { if (document.visibilityState === "visible") fire(); };
+    const onVis = () => { if (pending && document.visibilityState === "visible") fire(); };
     document.addEventListener("visibilitychange", onVis);
     return () => {
-      clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
       listeners.delete(fire);
       releaseChannel();

@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { generateText, Output } from "npm:ai@6";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
+import { COMMISSION_CHAT_TOOLS, formatCommissionAnswer, isCommissionQuestion, wantsMaestroDirectory } from "../_shared/ava-chat-routing.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -374,6 +375,12 @@ Deno.serve(async (req) => {
         const nested = (payload as any).payload && typeof (payload as any).payload === "object" ? (payload as any).payload : null;
         if (nested) for (const [k, v] of Object.entries(nested)) if ((payload as any)[k] === undefined) (payload as any)[k] = v;
         const rawAction = String(payload.action ?? (nested as any)?.action ?? "").trim().toLowerCase();
+        if (COMMISSION_CHAT_TOOLS.has(rawAction)) {
+          const exec = await invokeFunction("ava-tool-executor", authHeader, {
+            tool_name: rawAction, parameters: payload, session_id: sessionId,
+          });
+          return json({ reply: formatCommissionAnswer(exec.data, lang), result: exec.data, suggestions: [] });
+        }
         let action = rawAction;
         const ALIASES: Record<string, string> = {
           open_client: "client_profile", show_client: "client_profile", get_client: "client_profile",
@@ -403,7 +410,8 @@ Deno.serve(async (req) => {
                 ? "client_profile"
                 : /broker|courtier/.test(action)
                   ? "list_brokers"
-                  : "list_clients";
+                  : "";
+          if (!action) return json({ reply: L("Cette action n'est pas disponible. Reformule ta demande.", "This action is unavailable. Please rephrase your request."), suggestions: [] });
         }
         if (action === "list_clients" && !payload.search && clientName) payload.search = clientName;
         // Profile/contracts requested without an id: resolve by name first.
@@ -571,6 +579,7 @@ Deno.serve(async (req) => {
 
 
     let appContext = "";
+    let commissionReply: string | null = null;
     const integrations: string[] = [
       `Microsoft 365: ${profile?.ms365_access_token ? `connecté${profile?.ms365_email ? ` (${profile.ms365_email})` : ""}` : "non connecté"}`,
       `Scopes Microsoft: ${profile?.ms365_scopes ?? "non détectés"}`,
@@ -655,7 +664,7 @@ Deno.serve(async (req) => {
       // Directory / contact lookup — always try when the message mentions a
       // name, email, or contact-oriented action (e.g. "envoie un email à X").
       const tokens = extractNameTokens(userMessage);
-      if (wantsContactLookup(userMessage) || tokens.emails.length || tokens.names.length) {
+      if (!isCommissionQuestion(userMessage) && (wantsContactLookup(userMessage) || tokens.emails.length || tokens.names.length)) {
         try {
           const matches = await searchDirectory(admin, u.user.id, tokens);
           if (matches.length) {
@@ -678,7 +687,7 @@ Deno.serve(async (req) => {
       }
 
       // Maestro clients/brokers directory (endpoints /users/{id}/clients|brokers)
-      if (/\bclients?\b|\bcourtiers?\b|\bbrokers?\b|\bdossiers?\b|\bportefeuille\b|\bmaestro\b|\bprospects?\b|\bpipeline\b|\bcustomers?\b|\bmes\s+clients\b|\bmy\s+clients\b|\bliste\b|\blist\b/i.test(userMessage)) {
+      if (wantsMaestroDirectory(userMessage)) {
         try {
           const isBroker = /\bcourtiers?\b|\bbrokers?\b/i.test(userMessage);
           const phones = Array.from(userMessage.matchAll(/\+?\d[\d\s().-]{8,}\d/g)).map(m => m[0].replace(/\D/g, ""));
@@ -781,7 +790,7 @@ Deno.serve(async (req) => {
         return r.data ?? { success: false, error: `HTTP ${r.status}` };
       };
       try {
-        if (/commission|d[ée]bours|paid|pending|en attente|d[ée]p[oô]ts?|payes?|revenus?/i.test(userMessage)) {
+        if (isCommissionQuestion(userMessage)) {
           const status = /pending|en attente/i.test(userMessage) && !/d[ée]bours|paid|pay[ée]/i.test(userMessage) ? "pending"
             : /d[ée]bours|paid|pay[ée]/i.test(userMessage) && !/pending|en attente/i.test(userMessage) ? "paid" : "both";
           const period = /trimestre|quarter/i.test(userMessage) ? "quarter" : /\bmois\b|month/i.test(userMessage) ? "month" : /l'?ann[ée]e derni|last year/i.test(userMessage) ? "year" : "ytd";
@@ -796,11 +805,12 @@ Deno.serve(async (req) => {
           // Several brokers or the "par courtier" table → full table (admin: all
           // brokers; broker: own + team members), never just the first name.
           const wantsTable = fullHit.length > 1 || /par courtier|tableau|by broker|chaque courtier|tous les courtiers|all brokers/i.test(userMessage);
-          const named = wantsTable ? undefined : (fullHit[0] ?? (firstHit.length === 1 ? firstHit[0] : undefined));
+          const globalView = /vue globale|global view|tous les courtiers|all brokers/i.test(userMessage);
+          const named = globalView ? undefined : (fullHit[0] ?? (wantsTable ? undefined : firstHit.length === 1 ? firstHit[0] : undefined));
           const params: Record<string, unknown> = { status, period };
           if (named) params.broker_name = named;
-          let c: any = await runTool("get_commissions", params);
-          if (c?.error === "broker_not_found" && named) c = await runTool("get_commissions", { status, period });
+          const c: any = await runTool("get_commissions", params);
+          commissionReply = formatCommissionAnswer(c, lang, /pr[êe]teurs?|lenders?|institutions? financi[èe]res?/i.test(userMessage));
           dataBlocks.push(`Commissions validées (identiques au portail et à l'app): ${JSON.stringify(c).slice(0, 9000)}. Utilise EXACTEMENT ces montants; une erreur n'est jamais 0 $. Le champ scope indique à qui appartiennent les chiffres (ne dis pas « tes » si scope est un autre courtier). Si un courtier demandé est absent des données d'un courtier (hors équipe), refuse clairement: il n'est pas dans ton équipe.`);
         }
         if (/\bteams\b/i.test(userMessage)) {
@@ -820,7 +830,10 @@ Deno.serve(async (req) => {
           const rn: any = await runTool("find_upcoming_renewals", { days: 120 });
           dataBlocks.push(`Renouvellements à venir: ${JSON.stringify(rn).slice(0, 3000)}`);
         }
-      } catch (e) { console.error("pp-ava-chat full-access fetch fail", e); }
+      } catch (e) {
+        if (isCommissionQuestion(userMessage)) commissionReply = L("Chiffres indisponibles pour le moment.", "Figures unavailable right now.");
+        console.error("pp-ava-chat full-access fetch fail", e);
+      }
 
       if (dataBlocks.length) appContext += `\n${dataBlocks.join("\n")}`;
     }
@@ -928,8 +941,8 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
       return { reply, suggestions: sugg, openCoach: !!(v as any).openCoach, openVoice: !!(v as any).openVoice };
     };
 
-    let result: any = null;
-    try {
+    let result: any = commissionReply ? { reply: commissionReply, suggestions: [] } : null;
+    if (!result) try {
       const r = await generateText({
         model: gateway("google/gemini-3-flash-preview"),
         system,

@@ -93,7 +93,7 @@ const CONFIRM_REQUIRED = new Set([
   "cancel_calendar_event", "delete_calendar_event",
   "create_teams_chat", "send_teams_message", "reply_teams_message",
   "reply_email", "forward_email", "update_app_setting", "manage_voicemail", "control_call",
-  "push_call_summary", "push_client_note", "push_communication_log",
+  "push_call_summary", "push_client_note", "push_communication_log", "analyze_call",
 ]);
 
 export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPlaceCall, onHangupCall }: Props) {

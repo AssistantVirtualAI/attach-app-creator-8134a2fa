@@ -405,7 +405,7 @@ Deno.serve(async (req) => {
         destination,
         callId: body?.call_id ?? null,
         payload: { ...(body?.task ?? {}), task_id: body?.task_id ?? body?.id ?? null },
-        provided: body?.idempotency_key ?? null,
+        provided: body?.idempotency_key ?? null, scoped: true,
       });
       const claim = await claimAction(admin, {
         userId,

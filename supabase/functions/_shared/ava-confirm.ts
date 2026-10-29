@@ -102,7 +102,12 @@ async function sha(input: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
 }
 
-/** broker + action + destinataire + contenu + call_id + fenêtre de 10 minutes. */
+/** broker + action + destinataire + contenu + call_id + fenêtre de 10 minutes.
+ * `scoped: true` is required for any service that can receive a key forwarded
+ * by another guarded service (e.g. ava-tool-executor → ms365-actions): the
+ * forwarded key is re-hashed with this service's action so the downstream
+ * reservation never collides with the caller's own "running" row, while staying
+ * deterministic (a retry with the same key still deduplicates). */
 export async function buildIdempotencyKey(opts: {
   userId: string;
   action: string;
@@ -111,9 +116,11 @@ export async function buildIdempotencyKey(opts: {
   payload?: unknown;
   windowMs?: number;
   provided?: string | null;
+  scoped?: boolean;
 }): Promise<string> {
   if (opts.provided && String(opts.provided).trim()) {
     const supplied = String(opts.provided).trim().slice(0, 160);
+    if (opts.scoped) return `u:${opts.userId}:${await sha(`scoped:${opts.action}:${supplied}`)}`.slice(0, 160);
     if (supplied.startsWith(`u:${opts.userId}:`)) return supplied;
     return `u:${opts.userId}:${await sha(`provided:${supplied}`)}`.slice(0, 160);
   }

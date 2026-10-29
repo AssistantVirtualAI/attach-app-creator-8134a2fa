@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       action: `ava_action:${action.type}`,
       destination: String(params.to ?? params.chat_id ?? params.channel_id ?? ""),
       payload: { analysis_id, action_id, content },
-      provided: body?.idempotency_key ?? null,
+      provided: body?.idempotency_key ?? null, scoped: true,
     });
     const claim = await claimAction(admin, {
       userId,

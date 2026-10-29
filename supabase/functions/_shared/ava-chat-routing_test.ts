@@ -11,3 +11,11 @@ Deno.test("commission questions still route to commissions", () => {
   assertEquals(isCommissionQuestion("c'est quoi le volume de Francis Marois?"), true);
   assertEquals(isCommissionQuestion("pending 2026"), true);
 });
+
+Deno.test("non-commission requests with generic words are not commission questions", () => {
+  assertEquals(isCommissionQuestion("Quels sont mes rappels en attente ?"), false);
+  assertEquals(isCommissionQuestion("Écris un texto à Marie : son dépôt est reçu"), false);
+  assertEquals(isCommissionQuestion("envoie un courriel à Paul au sujet du dépôt"), false);
+  assertEquals(isCommissionQuestion("mes commissions en attente"), true);
+  assertEquals(isCommissionQuestion("c'est quoi le volume de Francis Marois?"), true);
+});

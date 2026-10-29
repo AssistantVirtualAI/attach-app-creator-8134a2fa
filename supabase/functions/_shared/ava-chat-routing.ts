@@ -1,4 +1,12 @@
+// Task / action requests ("ferme la tâche en attente…") must never be routed to
+// commission figures just because they contain "en attente" / "pending".
+const TASK_INTENT = /\bt[âa]ches?\b|\btasks?\b|\bto-?dos?\b|\brappels?\b|\breminders?\b|\bsuivis?\b|\bfollow-?ups?\b|\b(ferme|fermer|compl[èe]te[rz]?|termine[rz]?|close|complete|finish|cr[ée]e[rz]?|create|assigne[rz]?|assign)\b/i;
+const EXPLICIT_COMMISSION = /commission|d[ée]bours|\bpr[êe]teurs?\b|\blenders?\b|institutions? financi[èe]res?/i;
+export function isTaskRequest(text: string) {
+  return TASK_INTENT.test(text);
+}
 export function isCommissionQuestion(text: string) {
+  if (isTaskRequest(text) && !EXPLICIT_COMMISSION.test(text)) return false;
   return /commission|d[ée]bours|\bpaid\b|\bpending\b|en attente|d[ée]p[oô]ts?|pay[ée]s?|revenus?|\bvolumes?\b|\bunit[ée]s?\b|pr[êe]teurs?|\blenders?\b|institutions? financi[èe]res?/i.test(text);
 }
 export function wantsMaestroDirectory(text: string) {

@@ -261,6 +261,9 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
       "get_daily_briefing", "get_my_stats", "get_performance_report",
       "explain_feature", "get_integration_status",
       "push_call_summary", "push_client_note", "push_communication_log",
+      "get_commissions", "get_app_settings", "update_app_setting", "read_teams_messages", "reply_teams_message",
+      "get_sms_thread", "reply_email", "forward_email", "manage_voicemail", "control_call",
+      "get_contract_details", "find_upcoming_renewals",
       "submit_feedback",
     ];
     const map: Record<string, (p: any) => Promise<any>> = {};

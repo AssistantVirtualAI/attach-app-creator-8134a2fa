@@ -5,9 +5,12 @@ const EXPLICIT_COMMISSION = /commission|d[ée]bours|\bpr[êe]teurs?\b|\blenders?
 export function isTaskRequest(text: string) {
   return TASK_INTENT.test(text);
 }
+const OTHER_INTENT = /\btextos?\b|\bsms\b|\bmessages?\b|\bcourriels?\b|\be-?mails?\b|\bappel(le|er|s)?\b|\bcall\b|\btext\b|\bsend\b|\bwrite\b|\b[ée]cri[st]?\b|\b[ée]crire\b|\benvoie[rz]?\b|\bvoicemails?\b|\bmessagerie\b|\brendez-vous\b|\bmeetings?\b/i;
 export function isCommissionQuestion(text: string) {
-  if (isTaskRequest(text) && !EXPLICIT_COMMISSION.test(text)) return false;
-  return /commission|d[ée]bours|\bpaid\b|\bpending\b|en attente|d[ée]p[oô]ts?|pay[ée]s?|revenus?|\bvolumes?\b|\bunit[ée]s?\b|pr[êe]teurs?|\blenders?\b|institutions? financi[èe]res?/i.test(text);
+  if (EXPLICIT_COMMISSION.test(text)) return true;
+  // Generic words (en attente, dépôt, payé, volume...) only mean commissions when no other request is present.
+  if (isTaskRequest(text) || OTHER_INTENT.test(text)) return false;
+  return /\bpaid\b|\bpending\b|en attente|d[ée]p[oô]ts?|pay[ée]s?|revenus?|\bvolumes?\b|\bunit[ée]s?\b/i.test(text);
 }
 export function wantsMaestroDirectory(text: string) {
   return !isCommissionQuestion(text) && /\bclients?\b|\bcourtiers?\b|\bbrokers?\b|\bcustomers?\b|\bcontacts?\b/i.test(text);

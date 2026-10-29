@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     destination: String(body?.recipient ?? ""),
     callId,
     payload: { body: String(body?.body ?? "").trim(), subject: body?.subject ?? null },
-    provided: body?.idempotency_key ?? null,
+    provided: body?.idempotency_key ?? null, scoped: true,
   });
 
   if (!check.ok) {

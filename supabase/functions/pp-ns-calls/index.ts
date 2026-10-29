@@ -305,7 +305,7 @@ Deno.serve(async (req) => {
         destination: target || null,
         callId,
         payload: { consult_call_id: payload?.consult_call_id ?? null },
-        provided: payload?.idempotency_key ?? null,
+        provided: payload?.idempotency_key ?? null, scoped: true,
       });
       const claim = await claimAction(guard.supabase, {
         userId: ctx.userId,

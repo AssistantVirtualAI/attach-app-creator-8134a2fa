@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
         destination,
         callId: payload?.call_id ?? null,
         payload: { ...payload, confirmed: undefined, approved: undefined },
-        provided: payload?.idempotency_key ?? body?.idempotency_key ?? null,
+        provided: payload?.idempotency_key ?? body?.idempotency_key ?? null, scoped: true,
       });
       const claim = await claimAction(admin, {
         userId,

@@ -486,7 +486,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     }
     if (!number) return { success: false, error: "number_required" };
     number = normalizePhoneE164(number) ?? number;
-    await broadcastNav(ctx, "/mplanipret/calls", { open_dialer: { number, autoDial: !!p?.auto_dial } });
+    await broadcastNav(ctx, "/mplanipret/calls", { open_dialer: { number, autoDial: false } });
     return { success: true, message: `Clavier ouvert avec ${name ?? number}` };
   },
 

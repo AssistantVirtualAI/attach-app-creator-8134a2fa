@@ -12609,6 +12609,7 @@ export type Database = {
           ns_cdr_id: string | null
           ns_domain: string | null
           ns_orig_callid: string | null
+          ns_parent_callid: string | null
           ns_recording_url: string | null
           ns_term_callid: string | null
           organization_id: string
@@ -12695,6 +12696,7 @@ export type Database = {
           ns_cdr_id?: string | null
           ns_domain?: string | null
           ns_orig_callid?: string | null
+          ns_parent_callid?: string | null
           ns_recording_url?: string | null
           ns_term_callid?: string | null
           organization_id?: string
@@ -12781,6 +12783,7 @@ export type Database = {
           ns_cdr_id?: string | null
           ns_domain?: string | null
           ns_orig_callid?: string | null
+          ns_parent_callid?: string | null
           ns_recording_url?: string | null
           ns_term_callid?: string | null
           organization_id?: string

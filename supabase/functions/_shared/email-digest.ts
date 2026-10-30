@@ -205,7 +205,6 @@ export function buildDailyReportHtml(input: DailyReportInput) {
   const { groups } = summarizeCounts(mails);
   const sumById = new Map((input.mailSummaries ?? []).map((s) => [s.id, s]));
   const vmByCaller = new Set(input.voicemails.map((v) => String(v.from_number ?? "").replace(/\D/g, "").slice(-10)));
-  const inboundCount = cs.answered + cs.missed.length - cs.outbound + Math.max(0, cs.outbound - (cs.outbound));
   const kpi = (n: number | string, label: string, color: string, t = "") => `<td width="33%" align="center" style="padding:14px 4px;"><div style="font:700 26px Arial,sans-serif;color:${color};">${n}</div><div style="font:12px Arial,sans-serif;color:#64748b;">${esc(label)}</div><div style="font:11px Arial,sans-serif;padding-top:2px;">${t}</div></td>`;
 
   const mailRow = (m: DigestMail, preview: boolean) => {
@@ -233,7 +232,6 @@ export function buildDailyReportHtml(input: DailyReportInput) {
     const ev = input.events ?? [], tk = input.tasks ?? [];
     parts.push(card("Demain", "#10b981", ev.length + tk.length, (ev.length ? ev.map((e) => line(`${esc(timeLabel(e.start, tz))} — ${esc(clip(e.subject || "(sans titre)", 90))}`, "", e.location ? esc(clip(e.location, 60)) : "")).join("") : emptyRow("Aucun rendez-vous prévu.")) + tk.map((t) => line(`☐ ${esc(clip(t.title, 100))}`, esc(t.due ? t.due.slice(0, 10) : ""))).join("")));
   }
-  void inboundCount;
   const y = input.yesterday ?? {};
   const html = `<!doctype html><html lang="fr"><head><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body style="margin:0;padding:0;background:#eef2f7;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;"><tr><td align="center" style="padding:24px 10px;">

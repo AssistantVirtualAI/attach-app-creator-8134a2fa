@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Diagnose the repeated AVA voice send_email tool timeout from the second screenshot, using sanitized evidence and promise/confirmation lifecycle checks; no email retries, sends, deployment or native changes.
+- [x] Check second screenshot against sanitized Marc/all-broker send logs: three recent send_email failures have to_email but no to, completed in 0.80–1.06 seconds; two entries near the reported incident returned action_in_progress in under 0.52 seconds. No recorded server timeout proves the voice timeout cause. Existing recipient fix passes 36 tests; no send/retry/deployment/native changes.
+- [ ] Confirm the incident's voice-tool timeout cause: requires actual voice-session/tool configuration evidence and confirmation lifecycle verification; do not equate quick server validation errors with a provider timeout or release running send reservations.
 
 - [x] Diagnose AVA voice email schema mismatch: shared registry supplies to_email, Microsoft requires to; executor now normalizes the recipient for all brokers while preserving explicit to, confirmation and idempotency. 36 focused tests pass; preview build OK. No email sent, deployment, publication or native changes.
 - [ ] Verify AVA voice email sending in Marc's account and installed app: requires authorization to deploy the prepared executor and send a specifically approved email; recent function logs did not establish his exact runtime failure.

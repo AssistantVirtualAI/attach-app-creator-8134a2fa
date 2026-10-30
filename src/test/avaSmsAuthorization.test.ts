@@ -28,6 +28,13 @@ describe("SMS job single-use authorization",()=>{
   const {admin}=store();expect(await authorizeSmsJob(admin,true,MARC_SMS_USER_ID,"job","reply",{...payload,to:"+15145559999"})).toBeNull();
   expect(await authorizeSmsJob(admin,true,MARC_SMS_USER_ID,"job","reply",{...payload,message:"different"})).toBeNull();
  });
+ it("authorizes an explicit verified appointment once, never a second time",async()=>{
+  const {admin,job}=store();
+  job.proposal={kind:"appointment",identity:"verified",start:"2026-11-02T14:00:00-05:00",end:"2026-11-02T14:30:00-05:00"};
+  const calendar={start:job.proposal.start,end:job.proposal.end};
+  expect(await authorizeSmsJob(admin,true,MARC_SMS_USER_ID,"job","calendar",calendar)).not.toBeNull();
+  expect(await authorizeSmsJob(admin,true,MARC_SMS_USER_ID,"job","calendar",calendar)).toBeNull();
+ });
  it("revoked consent and stopped pilot prevent dispatch",async()=>{
   const {admin,profile,config}=store();profile.ai_consent_revoked_at="2026-10-31";
   expect(await authorizeSmsJob(admin,true,MARC_SMS_USER_ID,"job","reply",payload)).toBeNull();

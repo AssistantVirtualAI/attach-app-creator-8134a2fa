@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { addressMatches, detectLanguage, holdingText, READ_ONLY_TOOLS, senderTier, signAvaSms, smsIdentityVerified, AVA_SMS_SIGNATURE } from "../../supabase/functions/_shared/ava-sms-policy";
+import { addressMatches, bookingIntent, detectLanguage, holdingText, READ_ONLY_TOOLS, senderTier, signAvaSms, smsIdentityVerified, AVA_SMS_SIGNATURE } from "../../supabase/functions/_shared/ava-sms-policy";
 const profile = { first_name: "Jean-François", last_name: "Côté", phones: { cell: "(514) 555-1212" }, address: { street: "1234 rue Sherbrooke Est", city: "Montréal" } };
 const words = "Bonjour, ici Jean-François Côté, j'habite au 1234 rue Sherbrooke Est";
 describe("AVA SMS trust tiers and customer verification", () => {
@@ -22,11 +22,15 @@ describe("AVA SMS trust tiers and customer verification", () => {
  it("exposes only read tools on SMS", () => {
   for (const t of READ_ONLY_TOOLS) expect(/create|update|delete|complete|reschedule|send|submit/.test(t)).toBe(false);
  });
- it("does not reserve appointments or call Microsoft 365 from the SMS route", () => {
+ it("books only explicit appointments through the guarded Microsoft 365 action", () => {
   const route = readFileSync("supabase/functions/pp-ava-sms/index.ts", "utf8");
-  expect(route).not.toContain("ava_sms_book");
-  expect(route).not.toContain('invoke("ms365-actions"');
-  expect(route).not.toContain('kind==="appointment"');
+  expect(bookingIntent("Je voudrais réserver un rendez-vous mardi à 10 h")).toBe(true);
+  expect(bookingIntent("Quelles sont vos disponibilités?")).toBe(false);
+  expect(route).toContain("ava_sms_book");
+  expect(route).toContain('invoke("ms365-actions"');
+  expect(route).toContain('kind==="appointment"');
+  expect(route).not.toContain("update_client");
+  expect(route).not.toContain("create_task");
  });
  it("replies in the sender's language with the holding text", () => {
   expect(detectLanguage("Hi, where is my mortgage file?")).toBe("en");

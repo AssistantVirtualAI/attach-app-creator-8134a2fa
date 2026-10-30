@@ -70,6 +70,13 @@ export function senderTier(peer: string, internalColleague: boolean): "owner" | 
   if (TRUSTED_OWNER_PEERS.includes(peer)) return "owner";
   return internalColleague ? "internal" : "external";
 }
+/** Explicit scheduling intent; availability questions alone never create a booking. */
+export function bookingIntent(text: string) {
+  const value = String(text ?? "");
+  const asksForMeeting = /rendez[- ]?vous|\brdv\b|appointment|meeting|rencontre|réunion|reunion/i.test(value);
+  const asksToBook = /\b(veux|voudrais|aimerais|souhaite|réserve|reserver|réserver|book|schedule|planifier|fixer|prendre|confirm|confirme)\b/i.test(value);
+  return asksForMeeting && asksToBook;
+}
 export function detectLanguage(text: string): "fr" | "en" {
   const t = ` ${String(text ?? "").toLowerCase()} `;
   const en = (t.match(/\b(the|my|is|are|where|what|when|hello|hi|please|thanks|thank|you|can|file|mortgage|appointment|i'm|i am)\b/g) ?? []).length;

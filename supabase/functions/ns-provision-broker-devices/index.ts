@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   mobileDeviceId,
   webDeviceId,
+  widgetDeviceId,
   legacyDeviceIds,
 } from "../_shared/pp-device-ids.ts";
 
@@ -291,6 +292,8 @@ Deno.serve(async (req) => {
 
       const mobile = await create(mobileId, "Mobile Softphone", true, mobilePassword);
       const widget = await create(widgetId, "Web Softphone", false, widgetPassword);
+      // Maestro widget device <ext>x (shares the widget secret read by ns-resolve-sip-credentials).
+      const widgetX = await create(widgetDeviceId(ext), "Web Softphone", false, widgetPassword);
 
       // Rename migration: NS device names are immutable, so once <ext>M/<ext>W
       // exist we delete the legacy <ext>_mobile / <ext>_web AORs. Leaving them

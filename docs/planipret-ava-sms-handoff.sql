@@ -34,6 +34,10 @@ begin
     if entry->>'job_id' = p_args->>'job_id' then return jsonb_build_object('duplicate',true); end if;
     s.summaries := s.summaries || jsonb_build_object(peer,jsonb_build_object(
       'peer',peer,'job_id',p_args->>'job_id','summary',p_args->>'summary','read',false,'greeted',false,'notified',false));
+  elsif p_op='greet_failed' then
+    entry := s.summaries->peer;
+    if entry is null or entry->>'job_id' <> p_args->>'job_id' then return jsonb_build_object('claimed',false); end if;
+    s.summaries := s.summaries || jsonb_build_object(peer,entry || jsonb_build_object('greeted',false));
   elsif p_op in ('read','greet','notify_claim') then
     entry := s.summaries->peer;
     if entry is null or entry->>'job_id' <> p_args->>'job_id' then return jsonb_build_object('claimed',false); end if;

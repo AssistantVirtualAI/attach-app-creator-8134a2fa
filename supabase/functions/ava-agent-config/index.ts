@@ -5,7 +5,7 @@ import { authBroker, corsHeaders, jsonResponse } from "../_shared/ns-broker.ts";
 import { EXPECTED_TOOL_NAMES } from "../_shared/ava-tools.ts";
 
 const DEFAULT_AGENT_ID = Deno.env.get("ELEVENLABS_DEFAULT_AGENT_ID") ?? "";
-const DEFAULT_VOICE_ID = "bBRsDJSAcL1ubkrtJ3hM"; // Caroline — voix québécoise douce
+const DEFAULT_VOICE_ID = "cgSgspJ2msm6clMCkdW9"; // Jessica — voix unique pour tous les courtiers
 
 const TOOL_NAMES = EXPECTED_TOOL_NAMES;
 
@@ -187,7 +187,7 @@ Deno.serve(async (req) => {
 
   const firstName = (p.full_name ?? "courtier").split(" ")[0];
   // Voix partagée : une seule voix pour tout le monde.
-  const voiceId = Deno.env.get("ELEVENLABS_AVA_VOICE_ID") || DEFAULT_VOICE_ID;
+  const voiceId = DEFAULT_VOICE_ID;
 
   // Probe ElevenLabs to detect which overrides the agent allows.
   // Sending disallowed overrides closes the WS right after connect.

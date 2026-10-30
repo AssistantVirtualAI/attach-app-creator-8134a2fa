@@ -11,7 +11,10 @@ async function provisionBrokerAgent(
   admin: ReturnType<typeof supaAdmin>,
   brokerUserId: string,
 ): Promise<{ agent_id: string | null; error?: string }> {
-  if (!ELEVENLABS_API_KEY) return { agent_id: null, error: "no_elevenlabs_key" };
+  // Un seul agent vocal partagé pour tous les courtiers : ne jamais créer d'agent par courtier.
+  void admin; void brokerUserId;
+  return { agent_id: null };
+  // deno-lint-ignore no-unreachable
   try {
     const { data: prof } = await admin
       .from("planipret_profiles")

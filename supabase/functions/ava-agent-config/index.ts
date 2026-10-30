@@ -53,7 +53,6 @@ Deno.serve(async (req) => {
       .eq("id", p.id).then(() => null);
   }
 
-  const firstName = (p.full_name ?? "courtier").split(" ")[0];
   // Voix partagée : une seule voix pour tout le monde.
   const voiceId = DEFAULT_VOICE_ID;
 

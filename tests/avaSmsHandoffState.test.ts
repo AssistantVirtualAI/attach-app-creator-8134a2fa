@@ -54,6 +54,13 @@ describe("persisted SMS handoff",()=>{
   await command("save_summary",{peer,job_id:job,summary:"Repeat"});
   expect((await command("status")).summaries[peer].summary).toBe("Test isolated summary");
  });
+ it("failed voice playback releases only the matching summary version",async()=>{
+  expect((await command("greet_failed",{peer,job_id:"00000000-0000-4000-8000-000000000099"})).claimed).toBe(false);
+  expect((await command("greet",{peer,job_id:job})).claimed).toBe(false);
+  await command("greet_failed",{peer,job_id:job});
+  expect((await command("greet",{peer,job_id:job})).claimed).toBe(true);
+  expect((await command("greet",{peer,job_id:job})).claimed).toBe(false);
+ });
  it("rejects every non-pilot broker and gives browser roles no table or RPC access",async()=>{
   await expect(command("status",{},"00000000-0000-4000-8000-000000000002")).rejects.toThrow("pilot_only");
   const permissions=await db.query<{table_access:boolean;function_access:boolean}>("select has_table_privilege('authenticated','public.planipret_ava_sms_handoff_state','SELECT') as table_access, has_function_privilege('authenticated','public.pp_ava_sms_handoff(uuid,text,jsonb)','EXECUTE') as function_access");

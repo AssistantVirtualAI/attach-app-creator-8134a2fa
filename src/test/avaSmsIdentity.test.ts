@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { addressMatches, bookingIntent, detectLanguage, holdingText, READ_ONLY_TOOLS, senderTier, signAvaSms, smsIdentityVerified, AVA_SMS_SIGNATURE } from "../../supabase/functions/_shared/ava-sms-policy";
+import { readFileSync } from "node:fs";
+import { addressMatches, detectLanguage, holdingText, READ_ONLY_TOOLS, senderTier, signAvaSms, smsIdentityVerified, AVA_SMS_SIGNATURE } from "../../supabase/functions/_shared/ava-sms-policy";
 const profile = { first_name: "Jean-François", last_name: "Côté", phones: { cell: "(514) 555-1212" }, address: { street: "1234 rue Sherbrooke Est", city: "Montréal" } };
 const words = "Bonjour, ici Jean-François Côté, j'habite au 1234 rue Sherbrooke Est";
 describe("AVA SMS trust tiers and customer verification", () => {
@@ -21,12 +22,18 @@ describe("AVA SMS trust tiers and customer verification", () => {
  it("exposes only read tools on SMS", () => {
   for (const t of READ_ONLY_TOOLS) expect(/create|update|delete|complete|reschedule|send|submit/.test(t)).toBe(false);
  });
+ it("does not reserve appointments or call Microsoft 365 from the SMS route", () => {
+  const route = readFileSync("supabase/functions/pp-ava-sms/index.ts", "utf8");
+  expect(route).not.toContain("ava_sms_book");
+  expect(route).not.toContain('invoke("ms365-actions"');
+  expect(route).not.toContain('kind==="appointment"');
+ });
  it("replies in the sender's language with the holding text", () => {
   expect(detectLanguage("Hi, where is my mortgage file?")).toBe("en");
   expect(detectLanguage("Bonjour, où est mon dossier?")).toBe("fr");
   expect(holdingText("fr")).toContain("assistante de Marc");
   expect(holdingText("en")).toContain("Marc's assistant");
   expect(signAvaSms(signAvaSms(holdingText("en"))).split(AVA_SMS_SIGNATURE).length).toBe(2);
-  expect(bookingIntent("I'd like a meeting tomorrow 2pm")).toBe(true);
+  expect(holdingText("en")).not.toContain("appointment booked");
  });
 });

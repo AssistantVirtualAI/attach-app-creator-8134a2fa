@@ -26,13 +26,7 @@ export function hasCalendarConflict(start: string, end: string, events: any[]) {
     return !Number.isFinite(from)||!Number.isFinite(to)||(from<Date.parse(end)&&to>Date.parse(start));
   });
 }
-export function explicitBookingRequest(text:string) {
-  return /\b(réserve|reserver|réserver|book|prendre|fixer|planifier)\b/i.test(text)
-    && /rendez[- ]?vous|appointment|rencontre/i.test(text)
-    && /\b\d{1,2}(?:h\d{0,2}|:\d{2})\b/.test(text)
-    && /\b\d{4}-\d{2}-\d{2}\b/.test(text)
-    && /\b\d{1,3}\s*(?:minutes?|min)\b/i.test(text);
-}export const AVA_SMS_SIGNATURE = "— AVA, assistante de Marc Maglieri";
+export const AVA_SMS_SIGNATURE = "— AVA, assistante de Marc Maglieri";
 /** Server-side signature: every automated text says AVA wrote it, never Marc. Idempotent. */
 export function signAvaSms(text: string): string {
   const body = String(text ?? "").replace(/\s*—\s*AVA[^\n]*$/u, "").trim();
@@ -75,9 +69,6 @@ export const READ_ONLY_TOOLS = ["search_client", "get_client_profile", "get_clie
 export function senderTier(peer: string, internalColleague: boolean): "owner" | "internal" | "external" {
   if (TRUSTED_OWNER_PEERS.includes(peer)) return "owner";
   return internalColleague ? "internal" : "external";
-}
-export function bookingIntent(text: string) {
-  return /rendez[- ]?vous|\brdv\b|appointment|rencontre|meeting|réunion|reunion|booker|réserv|reserv|planifier|céduler|ceduler|disponib/i.test(text);
 }
 export function detectLanguage(text: string): "fr" | "en" {
   const t = ` ${String(text ?? "").toLowerCase()} `;

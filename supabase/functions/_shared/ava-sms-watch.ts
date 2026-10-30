@@ -19,7 +19,7 @@ export async function nsGet(path: string): Promise<any[]> {
 }
 
 export const marcSessionMessagesPath = (sessionId: string) =>
-  `/domains/planipret.ca/users/1136/messagesessions/${encodeURIComponent(sessionId)}/messages?limit=30`;
+  `/domains/planipret.ca/users/1136/messagesessions/${encodeURIComponent(sessionId)}/messages?limit=100`;
 
 export async function runAvaSmsWatch(admin: any) {
   const { data: config } = await admin.from("planipret_ava_sms_pilot").select("enabled,activated_at,profile_id").eq("user_id", MARC_SMS_USER_ID).maybeSingle();

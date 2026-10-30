@@ -600,7 +600,7 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
       const E = encodeURIComponent(ext);
       const sessions = await tryPaths([`/domains/${D}/users/${E}/messagesessions`]);
       for (const s of sessions.data.slice(0, 25)) {
-        const sid = String(s?.session_id ?? s?.id ?? s?.["session-id"] ?? "").trim();
+        const sid = String(s?.["messagesession-id"] ?? s?.session_id ?? s?.id ?? s?.["session-id"] ?? "").trim();
         if (!sid) continue;
         const S = encodeURIComponent(sid);
         const msgs = await tryPaths([`/domains/${D}/users/${E}/messagesessions/${S}/messages`]);
@@ -640,11 +640,12 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
         for (const s of sess.data) {
           const sid = String(val(s, ["messagesession-id", "session_id", "id"], "")).trim();
           const last = toIso(val(s, ["messagesession-last-datetime"], null));
-          if (!sid || !last || last < pilot.activated_at) continue;
+          if (!sid || !last || Date.parse(last) < Date.parse(pilot.activated_at)) continue;
           const msgs = await tryPaths([`/domains/${D}/users/${E}/messagesessions/${encodeURIComponent(sid)}/messages?limit=20`]);
           for (const m of msgs.data) got.push({ ...m, user: String(pp.extension), ns_session: s });
         }
         const pilotRows = got.map((m) => toMessageRow(m, extToProfile)).filter((x) => x.user_id === pilot.profile_id);
+        console.log("[pp-admin-ns-sync] AVA pilot import", JSON.stringify({ sessions: sess.data.length, messages: got.length, rows: pilotRows.length }));
         if (pilotRows.length) await admin.from("planipret_phone_messages").upsert(pilotRows, { onConflict: "ns_message_id", ignoreDuplicates: true });
       }
       const { data: fresh } = await admin.from("planipret_phone_messages").select("id")

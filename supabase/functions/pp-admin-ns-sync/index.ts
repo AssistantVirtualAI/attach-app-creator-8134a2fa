@@ -631,7 +631,7 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
     const { data: pilot } = await admin.from("planipret_ava_sms_pilot").select("enabled, activated_at, profile_id").eq("enabled", true).maybeSingle();
     if (pilot?.profile_id && pilot.activated_at) {
       const { data: fresh } = await admin.from("planipret_phone_messages").select("id")
-        .eq("user_id", pilot.profile_id).eq("direction", "inbound").gte("created_at", pilot.activated_at)
+        .eq("user_id", pilot.profile_id).eq("direction", "inbound").gte("created_at", pilot.activated_at).gte("sent_at", pilot.activated_at)
         .is("metadata->ava_sms_job", null).order("created_at", { ascending: true }).limit(5);
       for (const m of fresh ?? []) {
         await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-ava-sms`, {

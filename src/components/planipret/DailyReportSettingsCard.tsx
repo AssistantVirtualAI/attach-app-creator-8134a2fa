@@ -56,7 +56,7 @@ export default function DailyReportSettingsCard({ lang }: { lang: "fr" | "en" | 
   const sendTest = async () => {
     setBusy("test");
     try {
-      const d = await call("daily_report");
+      const d = await call("daily_report", { day: new Date().getHours() < 12 ? "yesterday" : "today" });
       if (!d?.sent) throw new Error(d?.error ?? "Non envoyé");
       toast.success(en ? `Sample sent to ${d.to}` : `Exemple envoyé à ${d.to}`);
     } catch (e: any) { toast.error(e?.message ?? "Erreur"); } finally { setBusy(null); }

@@ -605,9 +605,11 @@ Deno.serve(async (req) => {
         const self = profile.ms365_email;
         if (!self) return j({ success: false, error: "Adresse Microsoft 365 inconnue" }, 400);
         const tz = APP_TZ;
-        const dayStart = localDayStartIso(tz);
-        const dayEnd = localDayStartIso(tz, new Date(Date.now() + 86400000));
-        const yStart = localDayStartIso(tz, new Date(Date.now() - 86400000));
+        // payload.day === "yesterday" : exemple sur la journée précédente complète.
+        const now = payload.day === "yesterday" ? Date.now() - 86400000 : Date.now();
+        const dayStart = localDayStartIso(tz, new Date(now));
+        const dayEnd = localDayStartIso(tz, new Date(now + 86400000));
+        const yStart = localDayStartIso(tz, new Date(now - 86400000));
         const { data: full } = await admin.from("planipret_profiles").select("metadata").eq("id", profile.id).maybeSingle();
         const meta = (full?.metadata as any) ?? {};
         const [callsR, vmR, smsR, yCalls, ySms] = await Promise.all([
@@ -620,7 +622,7 @@ Deno.serve(async (req) => {
         if (callsR.error || vmR.error || smsR.error) return j({ success: false, sent: false, error: "Lecture de l'activité impossible" }, 502);
         // Courriels : liste complète paginée, ou rien (jamais partielle).
         let mails: any[] | null = [];
-        let next: string | null = `/me/mailFolders/inbox/messages?$top=100&$orderby=receivedDateTime%20desc&$filter=receivedDateTime%20ge%20${encodeURIComponent(dayStart)}&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,importance,inferenceClassification,flag,webLink`;
+        let next: string | null = `/me/mailFolders/inbox/messages?$top=100&$orderby=receivedDateTime%20desc&$filter=receivedDateTime%20ge%20${encodeURIComponent(dayStart)}%20and%20receivedDateTime%20lt%20${encodeURIComponent(dayEnd)}&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,importance,inferenceClassification,flag,webLink`;
         for (let page = 0; next && page < 20; page++) {
           const r = await graph(admin, profile, next);
           const d = await r.json().catch(() => ({}));
@@ -632,7 +634,7 @@ Deno.serve(async (req) => {
         if (next) return j({ success: false, sent: false, error: "Trop de courriels pour un résumé complet" }, 502);
         const yMailsR = await graph(admin, profile, `/me/mailFolders/inbox/messages?$top=1&$count=true&$filter=receivedDateTime%20ge%20${encodeURIComponent(yStart)}%20and%20receivedDateTime%20lt%20${encodeURIComponent(dayStart)}&$select=id`, { headers: { ConsistencyLevel: "eventual" } });
         const yMails = yMailsR.ok ? Number((await yMailsR.json().catch(() => ({})))["@odata.count"]) : NaN;
-        const evR = await graph(admin, profile, `/me/calendarView?startDateTime=${dayEnd}&endDateTime=${localDayStartIso(tz, new Date(Date.now() + 2 * 86400000))}&$select=subject,start,location&$orderby=start/dateTime&$top=50`);
+        const evR = await graph(admin, profile, `/me/calendarView?startDateTime=${dayEnd}&endDateTime=${localDayStartIso(tz, new Date(now + 2 * 86400000))}&$select=subject,start,location&$orderby=start/dateTime&$top=50`);
         const evD = await evR.json().catch(() => ({}));
         const events = (evD.value ?? []).map((e: any) => ({ subject: e.subject, start: toOffsetIso(e.start?.dateTime, e.start?.timeZone), location: e.location?.displayName }));
         // Noms d'annuaire pour les numéros (contacts du courtier seulement).
@@ -640,7 +642,7 @@ Deno.serve(async (req) => {
         const names = new Map<string, string>();
         for (const c of contacts ?? []) for (const k of Object.keys(c)) if (/phone|mobile|number/i.test(k) && c[k]) { const d = String(c[k]).replace(/\D/g, "").slice(-10); const nm = c.full_name ?? c.name ?? [c.first_name, c.last_name].filter(Boolean).join(" "); if (d.length === 10 && nm) names.set(d, nm); }
         const mailSummaries = await summarizeMailsAi(mails ?? []);
-        const dateLabel = new Intl.DateTimeFormat("fr-CA", { timeZone: tz, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+        const dateLabel = new Intl.DateTimeFormat("fr-CA", { timeZone: tz, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(now));
         const report = buildDailyReportHtml({
           brokerName: profile.full_name ?? "", dateLabel, tz, settingsUrl: "https://avastatistic.ca/planipret/broker/settings",
           sections: meta.email_digest_sections, calls: callsR.data ?? [], voicemails: vmR.data ?? [], sms: smsR.data ?? [],

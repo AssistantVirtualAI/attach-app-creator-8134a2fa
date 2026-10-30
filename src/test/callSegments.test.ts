@@ -8,7 +8,7 @@ const seg = (id: string, parent: string, start: string, dur: number, reason: str
 
 describe("groupCallSegments", () => {
   it("merges a moved call into one row with total duration and drops the MoveMyCall helper", () => {
-    const out = groupCallSegments([
+    const out = groupCallSegments<any>([
       seg("a", "P1", "2026-10-30T10:00:00Z", 30, "Retrieved"),
       { id: "h", started_at: "2026-10-30T10:00:30Z", duration_seconds: 2, metadata: { netSapiens: { "call-parent-call-id": "", "call-orig-to-user": "MoveMyCall" } } },
       seg("b", "P1", "2026-10-30T10:00:31Z", 90, "Orig: Bye"),

@@ -2,7 +2,7 @@
   "name": "planipret-mobile",
   "version": "1.5.1",
   "androidVersionCode": 30,
-  "description": "Planiprêt — Standalone Capacitor Mobile App (iOS + Android)",
+  "description": "Planipr\u00eat \u2014 Standalone Capacitor Mobile App (iOS + Android)",
   "private": true,
   "type": "module",
   "scripts": {
@@ -98,7 +98,8 @@
     "recharts": "^2.15.0",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "@radix-ui/react-switch": "^1.2.5"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.1.2",

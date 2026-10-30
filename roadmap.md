@@ -1,7 +1,11 @@
 # Roadmap
 
+- [x] Deploy prepared recurring Maestro–Outlook fix: five runtime/preview/schema functions deployed; corrected ElevenLabs recurrence schema rejection; sync HTTP 200, 93/93 tools, shared agent/Jessica read back; 141 AVA/task/Microsoft tests pass. Monday voice instructions delivered; no real task created.
+- [x] Fix Project monitoring finding 476e99ca-4ef8-531c-aa79-fdf80e7a6f33: mobile Switch declared and both locks amended, exact npm graph and isolated package import verified; finding resolved fixed. Full standalone build blocked by absent real capacitor-pjsip source in this checkout; separate repo must validate clean build.
+- [x] Deliver Manus mobile release handoff in Files: resolved M identity, dependency fix, separate-repository build instructions and fresh sign-in/incoming/audio gates; no build, store upload, website publication or telecom changes.
+
 - [x] Prepare shared AVA recurring Maestro task + direct recurring Outlook link: explicit weekday schema, Toronto recurrence, downstream confirmation, deterministic event transaction identity and terminal partial outcomes. All 128 focused AVA/task/calendar tests pass; preview build OK. No deployment/publication/native changes or real task/event creation.
-- [ ] Activate and verify recurring AVA task + Outlook link: needs coordinated function deployment and shared ElevenLabs tool refresh authorization, then a broker-confirmed real task with exact content/time; no live calendar or all-broker account verification claimed.
+- [ ] Verify real recurring AVA voice task + Outlook link: deployment/schema activation complete; broker must speak and confirm the supplied November 2 Monday 09:00 Toronto test, then read back Maestro task and Outlook series. No live creation/all-broker account proof claimed.
 
 - [x] Prepare all-broker iPhone line labels using validated resolved M identity rather than stale profile extension; preserve existing Maestro resolver/native registration, no deployment/publication/telecom changes.
 - [ ] Verify Scott's installed iPhone registers and answers on 110M after fresh sign-in; physical device/version and next approved app release for updated labels required.

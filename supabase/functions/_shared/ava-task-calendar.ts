@@ -46,6 +46,8 @@ export async function createTaskWithOutlook(
       body: `${input.description ?? input.notes}\nMaestro task: ${taskId}`,
       recurrence: input.recurrence, is_online: false,
       transaction_id: `maestro-task-${taskId}`,
+      confirmed: input.confirmed === true,
+      idempotency_key: `maestro-task-${taskId}:outlook`,
     });
   } catch {
     calendar = { success: false, error: "calendar_result_unconfirmed" };

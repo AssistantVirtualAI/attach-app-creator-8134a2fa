@@ -959,6 +959,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       sync_calendar: p?.sync_calendar === true, notification: p?.notification === true,
       recurrence: p?.recurrence ? { ...p.recurrence, value: p.recurrence.value ?? 1 } : null,
       link_outlook: p?.link_outlook === true, duration_minutes: p?.duration_minutes,
+      confirmed: p?.confirmed === true, idempotency_key: p?.idempotency_key,
     }, (input) => taskApi(ctx, input), (input) => TOOLS.create_calendar_event(ctx, input));
     if ((r as any)?.success || (r as any)?.task_created) await broadcastTasks(ctx, "created", (r as any).task_id);
     return r;
@@ -1296,6 +1297,8 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
           isOnlineMeeting: p.is_online ?? true,
           recurrence: p.recurrence,
           transactionId: p.transaction_id,
+          confirmed: p.confirmed === true,
+          idempotency_key: p.idempotency_key,
         },
       }),
     });
@@ -2522,7 +2525,10 @@ Deno.serve(async (req) => {
     try {
       const result = await fn(ctx, { ...feedbackPayload, confirmed: true, idempotency_key: idempotencyKey });
       const ok = (result as any)?.success !== false;
-      await finishAction(ctx.admin, claim.id, ok, result, ok ? null : String((result as any)?.error ?? "error"));
+      // A created task with a failed Outlook link is a terminal partial result:
+      // retain both IDs/evidence for replay, without re-running either mutation.
+      const terminalPartialTask = tool_name === "create_task" && (result as any)?.task_created === true;
+      await finishAction(ctx.admin, claim.id, ok || terminalPartialTask, result, ok ? null : String((result as any)?.error ?? "error"));
       await logTool(ctx, session_id ?? "no-session", tool_name, params, result);
       return jsonResponse({ ...(result as any), idempotency_key: idempotencyKey });
     } catch (e) {

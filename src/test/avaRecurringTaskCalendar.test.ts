@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createTaskWithOutlook, outlookTaskRecurrence } from "../../supabase/functions/_shared/ava-task-calendar";
 import { buildCreatePayload } from "../../supabase/functions/_shared/planipret-tasks";
 
-const input = { notes: "Monday reminder", due_at: "2026-11-02 09:00:00", recurrence: { value: 1, pattern: "week", on: [1] }, link_outlook: true };
+const input = { notes: "Monday reminder", due_at: "2026-11-02 09:00:00", recurrence: { value: 1, pattern: "week", on: [1] }, link_outlook: true, confirmed: true };
 
 describe("AVA recurring Maestro task linked directly to Outlook", () => {
   it("creates a weekly Monday morning series in Toronto, including the DST change", () => {
@@ -20,7 +20,7 @@ describe("AVA recurring Maestro task linked directly to Outlook", () => {
     const result = await createTaskWithOutlook(input, task, event);
     expect(task).toHaveBeenCalledTimes(1);
     expect(event).toHaveBeenCalledTimes(1);
-    expect(event).toHaveBeenCalledWith(expect.objectContaining({ recurrence: input.recurrence, start_datetime: input.due_at, is_online: false, transaction_id: "maestro-task-42" }));
+    expect(event).toHaveBeenCalledWith(expect.objectContaining({ recurrence: input.recurrence, start_datetime: input.due_at, is_online: false, transaction_id: "maestro-task-42", confirmed: true, idempotency_key: "maestro-task-42:outlook" }));
     expect(result).toMatchObject({ success: true, task_id: "42", outlook_created: true, event_id: "outlook-42" });
   });
 

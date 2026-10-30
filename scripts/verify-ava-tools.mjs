@@ -11,6 +11,7 @@ const registry = read("supabase/functions/_shared/ava-tools.ts");
 const executor = read("supabase/functions/ava-tool-executor/index.ts");
 const confirmation = read("supabase/functions/_shared/ava-confirm.ts");
 const voice = read("src/components/planipret/mobile/AvaVoiceAgent.tsx");
+const mobileVoice = read("apps/planipret-mobile/src/components/planipret/mobile/AvaVoiceAgent.tsx");
 const chat = read("src/pages/planipret/mobile/MAvaChat.tsx");
 const chatEdge = read("supabase/functions/pp-ava-chat/index.ts");
 const tokenEdge = read("supabase/functions/pp-ava-webrtc-token/index.ts");
@@ -44,6 +45,11 @@ const voiceBlock = voice.match(/const TOOL_NAMES = \[([\s\S]*?)\];/)?.[1] ?? "";
 const voiceNames = new Set([...voiceBlock.matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]));
 const sensitiveBlock = confirmation.match(/AVA_SENSITIVE_TOOLS = new Set<string>\(\[([\s\S]*?)\]\)/)?.[1] ?? "";
 const sensitiveNames = unique([...sensitiveBlock.matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]));
+const hasExplicitJwtVerification = (functionName) => {
+  const escaped = functionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const section = supabaseConfig.match(new RegExp(`\\[functions\\.${escaped}\\]([\\s\\S]*?)(?=\\n\\[|$)`))?.[1] ?? "";
+  return /^\s*verify_jwt\s*=\s*true\s*$/m.test(section);
+};
 
 check(specNames.length === expectedNames.length, `AVA tool spec count mismatch: registry ${specNames.length}, expected ${expectedNames.length}`);
 check(expectedNames.length === specNames.length && specNames.every((n) => expectedNames.includes(n)), "EXPECTED_TOOL_NAMES must exactly cover all tool specs");
@@ -71,6 +77,13 @@ check(
   && voice.includes('tool === "submit_feedback"')
   && voice.includes('callServerTool(tool, { ...params, ...patched })'),
   "Voice confirmation must require an explicit spoken decision and preserve the Feedback token flow",
+);
+check(
+  mobileVoice.includes('voiceConfirmationDecision(text)')
+  && mobileVoice.includes('Date.now() - spoken.at <= 20_000')
+  && mobileVoice.includes('confirmation_superseded')
+  && mobileVoice.includes('describeVoiceStartError'),
+  "Mobile voice must match the portal’s explicit confirmation and safe diagnostic guardrails",
 );
 check(voice.includes('tool === "make_call"') && voice.includes('owner: "mobile_softphone"'), "Confirmed voice calls must remain owned by the local mobile softphone");
 check(voice.includes('functions.invoke("pp-ava-chat"') && !voice.includes('functions.invoke("ava-assistant"'), "Voice text fallback must use the canonical Planiprêt chatbot");
@@ -103,7 +116,7 @@ check(!actionExecutor.includes('executionMode = "mock"') && actionExecutor.inclu
 
 for (const [name, source] of [["pp-ava-stt", stt], ["pp-ava-tts", tts], ["pp-ava-brief", brief], ["pp-ava-report", report], ["ava-email-analyzer", emailAnalyzer]]) {
   check(source.includes("ai_consent_required") || source.includes("hasValidAiConsent"), `${name} must enforce persistent AI consent`);
-  check(supabaseConfig.includes(`[functions.${name}]\nverify_jwt = true`), `${name} must have verify_jwt=true`);
+  check(hasExplicitJwtVerification(name), `${name} must have verify_jwt=true`);
 }
 
 if (failures.length) {

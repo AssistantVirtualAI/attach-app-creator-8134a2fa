@@ -7,10 +7,15 @@ type Preview = {
   broker: { full_name: string | null; first_name: string; extension: string | null; voice_agent_enabled: boolean | null; ms365_connected: boolean; maestro_connected: boolean };
   agent_id: string;
   voice_id: string;
+  voice_name?: string | null;
+  agent_voice_id?: string | null;
   language: string;
   autonomy_mode: string;
   first_message: string;
-  dynamic_variables: Record<string, string>;
+  agent_status?: string | null;
+  overrides_allowed?: { prompt: boolean; first_message: boolean; language: boolean; voice: boolean };
+  expected_tool_count?: number;
+  attached_tool_count?: number | null;
 };
 
 export default function AvaVoiceSimulatorPanel() {
@@ -60,6 +65,9 @@ export default function AvaVoiceSimulatorPanel() {
       (b) => (b.full_name ?? "").toLowerCase().includes(q) || (b.extension ?? "").includes(q),
     );
   }, [brokers, filter]);
+  const technicalHealthy = !!preview
+    && preview.agent_status === "ok"
+    && preview.attached_tool_count === preview.expected_tool_count;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -126,18 +134,21 @@ export default function AvaVoiceSimulatorPanel() {
               <div className="text-sm text-slate-800 italic">"{preview.first_message}"</div>
             </div>
 
-            <div>
-              <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Dynamic variables envoyées</div>
-              <pre className="text-[11px] bg-slate-900 text-slate-100 rounded p-2 overflow-auto">
-{JSON.stringify(preview.dynamic_variables, null, 2)}
-              </pre>
-            </div>
-
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div><span className="text-slate-400">Agent ID:</span> <span className="text-slate-700 font-mono">{preview.agent_id.slice(0, 12)}…</span></div>
-              <div><span className="text-slate-400">Voice ID:</span> <span className="text-slate-700 font-mono">{preview.voice_id.slice(0, 12)}…</span></div>
+              <div><span className="text-slate-400">Voix runtime:</span> <span className="text-slate-700">{preview.voice_name ?? "—"} · <span className="font-mono">{preview.voice_id.slice(0, 12)}…</span></span></div>
               <div><span className="text-slate-400">Langue:</span> <span className="text-slate-700">{preview.language}</span></div>
               <div><span className="text-slate-400">Autonomie:</span> <span className="text-slate-700">{preview.autonomy_mode}</span></div>
+            </div>
+
+            <div className={`rounded-md border p-3 text-xs ${technicalHealthy ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+              <div className="font-semibold text-slate-700">Validation technique (lecture seule)</div>
+              <div className="mt-1 text-slate-600">Agent : {preview.agent_status ?? "non vérifié"} · outils : {preview.attached_tool_count ?? "—"}/{preview.expected_tool_count ?? "—"}</div>
+              {preview.attached_tool_count !== null && preview.attached_tool_count !== undefined && preview.expected_tool_count !== undefined && preview.attached_tool_count !== preview.expected_tool_count && (
+                <div className="mt-1 font-medium text-amber-800">Écart d’inventaire : ne pas resynchroniser les outils avant comparaison de la source déployée.</div>
+              )}
+              <div className="mt-1 text-slate-600">Overrides — prompt {preview.overrides_allowed?.prompt ? "✓" : "✕"} · salut {preview.overrides_allowed?.first_message ? "✓" : "✕"} · langue {preview.overrides_allowed?.language ? "✓" : "✕"} · voix {preview.overrides_allowed?.voice ? "✓" : "✕"}</div>
+              <div className="mt-1 text-slate-600">Voix de l’agent : {preview.agent_voice_id ? `${preview.agent_voice_id.slice(0, 12)}…` : "non vérifiée"}</div>
             </div>
           </div>
         )}

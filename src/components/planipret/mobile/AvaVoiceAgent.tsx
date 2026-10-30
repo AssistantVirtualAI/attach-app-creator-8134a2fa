@@ -444,8 +444,9 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
           },
           onDisconnect: (info: any) => {
             if (cancelled || generation !== connectionGenerationRef.current) return;
-            const reason = info?.reason ?? info?.code ?? "closed";
-            const recoverable = ![1000, 1008, "1000", "1008", "user_disconnected"].includes(reason);
+            const rawReason = info?.reason ?? info?.code ?? "closed";
+            const reason = describeVoiceStartError({ message: rawReason });
+            const recoverable = ![1000, 1008, "1000", "1008", "user_disconnected"].includes(rawReason);
             // Boucle de reconnexion robuste : backoff exponentiel + jitter,
             // plafonné, et reprise immédiate dès que le réseau revient.
             if (recoverable && automaticRecoveriesRef.current < MAX_AUTO_RECOVERIES) {
@@ -472,8 +473,9 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
           },
           onError: (err: any) => {
             if (cancelled || generation !== connectionGenerationRef.current) return;
-            console.error("AVA error", err);
-            logSession({ error_code: "runtime", error_message: String(err?.message ?? err ?? "unknown") });
+            const detail = describeVoiceStartError(err);
+            console.error("AVA error", detail);
+            logSession({ error_code: "runtime", error_message: detail });
             setState("error");
           },
           onModeChange: (m: any) => {
@@ -525,7 +527,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
             ...commonOptions,
           } as any);
         } catch (webrtcErr: any) {
-          console.warn("AVA WebRTC failed, falling back to WebSocket", webrtcErr);
+          console.warn("AVA WebRTC failed, falling back to WebSocket", describeVoiceStartError(webrtcErr));
           usedTransport = "websocket";
           try {
             await new Promise((resolve) => setTimeout(resolve, 350));
@@ -540,7 +542,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
               ...commonOptions,
             } as any);
           } catch (wsErr: any) {
-            console.error("AVA startSession failed on both transports", wsErr);
+            console.error("AVA startSession failed on both transports", describeVoiceStartError(wsErr));
             const code = wsErr?.code ?? webrtcErr?.code;
             if (code === "voice_agent_disabled") {
               fallback(L("Agent vocal AVA désactivé — contactez votre administrateur pour l'activer.", "AVA voice agent disabled — contact your administrator to enable it."), "voice_agent_disabled");

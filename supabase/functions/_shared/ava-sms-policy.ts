@@ -67,3 +67,43 @@ export function providerHistory(msgs: any[], peer: string, limit = 20) {
     return { at: nsTime(m?.timestamp) ?? "", peer: smsPeer(other), role: inbound ? "user" : "assistant", text: String(m?.text ?? "").slice(0, 1200) };
   }).filter(x => x.peer === peer && x.at && x.text).sort((a, b) => a.at.localeCompare(b.at)).slice(-limit).map(({ role, text }) => ({ role, text }));
 }
+
+/** Booking intent anywhere in the sender's recent words (date/time resolved by the model, verified by the server). */
+export function bookingIntent(text: string) {
+  return /rendez[- ]?vous|\brdv\b|appointment|rencontre|meeting|réunion|reunion|booker|réserv|reserv|planifier|céduler|ceduler|disponib/i.test(text);
+}
+/** Customer asking where their mortgage file stands. */
+export function fileStatusIntent(text: string) {
+  return /\b(dossier|file|demande|prêt|pret|hypoth[eè]que|mortgage|approbation|approval|statut|status|où en est|ou en est|update|nouvelles?)\b/i.test(text);
+}
+const fold = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s'-]/g, " ").replace(/\s+/g, " ").trim();
+const tenDigits = (s: unknown) => { const d = String(s ?? "").replace(/\D/g, ""); return d.length === 11 && d.startsWith("1") ? d.slice(1) : d.length === 10 ? d : null; };
+function collect(obj: any, test: (k: string, v: any) => boolean, out: string[] = [], depth = 0): string[] {
+  if (!obj || typeof obj !== "object" || depth > 4) return out;
+  for (const [k, v] of Object.entries(obj)) {
+    if (v && typeof v === "object") collect(v, test, out, depth + 1);
+    else if (test(k, v)) out.push(String(v));
+  }
+  return out;
+}
+export function profilePhones(profile: any): string[] {
+  return [...new Set(collect(profile, (k, v) => /phone|tel|cell|mobile/i.test(k) && !!tenDigits(v)).map(tenDigits) as string[])];
+}
+export function profileFullNames(profile: any): string[] {
+  const p = profile ?? {};
+  const first = p.first_name ?? p.firstname ?? p.prenom ?? p.firstName, last = p.last_name ?? p.lastname ?? p.nom ?? p.lastName;
+  return [first && last ? `${first} ${last}` : "", p.full_name, p.name, p.fullName].map(fold).filter(n => n.split(" ").length >= 2);
+}
+/**
+ * Security check for file updates by SMS: the sender gave a first AND last name that
+ * appears in their own messages, it matches the Maestro profile, and the texting number
+ * is one of that profile's phone numbers. All three or nothing.
+ */
+export function smsIdentityVerified(claimedName: unknown, senderWords: string, senderPeer: string, profile: any) {
+  const claimed = fold(claimedName);
+  if (claimed.split(" ").length < 2 || !fold(senderWords).includes(claimed)) return false;
+  const sender = tenDigits(senderPeer);
+  if (!sender || !profilePhones(profile).includes(sender)) return false;
+  const tokens = claimed.split(" ");
+  return profileFullNames(profile).some(n => { const parts = n.split(" "); return parts.every(t => tokens.includes(t)) && tokens.every(t => parts.includes(t)); });
+}

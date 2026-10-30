@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Test pilot handoff and correct offline continuation after a human reply; verify push and spoken summary where evidence is available. No publication or native changes; physical-device receipt requires Marc's confirmation.
+
 - [x] Prepare Marc-only SMS handoff: event-driven foreground pause, background resume for other threads, permanent human-thread takeover/resume, persisted queue, atomic adapter claims, evidence-based summary, private push and voice controls. Draft schema only; no active data/migration/deployment/native edits. AVA and isolated SQL tests pass; mocked desktop/mobile panel verified, not a live Marc flow.
 - [ ] Verify live SMS handoff: handoff schema (planipret_ava_sms_handoff_state + pp_ava_sms_handoff RPC, service-only) installed 2026-10-30 and pp-ava-sms/pp-ava-sms-watch/pp-ns-sms/ms365-actions deployed together; live checks: RPC/table exist, service_role execute granted, anonymous 401, non-owner session 403 (owner-only controls). Awaiting real Marc flow: push, speech, app lifecycle, human reply, provider-observed takeover, plus portal publication for the handoff panel. Installed-app integration remains separately authorized. No delivery/real-device claim.
 

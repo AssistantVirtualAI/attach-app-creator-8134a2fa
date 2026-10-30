@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { displayStatus, type DisplayStatus } from "@/lib/planipret/avaConfirmationStatus";
 import { toast } from "sonner";
+import { AvaSmsPilotPanel } from "@/components/planipret/admin/AvaSmsPilotPanel";
 
 type Row = {
   id: string; user_id: string | null; broker_id: string | null; call_id: string | null;

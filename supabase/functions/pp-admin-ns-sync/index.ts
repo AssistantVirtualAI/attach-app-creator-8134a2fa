@@ -609,7 +609,6 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
     }
     r = { data: collected, warning: collected.length ? null : "messages_per_session_empty" };
   }
-  if (!r.data.length) return { fetched: 0, upserted: 0, warning: r.warning ?? "messages_endpoint_empty" };
 
 
   const { data: profiles } = await admin.from("planipret_profiles").select("id,extension,ns_extension").eq("organization_id", AVA_ORG_ID);

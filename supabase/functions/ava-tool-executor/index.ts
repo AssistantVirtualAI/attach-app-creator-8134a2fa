@@ -33,6 +33,7 @@ import {
 } from "../_shared/commission-reports.ts";
 import { addWallMinutes, graphWallTime } from "./calendarWallTime.ts";
 import { ms365ActionResult } from "./ms365ActionResult.ts";
+import { normalizeAvaEmailPayload } from "./emailPayload.ts";
 
 
 const DOMAIN = "planipret.ca";
@@ -1158,7 +1159,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async send_email(ctx, p) {
-    const payload = { ...p };
+    const payload = normalizeAvaEmailPayload(p ?? {});
     if (!payload.to && !payload.to_email && payload.contact_name) {
       const hit = await resolveContact(ctx, payload.contact_name, "email");
       if (!hit) return { success: false, error: "contact_not_found", message: `Aucun courriel trouvé pour ${payload.contact_name}` };

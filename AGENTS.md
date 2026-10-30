@@ -1,5 +1,7 @@
 # Project Architecture Rules
 
+- AVA email dispatch normalizes the shared registry's to_email into Microsoft 365's to field in the server executor, preserving explicit recipients, confirmation and idempotency so voice and chat use the same send contract.
+
 - AVA financial questions take precedence over directory/history context, execute shared commission tools and render validated figures deterministically; unknown actions never fall back to client lists.
 - Commission screens refresh on server update broadcasts or explicit refresh only; returning to a visible tab consumes a pending update without timed polling or unconditional refetches, preserving selected brokers.
 

@@ -869,11 +869,11 @@ Deno.serve(async (req) => {
 
     const bg = (async () => {
       try {
+        // Textos d'abord : légers et attendus en premier (AVA, portail); les
+        // enregistrements lourds peuvent dépasser le budget CPU sans les bloquer.
+        const messages = await syncMessages(admin, domain, start, end, brokerUsers);
         const calls = await syncCalls(admin, domain, brokerUsers, start, end);
-        const [recordings, messages] = await Promise.all([
-          syncRecordings(admin, domain, brokerUsers, start, end),
-          syncMessages(admin, domain, start, end, brokerUsers),
-        ]);
+        const recordings = await syncRecordings(admin, domain, brokerUsers, start, end);
         const summary = { domain, users: brokerUsers.length, raw_users: usersRes.data.length, profiles: profileSync, calls, recordings, messages, start, end };
         console.log("[pp-admin-ns-sync] completed", JSON.stringify(summary));
         if (runId) await admin.from("planipret_edge_function_runs").update({ status: "success", finished_at: new Date().toISOString(), summary }).eq("id", runId);

@@ -1201,6 +1201,12 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async summarize_inbox(ctx, p) {
+    if (p?.send_by_email === true) {
+      const d = await msAction(ctx, "email_digest", {});
+      return d?.sent
+        ? { success: true, sent: true, message: `Résumé envoyé à ${d.to} : ${d.total} courriels reçus aujourd'hui, ${d.priority} à traiter.` }
+        : { success: false, sent: false, error: d?.error ?? "Résumé non envoyé" };
+    }
     const limit = Math.min(Number(p?.limit ?? 10), 25);
     const j = await msAction(ctx, "read_emails", { folder: p?.folder ?? "inbox", top: limit });
     const emails = (j?.emails ?? j?.value ?? []).map((e: any) => ({

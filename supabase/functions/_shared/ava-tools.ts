@@ -334,7 +334,8 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       tone: { type: "string", description: "ex: professionnel, chaleureux, direct" },
       language: { type: "string", description: "fr-CA (défaut) ou en" },
     }, ["message_id"]),
-    mk("summarize_inbox", "Résume la boîte de réception avec priorités et actions requises.", {
+    mk("summarize_inbox", "Résume la boîte de réception avec priorités et actions requises. Si le courtier veut recevoir son résumé par courriel, passe send_by_email=true : AVA envoie le résumé complet du jour (template Planiprêt) à SA propre adresse seulement.", {
+      send_by_email: { type: "boolean", description: "true = envoyer le résumé complet du jour par courriel au courtier lui-même" },
       limit: { type: "number", description: "Nombre de courriels à analyser (défaut 10)" },
       folder: { type: "string", description: "inbox, unread (défaut: inbox)" },
     }),

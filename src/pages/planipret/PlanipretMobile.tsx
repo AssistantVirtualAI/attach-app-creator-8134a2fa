@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
 import AiConsentHost from "@/components/planipret/mobile/AiConsentHost";
+import AvaSmsHandoff from "@/components/planipret/portal/AvaSmsHandoff";
 import { createRefreshRegistry } from "@/lib/planipret/refreshRegistry";
 import { useNavigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1266,6 +1267,7 @@ export default function PlanipretMobile() {
         </header>
 
         <UniversalSearchBar />
+        <AvaSmsHandoff userId={profile?.user_id} callState={softphone.snap.callState}/>
         <div ref={scrollRef} className="pp-mobile-scroll flex-1 overflow-y-auto pb-[130px]">
           <PullIndicator pullDist={pullDist} refreshing={refreshing} threshold={threshold} color={ACCENT} />
           <PlanipretErrorBoundary key={`${location.pathname}:${lang}`}>

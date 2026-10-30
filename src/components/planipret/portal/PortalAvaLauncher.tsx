@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import MAvaChat from "@/pages/planipret/mobile/MAvaChat";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
+import AvaSmsHandoff from "./AvaSmsHandoff";
 
 /** Shows the app's AVA (chat + voice, same Maestro tools) in the web portals,
  *  only for profiles with portal_ava_enabled. Uses the signed-in user's own identity. */
@@ -36,10 +37,11 @@ export default function PortalAvaLauncher({ authUserId, softphone }: { authUserI
     return () => { cancelled = true; };
   }, [authUserId]);
 
-  if (!allowed) return null;
+  if (!allowed) return <AvaSmsHandoff userId={authUserId} callState={softphone?.snap?.callState}/>;
 
   return (
     <>
+      <AvaSmsHandoff userId={authUserId} callState={softphone?.snap?.callState}/>
       {!open && (
         <button
           onClick={() => setOpen(true)}

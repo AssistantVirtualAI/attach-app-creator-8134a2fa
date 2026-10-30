@@ -1,7 +1,11 @@
 # Roadmap
 
+- [ ] Deploy prepared recurring Maestro–Outlook task fix and refresh the shared voice tool schema; verify live configuration, then guide a broker-confirmed Monday voice test (real creation requires the user's spoken confirmation).
+- [ ] Fix claimed Project monitoring finding 476e99ca-4ef8-531c-aa79-fdf80e7a6f33: standalone mobile switch dependency and resolution verification; no native release, website publication or telecom changes.
+- [ ] Deliver Manus mobile release handoff: resolved M identity, dependency fix, separate-repository build instructions and fresh sign-in/incoming/audio device gates; no build or store upload.
+
 - [x] Prepare shared AVA recurring Maestro task + direct recurring Outlook link: explicit weekday schema, Toronto recurrence, downstream confirmation, deterministic event transaction identity and terminal partial outcomes. All 128 focused AVA/task/calendar tests pass; preview build OK. No deployment/publication/native changes or real task/event creation.
-- [ ] Activate and verify recurring AVA task + Outlook link: needs coordinated function deployment and shared ElevenLabs tool refresh authorization, then a broker-confirmed real task with exact content/time; no live calendar or all-broker account verification claimed.
+- [ ] Activate and verify recurring AVA task + Outlook link: deployment and shared ElevenLabs tool refresh authorized in this request; a broker-confirmed real task with exact content/time still requires the user's voice interaction; no live calendar or all-broker account verification claimed.
 
 - [x] Prepare all-broker iPhone line labels using validated resolved M identity rather than stale profile extension; preserve existing Maestro resolver/native registration, no deployment/publication/telecom changes.
 - [ ] Verify Scott's installed iPhone registers and answers on 110M after fresh sign-in; physical device/version and next approved app release for updated labels required.

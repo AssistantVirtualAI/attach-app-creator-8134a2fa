@@ -32,7 +32,9 @@ export async function runAvaSmsWatch(admin: any) {
   if(avaError)throw new Error("handoff_history_unavailable");
   const avaBodies=new Set<string>((avaJobs??[]).map((j:any)=>String(j.reply??"").trim()));
   const rows: any[] = [];
-  for (const s of sessions.filter((x) => sessionNeedsRead(x, config.activated_at)).slice(0, 5)) {
+  // Read recently updated sessions even when Marc had the last word: human
+  // messages must establish takeover before a later inbound can be answered.
+  for (const s of sessions.filter((x) => sessionNeedsRead({...x,"messagesession-last-sender":""}, config.activated_at)).slice(0, 5)) {
     const msgs = await nsGet(marcSessionMessagesPath(String(s["messagesession-id"])));
     for (const m of msgs) {
       const human=providerHumanOutbound(m,avaBodies,config.activated_at);

@@ -1,6 +1,6 @@
 # Project Architecture Rules
 
-- AVA inbound SMS automation is isolated in pp-ava-sms with persisted event/job claims and a Marc-only pilot policy; external DID matches never grant private tools, and SMS/calendar adapters authorize exact persisted job payloads without weakening interactive AVA confirmations. Inbound texts reach it via the Marc-only pp-ava-sms-watch provider read (NetSapiens posts no message webhooks) plus the portal watch_now trigger; the server appends AVA's signature to every persisted reply so the AI can never sign as the broker.
+- AVA SMS stays in pp-ava-sms, Marc-only, with persisted claims, exact-job SMS/calendar authorization and server signatures; external DID matches never grant private tools or weaken interactive confirmations. Existing pp-ava-sms-watch and watch_now ingest provider history. Handoff uses service-only persisted sessions/peer takeover, fail-closed dispatch guards and job-versioned summary/push/greeting claims, preventing cross-owner or duplicate relays; install drafted schema before coordinated deployment. Mobile web changes never update installed binaries.
 
 - AVA email maps to_email to Microsoft to, preserving recipients, confirmation and idempotency.
 

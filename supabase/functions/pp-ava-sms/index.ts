@@ -49,9 +49,12 @@ async function dispatch(admin:any,job:any) {
  try {
   const result=await invoke("pp-ns-sms",{...common,action:"send",to:job.peer,message:job.reply,origin:"ava_sms_pilot",ava_generated:true,idempotency_key:`ava-sms:${job.id}`});
   await admin.from("planipret_ava_sms_jobs").update({status:"accepted",result:{message_id:result.message_id},updated_at:new Date().toISOString()}).eq("id",job.id);
-  await handoffCommand(admin,"save_summary",{peer:job.peer,job_id:job.id,summary:job.proposal?.handoff_summary??handoffSummary([],job.reply)});
+  // Summary/notification failures must never relabel an already accepted SMS as uncertain.
+  try {
+  await handoffCommand(admin,"save_summary",{peer:job.peer,job_id:job.id,summary:job.proposal?.handoff_summary?`${job.proposal.handoff_summary}\nRéponse finale : ${job.reply}`:handoffSummary([],job.reply)});
   const notification=await handoffCommand(admin,"notify_claim",{peer:job.peer,job_id:job.id});
   if(notification.claimed)await invoke("pp-push-notify",{user_id:MARC_SMS_USER_ID,title:"AVA — relais prêt",body:"Un échange est prêt à être repris. Ouvrez l’application pour consulter le résumé.",category:"sms",deep_link:"/mplanipret/messages",data:{url:"/mplanipret/messages"},idempotency_key:`ava-sms-handoff:${job.id}`}).catch(()=>null);
+  }catch{await admin.from("planipret_ava_sms_jobs").update({error_code:"handoff_summary_unavailable"}).eq("id",job.id);}
   return {success:true,status:"accepted"};
  } catch(error) {
   await admin.from("planipret_ava_sms_jobs").update({status:"needs_review",error_code:"send_unconfirmed"}).eq("id",job.id);

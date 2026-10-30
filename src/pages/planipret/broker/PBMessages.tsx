@@ -105,6 +105,17 @@ export default function PBMessages() {
   const active = pageThreads.find((t) => t.key === activeKey) ?? pageThreads[0] ?? null;
 
   useEffect(() => {
+    const to=params.get("to");if(!to||loading)return;
+    const digits=to.replace(/\D/g,"").replace(/^1(?=\d{10}$)/,"");
+    const index=threads.findIndex(thread=>thread.messages.some(row=>String(msgPeer(row)??"").replace(/\D/g,"").replace(/^1(?=\d{10}$)/,"")===digits));
+    if(index<0){setComposeTarget({number:to});return;}
+    const thread=threads[index];if(!thread)return;
+    setActiveKey(thread.key);
+    const targetPage=Math.floor(index/THREADS_PER_PAGE)+1;
+    if(page!==targetPage){const next=new URLSearchParams(params);next.set("page",String(targetPage));setParams(next,{replace:true});}
+  },[params,threads,loading,page,setParams]);
+
+  useEffect(() => {
     if (!active || active.unread === 0) return;
     const ids = active.messages.filter((m) => m.direction === "inbound" && !m.read_at).map((m) => m.id);
     if (!ids.length) return;

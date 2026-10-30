@@ -9,6 +9,7 @@ type Summary = {peer:string;job_id:string;summary:string;read:boolean;greeted:bo
 export default function AvaSmsHandoff({userId,callState}:{userId?:string|null;callState?:string}) {
  const [state,setState]=useState<{online?:boolean;taking_over?:boolean;summaries?:Record<string,Summary>;taken_over?:Record<string,boolean>}>({});
  const [error,setError]=useState<string|null>(null),[playing,setPlaying]=useState(false);
+ const session=useRef(crypto.randomUUID());
  const audio=useRef<HTMLAudioElement|null>(null),call=useRef(callState),visible=useRef(true),epoch=useRef(0);
  const navigate=useNavigate();call.current=callState;
  const request=useCallback(async(body:Record<string,unknown>)=>{
@@ -32,14 +33,14 @@ export default function AvaSmsHandoff({userId,callState}:{userId?:string|null;ca
  },[request]);
  useEffect(()=>{
   if(userId!==PILOT_OWNER)return;
-  const session=crypto.randomUUID();let disposed=false;
+  let disposed=false;
   const update=createHandoffLifecycle(async active=>{
    try{
-    const result=await request({action:"presence",session_id:session,active});
+   const result=await request({action:"presence",session_id:session.current,active});
     if(disposed||!active)return;
     setState(result);setError(null);
     const next=Object.values(result.summaries??{}).find((row:any)=>!row.greeted) as Summary|undefined;
-    if(next&&localStorage.getItem("ava_tts_on")==="true")void speak(next,true);
+   if(next&&!result.taking_over&&localStorage.getItem("ava_tts_on")==="true")void speak(next,true);
    }catch(e){if(!disposed)setError(e instanceof Error?e.message:"Relais indisponible.");}
   });
   const visibility=()=>{visible.current=document.visibilityState==="visible";if(!visible.current)stop();void update(visible.current);};
@@ -53,7 +54,7 @@ export default function AvaSmsHandoff({userId,callState}:{userId?:string|null;ca
  const summaries=Object.values(state.summaries??{}).filter(item=>!item.read||state.taken_over?.[item.peer]);
  return <aside aria-label="Relais SMS AVA" className="border-y border-border bg-background p-3 text-foreground">
   <div className="flex flex-wrap items-center gap-2"><strong className="text-sm">AVA — {state.taking_over?"Reprise en cours":state.online?"Tu as la main · réponses suspendues":"Relais SMS"}</strong>
-   <Button variant="ghost" size="icon" title="Actualiser le relais" onClick={()=>void request({action:"handoff_status"}).then(setState).catch(e=>setError(e.message))}><RefreshCw className="h-4 w-4"/></Button>
+   <Button variant="ghost" size="icon" title="Actualiser le relais" onClick={()=>void request({action:"presence",session_id:session.current,active:document.visibilityState==="visible"}).then(result=>{setState(result);setError(null);}).catch(e=>setError(e.message))}><RefreshCw className="h-4 w-4"/></Button>
   </div>
   {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
   {summaries.map(item=><article key={item.peer} className="mt-3 border-t border-border pt-3">

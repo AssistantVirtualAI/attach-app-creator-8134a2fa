@@ -4,6 +4,7 @@ import { generateText, Output } from "npm:ai@6";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { eligibleInbound, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, safeThread, smsPeer } from "../_shared/ava-sms-policy.ts";
+import { buildAvaPrompt } from "../_shared/ava-prompt.ts";
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});
 const requestSchema=z.object({action:z.enum(["status","configure","process","approve","decline"]),message_id:z.string().uuid().optional(),job_id:z.string().uuid().optional(),enabled:z.boolean().optional(),reply:z.string().trim().min(1).max(1200).optional()});
 const outputSchema=z.object({kind:z.enum(["reply","sensitive","appointment"]),reply:z.string().trim().min(1).max(1200),start:z.string().optional(),end:z.string().optional()});
@@ -14,7 +15,7 @@ async function invoke(name:string,body:any) {
  return data;
 }
 async function notify(job:any) {
- await invoke("pp-push-notify",{user_id:MARC_SMS_USER_ID,title:"AVA — demande texto à vérifier",body:"Une demande nécessite votre décision. Ouvrez AVA pour la consulter.",category:"sms",data:{url:"/planipret/admin/ava-confirmations"},idempotency_key:`ava-sms-review:${job.id}`});
+ await invoke("pp-push-notify",{user_id:MARC_SMS_USER_ID,title:"AVA — demande texto à vérifier",body:"Une demande nécessite votre décision. Ouvrez AVA pour la consulter.",category:"sms",deep_link:"/planipret/broker/messages",data:{url:"/planipret/broker/messages"},idempotency_key:`ava-sms-review:${job.id}`});
 }
 async function dispatch(admin:any,job:any) {
  const common={_user_id:MARC_SMS_USER_ID,ava_sms_job_id:job.id};
@@ -71,6 +72,7 @@ Deno.serve(async req=>{
    if(error)throw error;return json({success:true,enabled:body.enabled});
   }
   if(!config?.enabled)return json({success:true,skipped:"pilot_disabled"});
+  if(!consent||profile.ava_chat_enabled===false)return json({error:"ai_consent_required"},403);
   if(body.action==="approve"||body.action==="decline") {
    if(!body.job_id)return json({error:"job_id_required"},400);
    const {data:job}=await admin.from("planipret_ava_sms_jobs").select("*").eq("id",body.job_id).eq("user_id",MARC_SMS_USER_ID).eq("status","needs_review").is("reply_claimed_at",null).is("calendar_claimed_at",null).maybeSingle();

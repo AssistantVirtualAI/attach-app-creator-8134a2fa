@@ -61,3 +61,4 @@
 - AVA voice prompt and greeting live only in supabase/functions/_shared/ava-prompt.ts, used by both ava-agent-config and ava-agent-config-preview, so the admin preview always matches real sessions.
 - SMS imports share verified-line mapping and idempotent storage; reports use sent_at, not ingestion time.
 - Daily reports reuse scoped tasks and mirrored settings; incomplete tasks stay unavailable, send reservation differs from acceptance.
+- Mobile SIP identity: the broker's own Maestro token (/user -> /users/{id}/sips) decides the extension in ns-resolve-sip-credentials; only an unambiguous single base extension overrides the profile, and lookup failures keep the profile extension.

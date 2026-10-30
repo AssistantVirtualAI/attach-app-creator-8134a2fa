@@ -2099,6 +2099,10 @@ function VoicemailsTab({
     if (!userId) return;
     setLoading(true);
     const sb: any = supabase;
+    // Mirror the broker's own phone-system inbox/saved folders first; the
+    // server scopes to the JWT extension. Failures fall back to the cache.
+    await Promise.all((["inbox", "saved"] as const).map((f) =>
+      supabase.functions.invoke("pp-ns-voicemail", { body: { action: "list", folder: f } }).catch(() => null)));
     const { data } = await sb
       .from("planipret_voicemails")
       .select("*")

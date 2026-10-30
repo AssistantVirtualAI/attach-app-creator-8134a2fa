@@ -165,3 +165,4 @@
 - [x] Codemagic artifacts-only CI/CD: codemagic.yaml (3 workflows), release-gates.mjs, pp-mobile-build (preview/start/status, allowlist serveur, anti-double-build, 3/h), page admin « Build mobile ». Aucun upload store.
 - [ ] À faire par le propriétaire : créer l'app Codemagic, y déposer les identités de signature (groupes app_store_connect, planipret_ios_signing, planipret_android_signing), puis entrer CODEMAGIC_API_TOKEN + CODEMAGIC_APP_ID via le formulaire sécurisé.
 - [ ] Déployer pp-mobile-build + mobile-register-push sur demande.
+- [ ] AVA answers the owner's texts from 514-216-3359 (pilot line)

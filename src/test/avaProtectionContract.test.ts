@@ -11,7 +11,7 @@ const names = tools.map(nameOf).filter(Boolean);
 const voiceSrc = readFileSync("src/components/planipret/mobile/AvaVoiceAgent.tsx", "utf8");
 
 describe("AVA protection contract", () => {
-  it("keeps all 108 registered tool names, without duplicates", () => {
+  it("keeps every registered tool names, without duplicates", () => {
     expect(EXPECTED_TOOL_NAMES.length).toBe(new Set(EXPECTED_TOOL_NAMES).size);
     for (const n of ["send_email", "send_sms", "make_call", "list_tasks", "complete_task", "get_commission_summary", "list_my_clients", "get_voicemails"]) {
       expect(EXPECTED_TOOL_NAMES).toContain(n);

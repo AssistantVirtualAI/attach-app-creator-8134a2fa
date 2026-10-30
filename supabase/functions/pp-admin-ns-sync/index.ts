@@ -625,6 +625,22 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
     const { error } = await admin.from("planipret_phone_messages").upsert(chunk, { onConflict: "ns_message_id" });
     if (!error) upserted += chunk.length;
   }
+  // Essai AVA texto (Marc seulement) : les SMS entrants arrivent par cette synchro,
+  // pas par webhook. pp-ava-sms revérifie l'éligibilité et réclame chaque message une seule fois.
+  try {
+    const { data: pilot } = await admin.from("planipret_ava_sms_pilot").select("enabled, activated_at, profile_id").eq("enabled", true).maybeSingle();
+    if (pilot?.profile_id && pilot.activated_at) {
+      const { data: fresh } = await admin.from("planipret_phone_messages").select("id")
+        .eq("user_id", pilot.profile_id).eq("direction", "inbound").gte("created_at", pilot.activated_at)
+        .is("metadata->ava_sms_job", null).order("created_at", { ascending: true }).limit(5);
+      for (const m of fresh ?? []) {
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-ava-sms`, {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ action: "process", message_id: m.id }),
+        }).catch((e) => console.warn("[pp-admin-ns-sync] AVA SMS pilot", String(e)));
+      }
+    }
+  } catch (e) { console.warn("[pp-admin-ns-sync] AVA SMS pilot check failed", String(e)); }
   return { fetched: rows.length, upserted, warning: null };
 }
 

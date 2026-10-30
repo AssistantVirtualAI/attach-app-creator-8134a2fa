@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { displayStatus, type DisplayStatus } from "@/lib/planipret/avaConfirmationStatus";
+import { toast } from "sonner";
 
 type Row = {
   id: string; user_id: string | null; broker_id: string | null; call_id: string | null;
@@ -26,7 +28,9 @@ const ACTION_LABEL_FR: Record<string, string> = {
   send_sms: "Texto", sms: "Texto", send_email: "Courriel", email: "Courriel",
   create_task: "Tâche", update_task: "Tâche", task: "Tâche",
   save_call: "Sauvegarde Maestro", maestro_save: "Sauvegarde Maestro",
-  call_consent: "Sauvegarde Maestro", add_note: "Note Maestro", place_call: "Appel",
+  call_consent: "Sauvegarde Maestro", add_note: "Note Maestro", place_call: "Appel", make_call: "Appel",
+  submit_feedback: "Feedback", create_appointment: "Rendez-vous", update_client: "Client", create_client: "Client",
+  complete_task: "Tâche terminée", delete_task: "Tâche supprimée", "ms365:send_email": "Courriel",
 };
 
 const tone = (r: Row): "default" | "secondary" | "destructive" | "outline" => {
@@ -36,6 +40,23 @@ const tone = (r: Row): "default" | "secondary" | "destructive" | "outline" => {
   if (PENDING.has(s) || !r.decision) return "outline";
   return "secondary";
 };
+
+const STATUS_STYLE: Record<DisplayStatus, string> = {
+  executed: "bg-primary/15 text-primary border-primary/30",
+  failed: "bg-destructive/15 text-destructive border-destructive/30",
+  pending: "bg-accent text-accent-foreground border-border",
+  expired: "bg-muted text-muted-foreground border-border",
+  duplicate_blocked: "bg-secondary text-secondary-foreground border-border",
+  fixed_since: "bg-muted text-muted-foreground border-border line-through decoration-1",
+  cancelled: "bg-muted text-muted-foreground border-border",
+  other: "bg-muted text-muted-foreground border-border",
+};
+const STATUS_LABEL: Record<DisplayStatus, [string, string]> = {
+  executed: ["Exécutée", "Executed"], failed: ["Échec", "Failed"], pending: ["En attente", "Pending"],
+  expired: ["Expirée", "Expired"], duplicate_blocked: ["Doublon bloqué", "Duplicate blocked"],
+  fixed_since: ["Échec — corrigé depuis", "Failed — fixed since"], cancelled: ["Annulée", "Cancelled"], other: ["Autre", "Other"],
+};
+const short = (v?: string | null) => (!v ? "—" : v.length > 14 ? `${v.slice(0, 6)}…${v.slice(-6)}` : v);
 
 const dt = (v?: string | null) =>
   v ? new Date(v).toLocaleString("fr-CA", { timeZone: "America/Toronto", dateStyle: "short", timeStyle: "short" }) : "—";
@@ -149,10 +170,17 @@ export default function PAAvaConfirmations() {
       .sort((a, b) => b.calls - a.calls);
   }, [filtered]);
 
-  const pending = useMemo(
-    () => filtered.filter((r) => !r.executed_at && (PENDING.has((r.status ?? "").toLowerCase()) || !r.decision)),
-    [filtered],
-  );
+  const pending = useMemo(() => filtered.filter((r) => displayStatus(r) === "pending"), [filtered]);
+  const summary = useMemo(() => {
+    const c: Record<DisplayStatus, number> = { executed: 0, failed: 0, pending: 0, expired: 0, duplicate_blocked: 0, fixed_since: 0, cancelled: 0, other: 0 };
+    for (const r of filtered) c[displayStatus(r)]++;
+    return c;
+  }, [filtered]);
+  const Pill = ({ r }: { r: Row }) => { const d = displayStatus(r); return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${STATUS_STYLE[d]}`}>{L(...STATUS_LABEL[d])}</span>); };
+  const Mono = ({ v }: { v?: string | null }) => v ? (
+    <button type="button" title={v} onClick={() => { void navigator.clipboard?.writeText(v); toast.success(L("Copié", "Copied")); }}
+      className="font-mono text-xs text-muted-foreground hover:text-foreground">{short(v)}</button>) : <span>—</span>;
 
   if (allowed === null) return <PAPage><div className="py-16 text-center text-sm text-muted-foreground">…</div></PAPage>;
   if (!allowed) {
@@ -214,17 +242,19 @@ export default function PAAvaConfirmations() {
         </Button>
       </div>
 
-      <Card className="mb-4">
-        <CardContent className="py-3 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium mr-1">{L("Appels par statut", "Calls by status")}</span>
-          {statusCounts.length === 0 && (
-            <span className="text-sm text-muted-foreground">{L("Aucune donnée pour cette sélection.", "No data for this selection.")}</span>
-          )}
-          {statusCounts.map((s) => (
-            <Badge key={s.status} variant="outline">{s.status} · {s.calls}</Badge>
-          ))}
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+        {([["pending", L("En attente", "Pending")], ["executed", L("Exécutées", "Executed")], ["failed", L("Échecs", "Failed")],
+          ["duplicate_blocked", L("Doublons bloqués", "Duplicates blocked")], ["expired", L("Expirées", "Expired")]] as [DisplayStatus, string][]).map(([k, label]) => (
+          <Card key={k}><CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className={`text-2xl font-semibold mt-1 ${k === "failed" && summary.failed ? "text-destructive" : ""}`}>{summary[k]}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2 mb-4 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{L("Appels par statut", "Calls by status")}</span>
+        {statusCounts.map((st) => <Badge key={st.status} variant="outline">{st.status} · {st.calls}</Badge>)}
+      </div>
 
       {error && <Card className="mb-4 border-destructive/40"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
 
@@ -234,9 +264,9 @@ export default function PAAvaConfirmations() {
             <div className="text-sm font-medium">{L("En attente de confirmation", "Awaiting confirmation")}</div>
             <Badge variant="outline">{pending.length}</Badge>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[560px]">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
+              <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
                 <tr>
                   {[L("Courtier", "Broker"), L("Action", "Action"), L("Destinataire", "Recipient"),
                     L("Appel", "Call"), L("Proposée", "Proposed"), L("Statut", "Status"), "idempotency_key",
@@ -245,14 +275,14 @@ export default function PAAvaConfirmations() {
               </thead>
               <tbody>
                 {pending.map((r) => (
-                  <tr key={r.id} className="border-t">
+                  <tr key={r.id} className="border-t hover:bg-muted/30">
                     <td className="px-3 py-2 whitespace-nowrap">{brokerOf(r)}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{actionLabel(r.action)}</td>
                     <td className="px-3 py-2">{r.destination ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{r.call_id ?? r.session_id ?? "—"}</td>
+                    <td className="px-3 py-2"><Mono v={r.call_id ?? r.session_id} /></td>
                     <td className="px-3 py-2 whitespace-nowrap">{dt(r.proposed_at ?? r.created_at)}</td>
-                    <td className="px-3 py-2"><Badge variant={tone(r)}>{r.status ?? L("en attente", "pending")}</Badge></td>
-                    <td className="px-3 py-2 font-mono text-xs break-all max-w-[260px]">{r.idempotency_key ?? "—"}</td>
+                    <td className="px-3 py-2"><Pill r={r} /></td>
+                    <td className="px-3 py-2"><Mono v={r.idempotency_key} /></td>
                   </tr>
                 ))}
                 {!pending.length && (
@@ -272,9 +302,9 @@ export default function PAAvaConfirmations() {
             <div className="text-sm font-medium">{L("Feuille d'audit complète", "Full audit sheet")}</div>
             <Badge variant="outline">{filtered.length}</Badge>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[560px]">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
+              <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
                 <tr>
                   {[L("Courtier", "Broker"), "call_id", L("Action", "Action"), L("Surface", "Surface"),
                     L("Destination", "Destination"), L("Proposée", "Proposed"), L("Décision", "Decision"),
@@ -285,9 +315,9 @@ export default function PAAvaConfirmations() {
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.id} className="border-t">
+                  <tr key={r.id} className="border-t hover:bg-muted/30">
                     <td className="px-3 py-2 whitespace-nowrap">{brokerOf(r)}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{r.call_id ?? r.session_id ?? "—"}</td>
+                    <td className="px-3 py-2"><Mono v={r.call_id ?? r.session_id} /></td>
                     <td className="px-3 py-2 whitespace-nowrap">{actionLabel(r.action)}</td>
                     <td className="px-3 py-2">{r.surface ?? "—"}</td>
                     <td className="px-3 py-2">{r.destination ?? "—"}{r.provider ? ` · ${r.provider}` : ""}</td>
@@ -295,9 +325,9 @@ export default function PAAvaConfirmations() {
                     <td className="px-3 py-2">{r.decision ?? "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{dt(r.decided_at)}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{dt(r.executed_at)}</td>
-                    <td className="px-3 py-2"><Badge variant={tone(r)}>{r.status ?? "—"}</Badge></td>
+                    <td className="px-3 py-2"><Pill r={r} /></td>
                     <td className="px-3 py-2 text-destructive text-xs">{r.error_code ?? ""}</td>
-                    <td className="px-3 py-2 font-mono text-xs break-all max-w-[240px]">{r.idempotency_key ?? "—"}</td>
+                    <td className="px-3 py-2"><Mono v={r.idempotency_key} /></td>
                   </tr>
                 ))}
                 {!filtered.length && !loading && (

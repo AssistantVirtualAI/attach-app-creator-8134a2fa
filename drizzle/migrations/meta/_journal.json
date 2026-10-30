@@ -232,6 +232,13 @@
       "when": 1793335464188,
       "tag": "0032_ava_sms_calendar_serialization",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793343519789,
+      "tag": "0033_ava_sms_handoff_state",
+      "breakpoints": true
     }
   ]
 }

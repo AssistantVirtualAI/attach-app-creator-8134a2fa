@@ -352,7 +352,7 @@ Deno.serve(async (req) => {
         extension: ext,
         success: ok,
         db_error: uErr?.message,
-        ns_user: nsUser, mobile, widget, removed_legacy,
+        ns_user: nsUser, mobile, widget, widget_x: widgetX, removed_legacy,
          sip_credentials: { mobile_device_id: mobileId, widget_device_id: widgetId },
       };
     };

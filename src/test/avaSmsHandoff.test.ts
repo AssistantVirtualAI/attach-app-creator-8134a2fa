@@ -24,6 +24,12 @@ describe("SMS handoff rules",()=>{
   expect(providerHumanOutbound(row,new Set(),"2026-10-30T00:00:00Z")?.peer).toBe("+15145550101");
   expect(providerHumanOutbound(row,new Set(["Bonjour"]),"2026-10-30T00:00:00Z")).toBeNull();
   expect(providerHumanOutbound({...row,"from-user-id":"1117@planipret.ca"},new Set(),"2026-10-30T00:00:00Z")).toBeNull();
+  expect(providerHumanOutbound(row,new Set(),"2026-10-30T00:00:00Z",new Set(["provider-id"]))).toBeNull();
+  expect(providerHumanOutbound({...row,direction:"unknown"},new Set(),"2026-10-30T00:00:00Z")).toBeNull();
+ });
+ it("allows an explicit lifecycle retry after a failed event",async()=>{
+  let attempts=0;const event=createHandoffLifecycle(async()=>{attempts++;if(attempts===1)throw new Error("offline");});
+  await expect(event(false)).rejects.toThrow("offline");await event(false);expect(attempts).toBe(2);
  });
  it("summary includes actual conversation evidence without inventing identity",()=>{
   const result=handoffSummary([{role:"user",text:"Un rendez-vous jeudi"}],"Je vérifie le créneau.");

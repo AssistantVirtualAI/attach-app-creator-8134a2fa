@@ -3,6 +3,7 @@
 // Contient: appels manqués, notifications AVA non lues, RDV de demain.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { dailyReportDue } from "../_shared/daily-report-schedule.ts";
 
 const DEFAULT_TZ = "America/Toronto";
 const j = (b: unknown, s = 200) =>
@@ -70,9 +71,7 @@ Deno.serve(async (req) => {
       const meta = (p.metadata as any) ?? {};
       const tz = meta.timezone || DEFAULT_TZ;
       const { date, hour, minute } = localParts(tz);
-      const [h, m] = String(meta.email_digest_time ?? "17:00").split(":").map(Number);
-      const mins = hour * 60 + minute, target = (h || 17) * 60 + (m || 0);
-      if (mins < target || mins >= target + 30 || meta.last_email_digest_date === date || meta.email_digest_attempt_date === date) continue;
+      if (!dailyReportDue(meta, date, hour * 60 + minute)) continue;
       if (due.length >= 60) break;
       // Atomic reservation, separate from success; an uncertain send is never retried.
       const attemptMeta = { ...meta, email_digest_attempt_date: date, email_digest_status: "running" };

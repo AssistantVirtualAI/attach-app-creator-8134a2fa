@@ -1,5 +1,9 @@
 # Roadmap
 
+- [ ] Fix all-broker SMS persistence and report event-time counts; verify stored inbound messages without sending tests.
+- [ ] Include tomorrow's broker-owned tasks in daily reports and expose report settings in mirrored mobile web screens.
+- [ ] Verify automatic daily-report dispatch from persisted evidence; no waiting or new schedule.
+
 - [x] Publication requested for https://avastatistic.ca; current security scan: 3 warnings, no critical findings. All 61 AVA protection tests pass; authenticated live agent read confirms 93/93 expected tools attached (96 including built-ins), Jessica unchanged; authenticated confirmations page renders. Live sensitive tool execution and installed-phone receipt remain unverified.
 - [x] Implement and activate Marc-only 1136 AVA SMS pilot: verified account/profile/domain, inbound event claims, thread-isolated history, ordinary automatic replies, explicit-date booking with serialized calendar/readback, sensitive review UI and existing iOS notifications. No caller DID grants private tools; interactive confirmations unchanged. Four functions deployed; signed-in control active, anonymous 401/user process 403; 84 AVA/SMS tests pass.
 - [ ] Verify Marc pilot with a genuinely new inbound SMS, scheduling, sensitive approval and iOS receipt: waiting for an actual incoming message on Marc’s line and Marc’s phone confirmation. No retroactive sends or fabricated provider events. Uncertain SMS/calendar attempts remain blocked for manual provider reconciliation, never automatic retry.

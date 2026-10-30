@@ -24,6 +24,7 @@ import { mergeDeliveryEvidence } from "./delivery-evidence.ts";
 import { approvedSmsTest } from "./approved-sms-test.ts";
 import { internalThreadPair, internalThreadOrFilter } from "../_shared/pp-internal-thread.ts";
 import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
+import { persistNsMessages } from "../_shared/ns-message-storage.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -483,6 +484,10 @@ Deno.serve(async (req) => {
         } else {
           const raw = await res.json().catch(() => null);
           messages = Array.isArray(raw) ? raw : (raw?.messages ?? raw?.data ?? []);
+          await persistNsMessages(supabase, messages, {
+            profileId: ctx.profileId ?? ctx.userId, extension: ctx.extension,
+            domain: ctx.nsDomain, organizationId: ctx.organizationId,
+          }, threadId);
         }
       }
 

@@ -5,6 +5,7 @@ import { callAnthropic } from "../_shared/anthropic.ts";
 import { buildIdempotencyKey, claimAction, finishAction, isConfirmed, isSensitiveMs365Action } from "../_shared/ava-confirm.ts";
 import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
 import { hasCalendarConflict } from "../_shared/ava-sms-policy.ts";
+import { buildDigestHtml, localDayStartIso } from "../_shared/email-digest.ts";
 
 
 
@@ -559,6 +560,35 @@ Deno.serve(async (req) => {
         const r = await graph(admin, profile, scope, { method: "POST", body: JSON.stringify({ body: { contentType: payload.contentType ?? "text", content } }) });
         const d = await r.json().catch(() => ({}));
         return j({ success: r.ok, message_id: d.id, error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
+      }
+      case "email_digest": {
+        // Envoyé uniquement à l'adresse du courtier lui-même ; liste complète paginée.
+        const self = profile.ms365_email;
+        if (!self) return j({ success: false, error: "Adresse Microsoft 365 inconnue" }, 400);
+        const tz = APP_TZ;
+        const startIso = localDayStartIso(tz);
+        const mails: any[] = [];
+        let next: string | null = `/me/mailFolders/inbox/messages?$top=100&$orderby=receivedDateTime%20desc&$filter=receivedDateTime%20ge%20${encodeURIComponent(startIso)}&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,importance,inferenceClassification,flag,webLink`;
+        for (let page = 0; next && page < 20; page++) {
+          const r = await graph(admin, profile, next);
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) return j({ success: false, error: d?.error?.message ?? `Lecture boîte impossible (${r.status})`, sent: false }, 502);
+          mails.push(...(d.value ?? []));
+          const link: string | undefined = d["@odata.nextLink"];
+          next = link ? link.replace(GRAPH, "") : null;
+        }
+        if (next) return j({ success: false, error: "Trop de courriels pour un résumé complet", sent: false }, 502);
+        const tomorrow = new Date(Date.parse(localDayStartIso(tz, new Date(Date.now() + 86400000))));
+        const after = new Date(tomorrow.getTime() + 86400000);
+        const evR = await graph(admin, profile, `/me/calendarView?startDateTime=${tomorrow.toISOString()}&endDateTime=${after.toISOString()}&$select=subject,start,location&$orderby=start/dateTime&$top=50`);
+        const evD = await evR.json().catch(() => ({}));
+        const events = (evD.value ?? []).map((e: any) => ({ subject: e.subject, start: toOffsetIso(e.start?.dateTime, e.start?.timeZone), location: e.location?.displayName }));
+        const dateLabel = new Intl.DateTimeFormat("fr-CA", { timeZone: tz, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+        const digest = buildDigestHtml({ brokerName: profile.full_name ?? "", dateLabel, mails, events, tz });
+        if (payload.preview_only === true) return j({ success: true, sent: false, ...digest });
+        const sr = await graph(admin, profile, `/me/sendMail`, { method: "POST", body: JSON.stringify({ message: { subject: digest.subject, body: { contentType: "HTML", content: digest.html }, toRecipients: [{ emailAddress: { address: self } }] }, saveToSentItems: false }) });
+        if (!sr.ok) { const e = await sr.json().catch(() => ({})); return j({ success: false, sent: false, error: e?.error?.message ?? `Envoi refusé (${sr.status})` }, 502); }
+        return j({ success: true, sent: true, to: self, subject: digest.subject, total: digest.total, unread: digest.unread, priority: digest.priority });
       }
       case "daily_briefing": {
         const emailsR = await graph(admin, profile, `/me/messages?$top=5&$filter=isRead%20eq%20false&$select=subject,from,bodyPreview`);

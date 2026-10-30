@@ -4,6 +4,7 @@ import { Volume2, MessageSquare, RotateCcw, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { createHandoffLifecycle } from "@/lib/planipret/avaHandoffLifecycle";
+import { playHandoffGreeting } from "@/lib/planipret/avaHandoffPlayback";
 const PILOT_OWNER = "a7df1872-f25a-4925-b763-a573e7452462";
 type Summary = {peer:string;job_id:string;summary:string;read:boolean;greeted:boolean};
 export default function AvaSmsHandoff({userId,callState}:{userId?:string|null;callState?:string}) {
@@ -22,13 +23,17 @@ export default function AvaSmsHandoff({userId,callState}:{userId?:string|null;ca
   if(!visible.current||["active","held","ringing-in","ringing-out"].includes(call.current??""))return;
   const version=epoch.current;
   try{
-   if(automatic){const claim=await request({action:"greet",peer:item.peer,job_id:item.job_id});if(!claim.claimed)return;}
+   await playHandoffGreeting({automatic,
+    claim:async()=>{const claim=await request({action:"greet",peer:item.peer,job_id:item.job_id});return claim.claimed===true;},
+    release:async()=>{await request({action:"greet_failed",peer:item.peer,job_id:item.job_id});},
+    play:async()=>{
    const {data,error}=await supabase.functions.invoke("pp-ava-tts",{body:{text:item.summary,language:"fr"}});
    const content=data?.data??data;
    if(error||!content?.audioContent)throw new Error("Lecture indisponible.");
-   if(version!==epoch.current||!visible.current||["active","held","ringing-in","ringing-out"].includes(call.current??""))return;
+   if(version!==epoch.current||!visible.current||["active","held","ringing-in","ringing-out"].includes(call.current??""))throw new Error("playback_interrupted");
    const player=new Audio(`data:audio/mpeg;base64,${content.audioContent}`);audio.current=player;
    player.onended=()=>setPlaying(false);setPlaying(true);await player.play();
+   }});
   }catch{setPlaying(false);setError("Le résumé reste disponible; utilise le bouton de lecture.");}
  },[request]);
  useEffect(()=>{
@@ -47,9 +52,10 @@ export default function AvaSmsHandoff({userId,callState}:{userId?:string|null;ca
   });
   const visibility=()=>{visible.current=document.visibilityState==="visible";if(!visible.current)stop();void update(visible.current);};
   visibility();document.addEventListener("visibilitychange",visibility);
+  window.addEventListener("pageshow",visibility);
   const leave=()=>{visible.current=false;stop();void update(false);};
   window.addEventListener("pagehide",leave);
-  return()=>{disposed=true;document.removeEventListener("visibilitychange",visibility);window.removeEventListener("pagehide",leave);stop();void update(false);};
+  return()=>{disposed=true;document.removeEventListener("visibilitychange",visibility);window.removeEventListener("pageshow",visibility);window.removeEventListener("pagehide",leave);stop();void update(false);};
  },[userId,request,speak,stop]);
  useEffect(()=>{if(["active","held","ringing-in","ringing-out"].includes(callState??""))stop();},[callState,stop]);
  if(userId!==PILOT_OWNER)return null;

@@ -6,9 +6,9 @@ import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { bookingIntent, detectLanguage, eligibleInbound, holdingText, READ_ONLY_TOOLS, senderTier, smsIdentityVerified, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, providerHistory, safeThread, signAvaSms, smsPeer } from "../_shared/ava-sms-policy.ts";
 import { marcSessionMessagesPath, nsGet, runAvaSmsWatch } from "../_shared/ava-sms-watch.ts";
 import { buildAvaPrompt } from "../_shared/ava-prompt.ts";
-import { handoffCommand, handoffPaused, handoffSummary } from "../_shared/ava-sms-handoff.ts";
+import { handoffCommand, handoffPaused, handoffPushAccepted, handoffSummary } from "../_shared/ava-sms-handoff.ts";
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});
-const requestSchema=z.object({action:z.enum(["status","configure","process","approve","decline","watch_now","presence","handoff_status","resume","read","greet"]),session_id:z.string().uuid().optional(),active:z.boolean().optional(),peer:z.string().max(30).optional(),message_id:z.string().uuid().optional(),job_id:z.string().uuid().optional(),enabled:z.boolean().optional(),reply:z.string().trim().min(1).max(1200).optional()});
+const requestSchema=z.object({action:z.enum(["status","configure","process","approve","decline","watch_now","presence","handoff_status","resume","read","greet","greet_failed"]),session_id:z.string().uuid().optional(),active:z.boolean().optional(),peer:z.string().max(30).optional(),message_id:z.string().uuid().optional(),job_id:z.string().uuid().optional(),enabled:z.boolean().optional(),reply:z.string().trim().min(1).max(1200).optional()});
 const outputSchema=z.object({kind:z.enum(["reply","sensitive","appointment","needs_identity","change_request"]),claimed_name:z.string().max(120).optional(),claimed_address:z.string().max(200).optional(),reply:z.string().trim().min(1).max(1100),start:z.string().optional(),end:z.string().optional()});
 async function invoke(name:string,body:any) {
  const response=await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${name}`,{method:"POST",headers:{Authorization:`Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -53,7 +53,12 @@ async function dispatch(admin:any,job:any) {
   try {
   await handoffCommand(admin,"save_summary",{peer:job.peer,job_id:job.id,summary:job.proposal?.handoff_summary?`${job.proposal.handoff_summary}\nRéponse finale : ${job.reply}`:handoffSummary([],job.reply)});
   const notification=await handoffCommand(admin,"notify_claim",{peer:job.peer,job_id:job.id});
-  if(notification.claimed)await invoke("pp-push-notify",{user_id:MARC_SMS_USER_ID,title:"AVA — relais prêt",body:"Un échange est prêt à être repris. Ouvrez l’application pour consulter le résumé.",category:"sms",deep_link:"/mplanipret/messages",data:{url:"/mplanipret/messages"},idempotency_key:`ava-sms-handoff:${job.id}`}).catch(()=>null);
+  if(notification.claimed){
+   try {
+    const push=await invoke("pp-push-notify",{user_id:MARC_SMS_USER_ID,title:"AVA — relais prêt",body:"Un échange est prêt à être repris. Ouvrez l’application pour consulter le résumé.",category:"sms",deep_link:"/mplanipret/messages",data:{url:"/mplanipret/messages"},idempotency_key:`ava-sms-handoff:${job.id}`});
+    if(!handoffPushAccepted(push))await admin.from("planipret_ava_sms_jobs").update({error_code:"handoff_push_not_accepted"}).eq("id",job.id);
+   }catch{await admin.from("planipret_ava_sms_jobs").update({error_code:"handoff_push_unconfirmed"}).eq("id",job.id);}
+  }
   }catch{await admin.from("planipret_ava_sms_jobs").update({error_code:"handoff_summary_unavailable"}).eq("id",job.id);}
   return {success:true,status:"accepted"};
  } catch(error) {
@@ -83,11 +88,11 @@ Deno.serve(async req=>{
  try {
    const {data:profile}=await admin.from("planipret_profiles").select("id,user_id,extension,ns_domain,ava_chat_enabled,ai_consent_at,ai_consent_revoked_at").eq("user_id",MARC_SMS_USER_ID).eq("id",MARC_SMS_PROFILE_ID).maybeSingle();
   if(!profile||!pilotOwner(profile))return json({error:"pilot_identity_unverified"},409);
-  if(["presence","handoff_status","resume","read","greet"].includes(body.action)){
+  if(["presence","handoff_status","resume","read","greet","greet_failed"].includes(body.action)){
    if(caller!==MARC_SMS_USER_ID)return json({error:"owner_session_required"},403);
    if(body.action==="presence"&&(!body.session_id||typeof body.active!=="boolean"))return json({error:"presence_required"},400);
    const peer=body.peer?smsPeer(body.peer):null;
-   if(["resume","read","greet"].includes(body.action)&&(!peer||body.action!=="resume"&&!body.job_id))return json({error:"handoff_required"},400);
+   if(["resume","read","greet","greet_failed"].includes(body.action)&&(!peer||body.action!=="resume"&&!body.job_id))return json({error:"handoff_required"},400);
    const result=await handoffCommand(admin,body.action==="handoff_status"?"status":body.action,{session_id:body.session_id,active:body.active,peer,job_id:body.job_id});
    return json({success:true,...result});
   }

@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { handoffCommand, handoffPaused, handoffSummary, providerHumanOutbound } from "../../supabase/functions/_shared/ava-sms-handoff";
+import { handoffCommand, handoffPaused, handoffPushAccepted, handoffSummary, providerHumanOutbound } from "../../supabase/functions/_shared/ava-sms-handoff";
 import { createHandoffLifecycle } from "../lib/planipret/avaHandoffLifecycle";
 import { MARC_SMS_USER_ID } from "../../supabase/functions/_shared/ava-sms-policy";
 describe("SMS handoff rules",()=>{
+ it("HTTP acceptance without a push provider acceptance is not a successful handoff alert",()=>{
+  expect(handoffPushAccepted({delivered:0})).toBe(false);
+  expect(handoffPushAccepted({})).toBe(false);
+  expect(handoffPushAccepted({delivered:1,blocked_by_preference:true})).toBe(false);
+  expect(handoffPushAccepted({delivered:1})).toBe(true);
+ });
  it("fails closed when handoff storage is unavailable",async()=>{
   await expect(handoffPaused({rpc:async()=>({error:{message:"missing"}})},"+15145550101")).rejects.toThrow("handoff_unavailable");
  });

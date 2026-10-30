@@ -20,10 +20,14 @@ describe("persisted SMS handoff",()=>{
   await command("presence",{session_id:"one",active:false});
   expect((await command("check",{peer:other})).paused).toBe(false);
  });
- it("a personally taken-over thread stays silent after app closes",async()=>{
-  await command("takeover",{peer});await command("presence",{session_id:"one",active:false});
+ it("a previous human reply never blocks a new client message when Marc is offline",async()=>{
+  await command("presence",{session_id:"one",active:true});await command("takeover",{peer});
   expect((await command("check",{peer})).paused).toBe(true);
+  await command("presence",{session_id:"one",active:false});
+  expect((await command("check",{peer})).paused).toBe(false);
   expect((await command("check",{peer:other})).paused).toBe(false);
+  expect((await command("begin",{peer,job_id:job})).allowed).toBe(true);
+  await command("release",{job_id:job});
   await command("resume",{peer});expect((await command("check",{peer})).paused).toBe(false);
  });
  it("second foreground session prevents early resume",async()=>{
@@ -50,6 +54,13 @@ describe("persisted SMS handoff",()=>{
   await command("save_summary",{peer,job_id:job,summary:"Repeat"});
   expect((await command("status")).summaries[peer].summary).toBe("Test isolated summary");
  });
+ it("failed voice playback releases only the matching summary version",async()=>{
+  expect((await command("greet_failed",{peer,job_id:"00000000-0000-4000-8000-000000000099"})).claimed).toBe(false);
+  expect((await command("greet",{peer,job_id:job})).claimed).toBe(false);
+  await command("greet_failed",{peer,job_id:job});
+  expect((await command("greet",{peer,job_id:job})).claimed).toBe(true);
+  expect((await command("greet",{peer,job_id:job})).claimed).toBe(false);
+ });
  it("rejects every non-pilot broker and gives browser roles no table or RPC access",async()=>{
   await expect(command("status",{},"00000000-0000-4000-8000-000000000002")).rejects.toThrow("pilot_only");
   const permissions=await db.query<{table_access:boolean;function_access:boolean}>("select has_table_privilege('authenticated','public.planipret_ava_sms_handoff_state','SELECT') as table_access, has_function_privilege('authenticated','public.pp_ava_sms_handoff(uuid,text,jsonb)','EXECUTE') as function_access");
@@ -70,7 +81,7 @@ describe("persisted SMS handoff",()=>{
  it("atomic adapter claim refuses presence without consuming the one-shot job",async()=>{
   await db.exec("create table public.planipret_ava_sms_jobs(id uuid,user_id uuid,peer text,status text,reply_claimed_at timestamptz,calendar_claimed_at timestamptz)");
   await db.query("insert into public.planipret_ava_sms_jobs(id,user_id,peer,status) values($1,$2,$3,'ready')",[job,MARC_SMS_USER_ID,peer]);
-  await command("begin",{peer,job_id:job});await command("presence",{session_id:"one",active:true});
+  await command("takeover",{peer});await command("begin",{peer,job_id:job});await command("presence",{session_id:"one",active:true});
   expect((await command("claim",{peer,job_id:job,kind:"reply",status:"ready"})).claimed).toBe(false);
   await command("presence",{session_id:"one",active:false});
   expect((await command("claim",{peer,job_id:job,kind:"reply",status:"ready"})).claimed).toBe(true);

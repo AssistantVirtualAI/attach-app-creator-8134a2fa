@@ -10,6 +10,10 @@ export async function handoffPaused(admin: any, peer: string, jobId?: string) {
   const state = await handoffCommand(admin, "check", { peer, job_id: jobId });
   return state.paused === true;
 }
+/** Push provider acceptance is not physical phone receipt. */
+export function handoffPushAccepted(result: { delivered?: unknown; blocked_by_preference?: boolean }) {
+  return result.blocked_by_preference !== true && Number(result.delivered) > 0;
+}
 export function handoffSummary(history: { role: string; text: string }[], reply: string, name?: string | null) {
   const greeting = `Hey Marc, je viens de discuter avec ${name || "un correspondant"}. Voici le résumé de notre échange. Tu peux reprendre la discussion.`;
   // Evidence-based digest, not an invented model recap; bounded history is explicitly labelled.

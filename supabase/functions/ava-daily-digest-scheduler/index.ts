@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
       .from("planipret_profiles")
       .select("id, user_id, metadata, status")
       .eq("status", "active")
-      .eq("metadata->>email_digest_enabled", "true");
+      .eq("metadata->>email_digest_enabled", "true").not("ms365_access_token", "is", null);
     for (const p of digestProfiles ?? []) {
       const meta = (p.metadata as any) ?? {};
       const tz = meta.timezone || DEFAULT_TZ;
@@ -77,14 +77,14 @@ Deno.serve(async (req) => {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/ms365-actions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "email_digest", payload: {}, _user_id: p.user_id }),
+        body: JSON.stringify({ action: "daily_report", payload: {}, _user_id: p.user_id }),
       });
       const out = await r.json().catch(() => ({}));
       if (out?.sent) emailDigest.sent++;
       else {
         emailDigest.failed.push({ profile_id: p.id, error: out?.error ?? r.status });
         await admin.from("planipret_ava_notifications").insert({
-          user_id: p.user_id, type: "email_digest_failed", title: "Résumé des courriels non envoyé",
+          user_id: p.user_id, type: "email_digest_failed", title: "Résumé quotidien non envoyé",
           body: "AVA n'a pas pu lire ta boîte complète aujourd'hui ; aucun résumé partiel n'a été envoyé.",
           deep_link: "/mplanipret/notifications", metadata: { date },
         });

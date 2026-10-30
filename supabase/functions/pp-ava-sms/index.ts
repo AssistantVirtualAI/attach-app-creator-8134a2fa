@@ -3,17 +3,26 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { generateText, Output } from "npm:ai@6";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
-import { eligibleInbound, explicitBookingRequest, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, providerHistory, safeThread, signAvaSms, smsPeer } from "../_shared/ava-sms-policy.ts";
+import { bookingIntent, eligibleInbound, fileStatusIntent, smsIdentityVerified, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, providerHistory, safeThread, signAvaSms, smsPeer } from "../_shared/ava-sms-policy.ts";
 import { marcSessionMessagesPath, nsGet, runAvaSmsWatch } from "../_shared/ava-sms-watch.ts";
 import { buildAvaPrompt } from "../_shared/ava-prompt.ts";
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});
 const requestSchema=z.object({action:z.enum(["status","configure","process","approve","decline","watch_now"]),message_id:z.string().uuid().optional(),job_id:z.string().uuid().optional(),enabled:z.boolean().optional(),reply:z.string().trim().min(1).max(1200).optional()});
-const outputSchema=z.object({kind:z.enum(["reply","sensitive","appointment"]),reply:z.string().trim().min(1).max(1100),start:z.string().optional(),end:z.string().optional()});
+const outputSchema=z.object({kind:z.enum(["reply","sensitive","appointment","file_status"]),claimed_name:z.string().max(120).optional(),reply:z.string().trim().min(1).max(1100),start:z.string().optional(),end:z.string().optional()});
 async function invoke(name:string,body:any) {
  const response=await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${name}`,{method:"POST",headers:{Authorization:`Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,"Content-Type":"application/json"},body:JSON.stringify(body)});
  const data=await response.json().catch(()=>({success:false,error:"invalid_provider_response"}));
  if (!response.ok || data.success===false || data.ok===false || data.error) throw new Error(`${name}:${response.status}:${data.error??"provider_refused"}`);
  return data;
+}
+async function tool(name:string,params:any) {
+ const r=await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ava-tool-executor`,{method:"POST",headers:{Authorization:`Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,"Content-Type":"application/json"},body:JSON.stringify({tool_name:name,parameters:params,_user_id:MARC_SMS_USER_ID})});
+ return await r.json().catch(()=>({success:false}));
+}
+async function senderProfile(peer:string) {
+ if(/^\d{2,6}$/.test(peer))return null;
+ const r=await tool("get_client_profile",{query:peer.replace(/^\+1/,"")}).catch(()=>null);
+ return r?.success&&!r.multiple&&r.profile?r:null;
 }
 async function notify(job:any) {
  await invoke("pp-push-notify",{user_id:MARC_SMS_USER_ID,title:"AVA — demande texto à vérifier",body:"Une demande nécessite votre décision. Ouvrez AVA pour la consulter.",category:"sms",deep_link:"/planipret/broker/messages",data:{url:"/planipret/broker/messages"},idempotency_key:`ava-sms-review:${job.id}`});
@@ -26,8 +35,13 @@ async function dispatch(admin:any,job:any) {
    job.reply=signAvaSms(`Votre rendez-vous avec Marc est réservé pour ${new Date(job.proposal.start).toLocaleString("fr-CA",{timeZone:"America/Toronto"})}.`);
    await admin.from("planipret_ava_sms_jobs").update({reply:job.reply,result:{calendar:booking.event_id}}).eq("id",job.id);
   } catch(error) {
-   await admin.from("planipret_ava_sms_jobs").update({status:"needs_review",error_code:"calendar_unconfirmed"}).eq("id",job.id);
-   await notify(job); return {success:false,needs_review:true};
+   if(!String(error instanceof Error?error.message:"").includes("calendar_conflict")){
+    await admin.from("planipret_ava_sms_jobs").update({status:"needs_review",error_code:"calendar_unconfirmed"}).eq("id",job.id);
+    await notify(job); return {success:false,needs_review:true};
+   }
+   job.reply=signAvaSms("Ce créneau n'est malheureusement plus disponible dans l'agenda de Marc. Quel autre moment (date et heure) vous conviendrait?");
+   job.proposal={kind:"reply",calendar:"conflict"};
+   await admin.from("planipret_ava_sms_jobs").update({reply:job.reply,proposal:job.proposal}).eq("id",job.id);
   }
  }
  try {

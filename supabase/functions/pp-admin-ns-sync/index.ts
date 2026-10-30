@@ -602,6 +602,8 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
       for (const s of sessions.data.slice(0, 25)) {
         const sid = String(s?.["messagesession-id"] ?? s?.session_id ?? s?.id ?? s?.["session-id"] ?? "").trim();
         if (!sid) continue;
+        const lastAt = toIso(s?.["messagesession-last-datetime"]);
+        if (lastAt && (lastAt < start || lastAt > end)) continue;
         const S = encodeURIComponent(sid);
         const msgs = await tryPaths([`/domains/${D}/users/${E}/messagesessions/${S}/messages`]);
         for (const m of msgs.data) collected.push({ ...m, user: ext });

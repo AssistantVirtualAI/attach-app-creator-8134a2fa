@@ -251,6 +251,9 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
         return { success: false, error: "user_cancelled" };
       }
       return new Promise((resolve, reject) => {
+        // Never strand an earlier confirmation: settle it as superseded.
+        const previous = pendingRef.current;
+        if (previous) previous.resolve({ success: false, error: "confirmation_superseded" });
         const next = { tool: toolName, params: params ?? {}, resolve, reject };
         pendingRef.current = next;
         setPending(next);
@@ -588,6 +591,11 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
       cancelled = true;
       connectionGenerationRef.current += 1;
       if (recoveryTimerRef.current) { clearTimeout(recoveryTimerRef.current); recoveryTimerRef.current = null; }
+      if (pendingRef.current) {
+        pendingRef.current.resolve({ success: false, error: "session_ended" });
+        pendingRef.current = null;
+        setPending(null);
+      }
       try { convRef.current?.endSession(); } catch (_) { /* */ }
       if (initAttempt === 0) {
         // On unmount (not on retry), release mic.
@@ -707,14 +715,15 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
         .catch((error) => resolve({ success: false, error: String(error) }));
       return;
     }
+    const fail = (error: unknown) => resolve({ success: false, error: String((error as any)?.message ?? error ?? "tool_failed") });
     if (tool === "submit_feedback") {
-      callServerTool(tool, { ...params, ...patched }).then(resolve);
+      Promise.resolve(callServerTool(tool, { ...params, ...patched })).then(resolve, fail);
       return;
     }
     const calendarPatch = CALENDAR_TOOLS.has(tool)
       ? { timezone: params?.timezone ?? "America/Toronto" }
       : {};
-    callServerTool(tool, { ...params, ...calendarPatch, ...patched, confirmed: true }).then(resolve);
+    Promise.resolve(callServerTool(tool, { ...params, ...calendarPatch, ...patched, confirmed: true })).then(resolve, fail);
   }
   execConfirmedRef.current = execConfirmed;
 

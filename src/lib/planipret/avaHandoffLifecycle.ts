@@ -5,7 +5,7 @@ export function createHandoffLifecycle(send: (active: boolean) => Promise<void>)
   return (active: boolean) => {
     if (desired === active) return queue;
     desired = active;
-    queue = queue.catch(() => undefined).then(() => send(active));
+    queue = queue.catch(() => undefined).then(() => send(active)).catch(error=>{if(desired===active)desired=undefined;throw error;});
     return queue;
   };
 }

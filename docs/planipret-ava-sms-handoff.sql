@@ -3,7 +3,7 @@
 create table public.planipret_ava_sms_handoff_state (
   user_id uuid primary key, sessions jsonb not null default '{}',
   taken_over jsonb not null default '{}', observations jsonb not null default '{}',
-  summaries jsonb not null default '{}', busy_job uuid,
+  summaries jsonb not null default '{}', queue jsonb not null default '{}', busy_job uuid,
   updated_at timestamptz not null default now()
 );
 grant all on public.planipret_ava_sms_handoff_state to service_role;
@@ -40,9 +40,13 @@ begin
     k := case p_op when 'read' then 'read' when 'greet' then 'greeted' else 'notified' end;
     if coalesce((entry->>k)::boolean,false) then return jsonb_build_object('claimed',false); end if;
     s.summaries := s.summaries || jsonb_build_object(peer,entry || jsonb_build_object(k,true));
+  elsif p_op='queue' then
+    s.queue := s.queue || jsonb_build_object(p_args->>'message_id',peer);
+  elsif p_op='dequeue' then
+    s.queue := s.queue - (p_args->>'message_id');
   elsif p_op='release' then
     if s.busy_job::text = p_args->>'job_id' then s.busy_job := null; end if;
-  elsif p_op not in ('status','check','begin') then raise exception 'unknown_operation';
+  elsif p_op not in ('status','check','begin','queue_list') then raise exception 'unknown_operation';
   end if;
   active := s.sessions <> '{}'::jsonb;
   if p_op='begin' then
@@ -52,10 +56,10 @@ begin
     s.busy_job := (p_args->>'job_id')::uuid;
   end if;
   update public.planipret_ava_sms_handoff_state set sessions=s.sessions,taken_over=s.taken_over,
-    observations=s.observations,summaries=s.summaries,busy_job=s.busy_job,updated_at=now() where user_id=p_user;
+    observations=s.observations,summaries=s.summaries,queue=s.queue,busy_job=s.busy_job,updated_at=now() where user_id=p_user;
   return jsonb_build_object('allowed',true,'claimed',true,'online',active,
     'paused',active or coalesce(s.taken_over ? peer,false) or (s.busy_job is not null and s.busy_job::text is distinct from p_args->>'job_id'),
-    'taking_over',s.busy_job is not null,'summaries',s.summaries,'taken_over',s.taken_over);
+    'taking_over',s.busy_job is not null,'summaries',s.summaries,'taken_over',s.taken_over,'queue',s.queue);
 end; $$;
 revoke all on function public.pp_ava_sms_handoff(uuid,text,jsonb) from public, anon, authenticated;
 grant execute on function public.pp_ava_sms_handoff(uuid,text,jsonb) to service_role;

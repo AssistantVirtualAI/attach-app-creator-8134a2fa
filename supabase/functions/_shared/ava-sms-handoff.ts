@@ -17,10 +17,10 @@ export function handoffSummary(history: { role: string; text: string }[], reply:
   return `${greeting}\nDemandes récentes : ${recent.join(" / ") || "Consulte le fil."}\nRéponse d’AVA : ${reply.slice(0, 1100)}\nContexte : historique disponible seulement; exhaustivité non confirmée.`;
 }
 /** Only exact provider ownership establishes a human outbound observation. */
-export function providerHumanOutbound(message: any, avaBodies: Set<string>, activatedAt: string) {
-  if (String(message?.direction ?? "").toLowerCase() === "orig" || message?.["from-user-id"] !== "1136@planipret.ca" || message?.["deleted-datetime"]) return null;
+export function providerHumanOutbound(message: any, avaBodies: Set<string>, activatedAt: string, avaIds: Set<string> = new Set()) {
+  if (String(message?.direction ?? "").toLowerCase() !== "term" || message?.["from-user-id"] !== "1136@planipret.ca" || message?.["deleted-datetime"] || avaIds.has(String(message?.id))) return null;
   const body = String(message?.text ?? "").trim();
-  if (!body || avaBodies.has(body)) return null;
+  if (!body || avaBodies.has(body) || /—\s*AVA,\s*assistante de Marc Maglieri\s*$/u.test(body)) return null;
   const raw = String(message.timestamp ?? "").replace(" ", "T");
   const at = Date.parse(/Z|[+-]\d\d:?\d\d$/.test(raw) ? raw : `${raw}Z`);
   if (!Number.isFinite(at) || at < Date.parse(activatedAt)) return null;

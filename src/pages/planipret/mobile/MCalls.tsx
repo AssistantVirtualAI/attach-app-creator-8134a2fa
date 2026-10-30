@@ -2317,7 +2317,7 @@ function VmAction({ icon, label, onClick, accent, danger }:
 }
 
 function VmAudio({ vm }: { vm: VM }) {
-  const [src, setSrc] = useState<string | null>(vm.audio_url);
+  const [src, setSrc] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [dur, setDur] = useState(vm.duration_seconds ?? 0);
@@ -2326,9 +2326,9 @@ function VmAudio({ vm }: { vm: VM }) {
 
   useEffect(() => {
     (async () => {
-      if (src) return;
+      // Always fetch a fresh, owner-scoped URL; stored provider links expire.
       const id = vm.ns_vm_id ?? vm.id;
-      const { data } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id } });
+      const { data } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id, folder: (vm as any).folder ?? "inbox" } });
       const url = (data as any)?.url ?? (data as any)?.audio_url;
       if (url) setSrc(url);
     })();

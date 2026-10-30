@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Diagnose the repeated AVA voice send_email tool timeout from the second screenshot, using sanitized evidence and promise/confirmation lifecycle checks; no email retries, sends, deployment or native changes.
+
 - [x] Diagnose AVA voice email schema mismatch: shared registry supplies to_email, Microsoft requires to; executor now normalizes the recipient for all brokers while preserving explicit to, confirmation and idempotency. 36 focused tests pass; preview build OK. No email sent, deployment, publication or native changes.
 - [ ] Verify AVA voice email sending in Marc's account and installed app: requires authorization to deploy the prepared executor and send a specifically approved email; recent function logs did not establish his exact runtime failure.
 

@@ -4,6 +4,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { normalizeNsEvents, nsCallKey, nsCdrExtensionCandidates, shouldProcessCall, inboundSmsRow } from "../_shared/ns-call-events.ts";
 import { parseServiceAccount, sendFcmDataMessage } from "../_shared/fcm.ts";
 import { queueWidgetSync, queueWidgetCallEvent, queueWidgetResourceEvent } from "../_shared/maestro-widget-sync.ts";
+import { pilotOwner } from "../_shared/ava-sms-policy.ts";
 
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
@@ -610,6 +611,15 @@ async function processEvent(event: any) {
       return;
     }
     if (messageError || !inboundMsg?.id) throw messageError ?? new Error("message_insert_failed");
+    if (pilotOwner(brokerProfile)) {
+      runBackground("AVA SMS pilot", (async () => {
+        const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-ava-sms`, {
+          method: "POST", headers: {"Content-Type":"application/json", Authorization:`Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`},
+          body: JSON.stringify({action:"process",message_id:inboundMsg.id}),
+        });
+        if (!response.ok) console.warn("[ns-webhook] AVA SMS pilot refused",{status:response.status});
+      })());
+    }
     if (inboundMsg?.id) {
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-sync-message`, {
         method: "POST",

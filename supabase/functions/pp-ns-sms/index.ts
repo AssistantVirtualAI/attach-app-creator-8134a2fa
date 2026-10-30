@@ -23,6 +23,7 @@ import { isAvaOriginated, isConfirmed } from "../_shared/ava-confirm.ts";
 import { mergeDeliveryEvidence } from "./delivery-evidence.ts";
 import { approvedSmsTest } from "./approved-sms-test.ts";
 import { internalThreadPair, internalThreadOrFilter } from "../_shared/pp-internal-thread.ts";
+import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -585,7 +586,12 @@ Deno.serve(async (req) => {
         draft: pick("draft"), proposal: pick("proposal"),
         confirmed: pick("confirmed"), approved: pick("approved"),
       };
-      if (isAvaOriginated(confirmScope) && !isConfirmed(confirmScope)) {
+      const pilotJobId = pick("ava_sms_job_id");
+      const pilotJob = pilotJobId ? await authorizeSmsJob(supabase,
+        req.headers.get("Authorization") === `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        ctx.userId, pilotJobId, "reply", {to,message,idempotency_key:idempotencyKey}) : null;
+      if (pilotJobId && !pilotJob) return jsonResponse({ok:false,error:"sms_pilot_authorization_refused"},403);
+      if (isAvaOriginated(confirmScope) && !isConfirmed(confirmScope) && !pilotJob) {
         console.warn("[pp-ns-sms] AVA send without explicit confirmation — refused", { userId: ctx.userId });
         return jsonResponse({
           ok: false,
@@ -750,7 +756,7 @@ Deno.serve(async (req) => {
 
       // Fallback: older NS builds accept POST /messagesessions with the
       // session id embedded in the body.
-      if (!res.ok && res.status !== 401 && res.status !== 403) {
+      if (!pilotJob && !res.ok && res.status !== 401 && res.status !== 403) {
         const altPath = `${userBase}/messagesessions`;
         const alt = await nsFetch(altPath, {
           method: "POST",

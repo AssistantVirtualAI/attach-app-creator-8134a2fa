@@ -3,6 +3,8 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 import { callAnthropic } from "../_shared/anthropic.ts";
 import { buildIdempotencyKey, claimAction, finishAction, isConfirmed, isSensitiveMs365Action } from "../_shared/ava-confirm.ts";
+import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
+import { hasCalendarConflict } from "../_shared/ava-sms-policy.ts";
 
 
 
@@ -169,6 +171,33 @@ Deno.serve(async (req) => {
     }
 
     switch (action) {
+
+      case "ava_sms_book": {
+        const job = await authorizeSmsJob(admin, token === serviceKey, userId, body.ava_sms_job_id, "calendar", payload);
+        if (!job) return j({success:false,error:"sms_pilot_authorization_refused"},403);
+        const start = String(payload.start ?? ""), end = String(payload.end ?? "");
+        const startMs=Date.parse(start), endMs=Date.parse(end);
+        if (!Number.isFinite(startMs)||!Number.isFinite(endMs)||startMs<=Date.now()||endMs<=startMs||endMs-startMs>7200000) return j({success:false,error:"invalid_appointment"},400);
+        let path: string | null = `/me/calendarView?startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}&$top=250&$select=start,end,showAs,isCancelled`;
+        const events: any[]=[];
+        for(let page=0;path&&page<20;page++) {
+          const read=await graph(admin,profile,path);
+          if(!read.ok)return j({success:false,error:"calendar_unverified",code:read.status},502);
+          const data=await read.json();
+          events.push(...(data.value??[]).filter((event:any)=>!event.isCancelled&&event.showAs!=="free").map((event:any)=>({...event,start:{dateTime:toOffsetIso(event.start?.dateTime,event.start?.timeZone)},end:{dateTime:toOffsetIso(event.end?.dateTime,event.end?.timeZone)}})));
+          const next=data["@odata.nextLink"];
+          if(next&&!String(next).startsWith(`${GRAPH}/me/calendarView`))return j({success:false,error:"calendar_continuation_refused"},502);
+          path=next?String(next).slice(GRAPH.length):null;
+        }
+        if(path)return j({success:false,error:"calendar_incomplete"},502);
+        if(hasCalendarConflict(start,end,events))return j({success:false,error:"calendar_conflict"},409);
+        const created=await graph(admin,profile,"/me/events",{method:"POST",body:JSON.stringify({subject:"Rendez-vous — AVA texto",start:{dateTime:new Date(startMs).toISOString(),timeZone:"UTC"},end:{dateTime:new Date(endMs).toISOString(),timeZone:"UTC"},transactionId:job.id,isOnlineMeeting:false})},false);
+        const event=await created.json().catch(()=>({}));
+        if(!created.ok||!event.id)return j({success:false,error:event.error?.message??"calendar_creation_unconfirmed",code:created.status},502);
+        const readback=await graph(admin,profile,`/me/events/${encodeURIComponent(event.id)}?$select=id,start,end`);
+        if(!readback.ok)return j({success:false,error:"calendar_readback_unconfirmed"},502);
+        return j({success:true,event_id:event.id});
+      }
 
       case "connection_status": {
         return j({

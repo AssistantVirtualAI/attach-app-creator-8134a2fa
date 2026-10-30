@@ -1,6 +1,6 @@
 # Project Architecture Rules
 
-- AVA inbound SMS automation is isolated in pp-ava-sms with persisted event/job claims and a Marc-only pilot policy; external DID matches never grant private tools, and SMS/calendar adapters authorize exact persisted job payloads without weakening interactive AVA confirmations.
+- AVA inbound SMS automation is isolated in pp-ava-sms with persisted event/job claims and a Marc-only pilot policy; external DID matches never grant private tools, and SMS/calendar adapters authorize exact persisted job payloads without weakening interactive AVA confirmations. Inbound texts reach it via the Marc-only pp-ava-sms-watch provider read (NetSapiens posts no message webhooks) plus the portal watch_now trigger; the server appends AVA's signature to every persisted reply so the AI can never sign as the broker.
 
 - AVA email dispatch normalizes the shared registry's to_email into Microsoft 365's to field in the server executor, preserving explicit recipients, confirmation and idempotency so voice and chat use the same send contract.
 

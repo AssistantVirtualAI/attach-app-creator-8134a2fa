@@ -15,7 +15,7 @@ export function AvaSmsPilotPanel(){
  },[]);
  const load=useCallback(async()=>{
   setBusy(true);setError(null);
-  try{const data=await call({action:"status"});setEnabled(data.enabled===true);setJobs(data.jobs??[]);}catch(e){setError(e instanceof Error?e.message:"Chargement impossible");}finally{setBusy(false);}
+  try{await call({action:"watch_now"}).catch(()=>null);const data=await call({action:"status"});setEnabled(data.enabled===true);setJobs(data.jobs??[]);}catch(e){setError(e instanceof Error?e.message:"Chargement impossible");}finally{setBusy(false);}
  },[call]);
  useEffect(()=>{void load();},[load]);
  const decide=async(job:Job,action:"approve"|"decline")=>{

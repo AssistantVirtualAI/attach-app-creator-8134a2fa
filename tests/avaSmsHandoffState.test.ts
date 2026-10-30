@@ -3,7 +3,7 @@ import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { Blob } from "node:buffer";
-import { MARC_SMS_USER_ID } from "../../supabase/functions/_shared/ava-sms-policy";
+import { MARC_SMS_USER_ID } from "../supabase/functions/_shared/ava-sms-policy";
 const db=new PGlite({fsBundle:new Blob([readFileSync("node_modules/@electric-sql/pglite/dist/pglite.data")]) as unknown as globalThis.Blob});
 const peer="+15145550101",other="+15145550102",job="00000000-0000-4000-8000-000000000001";
 const command=async(op:string,args:Record<string,unknown>={},owner=MARC_SMS_USER_ID)=>{

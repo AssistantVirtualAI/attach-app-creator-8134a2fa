@@ -968,7 +968,7 @@ Deno.serve(async (req) => {
   // serve the stored copy with no Maestro call, whatever its age.
   const version = await commissionDataVersion(admin);
 
-  if (reusableCommissionSnapshot(snap, version, FRESH_MS)) {
+  if (snap && reusableCommissionSnapshot(snap, version, FRESH_MS)) {
     admin.from("planipret_commission_snapshots").update({ last_accessed_at: new Date().toISOString() }).eq("cache_key", key).then(() => {});
     return out(snap.payload, true, snap.fetched_at);
   }

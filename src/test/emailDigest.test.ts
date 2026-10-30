@@ -52,4 +52,11 @@ describe("daily report", () => {
     expect(d.html).toContain("Résumé IA"); expect(d.html).not.toContain("raw preview"); expect(d.html).not.toContain(">Textos <");
     expect(d.stats.missed).toBe(2);
   });
+  it("uses provider event time rather than late database import time for unanswered texts", () => {
+    const result = smsThreads([
+      { direction: "outbound", to_number: "5145550001", sent_at: "2026-10-29T20:01:00Z", created_at: "2026-10-29T20:01:00Z" },
+      { direction: "inbound", from_number: "5145550001", sent_at: "2026-10-29T20:00:00Z", created_at: "2026-10-30T05:00:00Z" },
+    ]);
+    expect(result.received).toBe(1); expect(result.unanswered).toBe(0);
+  });
 });

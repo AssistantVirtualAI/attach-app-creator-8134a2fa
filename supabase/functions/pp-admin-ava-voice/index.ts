@@ -157,6 +157,7 @@ Deno.serve(async (req) => {
       sessions_24h_total: sess7d.filter((s: any) => new Date(s.started_at ?? 0).getTime() > Date.now() - 24 * 3600e3).length + err24.length,
       errors_24h: err24.length,
       top_errors,
+      recent_errors: err24.slice(0, 5).map((e: any) => ({ code: e.error_code, message: String(e.error_message ?? "").slice(0, 240), at: e.started_at })),
       brokers: brokers.map((b: any) => ({
         ...b,
         ...(agg.get(b.user_id) ?? { sessions_7d: 0, errors_24h: 0, last_error: null }),

@@ -2,14 +2,14 @@
 
 - AVA inbound SMS automation is isolated in pp-ava-sms with persisted event/job claims and a Marc-only pilot policy; external DID matches never grant private tools, and SMS/calendar adapters authorize exact persisted job payloads without weakening interactive AVA confirmations. Inbound texts reach it via the Marc-only pp-ava-sms-watch provider read (NetSapiens posts no message webhooks) plus the portal watch_now trigger; the server appends AVA's signature to every persisted reply so the AI can never sign as the broker.
 
-- AVA email dispatch normalizes the shared registry's to_email into Microsoft 365's to field in the server executor, preserving explicit recipients, confirmation and idempotency so voice and chat use the same send contract.
+- AVA email maps to_email to Microsoft to, preserving recipients, confirmation and idempotency.
 
 - AVA financial questions take precedence over directory/history context, execute shared commission tools and render validated figures deterministically; unknown actions never fall back to client lists.
 - Commission screens refresh on server update broadcasts or explicit refresh only; returning to a visible tab consumes a pending update without timed polling or unconditional refetches, preserving selected brokers.
 
 - The persistent call screen owns the mirrored useCurrentCallElapsed clock and passes elapsed seconds to the minimized pill; observed ringing-to-connected and dialog changes establish a fresh start, preventing native ring/stale timestamps and minimization from diverging without changing transport or history.
 
-- Let Vite infer the HMR protocol and port from the browser origin so local HTTP verification and hosted HTTPS previews both connect without hardcoded secure localhost sockets.
+- Vite infers HMR protocol/port from origin; never hardcode secure localhost sockets.
 
 - Portal SMS creation and replies share PortalSmsComposer and the existing JWT-owned pp-ns-sms endpoint; admin compose identity comes from the authenticated session rather than an optional display profile. Never submit a selected broker/sender, automatically retry dispatch, or label acceptance as delivery, preventing impersonation and duplicate texts.
 - Portal SMS recipient selection uses authenticated contact, directory and Maestro-client reads; dialogs use global design-system fields rather than page-scoped input CSS, preserving ownership and readability outside the page tree.
@@ -24,7 +24,7 @@
 - Maestro widget history writes explicit transport success; mirrored classifiers infer legacy null success only for widget sync/release 2xx without failure evidence, preserving explicit business outcomes and access scopes.
 
 - Planipret read/hidden SMS and missed-call state is mirrored, local per user/device; never delete history or call/notification records.
-- Planipret transcript diagnostics share a mirrored evidence mapper/notice; native/CDR absence never proves missing audio, provider hints never replace fallback outcomes.
+- Transcript diagnostics use mirrored evidence; absent native/CDR data never proves missing audio.
 
 - APNs pushes share one server-only persisted provider-token cache (atomic renewal, single-flight); independent signing hits Apple's refresh limits.
 - Both web trees share the call/recording speaker renderer; identity uses explicit source labels, never inferred turns.
@@ -59,3 +59,5 @@
 - Maestro paid deposits are read per bucket with up to 3 complete reads merged by exact-line fingerprint (minimum multiplicity) until the announced count is reached; Maestro paging repeats and skips lines.
 - AVA features are protected by src/test/avaProtectionContract.test.ts plus the src/test/ava*.test.ts suites; any AVA change must keep them green and changing a contract assertion requires explicit owner approval, preventing regressions in working AVA behaviour.
 - AVA voice prompt and greeting live only in supabase/functions/_shared/ava-prompt.ts, used by both ava-agent-config and ava-agent-config-preview, so the admin preview always matches real sessions.
+- SMS imports share verified-line mapping and idempotent storage; reports use sent_at, not ingestion time.
+- Daily reports reuse scoped tasks and mirrored settings; incomplete tasks stay unavailable, send reservation differs from acceptance.

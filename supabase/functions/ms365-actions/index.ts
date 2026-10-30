@@ -6,6 +6,7 @@ import { buildIdempotencyKey, claimAction, finishAction, isConfirmed, isSensitiv
 import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
 import { hasCalendarConflict } from "../_shared/ava-sms-policy.ts";
 import { buildDigestHtml, buildDailyReportHtml, localDayStartIso } from "../_shared/email-digest.ts";
+import { readTomorrowTasks } from "../_shared/daily-report-tasks.ts";
 
 
 
@@ -615,9 +616,9 @@ Deno.serve(async (req) => {
         const [callsR, vmR, smsR, yCalls, ySms] = await Promise.all([
           admin.from("planipret_phone_calls").select("direction,status,started_at,answered_at,duration_seconds,from_number,from_name,to_number,to_name").eq("user_id", profile.id).is("deleted_at", null).gte("started_at", dayStart).lt("started_at", dayEnd).order("started_at").limit(1000),
           admin.from("planipret_voicemails").select("from_number,from_name,received_at,duration_seconds,transcript").eq("user_id", profile.id).gte("received_at", dayStart).lt("received_at", dayEnd).order("received_at", { ascending: false }).limit(200),
-          admin.from("planipret_phone_messages").select("direction,from_number,to_number,body,created_at").eq("user_id", profile.id).gte("created_at", dayStart).lt("created_at", dayEnd).limit(1000),
+          admin.from("planipret_phone_messages").select("direction,from_number,to_number,body,sent_at,created_at").eq("user_id", profile.id).gte("sent_at", dayStart).lt("sent_at", dayEnd).order("sent_at").limit(1000),
           admin.from("planipret_phone_calls").select("id", { count: "exact", head: true }).eq("user_id", profile.id).is("deleted_at", null).gte("started_at", yStart).lt("started_at", dayStart),
-          admin.from("planipret_phone_messages").select("id", { count: "exact", head: true }).eq("user_id", profile.id).gte("created_at", yStart).lt("created_at", dayStart),
+          admin.from("planipret_phone_messages").select("id", { count: "exact", head: true }).eq("user_id", profile.id).gte("sent_at", yStart).lt("sent_at", dayStart),
         ]);
         if (callsR.error || vmR.error || smsR.error) return j({ success: false, sent: false, error: "Lecture de l'activité impossible" }, 502);
         // Courriels : liste complète paginée, ou rien (jamais partielle).
@@ -627,7 +628,7 @@ Deno.serve(async (req) => {
           const r = await graph(admin, profile, next);
           const d = await r.json().catch(() => ({}));
           if (!r.ok) return j({ success: false, sent: false, error: d?.error?.message ?? `Lecture boîte impossible (${r.status})` }, 502);
-          mails!.push(...(d.value ?? []));
+          mails.push(...(d.value ?? []));
           const link: string | undefined = d["@odata.nextLink"];
           next = link ? link.replace(GRAPH, "") : null;
         }
@@ -637,6 +638,14 @@ Deno.serve(async (req) => {
         const evR = await graph(admin, profile, `/me/calendarView?startDateTime=${dayEnd}&endDateTime=${localDayStartIso(tz, new Date(now + 2 * 86400000))}&$select=subject,start,location&$orderby=start/dateTime&$top=50`);
         const evD = await evR.json().catch(() => ({}));
         const events = (evD.value ?? []).map((e: any) => ({ subject: e.subject, start: toOffsetIso(e.start?.dateTime, e.start?.timeZone), location: e.location?.displayName }));
+        const tomorrowEnd = localDayStartIso(tz, new Date(now + 2 * 86400000));
+        const taskReport = meta.email_digest_sections?.agenda === false ? { tasks: [], unavailable: false } : await readTomorrowTasks(async (page) => {
+          const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/planipret-task-api`, {
+            method: "POST", headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "list", source: "ava", _user_id: userId, filter: "open", from: dayEnd, to: tomorrowEnd, page, limit: 200 }),
+          });
+          return r.ok ? await r.json().catch(() => null) : null;
+        }, dayEnd, tomorrowEnd);
         // Noms d'annuaire pour les numéros (contacts du courtier seulement).
         const { data: contacts } = await admin.from("planipret_contacts").select("*").eq("user_id", profile.id).limit(2000);
         const names = new Map<string, string>();
@@ -646,7 +655,8 @@ Deno.serve(async (req) => {
         const report = buildDailyReportHtml({
           brokerName: profile.full_name ?? "", dateLabel, tz, settingsUrl: "https://avastatistic.ca/planipret/broker/settings",
           sections: meta.email_digest_sections, calls: callsR.data ?? [], voicemails: vmR.data ?? [], sms: smsR.data ?? [],
-          mails, mailSummaries, events, yesterday: { calls: yCalls.count ?? undefined, sms: ySms.count ?? undefined, mails: Number.isFinite(yMails) ? yMails : undefined },
+          mails, mailSummaries, events, tasks: taskReport.tasks, tasksUnavailable: taskReport.unavailable,
+          yesterday: { calls: yCalls.count ?? undefined, sms: ySms.count ?? undefined, mails: Number.isFinite(yMails) ? yMails : undefined },
           nameFor: (p) => names.get(String(p ?? "").replace(/\D/g, "").slice(-10)) ?? null,
         });
         if (payload.preview_only === true) return j({ success: true, sent: false, ...report });

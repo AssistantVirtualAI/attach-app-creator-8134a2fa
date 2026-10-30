@@ -113,7 +113,8 @@ export function localDayStartIso(tz = "America/Toronto", now = new Date()) {
 // ===================== Rapport quotidien complet =====================
 export type ReportCall = { direction?: string | null; status?: string | null; started_at?: string | null; answered_at?: string | null; duration_seconds?: number | null; from_number?: string | null; from_name?: string | null; to_number?: string | null; to_name?: string | null };
 export type ReportVoicemail = { from_number?: string | null; from_name?: string | null; received_at?: string | null; duration_seconds?: number | null; transcript?: string | null };
-export type ReportSms = { direction?: string | null; from_number?: string | null; to_number?: string | null; body?: string | null; created_at?: string | null };
+export type ReportSms = { direction?: string | null; from_number?: string | null; to_number?: string | null; body?: string | null; sent_at?: string | null; created_at?: string | null };
+const smsTime = (sms: ReportSms) => sms.sent_at ?? sms.created_at;
 export type MailSummary = { id: string; summary?: string; action?: string };
 export type ReportSections = { calls: boolean; voicemails: boolean; texts: boolean; emails: boolean; agenda: boolean };
 export const DEFAULT_SECTIONS: ReportSections = { calls: true, voicemails: true, texts: true, emails: true, agenda: true };
@@ -142,13 +143,13 @@ export function callStats(calls: ReportCall[], tz = "America/Toronto") {
 const peerOf = (m: ReportSms) => String((m.direction === "inbound" ? m.from_number : m.to_number) ?? "").replace(/\D/g, "").slice(-10);
 export function smsThreads(rows: ReportSms[]) {
   const map = new Map<string, ReportSms[]>();
-  for (const r of rows) { const k = peerOf(r); if (!k) continue; (map.get(k) ?? map.set(k, []).get(k)!).push(r); }
+  for (const r of rows) { const k = peerOf(r); if (!k) continue; const group = map.get(k) ?? []; group.push(r); map.set(k, group); }
   const threads = [...map.entries()].map(([peer, msgs]) => {
-    msgs.sort((a, b) => Date.parse(a.created_at ?? "") - Date.parse(b.created_at ?? ""));
+    msgs.sort((a, b) => Date.parse(smsTime(a) ?? "") - Date.parse(smsTime(b) ?? ""));
     const last = msgs[msgs.length - 1];
     return { peer, last, count: msgs.length, unanswered: last.direction === "inbound" };
   });
-  threads.sort((a, b) => Number(b.unanswered) - Number(a.unanswered) || Date.parse(b.last.created_at ?? "") - Date.parse(a.last.created_at ?? ""));
+  threads.sort((a, b) => Number(b.unanswered) - Number(a.unanswered) || Date.parse(smsTime(b.last) ?? "") - Date.parse(smsTime(a.last) ?? ""));
   return { threads, received: rows.filter((r) => r.direction === "inbound").length, sent: rows.filter((r) => r.direction !== "inbound").length, unanswered: threads.filter((t) => t.unanswered).length };
 }
 
@@ -191,6 +192,7 @@ export type DailyReportInput = {
   mails?: DigestMail[] | null; mailSummaries?: MailSummary[];
   events?: Array<{ subject?: string; start?: string; location?: string }>;
   tasks?: Array<{ title?: string; due?: string }>;
+  tasksUnavailable?: boolean;
   yesterday?: { calls?: number; sms?: number; mails?: number };
   nameFor?: (phone: string | null | undefined) => string | null;
 };
@@ -222,7 +224,7 @@ export function buildDailyReportHtml(input: DailyReportInput) {
     parts.push(card("Appels manqués / sans réponse", "#ef4444", cs.missed.length, cs.missed.length ? cs.missed.slice(0, 40).map((c) => line(who(c.from_number, c.from_name), esc(timeLabel(c.started_at, tz)), vmByCaller.has(String(c.from_number ?? "").replace(/\D/g, "").slice(-10)) ? "📬 A laissé un message vocal" : "Aucun message laissé — à rappeler")).join("") : emptyRow("Aucun appel manqué aujourd'hui. 👏")));
   }
   if (sec.voicemails) parts.push(card("Messages vocaux", "#f59e0b", input.voicemails.length, input.voicemails.length ? input.voicemails.slice(0, 30).map((v) => line(who(v.from_number, v.from_name), `${esc(timeLabel(v.received_at, tz))}${v.duration_seconds ? ` · ${Math.max(1, Math.round(Number(v.duration_seconds)))} s` : ""}`, v.transcript ? `« ${esc(clip(v.transcript, 180))} »` : "")).join("") : emptyRow("Aucun message vocal.")));
-  if (sec.texts) parts.push(card("Textos", "#8b5cf6", ss.threads.length, ss.threads.length ? ss.threads.slice(0, 30).map((t) => line(`${t.unanswered ? '<span style="color:#ef4444;">● Sans réponse</span> · ' : ""}${who(t.peer)}`, esc(timeLabel(t.last.created_at, tz)), `${t.last.direction === "inbound" ? "" : "Vous : "}${esc(clip(t.last.body, 140))} <span style="color:#94a3b8;">(${t.count} msg)</span>`)).join("") : emptyRow("Aucun texto aujourd'hui.")));
+  if (sec.texts) parts.push(card("Textos", "#8b5cf6", ss.threads.length, ss.threads.length ? ss.threads.map((t) => line(`${t.unanswered ? '<span style="color:#ef4444;">● Sans réponse</span> · ' : ""}${who(t.peer)}`, esc(timeLabel(smsTime(t.last), tz)), `${t.last.direction === "inbound" ? "" : "Vous : "}${esc(clip(t.last.body, 140))} <span style="color:#94a3b8;">(${t.count} msg)</span>`)).join("") : emptyRow("Aucun texto aujourd'hui.")));
   if (sec.emails && input.mails) {
     parts.push(card("Courriels — à traiter en priorité", "#ef4444", groups.priority.length, groups.priority.length ? groups.priority.map((m) => mailRow(m, true)).join("") : emptyRow("Rien d'urgent.")));
     parts.push(card("Courriels — clients et partenaires", "#0023e6", groups.people.length, groups.people.length ? groups.people.map((m) => mailRow(m, true)).join("") : emptyRow("Aucun autre courriel.")));
@@ -230,7 +232,7 @@ export function buildDailyReportHtml(input: DailyReportInput) {
   }
   if (sec.agenda) {
     const ev = input.events ?? [], tk = input.tasks ?? [];
-    parts.push(card("Demain", "#10b981", ev.length + tk.length, (ev.length ? ev.map((e) => line(`${esc(timeLabel(e.start, tz))} — ${esc(clip(e.subject || "(sans titre)", 90))}`, "", e.location ? esc(clip(e.location, 60)) : "")).join("") : emptyRow("Aucun rendez-vous prévu.")) + tk.map((t) => line(`☐ ${esc(clip(t.title, 100))}`, esc(t.due ? t.due.slice(0, 10) : ""))).join("")));
+    parts.push(card("Demain", "#10b981", ev.length + tk.length, (ev.length ? ev.map((e) => line(`${esc(timeLabel(e.start, tz))} — ${esc(clip(e.subject || "(sans titre)", 90))}`, "", e.location ? esc(clip(e.location, 60)) : "")).join("") : emptyRow("Aucun rendez-vous prévu.")) + (input.tasksUnavailable ? emptyRow("Tâches Maestro indisponibles — vérifiez votre page Tâches.") : tk.map((t) => line(`☐ ${esc(clip(t.title, 100))}`, esc(timeLabel(t.due, tz)))).join("") || emptyRow("Aucune tâche à échéance demain."))));
   }
   const y = input.yesterday ?? {};
   const html = `<!doctype html><html lang="fr"><head><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body style="margin:0;padding:0;background:#eef2f7;">

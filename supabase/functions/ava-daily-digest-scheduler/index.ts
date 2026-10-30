@@ -3,6 +3,7 @@
 // Contient: appels manqués, notifications AVA non lues, RDV de demain.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { dailyReportDue } from "../_shared/daily-report-schedule.ts";
 
 const DEFAULT_TZ = "America/Toronto";
 const j = (b: unknown, s = 200) =>
@@ -70,11 +71,14 @@ Deno.serve(async (req) => {
       const meta = (p.metadata as any) ?? {};
       const tz = meta.timezone || DEFAULT_TZ;
       const { date, hour, minute } = localParts(tz);
-      const [h, m] = String(meta.email_digest_time ?? "17:00").split(":").map(Number);
-      const mins = hour * 60 + minute, target = (h || 17) * 60 + (m || 0);
-      if (mins < target || mins >= target + 30 || meta.last_email_digest_date === date) continue;
-      // Marque d'abord (pas de doublon en cas de nouvelle exécution), puis envoie.
-      await admin.from("planipret_profiles").update({ metadata: { ...meta, last_email_digest_date: date } }).eq("id", p.id);
+      if (!dailyReportDue(meta, date, hour * 60 + minute)) continue;
+      if (due.length >= 60) break;
+      // Atomic reservation, separate from success; an uncertain send is never retried.
+      const attemptMeta = { ...meta, email_digest_attempt_date: date, email_digest_status: "running" };
+      const { data: claimed, error: claimError } = await admin.from("planipret_profiles")
+        .update({ metadata: attemptMeta }).eq("id", p.id).eq("metadata", p.metadata).select("id");
+      if (claimError || !claimed?.length) continue;
+      p.metadata = attemptMeta;
       due.push({ p, date });
     }
     // Chaque rapport s'exécute dans sa propre invocation, en parallèle (borné à 60 par passage).
@@ -85,12 +89,15 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ action: "daily_report", payload: {}, _user_id: p.user_id }),
       });
       const out = await r.json().catch(() => ({}));
+      const { data: latest } = await admin.from("planipret_profiles").select("metadata").eq("id", p.id).maybeSingle();
+      const resultMeta = { ...(latest?.metadata ?? p.metadata), email_digest_status: out?.sent ? "accepted" : "failed", email_digest_result_at: new Date().toISOString(), ...(out?.sent ? { last_email_digest_date: date } : {}) };
+      await admin.from("planipret_profiles").update({ metadata: resultMeta }).eq("id", p.id).eq("metadata", latest?.metadata ?? p.metadata);
       if (out?.sent) { emailDigest.sent++; return; }
       emailDigest.failed.push({ profile_id: p.id, error: out?.error ?? r.status });
       await admin.from("planipret_ava_notifications").insert({
-        user_id: p.user_id, type: "email_digest_failed", title: "Résumé quotidien non envoyé",
+        user_id: p.user_id, category: "email_digest_failed", title: "Résumé quotidien non envoyé",
         body: "AVA n'a pas pu préparer ton résumé complet aujourd'hui ; aucun résumé partiel n'a été envoyé.",
-        deep_link: "/mplanipret/notifications", metadata: { date },
+        deep_link: "/mplanipret/notifications", data: { date },
       });
     }));
 
@@ -164,7 +171,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return j({ ok: true, considered: targets.length, sent, errors });
+    return j({ ok: true, considered: targets.length, sent, errors, email_digest: emailDigest });
   } catch (e: any) {
     console.error("[ava-daily-digest-scheduler]", e);
     return j({ error: e?.message ?? "server_error" }, 500);

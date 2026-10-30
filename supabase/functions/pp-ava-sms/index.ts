@@ -6,7 +6,7 @@ import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { bookingIntent, detectLanguage, eligibleInbound, holdingText, READ_ONLY_TOOLS, senderTier, smsIdentityVerified, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, providerHistory, safeThread, signAvaSms, smsPeer } from "../_shared/ava-sms-policy.ts";
 import { marcSessionMessagesPath, nsGet, runAvaSmsWatch } from "../_shared/ava-sms-watch.ts";
 import { buildAvaPrompt } from "../_shared/ava-prompt.ts";
-import { handoffCommand, handoffPaused, handoffSummary } from "../_shared/ava-sms-handoff.ts";
+import { handoffCommand, handoffPaused, handoffPushAccepted, handoffSummary } from "../_shared/ava-sms-handoff.ts";
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});
 const requestSchema=z.object({action:z.enum(["status","configure","process","approve","decline","watch_now","presence","handoff_status","resume","read","greet","greet_failed"]),session_id:z.string().uuid().optional(),active:z.boolean().optional(),peer:z.string().max(30).optional(),message_id:z.string().uuid().optional(),job_id:z.string().uuid().optional(),enabled:z.boolean().optional(),reply:z.string().trim().min(1).max(1200).optional()});
 const outputSchema=z.object({kind:z.enum(["reply","sensitive","appointment","needs_identity","change_request"]),claimed_name:z.string().max(120).optional(),claimed_address:z.string().max(200).optional(),reply:z.string().trim().min(1).max(1100),start:z.string().optional(),end:z.string().optional()});
@@ -56,7 +56,7 @@ async function dispatch(admin:any,job:any) {
   if(notification.claimed){
    try {
     const push=await invoke("pp-push-notify",{user_id:MARC_SMS_USER_ID,title:"AVA — relais prêt",body:"Un échange est prêt à être repris. Ouvrez l’application pour consulter le résumé.",category:"sms",deep_link:"/mplanipret/messages",data:{url:"/mplanipret/messages"},idempotency_key:`ava-sms-handoff:${job.id}`});
-    if(!(Number(push.delivered)>0)||push.blocked_by_preference)await admin.from("planipret_ava_sms_jobs").update({error_code:"handoff_push_not_accepted"}).eq("id",job.id);
+    if(!handoffPushAccepted(push))await admin.from("planipret_ava_sms_jobs").update({error_code:"handoff_push_not_accepted"}).eq("id",job.id);
    }catch{await admin.from("planipret_ava_sms_jobs").update({error_code:"handoff_push_unconfirmed"}).eq("id",job.id);}
   }
   }catch{await admin.from("planipret_ava_sms_jobs").update({error_code:"handoff_summary_unavailable"}).eq("id",job.id);}

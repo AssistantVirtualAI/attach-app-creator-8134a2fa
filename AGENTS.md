@@ -1,6 +1,6 @@
 # Project Architecture Rules
 
-- AVA SMS stays in pp-ava-sms, Marc-only, with persisted claims, exact-job SMS/calendar authorization and server signatures; external DID matches never grant private tools or weaken interactive confirmations. Existing pp-ava-sms-watch and watch_now ingest provider history. Handoff uses service-only persisted sessions/peer takeover, fail-closed dispatch guards and job-versioned summary/push/greeting claims; takeover records context but only online sessions pause dispatch, allowing offline continuation without duplicate relays. Install drafted schema before coordinated deployment. Mobile web changes never update installed binaries.
+- AVA SMS stays Marc-only in pp-ava-sms with persisted exact-job SMS/calendar claims and server signatures; external DIDs never grant private tools or weaken confirmations. Existing watch/watch_now ingest provider history. Service-only handoff state guards dispatch; peer takeover records context but only online sessions pause replies. Shared playback releases failed greetings by job version; push failures retain accepted SMS status. Install SQL before coordinated deployment. Web changes never update native binaries.
 
 - AVA email maps to_email to Microsoft to, preserving recipients, confirmation and idempotency.
 

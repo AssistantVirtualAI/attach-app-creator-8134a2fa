@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Prepare all-broker iPhone line labels using validated resolved M identity rather than stale profile extension; preserve existing Maestro resolver/native registration, no deployment/publication/telecom changes.
+- [ ] Verify Scott's installed iPhone registers and answers on 110M after fresh sign-in; physical device/version and next approved app release for updated labels required.
+
 - [x] Prepare offline continuation after human replies: remove permanent peer dispatch block while retaining foreground/session guards and job claims; add failed-greeting release by exact summary version, pageshow reactivation and persisted non-sensitive push failure indicators. Isolated SQL and AVA tests pass; no live schema correction or function deployment.
 - [ ] Finish live pilot relay verification: Marc-authenticated preview foreground/leave sets live online true/false; one discreet test push returned HTTP 200 with one provider acceptance; real TTS returned valid MP3. No actual new client SMS, physical push receipt/audible summary or installed-app lifecycle proof. Corrected SQL/function activation needs coordinated deployment authorization; no publication/native changes.
 

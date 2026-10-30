@@ -17,6 +17,7 @@ import {
   jsonResponse,
   requirePlanipretBroker,
   nsFetch,
+  AVA_ORG_ID,
 } from "../_shared/planipret-ns.ts";
 import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS, TEST_SMS_BLOCK_MESSAGE } from "../_shared/pp-test-sms.ts";
 import { isAvaOriginated, isConfirmed } from "../_shared/ava-confirm.ts";
@@ -486,7 +487,7 @@ Deno.serve(async (req) => {
           messages = Array.isArray(raw) ? raw : (raw?.messages ?? raw?.data ?? []);
           await persistNsMessages(supabase, messages, {
             profileId: ctx.profileId ?? ctx.userId, extension: ctx.extension,
-            domain: ctx.nsDomain, organizationId: ctx.organizationId,
+            domain: ctx.nsDomain, organizationId: AVA_ORG_ID,
           }, threadId);
         }
       }

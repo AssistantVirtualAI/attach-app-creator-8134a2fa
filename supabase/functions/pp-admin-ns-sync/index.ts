@@ -3,6 +3,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { nsMessageRow } from "../_shared/ns-message-storage.ts";
 
 const AVA_ORG_ID = "17d6507f-a9ca-409d-8e49-371d50332615";
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
@@ -535,34 +536,9 @@ async function syncCalls(admin: ReturnType<typeof createClient>, domain: string,
 
 function toMessageRow(m: any, extToProfile: Map<string, string>) {
     const ext = String(val(m, ["user", "extension", "subscriber", "from-user", "to-user", "source-user", "destination-user", "owner"], "")).trim();
-    const mid = String(val(m, ["id", "message_id", "message-id", "uuid", "sms-id", "sms_id"], crypto.randomUUID())).trim();
-    const fromUser = String(val(m, ["from-user-id", "from_user_id", "from-user"], ""));
-    const dirRaw = String(val(m, ["direction", "type", "message-direction"], "inbound")).toLowerCase();
-    const dir = dirRaw.includes("out") || (ext && fromUser.startsWith(`${ext}@`)) ? "outbound" : "inbound";
-    const peer = dir === "outbound" ? normalizePhone(val(m, ["to", "to_number", "to-number", "destination", "destination-number"])) : normalizePhone(val(m, ["from", "from_number", "from-number", "source", "source-number"]));
-    const sessionId = String(val(m, ["messagesession-id", "thread_id", "thread-id"], `${ext}:${peer ?? mid}`));
-    return {
-      user_id: extToProfile.get(ext) ?? null,
-      organization_id: AVA_ORG_ID,
-      ns_message_id: mid,
-      thread_id: sessionId,
-      direction: dir,
-      from_number: normalizePhone(val(m, ["from", "from_number", "from-number", "source", "source-number", "from-user-id"])),
-      to_number: normalizePhone(val(m, ["to", "to_number", "to-number", "destination", "destination-number", "terminating-number", "terminating-user-id", "dialed"])),
-      body: val(m, ["body", "message", "text", "content", "message-text"], ""),
-      media_urls: val(m, ["media_urls", "media-urls", "attachments", "media"], []),
-      // NetSapiens renvoie « sending » sur l'historique importé : on normalise
-      // pour ne pas créer de faux SMS bloqués côté portail.
-      status: (() => {
-        const raw = String(val(m, ["status", "delivery_status", "delivery-status"], "") ?? "").toLowerCase();
-        if (!raw) return null;
-        if (raw.includes("fail") || raw.includes("error") || raw.includes("reject")) return "failed";
-        if (raw.includes("deliver") || raw.includes("sent") || raw.includes("sending") || raw.includes("complete")) return "sent";
-        return raw;
-      })(),
-      sent_at: toIso(val(m, ["sent_at", "sent-at", "time", "created_at", "message-datetime", "timestamp", "date"])),
-      metadata: { ...m, extension: ext },
-    };
+    const profileId = extToProfile.get(ext);
+    if (!profileId) return null;
+    return nsMessageRow(m, { profileId, extension: ext, domain: String(m.domain ?? NS_DEFAULT_DOMAIN), organizationId: AVA_ORG_ID });
   }
 
 async function syncMessages(admin: ReturnType<typeof createClient>, domain: string, start: string, end: string, users: any[] = []) {
@@ -620,13 +596,14 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
     if (ext && p.id) extToProfile.set(ext, p.id as string);
   }
 
-  const rows = r.data.map((m: any) => toMessageRow(m, extToProfile));
+  const rows = r.data.map((m: any) => toMessageRow(m, extToProfile)).filter((row) => row !== null);
 
   let upserted = 0;
   for (let i = 0; i < rows.length; i += 200) {
     const chunk = rows.slice(i, i + 200);
-    const { error } = await admin.from("planipret_phone_messages").upsert(chunk, { onConflict: "ns_message_id" });
-    if (!error) upserted += chunk.length;
+    const { error } = await admin.from("planipret_phone_messages").upsert(chunk, { onConflict: "ns_message_id", ignoreDuplicates: true });
+    if (error) throw new Error(`sms_storage_failed:${error.code ?? "unknown"}`);
+    upserted += chunk.length;
   }
   // Essai AVA texto (Marc) : traité par pp-ava-sms-watch (chaque minute), pas ici.
   return { fetched: rows.length, upserted, warning: null };

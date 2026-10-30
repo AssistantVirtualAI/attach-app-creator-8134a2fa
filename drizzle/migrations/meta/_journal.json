@@ -239,6 +239,13 @@
       "when": 1793343519789,
       "tag": "0033_ava_sms_handoff_state",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793344674034,
+      "tag": "0034_ava_sms_handoff_offline_resume",
+      "breakpoints": true
     }
   ]
 }

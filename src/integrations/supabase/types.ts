@@ -9785,6 +9785,39 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_ava_sms_handoff_state: {
+        Row: {
+          busy_job: string | null
+          observations: Json
+          queue: Json
+          sessions: Json
+          summaries: Json
+          taken_over: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          busy_job?: string | null
+          observations?: Json
+          queue?: Json
+          sessions?: Json
+          summaries?: Json
+          taken_over?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          busy_job?: string | null
+          observations?: Json
+          queue?: Json
+          sessions?: Json
+          summaries?: Json
+          taken_over?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_ava_sms_jobs: {
         Row: {
           calendar_claimed_at: string | null
@@ -18650,6 +18683,10 @@ export type Database = {
         Returns: boolean
       }
       pp_audit_realtime_check: { Args: never; Returns: Json }
+      pp_ava_sms_handoff: {
+        Args: { p_args?: Json; p_op: string; p_user: string }
+        Returns: Json
+      }
       pp_claim_call: {
         Args: { _answered_by: string; _call_id: string }
         Returns: boolean

@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { groupCallSegments } from "@/lib/planipret/callSegments";
 import { Button } from "@/components/ui/button";
 import { useMissedCallReadState } from "@/lib/planipret/missedCallReadState";
 import { TranscriptDiagnosticNotice } from "@/components/planipret/mobile/call/TranscriptDiagnosticNotice";
@@ -303,17 +304,7 @@ export default function MCalls() {
       );
 
       // Fallback : si NS ne renvoie rien, montrer le cache local
-      const groups = new Map<string, Call>();
-      for (const call of (all.length ? all : visibleLocal as Call[])) {
-        const key = call.ns_orig_callid || call.id;
-        const previous = groups.get(key);
-        if (!previous) groups.set(key, call);
-        else groups.set(key, { ...previous,
-          recording_url: previous.recording_url || call.recording_url,
-          transcript: previous.transcript || call.transcript,
-        });
-      }
-      const next = [...groups.values()];
+      const next = groupCallSegments((all.length ? all : visibleLocal) as Call[]);
       setCalls(next);
       writeScreenCache(`calls:list:${userId}`, next);
 

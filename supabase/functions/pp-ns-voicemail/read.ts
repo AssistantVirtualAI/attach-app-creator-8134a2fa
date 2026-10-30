@@ -16,10 +16,9 @@ async function getRows(fetcher: Fetcher, path: string) {
   return Array.isArray(raw) ? voicemailRows(raw) : raw;
 }
 
-export async function readVoicemailList(fetcher: Fetcher, domain: string, extension: string, folder: string, now: string) {
-  const path = voicemailPath(domain, extension, folder);
+async function getAllVoicemailRows(fetcher: Fetcher, path: string) {
   const rows = [...voicemailRows(await getRows(fetcher, path))];
-  // Provider pages at 20 rows; read further pages (read-only), stop when no new file appears.
+  // Provider pages at 20 rows; continue until a page adds no new message.
   const key = (r: any) => r?.filename ?? r?.ns_vm_id ?? r?.vm_id ?? r?.id;
   const seen = new Set(rows.map(key));
   for (let page = 0; rows.length >= 20 && page < 25; page++) {
@@ -29,6 +28,12 @@ export async function readVoicemailList(fetcher: Fetcher, domain: string, extens
     if (!fresh.length) break;
     fresh.forEach((r) => { seen.add(key(r)); rows.push(r); });
   }
+  return rows;
+}
+
+export async function readVoicemailList(fetcher: Fetcher, domain: string, extension: string, folder: string, now: string) {
+  const path = voicemailPath(domain, extension, folder);
+  const rows = await getAllVoicemailRows(fetcher, path);
   const items = rows.map((row) => normalizeVoicemail(row, folder, now));
   if (items.some((item) => !item)) throw new Error("Voicemail identity missing");
   const valid = items.filter((item) => item !== null);
@@ -54,8 +59,8 @@ export async function readVoicemailList(fetcher: Fetcher, domain: string, extens
 
 export async function readVoicemailAudio(fetcher: Fetcher, domain: string, extension: string, folder: string, filename: string) {
   const path = voicemailPath(domain, extension, folder, filename);
-  const rows = await getRows(fetcher, voicemailPath(domain, extension, folder));
-  const exists = voicemailRows(rows).some((row) => (row.filename ?? row.ns_vm_id ?? row.vm_id ?? row.id) === filename);
+  const rows = await getAllVoicemailRows(fetcher, voicemailPath(domain, extension, folder));
+  const exists = rows.some((row) => (row.filename ?? row.ns_vm_id ?? row.vm_id ?? row.id) === filename);
   if (!exists) return null; // Never read a guessed foreign or absent message.
   const detail = await getRows(fetcher, path);
   const item = Array.isArray(detail) ? detail[0] : detail?.data ?? detail;

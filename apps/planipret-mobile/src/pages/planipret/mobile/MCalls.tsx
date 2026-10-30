@@ -2092,8 +2092,7 @@ function VoicemailsTab({
     const sb: any = supabase;
     // Mirror the broker's own phone-system inbox/saved folders first; the
     // server scopes to the JWT extension. Failures fall back to the cache.
-    await Promise.all((["inbox", "saved"] as const).map((f) =>
-      supabase.functions.invoke("pp-ns-voicemail", { body: { action: "list", folder: f } }).catch(() => null)));
+    await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "sync" } }).catch(() => null);
     const { data } = await sb
       .from("planipret_voicemails")
       .select("*")
@@ -2126,25 +2125,52 @@ function VoicemailsTab({
 
   const markRead = async (vm: VM) => {
     if (vm.is_read) return;
-    const sb: any = supabase;
-    await sb.from("planipret_voicemails").update({ is_read: true }).eq("id", vm.id);
-    setItems((p) => p.map((x) => x.id === vm.id ? { ...x, is_read: true } : x));
+    try {
+      if (vm.ns_vm_id) {
+        const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", {
+          body: { action: "mark-read", vm_id: vm.ns_vm_id, from_folder: vm.folder || "inbox" },
+        });
+        if (error || (data as any)?.ok !== true) throw new Error("mark_read_failed");
+      } else {
+        await (supabase as any).from("planipret_voicemails").update({ is_read: true }).eq("id", vm.id).eq("user_id", userId);
+      }
+      setItems((p) => p.map((x) => x.id === vm.id ? { ...x, is_read: true } : x));
+    } catch {
+      toast.error("Impossible de marquer ce voicemail comme lu");
+    }
   };
   const saveVm = async (vm: VM) => {
-    const sb: any = supabase;
-    await sb.from("planipret_voicemails").update({ folder: "saved" }).eq("id", vm.id);
-    setItems((p) => p.map((x) => x.id === vm.id ? { ...x, folder: "saved" } : x));
-    toast.success("Voicemail sauvegardé");
+    try {
+      if (vm.ns_vm_id) {
+        const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", {
+          body: { action: "move", vm_id: vm.ns_vm_id, from_folder: vm.folder || "inbox", folder: "saved" },
+        });
+        if (error || (data as any)?.ok !== true) throw new Error("move_failed");
+      } else {
+        await (supabase as any).from("planipret_voicemails").update({ folder: "saved" }).eq("id", vm.id).eq("user_id", userId);
+      }
+      setItems((p) => p.map((x) => x.id === vm.id ? { ...x, folder: "saved" } : x));
+      toast.success("Voicemail sauvegardé");
+    } catch {
+      toast.error("Impossible de sauvegarder ce voicemail");
+    }
   };
   const removeVm = async (vm: VM) => {
     if (!confirm("Supprimer ce voicemail ?")) return;
-    if (vm.ns_vm_id) {
-      await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "delete", vm_id: vm.ns_vm_id } }).catch(() => null);
+    try {
+      if (vm.ns_vm_id) {
+        const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", {
+          body: { action: "delete", vm_id: vm.ns_vm_id, from_folder: vm.folder || "inbox" },
+        });
+        if (error || (data as any)?.ok !== true) throw new Error("delete_failed");
+      } else {
+        await (supabase as any).from("planipret_voicemails").delete().eq("id", vm.id).eq("user_id", userId);
+      }
+      setItems((p) => p.filter((x) => x.id !== vm.id));
+      toast.success("Voicemail supprimé");
+    } catch {
+      toast.error("Impossible de supprimer ce voicemail");
     }
-    const sb: any = supabase;
-    await sb.from("planipret_voicemails").delete().eq("id", vm.id);
-    setItems((p) => p.filter((x) => x.id !== vm.id));
-    toast.success("Voicemail supprimé");
   };
   const fetchTranscript = async (vm: VM) => {
     const { data, error } = await supabase.functions.invoke("ns-transcription", { body: { vm_id: vm.ns_vm_id ?? vm.id } });

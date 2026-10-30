@@ -17,6 +17,18 @@ Deno.test("another broker's filename never reaches the audio detail read", async
   assertEquals(await readVoicemailAudio(fetcher, "test", "2222", "inbox", "a.wav"), null);
   assertEquals(paths, ["/domains/test/users/2222/voicemails/new"]);
 });
+Deno.test("audio reads find a message on the provider's next voicemail page", async () => {
+  const paths: string[] = [];
+  const first = Array.from({ length: 20 }, (_, i) => ({ filename: `first-${i}.wav` }));
+  const fetcher = (path: string) => {
+    paths.push(path);
+    if (path.includes("?start=20")) return Promise.resolve(Response.json([{ filename: "later.wav" }]));
+    if (path.endsWith("/later.wav")) return Promise.resolve(Response.json([{ "file-access-url": "/later-audio" }]));
+    return Promise.resolve(Response.json(first));
+  };
+  assertEquals(await readVoicemailAudio(fetcher, "test", "1117", "inbox", "later.wav"), "/later-audio");
+  assertEquals(paths.some((path) => path.includes("?start=20&limit=100")), true);
+});
 Deno.test("unidentified list messages use documented metadata for caller details", async () => {
   const fetcher = (path: string) => Promise.resolve(Response.json(path.endsWith("/save") ? [{ filename: "a.wav" }] : [{ FromUser: "", NmsAni: "15147071203", FromName: "Olivier" }]));
   const rows = await readVoicemailList(fetcher, "test", "1117", "saved", now);

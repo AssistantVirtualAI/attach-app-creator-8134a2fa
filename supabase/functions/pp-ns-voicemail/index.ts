@@ -20,6 +20,32 @@ import {
 import { readVoicemailAudio, readVoicemailList, voicemailPath } from "./read.ts";
 
 const VALID_FOLDERS = new Set(["inbox", "saved", "deleted"]);
+const MIRRORED_FOLDERS = ["inbox", "saved"] as const;
+
+async function persistVoicemailItems(supabase: any, profileId: string, items: any[]) {
+  let syncFailed = false;
+  for (const item of items) {
+    const { vm_id: _vmId, created_at: _createdAt, ...values } = item;
+    const { data: existing, error: lookupError } = await supabase.from("planipret_voicemails")
+      .select("id,is_read,transcript,from_number,from_name").eq("user_id", profileId).eq("ns_vm_id", item.ns_vm_id).maybeSingle();
+    if (lookupError) { syncFailed = true; continue; }
+    const row = {
+      ...values,
+      user_id: profileId,
+      from_number: item.from_number ?? existing?.from_number ?? null,
+      from_name: item.from_name ?? existing?.from_name ?? null,
+      is_read: existing?.is_read ?? item.is_read,
+      transcript: item.transcript ?? existing?.transcript ?? null,
+    };
+    // The table's user_id stores the Planipret profile ID, not auth.uid().
+    // Never use a global upsert: filename conflicts cannot change owners.
+    const result = existing
+      ? await supabase.from("planipret_voicemails").update(row).eq("id", existing.id).eq("user_id", profileId)
+      : await supabase.from("planipret_voicemails").insert(row);
+    if (result.error) syncFailed = true;
+  }
+  return syncFailed;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -51,28 +77,30 @@ Deno.serve(async (req) => {
       }
       const now = new Date().toISOString();
       const items = await readVoicemailList(nsFetch, ctx.nsDomain, ctx.extension, folder, now);
-      let syncFailed = false;
-      for (const item of items) {
-        const { vm_id: _vmId, created_at: _createdAt, ...values } = item;
-        const { data: existing, error: lookupError } = await supabase.from("planipret_voicemails")
-          .select("id,is_read,transcript,from_number,from_name").eq("user_id", ctx.profileId).eq("ns_vm_id", item.ns_vm_id).maybeSingle();
-        if (lookupError) { syncFailed = true; continue; }
-        item.from_number = item.from_number ?? existing?.from_number ?? null;
-        item.from_name = item.from_name ?? existing?.from_name ?? null;
-        const row = {
-          ...values, user_id: ctx.profileId,
-          is_read: existing?.is_read ?? item.is_read,
-          transcript: item.transcript ?? existing?.transcript ?? null,
-        };
-        // The table's user_id stores the Planipret profile ID, not auth.uid().
-        // Never use a global upsert: filename conflicts cannot change owners.
-        const result = existing
-          ? await supabase.from("planipret_voicemails").update(row).eq("id", existing.id).eq("user_id", ctx.profileId)
-          : await supabase.from("planipret_voicemails").insert(row);
-        if (result.error) syncFailed = true;
-      }
+      const syncFailed = await persistVoicemailItems(supabase, ctx.profileId, items);
       if (syncFailed) console.error("[pp-ns-voicemail] local_sync_failed");
       return jsonResponse({ ok: true, count: items.length, folder, items, sync_failed: syncFailed });
+    }
+
+    // ── miroir complet inbox/saved ───────────────────────────────────────────
+    // Used by Calls: reconcile only this authenticated broker's current provider
+    // state. Local cache history remains retained; provider retention or delay
+    // must never erase a stored transcript/history from a broker's own cache.
+    if (action === "sync") {
+      const now = new Date().toISOString();
+      const byFolder: Record<string, any[]> = {};
+      let syncFailed = false;
+      for (const folder of MIRRORED_FOLDERS) {
+        const items = await readVoicemailList(nsFetch, ctx.nsDomain, ctx.extension, folder, now);
+        byFolder[folder] = items;
+        syncFailed = (await persistVoicemailItems(supabase, ctx.profileId, items)) || syncFailed;
+      }
+      if (syncFailed) console.error("[pp-ns-voicemail] full_sync_failed");
+      return jsonResponse({
+        ok: !syncFailed,
+        folders: Object.fromEntries(MIRRORED_FOLDERS.map((folder) => [folder, byFolder[folder]?.length ?? 0])),
+        sync_failed: syncFailed,
+      }, syncFailed ? 502 : 200);
     }
 
     // ── URL audio d'un voicemail ─────────────────────────────────────────────
@@ -106,7 +134,7 @@ Deno.serve(async (req) => {
       await supabase
         .from("planipret_voicemails")
         .update({ is_read: true })
-        .eq("vm_id", vmId)
+        .eq("ns_vm_id", vmId)
         .eq("user_id", ctx.profileId);
 
       return jsonResponse({ ok: true });
@@ -117,10 +145,12 @@ Deno.serve(async (req) => {
       const { vm_id, folder } = body ?? {};
       if (!vm_id || !folder) return jsonResponse({ error: "vm_id et folder requis" }, 400);
       if (!VALID_FOLDERS.has(folder)) return jsonResponse({ error: "Dossier invalide" }, 400);
+      const destinationFolder = providerFolder(String(folder));
+      if (!destinationFolder) return jsonResponse({ error: "Dossier fournisseur invalide" }, 400);
 
       const res = await nsFetch(
         `${userBase}/voicemails/${srcFolder}/${encodeURIComponent(vm_id)}/move`,
-        { method: "PATCH", body: JSON.stringify({ folder }) }
+        { method: "PATCH", body: JSON.stringify({ folder: destinationFolder }) }
       );
 
       if (!res.ok) {
@@ -131,7 +161,7 @@ Deno.serve(async (req) => {
       await supabase
         .from("planipret_voicemails")
         .update({ folder })
-        .eq("vm_id", vm_id)
+        .eq("ns_vm_id", vm_id)
         .eq("user_id", ctx.profileId);
 
       return jsonResponse({ ok: true });
@@ -155,7 +185,7 @@ Deno.serve(async (req) => {
       await supabase
         .from("planipret_voicemails")
         .delete()
-        .eq("vm_id", vmId)
+        .eq("ns_vm_id", vmId)
         .eq("user_id", ctx.profileId);
 
       return jsonResponse({ ok: true });

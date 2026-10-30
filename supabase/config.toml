@@ -175,6 +175,8 @@ project_id = "gejxisrqtvxavbrfcoxz"
     verify_jwt = false
   [functions.pp-ns-cdr]
     verify_jwt = true
+  [functions.pp-ns-voicemail-audit]
+    verify_jwt = true
   [functions.pp-ns-upload-greeting]
     verify_jwt = true
   [functions.pp-recording-play]

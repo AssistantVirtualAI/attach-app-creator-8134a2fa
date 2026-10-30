@@ -5,6 +5,7 @@ Deno.test("app folders use the documented provider folders", () => {
   assertEquals(providerFolder("inbox"), "new");
   assertEquals(providerFolder("saved"), "save");
   assertEquals(providerFolder("deleted"), "trash");
+  assertEquals(providerFolder("save"), "save");
   assertEquals(providerFolder("invalid"), null);
   assertEquals(appFolder("new"), "inbox");
 });

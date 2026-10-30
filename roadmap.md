@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Implement Marc-only SMS handoff: authenticated broker foreground pauses every auto-reply; background resumes non-taken-over threads; personal broker SMS keeps its thread silent; persisted summary + private push + spoken handoff. No native edits/deployment/publication without approval.
+- [x] Prepare Marc-only SMS handoff: event-driven foreground pause, background resume for other threads, permanent human-thread takeover/resume, persisted queue, atomic adapter claims, evidence-based summary, private push and voice controls. Draft schema only; no active data/migration/deployment/native edits. AVA and isolated SQL tests pass; mocked desktop/mobile panel verified, not a live Marc flow.
+- [ ] Activate and verify SMS handoff: needs explicit schema/function deployment and portal publication authorization; installed-app integration/release remains separately authorized. Verify real Marc phone push, speech, app lifecycle, human reply and provider-observed takeover; current signed-in requester is not Marc. No delivery/real-device claim.
 
 - [x] All-broker provider SMS mapper/storage deployed in portal reads and existing sync; provider sent_at drives reports. Marc's three inbound messages (including 04:53) persisted; authenticated requester threads/messages HTTP 200. 95 AVA/report/storage tests pass. Complete all-broker historical backfill is not established; no new polling or sends.
 - [x] Tomorrow's tasks added through broker-owned live Task API with pagination and explicit unavailable notice; settings mirrored in mobile web, authenticated UI/settings/report preview HTTP 200. Installed-app settings require next approved update; no native build/publication.

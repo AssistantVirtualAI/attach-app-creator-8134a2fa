@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Publish current portal after AVA protection tests and current security check; verify shared AVA tool availability without dispatching sensitive actions.
+- [x] Publication requested for https://avastatistic.ca; current security scan: 3 warnings, no critical findings. All 61 AVA protection tests pass; authenticated live agent read confirms 93/93 expected tools attached (96 including built-ins), Jessica unchanged; authenticated confirmations page renders. Live sensitive tool execution and installed-phone receipt remain unverified.
 - [ ] Implement Marc-only AVA SMS pilot: authenticated inbound identity, thread-scoped history, automatic safe replies, scheduling and sensitive-request approval/notification; never grant broker tool access based on DID alone.
 
 - [x] Check second screenshot against sanitized Marc/all-broker send logs: three recent send_email failures have to_email but no to, completed in 0.80–1.06 seconds; two entries near the reported incident returned action_in_progress in under 0.52 seconds. No recorded server timeout proves the voice timeout cause. Existing recipient fix passes 36 tests; no send/retry/deployment/native changes.

@@ -25,7 +25,7 @@ import { mergeDeliveryEvidence } from "./delivery-evidence.ts";
 import { approvedSmsTest } from "./approved-sms-test.ts";
 import { internalThreadPair, internalThreadOrFilter } from "../_shared/pp-internal-thread.ts";
 import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
-import { persistNsMessages } from "../_shared/ns-message-storage.ts";
+import { nsSessionId, persistNsMessages } from "../_shared/ns-message-storage.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -374,6 +374,22 @@ Deno.serve(async (req) => {
         threads = Array.isArray(raw) ? raw : (raw?.messagesessions ?? raw?.data ?? []);
       }
 
+      // Opening the inbox persists the provider's recent messages for every
+      // broker, even before a conversation is selected. No new polling.
+      let storageWarning: string | null = null;
+      for (const thread of threads.slice(0, 10)) {
+        const sessionId = nsSessionId(thread);
+        if (!sessionId) continue;
+        try {
+          const history = await nsFetch(`${userBase}/messagesessions/${encodeURIComponent(sessionId)}/messages?limit=100`, { method: "GET" });
+          if (!history.ok) { storageWarning = "sms_history_unavailable"; continue; }
+          const raw = await history.json();
+          await persistNsMessages(supabase, Array.isArray(raw) ? raw : raw?.messages ?? raw?.data ?? [], {
+            profileId: ctx.profileId, extension: ctx.extension, domain: ctx.nsDomain, organizationId: AVA_ORG_ID,
+          }, sessionId);
+        } catch { storageWarning = "sms_storage_unavailable"; }
+      }
+
       // Historique local (planipret_phone_messages) : garantit que les SMS
       // envoyés/reçus restent visibles même si NS-API n'expose pas la session.
       const localRows = await getLocalMessages(supabase, ctx.profileId ?? ctx.userId);
@@ -440,7 +456,7 @@ Deno.serve(async (req) => {
           }
         } catch { /* ignore */ }
       }
-      return jsonResponse({ ok: true, count: threads.length, threads, maestro_inbox: maestroInbox, ns_warning: nsWarning });
+      return jsonResponse({ ok: true, count: threads.length, threads, maestro_inbox: maestroInbox, ns_warning: nsWarning, storage_warning: storageWarning });
     }
 
     if (action === "internal-thread") {

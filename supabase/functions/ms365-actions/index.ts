@@ -5,7 +5,7 @@ import { callAnthropic } from "../_shared/anthropic.ts";
 import { buildIdempotencyKey, claimAction, finishAction, isConfirmed, isSensitiveMs365Action } from "../_shared/ava-confirm.ts";
 import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
 import { hasCalendarConflict } from "../_shared/ava-sms-policy.ts";
-import { buildDigestHtml, localDayStartIso } from "../_shared/email-digest.ts";
+import { buildDigestHtml, buildDailyReportHtml, localDayStartIso } from "../_shared/email-digest.ts";
 
 
 
@@ -85,6 +85,30 @@ async function graph(admin: any, profile: any, path: string, init: RequestInit =
   return r;
 }
 
+
+// Résumés d'une ligne (IA, consultatif) ; tout échec retombe sur l'aperçu du courriel.
+async function summarizeMailsAi(mails: any[]): Promise<Array<{ id: string; summary: string; action: string }>> {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key || !mails.length) return [];
+  const items = mails.slice(0, 150).map((m) => ({ id: m.id, from: m.from?.emailAddress?.name ?? m.from?.emailAddress?.address, subject: m.subject, preview: String(m.bodyPreview ?? "").slice(0, 400) }));
+  try {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
+      method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "openai/gpt-6-astra", reasoning: { effort: "low" },
+        instructions: "Tu aides un courtier hypothécaire québécois. Pour chaque courriel, écris en français un résumé d'une phrase (max 20 mots) et une action suggérée courte (ou chaîne vide si aucune). N'invente rien au-delà du contenu fourni.",
+        input: JSON.stringify(items),
+        text: { format: { type: "json_schema", name: "mail_summaries", strict: true, schema: { type: "object", additionalProperties: false, required: ["items"], properties: { items: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "summary", "action"], properties: { id: { type: "string" }, summary: { type: "string" }, action: { type: "string" } } } } } } } },
+      }),
+    });
+    if (!r.ok) { console.warn("[ms365-actions] mail summaries", r.status); return []; }
+    const d = await r.json();
+    const text = d.output_text ?? (d.output ?? []).flatMap((o: any) => o.content ?? []).map((c: any) => c.text ?? "").join("");
+    const parsed = JSON.parse(text);
+    const ids = new Set(items.map((i) => i.id));
+    return (parsed.items ?? []).filter((i: any) => ids.has(i.id));
+  } catch (e) { console.warn("[ms365-actions] mail summaries failed", String(e)); return []; }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -560,6 +584,58 @@ Deno.serve(async (req) => {
         const r = await graph(admin, profile, scope, { method: "POST", body: JSON.stringify({ body: { contentType: payload.contentType ?? "text", content } }) });
         const d = await r.json().catch(() => ({}));
         return j({ success: r.ok, message_id: d.id, error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
+      }
+      case "daily_report": {
+        // Rapport complet de la journée, envoyé uniquement au courtier lui-même.
+        const self = profile.ms365_email;
+        if (!self) return j({ success: false, error: "Adresse Microsoft 365 inconnue" }, 400);
+        const tz = APP_TZ;
+        const dayStart = localDayStartIso(tz);
+        const dayEnd = localDayStartIso(tz, new Date(Date.now() + 86400000));
+        const yStart = localDayStartIso(tz, new Date(Date.now() - 86400000));
+        const { data: full } = await admin.from("planipret_profiles").select("metadata").eq("id", profile.id).maybeSingle();
+        const meta = (full?.metadata as any) ?? {};
+        const [callsR, vmR, smsR, yCalls, ySms] = await Promise.all([
+          admin.from("planipret_phone_calls").select("direction,status,started_at,answered_at,duration_seconds,from_number,from_name,to_number,to_name").eq("user_id", profile.id).is("deleted_at", null).gte("started_at", dayStart).lt("started_at", dayEnd).order("started_at").limit(1000),
+          admin.from("planipret_voicemails").select("from_number,from_name,received_at,duration_seconds,transcript").eq("user_id", profile.id).gte("received_at", dayStart).lt("received_at", dayEnd).order("received_at", { ascending: false }).limit(200),
+          admin.from("planipret_phone_messages").select("direction,from_number,to_number,body,created_at").eq("user_id", profile.id).gte("created_at", dayStart).lt("created_at", dayEnd).limit(1000),
+          admin.from("planipret_phone_calls").select("id", { count: "exact", head: true }).eq("user_id", profile.id).is("deleted_at", null).gte("started_at", yStart).lt("started_at", dayStart),
+          admin.from("planipret_phone_messages").select("id", { count: "exact", head: true }).eq("user_id", profile.id).gte("created_at", yStart).lt("created_at", dayStart),
+        ]);
+        if (callsR.error || vmR.error || smsR.error) return j({ success: false, sent: false, error: "Lecture de l'activité impossible" }, 502);
+        // Courriels : liste complète paginée, ou rien (jamais partielle).
+        let mails: any[] | null = [];
+        let next: string | null = `/me/mailFolders/inbox/messages?$top=100&$orderby=receivedDateTime%20desc&$filter=receivedDateTime%20ge%20${encodeURIComponent(dayStart)}&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,importance,inferenceClassification,flag,webLink`;
+        for (let page = 0; next && page < 20; page++) {
+          const r = await graph(admin, profile, next);
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) return j({ success: false, sent: false, error: d?.error?.message ?? `Lecture boîte impossible (${r.status})` }, 502);
+          mails!.push(...(d.value ?? []));
+          const link: string | undefined = d["@odata.nextLink"];
+          next = link ? link.replace(GRAPH, "") : null;
+        }
+        if (next) return j({ success: false, sent: false, error: "Trop de courriels pour un résumé complet" }, 502);
+        const yMailsR = await graph(admin, profile, `/me/mailFolders/inbox/messages?$top=1&$count=true&$filter=receivedDateTime%20ge%20${encodeURIComponent(yStart)}%20and%20receivedDateTime%20lt%20${encodeURIComponent(dayStart)}&$select=id`, { headers: { ConsistencyLevel: "eventual" } });
+        const yMails = yMailsR.ok ? Number((await yMailsR.json().catch(() => ({})))["@odata.count"]) : NaN;
+        const evR = await graph(admin, profile, `/me/calendarView?startDateTime=${dayEnd}&endDateTime=${localDayStartIso(tz, new Date(Date.now() + 2 * 86400000))}&$select=subject,start,location&$orderby=start/dateTime&$top=50`);
+        const evD = await evR.json().catch(() => ({}));
+        const events = (evD.value ?? []).map((e: any) => ({ subject: e.subject, start: toOffsetIso(e.start?.dateTime, e.start?.timeZone), location: e.location?.displayName }));
+        // Noms d'annuaire pour les numéros (contacts du courtier seulement).
+        const { data: contacts } = await admin.from("planipret_contacts").select("*").eq("user_id", profile.id).limit(2000);
+        const names = new Map<string, string>();
+        for (const c of contacts ?? []) for (const k of Object.keys(c)) if (/phone|mobile|number/i.test(k) && c[k]) { const d = String(c[k]).replace(/\D/g, "").slice(-10); const nm = c.full_name ?? c.name ?? [c.first_name, c.last_name].filter(Boolean).join(" "); if (d.length === 10 && nm) names.set(d, nm); }
+        const mailSummaries = await summarizeMailsAi(mails ?? []);
+        const dateLabel = new Intl.DateTimeFormat("fr-CA", { timeZone: tz, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+        const report = buildDailyReportHtml({
+          brokerName: profile.full_name ?? "", dateLabel, tz, settingsUrl: "https://avastatistic.ca/planipret/broker/settings",
+          sections: meta.email_digest_sections, calls: callsR.data ?? [], voicemails: vmR.data ?? [], sms: smsR.data ?? [],
+          mails, mailSummaries, events, yesterday: { calls: yCalls.count ?? undefined, sms: ySms.count ?? undefined, mails: Number.isFinite(yMails) ? yMails : undefined },
+          nameFor: (p) => names.get(String(p ?? "").replace(/\D/g, "").slice(-10)) ?? null,
+        });
+        if (payload.preview_only === true) return j({ success: true, sent: false, ...report });
+        const sr = await graph(admin, profile, `/me/sendMail`, { method: "POST", body: JSON.stringify({ message: { subject: report.subject, body: { contentType: "HTML", content: report.html }, toRecipients: [{ emailAddress: { address: self } }] }, saveToSentItems: false }) });
+        if (!sr.ok) { const e = await sr.json().catch(() => ({})); return j({ success: false, sent: false, error: e?.error?.message ?? `Envoi refusé (${sr.status})` }, 502); }
+        return j({ success: true, sent: true, to: self, subject: report.subject, stats: report.stats, ai_summaries: mailSummaries.length });
       }
       case "email_digest": {
         // Envoyé uniquement à l'adresse du courtier lui-même ; liste complète paginée.

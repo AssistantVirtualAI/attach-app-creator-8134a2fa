@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     const { data: digestProfiles } = await admin
       .from("planipret_profiles")
       .select("id, user_id, metadata, status")
-      .eq("status", "active")
+      .in("status", ["active", "available"])
       .eq("metadata->>email_digest_enabled", "true").not("ms365_access_token", "is", null);
     for (const p of digestProfiles ?? []) {
       const meta = (p.metadata as any) ?? {};

@@ -2,6 +2,7 @@
 // NetSapiens (the provider does not deliver message webhooks to us), saves new
 // inbound texts and hands each one to pp-ava-sms exactly once (job claim on message_id).
 import { MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotInboundRow, pilotOwner, sessionNeedsRead } from "./ava-sms-policy.ts";
+import { handoffCommand, providerHumanOutbound } from "./ava-sms-handoff.ts";
 
 const AVA_ORG_ID = "17d6507f-a9ca-409d-8e49-371d50332615";
 const NS_BASE = () => (Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2").replace(/\/$/, "");
@@ -27,10 +28,15 @@ export async function runAvaSmsWatch(admin: any) {
   if (!profile || !pilotOwner(profile)) return { skipped: "pilot_identity_unverified" };
 
   const sessions = await nsGet("/domains/planipret.ca/users/1136/messagesessions?limit=20");
+  const {data:avaJobs,error:avaError}=await admin.from("planipret_ava_sms_jobs").select("reply").eq("user_id",MARC_SMS_USER_ID).gte("created_at",config.activated_at);
+  if(avaError)throw new Error("handoff_history_unavailable");
+  const avaBodies=new Set<string>((avaJobs??[]).map((j:any)=>String(j.reply??"").trim()));
   const rows: any[] = [];
   for (const s of sessions.filter((x) => sessionNeedsRead(x, config.activated_at)).slice(0, 5)) {
     const msgs = await nsGet(marcSessionMessagesPath(String(s["messagesession-id"])));
     for (const m of msgs) {
+      const human=providerHumanOutbound(m,avaBodies,config.activated_at);
+      if(human)await handoffCommand(admin,"takeover",human);
       const row = pilotInboundRow(m, MARC_SMS_PROFILE_ID, AVA_ORG_ID);
       if (row && Date.parse(row.sent_at) >= Date.parse(config.activated_at)) rows.push(row);
     }

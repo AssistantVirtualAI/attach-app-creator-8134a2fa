@@ -26,6 +26,8 @@ import { approvedSmsTest } from "./approved-sms-test.ts";
 import { internalThreadPair, internalThreadOrFilter } from "../_shared/pp-internal-thread.ts";
 import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
 import { nsSessionId, persistNsMessages } from "../_shared/ns-message-storage.ts";
+import { handoffCommand, handoffPaused } from "../_shared/ava-sms-handoff.ts";
+import { MARC_SMS_USER_ID } from "../_shared/ava-sms-policy.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -773,6 +775,15 @@ Deno.serve(async (req) => {
       const sessionId = thread_id ?? newMessageSessionId();
       const path = `${userBase}/messagesessions/${encodeURIComponent(sessionId)}/messages`;
 
+      if(ctx.userId===MARC_SMS_USER_ID){
+        if(pilotJob){
+          if(await handoffPaused(supabase,destination,pilotJob.id))return jsonResponse({ok:false,error:"broker_handoff"},409);
+        }else if(!isAvaOriginated(confirmScope)&&req.headers.get("Authorization")!==`Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`){
+          const state=await handoffCommand(supabase,"takeover",{peer:destination});
+          if(state.taking_over)return jsonResponse({ok:false,error:"handoff_in_progress_no_send"},409);
+        }
+      }
+
       let res = await nsFetch(path, { method: "POST", body: JSON.stringify(nsBody) });
       let lastText = await res.text();
 
@@ -810,7 +821,7 @@ Deno.serve(async (req) => {
               status: "sent",
               ns_message_id: nsMsgId,
               idempotency_key: idempotencyKey,
-              metadata: { type, correlation_id: correlationId, idempotency_key: idempotencyKey },
+              metadata: { type, correlation_id: correlationId, idempotency_key: idempotencyKey, ...(pilotJob?{ava_sms_job:pilotJob.id}:{}) },
               thread_id: threadId,
               sent_at: new Date().toISOString(),
             })

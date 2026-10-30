@@ -533,6 +533,38 @@ async function syncCalls(admin: ReturnType<typeof createClient>, domain: string,
   return { fetched: rawItems.length, mapped: rows.length, upserted, recordings: rows.filter((r) => r.recording_url).length, transcriptions, warnings: domainCdrs.warning ? [domainCdrs.warning] : [], errors };
 }
 
+function toMessageRow(m: any, extToProfile: Map<string, string>) {
+    const ext = String(val(m, ["user", "extension", "subscriber", "from-user", "to-user", "source-user", "destination-user", "owner"], "")).trim();
+    const mid = String(val(m, ["id", "message_id", "message-id", "uuid", "sms-id", "sms_id"], crypto.randomUUID())).trim();
+    const fromUser = String(val(m, ["from-user-id", "from_user_id", "from-user"], ""));
+    const dirRaw = String(val(m, ["direction", "type", "message-direction"], "inbound")).toLowerCase();
+    const dir = dirRaw.includes("out") || (ext && fromUser.startsWith(`${ext}@`)) ? "outbound" : "inbound";
+    const peer = dir === "outbound" ? normalizePhone(val(m, ["to", "to_number", "to-number", "destination", "destination-number"])) : normalizePhone(val(m, ["from", "from_number", "from-number", "source", "source-number"]));
+    const sessionId = String(val(m, ["messagesession-id", "thread_id", "thread-id"], `${ext}:${peer ?? mid}`));
+    return {
+      user_id: extToProfile.get(ext) ?? null,
+      organization_id: AVA_ORG_ID,
+      ns_message_id: mid,
+      thread_id: sessionId,
+      direction: dir,
+      from_number: normalizePhone(val(m, ["from", "from_number", "from-number", "source", "source-number", "from-user-id"])),
+      to_number: normalizePhone(val(m, ["to", "to_number", "to-number", "destination", "destination-number", "terminating-number", "terminating-user-id", "dialed"])),
+      body: val(m, ["body", "message", "text", "content", "message-text"], ""),
+      media_urls: val(m, ["media_urls", "media-urls", "attachments", "media"], []),
+      // NetSapiens renvoie « sending » sur l'historique importé : on normalise
+      // pour ne pas créer de faux SMS bloqués côté portail.
+      status: (() => {
+        const raw = String(val(m, ["status", "delivery_status", "delivery-status"], "") ?? "").toLowerCase();
+        if (!raw) return null;
+        if (raw.includes("fail") || raw.includes("error") || raw.includes("reject")) return "failed";
+        if (raw.includes("deliver") || raw.includes("sent") || raw.includes("sending") || raw.includes("complete")) return "sent";
+        return raw;
+      })(),
+      sent_at: toIso(val(m, ["sent_at", "sent-at", "time", "created_at", "message-datetime", "timestamp", "date"])),
+      metadata: { ...m, extension: ext },
+    };
+  }
+
 async function syncMessages(admin: ReturnType<typeof createClient>, domain: string, start: string, end: string, users: any[] = []) {
   const D = encodeURIComponent(domain);
   // Per NS-API docs (docs.ns-api.com/reference), SMS lives under:
@@ -568,8 +600,10 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
       const E = encodeURIComponent(ext);
       const sessions = await tryPaths([`/domains/${D}/users/${E}/messagesessions`]);
       for (const s of sessions.data.slice(0, 25)) {
-        const sid = String(s?.session_id ?? s?.id ?? s?.["session-id"] ?? "").trim();
+        const sid = String(s?.["messagesession-id"] ?? s?.session_id ?? s?.id ?? s?.["session-id"] ?? "").trim();
         if (!sid) continue;
+        const lastAt = toIso(s?.["messagesession-last-datetime"]);
+        if (lastAt && (lastAt < start || lastAt > end)) continue;
         const S = encodeURIComponent(sid);
         const msgs = await tryPaths([`/domains/${D}/users/${E}/messagesessions/${S}/messages`]);
         for (const m of msgs.data) collected.push({ ...m, user: ext });
@@ -577,7 +611,6 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
     }
     r = { data: collected, warning: collected.length ? null : "messages_per_session_empty" };
   }
-  if (!r.data.length) return { fetched: 0, upserted: 0, warning: r.warning ?? "messages_endpoint_empty" };
 
 
   const { data: profiles } = await admin.from("planipret_profiles").select("id,extension,ns_extension").eq("organization_id", AVA_ORG_ID);
@@ -587,37 +620,7 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
     if (ext && p.id) extToProfile.set(ext, p.id as string);
   }
 
-  const rows = r.data.map((m: any) => {
-    const ext = String(val(m, ["user", "extension", "subscriber", "from-user", "to-user", "source-user", "destination-user", "owner"], "")).trim();
-    const mid = String(val(m, ["id", "message_id", "message-id", "uuid", "sms-id", "sms_id"], crypto.randomUUID())).trim();
-    const fromUser = String(val(m, ["from-user-id", "from_user_id", "from-user"], ""));
-    const dirRaw = String(val(m, ["direction", "type", "message-direction"], "inbound")).toLowerCase();
-    const dir = dirRaw.includes("out") || (ext && fromUser.startsWith(`${ext}@`)) ? "outbound" : "inbound";
-    const peer = dir === "outbound" ? normalizePhone(val(m, ["to", "to_number", "to-number", "destination", "destination-number"])) : normalizePhone(val(m, ["from", "from_number", "from-number", "source", "source-number"]));
-    const sessionId = String(val(m, ["messagesession-id", "thread_id", "thread-id"], `${ext}:${peer ?? mid}`));
-    return {
-      user_id: extToProfile.get(ext) ?? null,
-      organization_id: AVA_ORG_ID,
-      ns_message_id: mid,
-      thread_id: sessionId,
-      direction: dir,
-      from_number: normalizePhone(val(m, ["from", "from_number", "from-number", "source", "source-number", "from-user-id"])),
-      to_number: normalizePhone(val(m, ["to", "to_number", "to-number", "destination", "destination-number", "terminating-number", "terminating-user-id", "dialed"])),
-      body: val(m, ["body", "message", "text", "content", "message-text"], ""),
-      media_urls: val(m, ["media_urls", "media-urls", "attachments", "media"], []),
-      // NetSapiens renvoie « sending » sur l'historique importé : on normalise
-      // pour ne pas créer de faux SMS bloqués côté portail.
-      status: (() => {
-        const raw = String(val(m, ["status", "delivery_status", "delivery-status"], "") ?? "").toLowerCase();
-        if (!raw) return null;
-        if (raw.includes("fail") || raw.includes("error") || raw.includes("reject")) return "failed";
-        if (raw.includes("deliver") || raw.includes("sent") || raw.includes("sending") || raw.includes("complete")) return "sent";
-        return raw;
-      })(),
-      sent_at: toIso(val(m, ["sent_at", "sent-at", "time", "created_at", "message-datetime", "timestamp", "date"])),
-      metadata: { ...m, extension: ext },
-    };
-  });
+  const rows = r.data.map((m: any) => toMessageRow(m, extToProfile));
 
   let upserted = 0;
   for (let i = 0; i < rows.length; i += 200) {
@@ -625,6 +628,39 @@ async function syncMessages(admin: ReturnType<typeof createClient>, domain: stri
     const { error } = await admin.from("planipret_phone_messages").upsert(chunk, { onConflict: "ns_message_id" });
     if (!error) upserted += chunk.length;
   }
+  // Essai AVA texto (Marc seulement) : les SMS entrants arrivent par cette synchro,
+  // pas par webhook. pp-ava-sms revérifie l'éligibilité et réclame chaque message une seule fois.
+  try {
+    const { data: pilot } = await admin.from("planipret_ava_sms_pilot").select("enabled, activated_at, profile_id").eq("enabled", true).maybeSingle();
+    if (pilot?.profile_id && pilot.activated_at) {
+      // Lecture directe de la ligne pilote : la liste domaine peut omettre une session récente.
+      const { data: pp } = await admin.from("planipret_profiles").select("id, extension").eq("id", pilot.profile_id).maybeSingle();
+      if (pp?.extension) {
+        const E = encodeURIComponent(String(pp.extension));
+        const sess = await tryPaths([`/domains/${D}/users/${E}/messagesessions?limit=20`]);
+        const got: any[] = [];
+        for (const s of sess.data) {
+          const sid = String(val(s, ["messagesession-id", "session_id", "id"], "")).trim();
+          const last = toIso(val(s, ["messagesession-last-datetime"], null));
+          if (!sid || !last || Date.parse(last) < Date.parse(pilot.activated_at)) continue;
+          const msgs = await tryPaths([`/domains/${D}/users/${E}/messagesessions/${encodeURIComponent(sid)}/messages?limit=20`]);
+          for (const m of msgs.data) got.push({ ...m, user: String(pp.extension), ns_session: s });
+        }
+        const pilotRows = got.map((m) => toMessageRow(m, extToProfile)).filter((x) => x.user_id === pilot.profile_id);
+        console.log("[pp-admin-ns-sync] AVA pilot import", JSON.stringify({ sessions: sess.data.length, messages: got.length, rows: pilotRows.length }));
+        if (pilotRows.length) await admin.from("planipret_phone_messages").upsert(pilotRows, { onConflict: "ns_message_id", ignoreDuplicates: true });
+      }
+      const { data: fresh } = await admin.from("planipret_phone_messages").select("id")
+        .eq("user_id", pilot.profile_id).eq("direction", "inbound").gte("created_at", pilot.activated_at).gte("sent_at", pilot.activated_at)
+        .is("metadata->ava_sms_job", null).order("created_at", { ascending: true }).limit(5);
+      for (const m of fresh ?? []) {
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-ava-sms`, {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ action: "process", message_id: m.id }),
+        }).catch((e) => console.warn("[pp-admin-ns-sync] AVA SMS pilot", String(e)));
+      }
+    }
+  } catch (e) { console.warn("[pp-admin-ns-sync] AVA SMS pilot check failed", String(e)); }
   return { fetched: rows.length, upserted, warning: null };
 }
 
@@ -853,11 +889,11 @@ Deno.serve(async (req) => {
 
     const bg = (async () => {
       try {
+        // Textos d'abord : légers et attendus en premier (AVA, portail); les
+        // enregistrements lourds peuvent dépasser le budget CPU sans les bloquer.
+        const messages = await syncMessages(admin, domain, start, end, brokerUsers);
         const calls = await syncCalls(admin, domain, brokerUsers, start, end);
-        const [recordings, messages] = await Promise.all([
-          syncRecordings(admin, domain, brokerUsers, start, end),
-          syncMessages(admin, domain, start, end, brokerUsers),
-        ]);
+        const recordings = await syncRecordings(admin, domain, brokerUsers, start, end);
         const summary = { domain, users: brokerUsers.length, raw_users: usersRes.data.length, profiles: profileSync, calls, recordings, messages, start, end };
         console.log("[pp-admin-ns-sync] completed", JSON.stringify(summary));
         if (runId) await admin.from("planipret_edge_function_runs").update({ status: "success", finished_at: new Date().toISOString(), summary }).eq("id", runId);

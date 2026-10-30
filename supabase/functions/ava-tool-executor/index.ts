@@ -1160,7 +1160,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async send_email(ctx, p) {
     const payload = normalizeAvaEmailPayload(p ?? {});
-    if (!payload.to && !payload.to_email && typeof payload.contact_name === "string" && payload.contact_name) {
+    if (!payload.to && !payload.to_email && payload.contact_name) {
       const hit = await resolveContact(ctx, payload.contact_name, "email");
       if (!hit) return { success: false, error: "contact_not_found", message: `Aucun courriel trouvé pour ${payload.contact_name}` };
       payload.to = hit.value; payload.to_name = hit.name;

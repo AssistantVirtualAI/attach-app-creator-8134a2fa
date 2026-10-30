@@ -206,6 +206,7 @@ export default function PAAvaConfirmations() {
         )}
       />
 
+      <AvaSmsPilotPanel />
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="relative">
           <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />

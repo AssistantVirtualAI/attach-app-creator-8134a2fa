@@ -63,8 +63,9 @@ Deno.serve(async (req) => {
     const { data: digestProfiles } = await admin
       .from("planipret_profiles")
       .select("id, user_id, metadata, status")
-      .eq("status", "active")
-      .eq("metadata->>email_digest_enabled", "true");
+      .in("status", ["active", "available"])
+      .eq("metadata->>email_digest_enabled", "true").not("ms365_access_token", "is", null);
+    const due: any[] = [];
     for (const p of digestProfiles ?? []) {
       const meta = (p.metadata as any) ?? {};
       const tz = meta.timezone || DEFAULT_TZ;
@@ -74,22 +75,24 @@ Deno.serve(async (req) => {
       if (mins < target || mins >= target + 30 || meta.last_email_digest_date === date) continue;
       // Marque d'abord (pas de doublon en cas de nouvelle exécution), puis envoie.
       await admin.from("planipret_profiles").update({ metadata: { ...meta, last_email_digest_date: date } }).eq("id", p.id);
+      due.push({ p, date });
+    }
+    // Chaque rapport s'exécute dans sa propre invocation, en parallèle (borné à 60 par passage).
+    await Promise.allSettled(due.slice(0, 60).map(async ({ p, date }) => {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/ms365-actions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "email_digest", payload: {}, _user_id: p.user_id }),
+        body: JSON.stringify({ action: "daily_report", payload: {}, _user_id: p.user_id }),
       });
       const out = await r.json().catch(() => ({}));
-      if (out?.sent) emailDigest.sent++;
-      else {
-        emailDigest.failed.push({ profile_id: p.id, error: out?.error ?? r.status });
-        await admin.from("planipret_ava_notifications").insert({
-          user_id: p.user_id, type: "email_digest_failed", title: "Résumé des courriels non envoyé",
-          body: "AVA n'a pas pu lire ta boîte complète aujourd'hui ; aucun résumé partiel n'a été envoyé.",
-          deep_link: "/mplanipret/notifications", metadata: { date },
-        });
-      }
-    }
+      if (out?.sent) { emailDigest.sent++; return; }
+      emailDigest.failed.push({ profile_id: p.id, error: out?.error ?? r.status });
+      await admin.from("planipret_ava_notifications").insert({
+        user_id: p.user_id, type: "email_digest_failed", title: "Résumé quotidien non envoyé",
+        body: "AVA n'a pas pu préparer ton résumé complet aujourd'hui ; aucun résumé partiel n'a été envoyé.",
+        deep_link: "/mplanipret/notifications", metadata: { date },
+      });
+    }));
 
     let sent = 0;
     const errors: any[] = [];

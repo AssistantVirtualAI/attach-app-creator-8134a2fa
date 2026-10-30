@@ -25,3 +25,31 @@ describe("email digest", () => {
     expect(localDayStartIso("America/Toronto", new Date("2026-10-30T04:54:00Z"))).toBe("2026-10-30T04:00:00.000Z");
   });
 });
+
+import { buildDailyReportHtml, callStats, smsThreads } from "../../supabase/functions/_shared/email-digest";
+describe("daily report", () => {
+  const calls = [
+    { direction: "inbound", status: "completed", answered_at: "x", duration_seconds: 120, started_at: "2026-10-30T14:05:00Z", from_number: "5145551111" },
+    { direction: "inbound", status: "inbound_ringing", started_at: "2026-10-30T15:05:00Z", from_number: "5145552222" },
+    { direction: "missed", status: "no-answer", started_at: "2026-10-30T15:30:00Z", from_number: "5145553333" },
+    { direction: "outbound", status: "completed", duration_seconds: 60, started_at: "2026-10-30T16:00:00Z", to_number: "5145554444" },
+  ];
+  it("counts missed and answered calls", () => {
+    const s = callStats(calls);
+    expect(s.total).toBe(4); expect(s.missed.length).toBe(2); expect(s.answered).toBe(2); expect(s.talkSeconds).toBe(180);
+  });
+  it("flags texts whose last message is incoming as unanswered", () => {
+    const t = smsThreads([
+      { direction: "inbound", from_number: "+15145550001", body: "a", created_at: "2026-10-30T14:00:00Z" },
+      { direction: "outbound", to_number: "5145550001", body: "b", created_at: "2026-10-30T14:01:00Z" },
+      { direction: "inbound", from_number: "5145550002", body: "c", created_at: "2026-10-30T14:02:00Z" },
+    ]);
+    expect(t.unanswered).toBe(1); expect(t.received).toBe(2); expect(t.sent).toBe(1);
+  });
+  it("uses AI one-liners when present and hides disabled sections", () => {
+    const d = buildDailyReportHtml({ brokerName: "M", dateLabel: "x", calls, voicemails: [], sms: [], sections: { texts: false },
+      mails: [{ id: "a", subject: "S", isRead: true, bodyPreview: "raw preview" }], mailSummaries: [{ id: "a", summary: "Résumé IA", action: "Rappeler" }] });
+    expect(d.html).toContain("Résumé IA"); expect(d.html).not.toContain("raw preview"); expect(d.html).not.toContain(">Textos <");
+    expect(d.stats.missed).toBe(2);
+  });
+});

@@ -3,6 +3,7 @@ import { Mail, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 
 const TIMES = Array.from({ length: 31 }, (_, i) => {
   const m = 6 * 60 + i * 30;
@@ -13,7 +14,7 @@ const SECTIONS: Array<[string, string, string]> = [
   ["voicemails", "Messages vocaux", "Voicemails"],
   ["texts", "Textos", "Texts"],
   ["emails", "Courriels (résumé IA)", "Emails (AI summary)"],
-  ["agenda", "Rendez-vous de demain", "Tomorrow's appointments"],
+  ["agenda", "Rendez-vous et tâches de demain", "Tomorrow's appointments and tasks"],
 ];
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
@@ -102,9 +103,9 @@ export default function DailyReportSettingsCard({ lang }: { lang: "fr" | "en" | 
               ))}
             </div>
             <div className="sm:col-span-2">
-              <button onClick={() => void sendTest()} disabled={busy !== null} className="pp-btn-primary inline-flex items-center gap-2 disabled:opacity-50">
+              <Button onClick={() => void sendTest()} disabled={busy !== null} className="inline-flex items-center gap-2">
                 <Send className="w-4 h-4" />{busy === "test" ? "…" : en ? "Send me a sample now" : "M'envoyer un exemple maintenant"}
-              </button>
+              </Button>
             </div>
           </div>
         )}

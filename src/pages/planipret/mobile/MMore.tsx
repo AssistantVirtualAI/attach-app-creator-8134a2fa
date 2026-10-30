@@ -17,6 +17,7 @@ import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
 
 import { Ms365ScopesCard } from "@/components/planipret/Ms365ScopesCard";
+import DailyReportSettingsCard from "@/components/planipret/DailyReportSettingsCard";
 import { SiriShortcutsCard } from "@/components/planipret/SiriShortcutsCard";
 import { safeEdgeFunction } from "@/lib/safeEdgeFunction";
 import MNetworkSection from "@/components/planipret/mobile/MNetworkSection";
@@ -425,6 +426,8 @@ export default function MMore() {
           <MaestroRelinkButton lang={lang === "fr" ? "fr" : "en"} className="mt-3" />
         </div>
       </Section>
+
+      <DailyReportSettingsCard lang={lang} />
 
       <div className="pp-card" style={{ padding: 4 }}>
         <SiriShortcutsCard />

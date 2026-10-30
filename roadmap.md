@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Prepare AVA recurring Maestro task + direct recurring Outlook event creation, preserving confirmations, ownership and duplicate prevention; test Monday mornings and partial failures. No deployment/publication or real task creation without authorization.
+- [x] Prepare shared AVA recurring Maestro task + direct recurring Outlook link: explicit weekday schema, Toronto recurrence, downstream confirmation, deterministic event transaction identity and terminal partial outcomes. All 128 focused AVA/task/calendar tests pass; preview build OK. No deployment/publication/native changes or real task/event creation.
+- [ ] Activate and verify recurring AVA task + Outlook link: needs coordinated function deployment and shared ElevenLabs tool refresh authorization, then a broker-confirmed real task with exact content/time; no live calendar or all-broker account verification claimed.
 
 - [x] Prepare all-broker iPhone line labels using validated resolved M identity rather than stale profile extension; preserve existing Maestro resolver/native registration, no deployment/publication/telecom changes.
 - [ ] Verify Scott's installed iPhone registers and answers on 110M after fresh sign-in; physical device/version and next approved app release for updated labels required.

@@ -61,4 +61,4 @@
 - AVA voice prompt and greeting live only in supabase/functions/_shared/ava-prompt.ts, used by both ava-agent-config and ava-agent-config-preview, so the admin preview always matches real sessions.
 - SMS imports share verified-line mapping and idempotent storage; reports use sent_at, not ingestion time.
 - Daily reports reuse scoped tasks and mirrored settings; incomplete tasks stay unavailable, send reservation differs from acceptance.
-- Mobile SIP uses unambiguous Maestro /user → /sips identity; labels prefer validated native M/resolver identity. Profile fallback never rewrites CRM ownership.
+- Mobile SIP uses Maestro /user → /sips and validated M labels; never rewrite CRM ownership. Lock mobile UI dependencies locally for standalone builds.

@@ -1,0 +1,1 @@
+CREATE TABLE public.planipret_ava_sms_calendar_lock (user_id uuid PRIMARY KEY, job_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now()); GRANT ALL ON public.planipret_ava_sms_calendar_lock TO service_role; ALTER TABLE public.planipret_ava_sms_calendar_lock ENABLE ROW LEVEL SECURITY;

@@ -178,24 +178,35 @@ Deno.serve(async (req) => {
         const start = String(payload.start ?? ""), end = String(payload.end ?? "");
         const startMs=Date.parse(start), endMs=Date.parse(end);
         if (!Number.isFinite(startMs)||!Number.isFinite(endMs)||startMs<=Date.now()||endMs<=startMs||endMs-startMs>7200000) return j({success:false,error:"invalid_appointment"},400);
+        const {error:lockError}=await admin.from("planipret_ava_sms_calendar_lock").insert({user_id:userId,job_id:job.id});
+        if(lockError)return j({success:false,error:"calendar_busy_or_unconfirmed"},409);
         let path: string | null = `/me/calendarView?startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}&$top=250&$select=start,end,showAs,isCancelled`;
         const events: any[]=[];
         for(let page=0;path&&page<20;page++) {
           const read=await graph(admin,profile,path);
           if(!read.ok)return j({success:false,error:"calendar_unverified",code:read.status},502);
           const data=await read.json();
-          events.push(...(data.value??[]).filter((event:any)=>!event.isCancelled&&event.showAs!=="free").map((event:any)=>({...event,start:{dateTime:toOffsetIso(event.start?.dateTime,event.start?.timeZone)},end:{dateTime:toOffsetIso(event.end?.dateTime,event.end?.timeZone)}})));
+          const instant=(v:any)=>v?.timeZone==="UTC"&&!/(Z|[+-]\d{2}:\d{2})$/.test(v?.dateTime??"")?`${v.dateTime}Z`:toOffsetIso(v?.dateTime,v?.timeZone);
+          events.push(...(data.value??[]).filter((event:any)=>!event.isCancelled&&event.showAs!=="free").map((event:any)=>({...event,start:{dateTime:instant(event.start)},end:{dateTime:instant(event.end)}})));
           const next=data["@odata.nextLink"];
           if(next&&!String(next).startsWith(`${GRAPH}/me/calendarView`))return j({success:false,error:"calendar_continuation_refused"},502);
           path=next?String(next).slice(GRAPH.length):null;
         }
         if(path)return j({success:false,error:"calendar_incomplete"},502);
-        if(hasCalendarConflict(start,end,events))return j({success:false,error:"calendar_conflict"},409);
+        if(hasCalendarConflict(start,end,events)) {
+          await admin.from("planipret_ava_sms_calendar_lock").delete().eq("user_id",userId).eq("job_id",job.id);
+          return j({success:false,error:"calendar_conflict"},409);
+        }
         const created=await graph(admin,profile,"/me/events",{method:"POST",body:JSON.stringify({subject:"Rendez-vous — AVA texto",start:{dateTime:new Date(startMs).toISOString(),timeZone:"UTC"},end:{dateTime:new Date(endMs).toISOString(),timeZone:"UTC"},transactionId:job.id,isOnlineMeeting:false})},false);
         const event=await created.json().catch(()=>({}));
         if(!created.ok||!event.id)return j({success:false,error:event.error?.message??"calendar_creation_unconfirmed",code:created.status},502);
         const readback=await graph(admin,profile,`/me/events/${encodeURIComponent(event.id)}?$select=id,start,end`);
         if(!readback.ok)return j({success:false,error:"calendar_readback_unconfirmed"},502);
+        const checked=await readback.json();
+        const instant=(v:any)=>v?.timeZone==="UTC"&&!/(Z|[+-]\d{2}:\d{2})$/.test(v?.dateTime??"")?`${v.dateTime}Z`:toOffsetIso(v?.dateTime,v?.timeZone);
+        if(Date.parse(instant(checked.start)??"")!==startMs||Date.parse(instant(checked.end)??"")!==endMs)return j({success:false,error:"calendar_time_unconfirmed"},502);
+        await admin.from("planipret_ava_sms_jobs").update({result:{calendar:event.id}}).eq("id",job.id);
+        await admin.from("planipret_ava_sms_calendar_lock").delete().eq("user_id",userId).eq("job_id",job.id);
         return j({success:true,event_id:event.id});
       }
 

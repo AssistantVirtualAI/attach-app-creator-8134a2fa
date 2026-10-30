@@ -57,7 +57,7 @@ Deno.serve(async req=>{
  if(body.action==="process"&&!service)return json({error:"server_only"},403);
  if(service&&body.action!=="process")return json({error:"user_session_required"},403);
  try {
-  const {data:profile}=await admin.from("planipret_profiles").select("id,user_id,extension,ns_domain,ava_chat_enabled,ai_consent_at,ai_consent_revoked_at").eq("user_id",MARC_SMS_USER_ID).maybeSingle();
+   const {data:profile}=await admin.from("planipret_profiles").select("id,user_id,extension,ns_domain,ava_chat_enabled,ai_consent_at,ai_consent_revoked_at").eq("user_id",MARC_SMS_USER_ID).eq("id",MARC_SMS_PROFILE_ID).maybeSingle();
   if(!profile||!pilotOwner(profile))return json({error:"pilot_identity_unverified"},409);
   const {data:config}=await admin.from("planipret_ava_sms_pilot").select("*").eq("user_id",MARC_SMS_USER_ID).maybeSingle();
   if(body.action==="status") {
@@ -68,7 +68,7 @@ Deno.serve(async req=>{
   if(body.action==="configure") {
    if(typeof body.enabled!=="boolean")return json({error:"enabled_required"},400);
    if(body.enabled&&(!consent||profile.ava_chat_enabled===false))return json({error:"ai_consent_required"},403);
-   const {error}=await admin.from("planipret_ava_sms_pilot").upsert({user_id:MARC_SMS_USER_ID,profile_id:MARC_SMS_PROFILE_ID,enabled:body.enabled,activated_at:new Date().toISOString(),updated_at:new Date().toISOString()});
+   const {error}=await admin.from("planipret_ava_sms_pilot").upsert({user_id:MARC_SMS_USER_ID,profile_id:MARC_SMS_PROFILE_ID,enabled:body.enabled,activated_at:body.enabled&&!config?.enabled?new Date().toISOString():config?.activated_at??new Date().toISOString(),updated_at:new Date().toISOString()});
    if(error)throw error;return json({success:true,enabled:body.enabled});
   }
   if(!config?.enabled)return json({success:true,skipped:"pilot_disabled"});
@@ -78,7 +78,7 @@ Deno.serve(async req=>{
    const {data:job}=await admin.from("planipret_ava_sms_jobs").select("*").eq("id",body.job_id).eq("user_id",MARC_SMS_USER_ID).eq("status","needs_review").is("reply_claimed_at",null).is("calendar_claimed_at",null).maybeSingle();
    if(!job)return json({error:"decision_unavailable_no_retry"},409);
    if(body.action==="approve"&&!body.reply)return json({error:"explicit_reply_required"},400);
-   const {data:claimed}=await admin.from("planipret_ava_sms_jobs").update({status:body.action==="decline"?"declined":"approved",reply:body.reply??job.reply}).eq("id",job.id).eq("status","needs_review").select("*").maybeSingle();
+   const {data:claimed}=await admin.from("planipret_ava_sms_jobs").update({status:body.action==="decline"?"declined":"approved",reply:body.reply??job.reply}).eq("id",job.id).eq("status","needs_review").is("reply_claimed_at",null).is("calendar_claimed_at",null).select("*").maybeSingle();
    if(!claimed)return json({error:"decision_already_taken"},409);
    return body.action==="decline"?json({success:true}):json(await dispatch(admin,claimed));
   }

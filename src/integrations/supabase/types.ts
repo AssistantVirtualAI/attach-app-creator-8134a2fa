@@ -9767,6 +9767,24 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_ava_sms_calendar_lock: {
+        Row: {
+          created_at: string
+          job_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          job_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          job_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_ava_sms_jobs: {
         Row: {
           calendar_claimed_at: string | null

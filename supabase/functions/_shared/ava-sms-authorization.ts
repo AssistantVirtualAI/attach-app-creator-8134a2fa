@@ -4,7 +4,7 @@ export async function authorizeSmsJob(admin: any, serviceAuthenticated: boolean,
   if (!serviceAuthenticated || userId !== MARC_SMS_USER_ID || typeof jobId !== "string") return null;
   const { data: config } = await admin.from("planipret_ava_sms_pilot").select("enabled,profile_id").eq("user_id", userId).maybeSingle();
   if (!config?.enabled || config.profile_id !== MARC_SMS_PROFILE_ID) return null;
-  const {data:profile}=await admin.from("planipret_profiles").select("id,user_id,extension,ns_domain,ava_chat_enabled,ai_consent_at,ai_consent_revoked_at").eq("user_id",userId).maybeSingle();
+  const {data:profile}=await admin.from("planipret_profiles").select("id,user_id,extension,ns_domain,ava_chat_enabled,ai_consent_at,ai_consent_revoked_at").eq("user_id",userId).eq("id",MARC_SMS_PROFILE_ID).maybeSingle();
   if(!profile||!pilotOwner(profile)||profile.ava_chat_enabled===false||!profile.ai_consent_at||(profile.ai_consent_revoked_at&&profile.ai_consent_revoked_at>=profile.ai_consent_at))return null;
   const { data: job } = await admin.from("planipret_ava_sms_jobs").select("*").eq("id",jobId).eq("user_id",userId).eq("profile_id",MARC_SMS_PROFILE_ID).maybeSingle();
   if (!job || !["ready","approved"].includes(job.status)) return null;

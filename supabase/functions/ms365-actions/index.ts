@@ -585,6 +585,21 @@ Deno.serve(async (req) => {
         const d = await r.json().catch(() => ({}));
         return j({ success: r.ok, message_id: d.id, error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
       }
+      case "daily_report_settings": {
+        const { data: cur } = await admin.from("planipret_profiles").select("metadata").eq("id", profile.id).maybeSingle();
+        const meta = (cur?.metadata as any) ?? {};
+        if (payload.save === true) {
+          const time = String(payload.time ?? "17:00");
+          if (!/^(0[6-9]|1\d|2[01]):(00|30)$/.test(time)) return j({ success: false, error: "Heure invalide (06:00–21:00)" }, 400);
+          const keys = ["calls", "voicemails", "texts", "emails", "agenda"];
+          const sections = Object.fromEntries(keys.map((k) => [k, payload.sections?.[k] !== false]));
+          const nextMeta = { ...meta, email_digest_enabled: payload.enabled === true, email_digest_time: time, email_digest_sections: sections };
+          const { error } = await admin.from("planipret_profiles").update({ metadata: nextMeta }).eq("id", profile.id);
+          if (error) return j({ success: false, error: "Enregistrement impossible" }, 500);
+          Object.assign(meta, nextMeta);
+        }
+        return j({ success: true, enabled: meta.email_digest_enabled === true, time: meta.email_digest_time ?? "17:00", sections: meta.email_digest_sections ?? {}, email: profile.ms365_email ?? null });
+      }
       case "daily_report": {
         // Rapport complet de la journée, envoyé uniquement au courtier lui-même.
         const self = profile.ms365_email;

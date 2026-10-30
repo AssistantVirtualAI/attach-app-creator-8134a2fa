@@ -19,7 +19,7 @@ async function execTool(name:string,params:any) {
  if(!(READ_ONLY_TOOLS as readonly string[]).includes(name))return {success:false,error:"read_only_channel"};
  const r=await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ava-tool-executor`,{method:"POST",headers:{Authorization:`Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,"Content-Type":"application/json"},body:JSON.stringify({tool_name:name,parameters:params,_user_id:MARC_SMS_USER_ID})});
  const d=await r.json().catch(()=>({success:false}));
- return JSON.parse(JSON.stringify(d).slice(0,12000).replace(/[^\]}]*$/,"")||"{}");
+ return d;
 }
 const clip=(d:any)=>{const t=JSON.stringify(d??{});return t.length>12000?{truncated:true,data:t.slice(0,12000)}:d;};
 async function notify(job:any) {

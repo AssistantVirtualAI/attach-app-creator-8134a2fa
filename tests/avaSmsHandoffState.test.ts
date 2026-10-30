@@ -20,10 +20,14 @@ describe("persisted SMS handoff",()=>{
   await command("presence",{session_id:"one",active:false});
   expect((await command("check",{peer:other})).paused).toBe(false);
  });
- it("a personally taken-over thread stays silent after app closes",async()=>{
-  await command("takeover",{peer});await command("presence",{session_id:"one",active:false});
+ it("a previous human reply never blocks a new client message when Marc is offline",async()=>{
+  await command("presence",{session_id:"one",active:true});await command("takeover",{peer});
   expect((await command("check",{peer})).paused).toBe(true);
+  await command("presence",{session_id:"one",active:false});
+  expect((await command("check",{peer})).paused).toBe(false);
   expect((await command("check",{peer:other})).paused).toBe(false);
+  expect((await command("begin",{peer,job_id:job})).allowed).toBe(true);
+  await command("release",{job_id:job});
   await command("resume",{peer});expect((await command("check",{peer})).paused).toBe(false);
  });
  it("second foreground session prevents early resume",async()=>{
@@ -70,7 +74,7 @@ describe("persisted SMS handoff",()=>{
  it("atomic adapter claim refuses presence without consuming the one-shot job",async()=>{
   await db.exec("create table public.planipret_ava_sms_jobs(id uuid,user_id uuid,peer text,status text,reply_claimed_at timestamptz,calendar_claimed_at timestamptz)");
   await db.query("insert into public.planipret_ava_sms_jobs(id,user_id,peer,status) values($1,$2,$3,'ready')",[job,MARC_SMS_USER_ID,peer]);
-  await command("begin",{peer,job_id:job});await command("presence",{session_id:"one",active:true});
+  await command("takeover",{peer});await command("begin",{peer,job_id:job});await command("presence",{session_id:"one",active:true});
   expect((await command("claim",{peer,job_id:job,kind:"reply",status:"ready"})).claimed).toBe(false);
   await command("presence",{session_id:"one",active:false});
   expect((await command("claim",{peer,job_id:job,kind:"reply",status:"ready"})).claimed).toBe(true);

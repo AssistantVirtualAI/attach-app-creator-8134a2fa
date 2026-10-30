@@ -50,7 +50,7 @@ begin
   end if;
   active := s.sessions <> '{}'::jsonb;
   if p_op='claim' then
-    if active or s.taken_over ? peer or s.busy_job::text is distinct from p_args->>'job_id' then return jsonb_build_object('claimed',false); end if;
+    if active or s.busy_job::text is distinct from p_args->>'job_id' then return jsonb_build_object('claimed',false); end if;
     k := case p_args->>'kind' when 'reply' then 'reply_claimed_at' when 'calendar' then 'calendar_claimed_at' else null end;
     if k is null then raise exception 'invalid_claim'; end if;
     execute format('update public.planipret_ava_sms_jobs set %I=now() where id=$1 and user_id=$2 and peer=$3 and status=$4 and %I is null returning id',k,k)
@@ -58,7 +58,7 @@ begin
     return jsonb_build_object('claimed',claimed_id is not null);
   end if;
   if p_op='begin' then
-    if active or s.taken_over ? peer or s.busy_job is not null then
+    if active or s.busy_job is not null then
       return jsonb_build_object('allowed',false,'paused',true);
     end if;
     s.busy_job := (p_args->>'job_id')::uuid;
@@ -66,7 +66,7 @@ begin
   update public.planipret_ava_sms_handoff_state set sessions=s.sessions,taken_over=s.taken_over,
     observations=s.observations,summaries=s.summaries,queue=s.queue,busy_job=s.busy_job,updated_at=now() where user_id=p_user;
   return jsonb_build_object('allowed',true,'claimed',true,'online',active,
-    'paused',active or coalesce(s.taken_over ? peer,false) or (s.busy_job is not null and s.busy_job::text is distinct from p_args->>'job_id'),
+    'paused',active or (s.busy_job is not null and s.busy_job::text is distinct from p_args->>'job_id'),
     'taking_over',s.busy_job is not null,'summaries',s.summaries,'taken_over',s.taken_over,'queue',s.queue);
 end; $$;
 revoke all on function public.pp_ava_sms_handoff(uuid,text,jsonb) from public, anon, authenticated;

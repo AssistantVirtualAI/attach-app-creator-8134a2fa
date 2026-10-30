@@ -4,6 +4,7 @@
 import { MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotInboundRow, pilotOwner, sessionNeedsRead } from "./ava-sms-policy.ts";
 import { handoffCommand, providerHumanOutbound } from "./ava-sms-handoff.ts";
 
+declare const Deno: { env: { get(name: string): string | undefined } };
 const AVA_ORG_ID = "17d6507f-a9ca-409d-8e49-371d50332615";
 const NS_BASE = () => (Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2").replace(/\/$/, "");
 

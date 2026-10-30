@@ -193,9 +193,11 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       description: { type: "string", description: "Description longue (optionnel)" },
       assignee_id: { type: "number", description: "users_id assigné — par défaut le Maestro ID du créateur ; fournir pour assigner à quelqu'un d'autre" },
       status: { type: "string", description: "Statut initial (optionnel)" },
-      sync_calendar: { type: "boolean", description: "Créer l'événement calendrier — false par défaut" },
+      sync_calendar: { type: "boolean", description: "Synchronisation calendrier côté Maestro seulement (pas un lien Outlook direct), false par défaut" },
+      link_outlook: { type: "boolean", description: "true si le courtier demande un événement correspondant directement dans son Outlook; conserve la récurrence, false par défaut" },
+      duration_minutes: { type: "number", description: "Durée du rappel Outlook; demander si manquante (défaut 30 minutes)" },
       notification: { type: "boolean", description: "Envoyer une notification — false par défaut" },
-      recurrence: { type: "object", description: "{ value, pattern: day|week|month|year, on: 0-6 }" },
+      recurrence: { type: "object", description: "Récurrence explicite; chaque lundi = value 1, pattern week, on [1]", properties: { value: { type: "integer", minimum: 1, description: "Intervalle, ex. 1 chaque semaine" }, pattern: { type: "string", enum: ["day", "week", "month", "year"] }, on: { type: "array", items: { type: "integer", minimum: 0, maximum: 6 }, description: "Jours: 0 dimanche, 1 lundi, … 6 samedi" } }, required: ["value", "pattern"] },
     }, ["notes", "due_at"]),
 
     mk("update_task", "Modifie une tâche (date, notes, description, statut, récurrence). Demande confirmation.", {
@@ -401,6 +403,7 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       attendees: { type: "string", description: "Courriels séparés par virgule (optionnel)" },
       body: { type: "string", description: "Description (optionnel)" },
       is_online: { type: "boolean", description: "Réunion Teams avec lien (défaut: true). L'invitation est envoyée par courriel aux participants." },
+      recurrence: { type: "object", description: "Récurrence optionnelle: value entier positif, pattern day|week|month|year, on tableau 0 dimanche à 6 samedi", properties: { value: { type: "integer", minimum: 1 }, pattern: { type: "string", enum: ["day", "week", "month", "year"] }, on: { type: "array", items: { type: "integer", minimum: 0, maximum: 6 } } }, required: ["value", "pattern"] },
     }, ["subject", "start_datetime"]),
     mk("move_calendar_event", "Déplace un événement du calendrier M365.", {
       event_id: { type: "string", description: "ID de l'événement" },

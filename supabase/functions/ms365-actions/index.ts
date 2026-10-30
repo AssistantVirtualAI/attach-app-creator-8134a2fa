@@ -7,6 +7,7 @@ import { authorizeSmsJob } from "../_shared/ava-sms-authorization.ts";
 import { hasCalendarConflict } from "../_shared/ava-sms-policy.ts";
 import { buildDigestHtml, buildDailyReportHtml, localDayStartIso } from "../_shared/email-digest.ts";
 import { readTomorrowTasks } from "../_shared/daily-report-tasks.ts";
+import { outlookTaskRecurrence } from "../_shared/ava-task-calendar.ts";
 
 
 
@@ -512,7 +513,16 @@ Deno.serve(async (req) => {
       }
       case "create_calendar_event": {
         if (!payload.subject || !payload.start || !payload.end) return j({ success: false, error: "subject, start, end requis" }, 400);
-        const r = await graph(admin, profile, `/me/events`, { method: "POST", body: JSON.stringify({ subject: payload.subject, start: withTz(payload.start), end: withTz(payload.end), body: { contentType: "HTML", content: payload.body ?? "" }, attendees: (payload.attendees ?? []).map((e: string) => ({ emailAddress: { address: e }, type: "required" })), isOnlineMeeting: payload.isOnlineMeeting ?? true, onlineMeetingProvider: payload.onlineMeetingProvider ?? "teamsForBusiness" }) });
+        const start = withTz(payload.start);
+        let recurrence;
+        try { recurrence = outlookTaskRecurrence(payload.recurrence, start.dateTime, start.timeZone); }
+        catch (error) { return j({ success: false, error: error instanceof Error ? error.message : "invalid_recurrence" }, 400); }
+        const r = await graph(admin, profile, `/me/events`, { method: "POST", body: JSON.stringify({ subject: payload.subject, start, end: withTz(payload.end), body: { contentType: "HTML", content: payload.body ?? "" }, attendees: (payload.attendees ?? []).map((e: string) => ({ emailAddress: { address: e }, type: "required" })), isOnlineMeeting: payload.isOnlineMeeting ?? true, ...(payload.isOnlineMeeting === false ? {} : { onlineMeetingProvider: payload.onlineMeetingProvider ?? "teamsForBusiness" }), recurrence, ...(typeof payload.transactionId === "string" && payload.transactionId.length <= 255 ? { transactionId: payload.transactionId } : {}) }) });
+        if (!r.ok) {
+          const details = await r.text();
+          console.error(`Outlook calendar failed [${r.status}]: ${details}`);
+          return j({ success: false, error: "outlook_calendar_failed", details, code: r.status }, r.status);
+        }
         const d = await r.json();
         return j({ success: r.ok, event_id: d.id, event: d, error: d?.error?.message, code: r.status }, r.ok ? 200 : 500);
       }

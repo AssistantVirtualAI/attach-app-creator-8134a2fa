@@ -8,6 +8,7 @@ import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch"
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import DailyReportSettingsCard from "@/components/planipret/DailyReportSettingsCard";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 
 export default function PBSettings() {
@@ -77,6 +78,8 @@ export default function PBSettings() {
         <div>
           <MaestroConnectCard />
         </div>
+
+        <DailyReportSettingsCard lang={lang} />
       </div>
     </PAPage>
   );

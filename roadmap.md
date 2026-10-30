@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Diagnose the reported AVA voice email-send failure, compare shared voice/chat confirmation and Microsoft 365 dispatch, and prepare only evidence-backed fixes with tests; no email send, deployment, publication or native changes authorized.
+- [x] Diagnose AVA voice email schema mismatch: shared registry supplies to_email, Microsoft requires to; executor now normalizes the recipient for all brokers while preserving explicit to, confirmation and idempotency. 36 focused tests pass; preview build OK. No email sent, deployment, publication or native changes.
+- [ ] Verify AVA voice email sending in Marc's account and installed app: requires authorization to deploy the prepared executor and send a specifically approved email; recent function logs did not establish his exact runtime failure.
 
 - [x] Prepare Marc's shared AVA financial-routing correction: volume/units/lenders bypass client prefetch and AI history, commission suggestions dispatch to the shared executor, unknown actions no longer default to clients; deterministic replies retain scope and validated figures. Remove 60-second polling/unconditional tab refresh in both web trees; pending server updates consumed on return. 37 focused tests pass; preview build OK. Signed-in Francis detail loaded, broker/URL retained after tab visibility/focus and three simulated minutes, zero automatic report requests. No deployment/publication/native change.
 - [ ] Confirm Marc's corrected AVA answers end-to-end in the live portal: awaits authorization to deploy pp-ava-chat and ava-tool-executor and publish portal changes; current hosted functions still use the previous logic. Installed-app refresh changes require the next approved release.

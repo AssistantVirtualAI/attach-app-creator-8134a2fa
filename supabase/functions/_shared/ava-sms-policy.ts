@@ -67,3 +67,72 @@ export function providerHistory(msgs: any[], peer: string, limit = 20) {
     return { at: nsTime(m?.timestamp) ?? "", peer: smsPeer(other), role: inbound ? "user" : "assistant", text: String(m?.text ?? "").slice(0, 1200) };
   }).filter(x => x.peer === peer && x.at && x.text).sort((a, b) => a.at.localeCompare(b.at)).slice(-limit).map(({ role, text }) => ({ role, text }));
 }
+
+/** Owner's personal cell: explicitly trusted by the owner (read-only, no identity check). */
+export const TRUSTED_OWNER_PEERS = ["+15142163359"];
+/** Read-only tools AVA may use by SMS. No write tool is ever exposed on this channel. */
+export const READ_ONLY_TOOLS = ["search_client", "get_client_profile", "get_client_contracts", "list_tasks", "get_pending_tasks", "get_upcoming_appointments"] as const;
+export function senderTier(peer: string, internalColleague: boolean): "owner" | "internal" | "external" {
+  if (TRUSTED_OWNER_PEERS.includes(peer)) return "owner";
+  return internalColleague ? "internal" : "external";
+}
+export function bookingIntent(text: string) {
+  return /rendez[- ]?vous|\brdv\b|appointment|rencontre|meeting|réunion|reunion|booker|réserv|reserv|planifier|céduler|ceduler|disponib/i.test(text);
+}
+export function detectLanguage(text: string): "fr" | "en" {
+  const t = ` ${String(text ?? "").toLowerCase()} `;
+  const en = (t.match(/\b(the|my|is|are|where|what|when|hello|hi|please|thanks|thank|you|can|file|mortgage|appointment|i'm|i am)\b/g) ?? []).length;
+  const fr = (t.match(/\b(le|la|les|mon|ma|est|où|quoi|quand|bonjour|salut|svp|merci|vous|peux|dossier|prêt|rendez|je|suis)\b/g) ?? []).length;
+  return en > fr ? "en" : "fr";
+}
+export function holdingText(lang: "fr" | "en") {
+  return lang === "en"
+    ? "I'm sorry, I'm Marc's assistant and I can't share information from your file without first confirming your identity. While Marc is unavailable, could you please send me your first name, full last name and address? Once I've verified them, I'll gladly share your information. 😊"
+    : "Je suis désolée, je suis l'assistante de Marc et je ne peux pas partager d'informations de votre dossier sans vérification. En attendant que Marc soit disponible, pourriez-vous me donner votre prénom, votre nom complet et votre adresse? Je validerai votre identité avant de vous transmettre vos informations. 😊";
+}
+const fold = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s'-]/g, " ").replace(/\s+/g, " ").trim();
+const foldNum = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+const tenDigits = (s: unknown) => { const d = String(s ?? "").replace(/\D/g, ""); return d.length === 11 && d.startsWith("1") ? d.slice(1) : d.length === 10 ? d : null; };
+function collect(obj: any, test: (k: string, v: any) => boolean, out: string[] = [], depth = 0): string[] {
+  if (!obj || typeof obj !== "object" || depth > 4) return out;
+  for (const [k, v] of Object.entries(obj)) {
+    if (v && typeof v === "object") collect(v, test, out, depth + 1);
+    else if (v != null && test(k, v)) out.push(String(v));
+  }
+  return out;
+}
+export function profilePhones(profile: any): string[] {
+  return [...new Set(collect(profile, (k, v) => /phone|tel|cell|mobile/i.test(k) && !!tenDigits(v)).map(tenDigits) as string[])];
+}
+export function profileFullNames(profile: any): string[] {
+  const p = profile ?? {};
+  const first = p.first_name ?? p.firstname ?? p.prenom ?? p.firstName, last = p.last_name ?? p.lastname ?? p.nom ?? p.lastName;
+  return [first && last ? `${first} ${last}` : "", p.full_name, p.name, p.fullName].map(fold).filter(n => n.split(" ").length >= 2);
+}
+export function profileAddress(profile: any): string {
+  return foldNum(collect(profile, k => /address|adresse|street|rue|civic|civique/i.test(k) && !/mail|courriel/i.test(k)).join(" "));
+}
+/** Claimed address matches when the civic number and a street word (≥4 letters) both appear in the profile address. */
+export function addressMatches(claimed: unknown, profile: any) {
+  const c = foldNum(claimed), addr = ` ${profileAddress(profile)} `;
+  const civic = c.match(/\b\d{1,6}\b/)?.[0];
+  if (!civic || !addr.includes(` ${civic} `)) return false;
+  return c.split(" ").filter(w => /^[a-z]{4,}$/.test(w) && !["avenue","boulevard","street","route","chemin","appartement"].includes(w)).some(w => addr.includes(` ${w} `));
+}
+function nameMatches(claimedName: unknown, profile: any) {
+  const tokens = fold(claimedName).split(" ");
+  if (tokens.length < 2) return false;
+  return profileFullNames(profile).some(n => { const parts = n.split(" "); return parts.every(t => tokens.includes(t)) && tokens.every(t => parts.includes(t)); });
+}
+/**
+ * External customer verification: first+last name AND address typed by the sender in
+ * this conversation match the Maestro profile, and the texting number is on that profile.
+ */
+export function smsIdentityVerified(claimedName: unknown, claimedAddress: unknown, senderWords: string, senderPeer: string, profile: any) {
+  if (!fold(senderWords).includes(fold(claimedName)) || !fold(claimedName)) return false;
+  const civic = foldNum(claimedAddress).match(/\b\d{1,6}\b/)?.[0];
+  if (!civic || !foldNum(senderWords).split(" ").includes(civic)) return false;
+  const sender = tenDigits(senderPeer);
+  if (!sender || !profilePhones(profile).includes(sender)) return false;
+  return nameMatches(claimedName, profile) && addressMatches(claimedAddress, profile);
+}

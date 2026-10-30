@@ -500,6 +500,7 @@ async function syncCalls(admin: ReturnType<typeof createClient>, domain: string,
       ns_callid: val(c, ["call-parent-cdr-id", "call-orig-call-id", "call-term-call-id", "call-parent-call-id", "id"]),
       ns_orig_callid: val(c, ["call-orig-call-id", "orig-callid", "orig-call-id"]),
       ns_term_callid: val(c, ["call-term-call-id", "term-callid", "term-call-id"]),
+      ns_parent_callid: val(c, ["call-parent-call-id"]) || null,
       metadata: { ...c, transcription_path: transcription, recording_api_path: recordingApiPath(domain, c) },
     });
   }

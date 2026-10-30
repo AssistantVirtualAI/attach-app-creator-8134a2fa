@@ -7,6 +7,7 @@ import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimiti
 import Pagination from "@/components/planipret/admin/Pagination";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
+import { groupCallSegments } from "@/lib/planipret/callSegments";
 import { fmtDateTime, fmtDuration, callPeer } from "@/lib/planipret/brokerFormat";
 import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
 import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
@@ -56,7 +57,7 @@ export default function PBCalls() {
 
       const { data, count } = await q;
       if (cancelled) return;
-      setRows(data ?? []);
+      setRows(groupCallSegments(data ?? []));
       setTotal(count ?? 0);
       setLoading(false);
     })();

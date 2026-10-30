@@ -1,0 +1,3 @@
+ALTER TABLE public.planipret_phone_calls ADD COLUMN IF NOT EXISTS ns_parent_callid text;
+UPDATE public.planipret_phone_calls SET ns_parent_callid = NULLIF(metadata->>'call-parent-call-id','') WHERE ns_parent_callid IS NULL AND NULLIF(metadata->>'call-parent-call-id','') IS NOT NULL;
+CREATE INDEX IF NOT EXISTS planipret_phone_calls_parent_callid_idx ON public.planipret_phone_calls (user_id, ns_parent_callid) WHERE ns_parent_callid IS NOT NULL;

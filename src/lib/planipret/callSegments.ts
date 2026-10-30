@@ -4,10 +4,11 @@
 
 type AnyCall = Record<string, any>;
 
-const raw = (c: AnyCall) => (c?.metadata?.netSapiens ?? {}) as AnyCall;
+// Lecture en direct : metadata.netSapiens ; lignes enregistrées : metadata à plat.
+const raw = (c: AnyCall) => (c?.metadata?.netSapiens ?? c?.metadata ?? {}) as AnyCall;
 
 export function parentCallId(c: AnyCall): string | null {
-  const v = raw(c)["call-parent-call-id"] ?? c.ns_parent_callid ?? null;
+  const v = c?.ns_parent_callid || raw(c)["call-parent-call-id"] || null;
   return v ? String(v) : null;
 }
 
@@ -16,7 +17,7 @@ export function isMoveMyCallHelper(c: AnyCall): boolean {
   const r = raw(c);
   const dest = [r["call-orig-to-user"], r["call-term-user"], r["call-orig-to-uri"], r["call-term-to-uri"], c.to_number]
     .filter(Boolean).map(String).join(" ").toLowerCase();
-  return dest.includes("movemycall") && !r["call-parent-call-id"];
+  return dest.includes("movemycall") && !r["call-parent-call-id"] && !c.ns_parent_callid;
 }
 
 /** « Retrieved » = déplacé vers un autre appareil, pas la fin de l'appel. */

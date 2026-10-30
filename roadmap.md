@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Implement Marc-only SMS handoff: authenticated broker foreground pauses every auto-reply; background resumes non-taken-over threads; personal broker SMS keeps its thread silent; persisted summary + private push + spoken handoff. No native edits/deployment/publication without approval.
+
 - [x] All-broker provider SMS mapper/storage deployed in portal reads and existing sync; provider sent_at drives reports. Marc's three inbound messages (including 04:53) persisted; authenticated requester threads/messages HTTP 200. 95 AVA/report/storage tests pass. Complete all-broker historical backfill is not established; no new polling or sends.
 - [x] Tomorrow's tasks added through broker-owned live Task API with pagination and explicit unavailable notice; settings mirrored in mobile web, authenticated UI/settings/report preview HTTP 200. Installed-app settings require next approved update; no native build/publication.
 - [ ] Confirm first scheduled 17:00 report: existing 15-minute cron active, all 83 enabled profiles have no prior recorded automatic send. Atomic attempts now distinct from accepted sends; uncertain attempts never auto-retry. Requires future dispatch/receipt evidence, not waiting or surveillance.

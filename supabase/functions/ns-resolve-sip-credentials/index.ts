@@ -12,6 +12,8 @@ import {
   webDeviceId,
   widgetDeviceId,
 } from "../_shared/pp-device-ids.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
+import { resolveMaestroSipExtension } from "../_shared/maestro-sip-identity.ts";
 
 
 const corsHeaders = {
@@ -183,10 +185,32 @@ Deno.serve(async (req) => {
   // `extension` is the portal/PBX source of truth. `ns_extension` is retained
   // only as a legacy fallback so a stale manual NS link can never register the
   // mobile app on an old subscriber (for example 1702 instead of 1372).
-  const ext = profileExtension;
+  // Maestro is authoritative for the signed-in person: the broker's own Maestro
+  // token -> /user -> /users/{id}/sips decides the extension (e.g. Scott signed
+  // in with Carlo's email but Maestro user 67 owns 110x/110W -> 110).
+  let ext = profileExtension;
+  let brokerDisplayName = String((profile as any).full_name || (profile as any).email || ext).trim();
+  let maestroIdentity: { crm_user_id: string | null; extension: string | null; overridden: boolean } | null = null;
+  try {
+    const admin = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const token = await getUserMaestroAccessToken(admin as any, user.id);
+    if (token) {
+      const r = await resolveMaestroSipExtension(admin, token);
+      maestroIdentity = { crm_user_id: r.crmUserId, extension: r.extension, overridden: false };
+      if (r.extension && r.extension !== profileExtension) {
+        const { data: owner } = await admin.from("planipret_profiles")
+          .select("full_name, email").eq("extension", r.extension).maybeSingle();
+        console.warn(`[ns-resolve] Maestro identity override ext ${profileExtension} -> ${r.extension} (crm ${r.crmUserId})`);
+        ext = r.extension;
+        brokerDisplayName = String(owner?.full_name || owner?.email || ext).trim();
+        maestroIdentity.overridden = true;
+      }
+    }
+  } catch (e) {
+    console.warn("[ns-resolve] Maestro identity lookup failed; keeping profile extension", String(e));
+  }
   const domain = profile.ns_domain || NS_DEFAULT_DOMAIN;
   const deviceName = deviceNameFor(ext, clientType);
-  const brokerDisplayName = String((profile as any).full_name || (profile as any).email || ext).trim();
 
   console.log(`[ns-resolve] client_type=${clientType} ext=${ext} device=${deviceName}`);
 
@@ -324,6 +348,7 @@ Deno.serve(async (req) => {
     sip_auth_user: resolvedId,
     sip_password: sipPassword,
     sip_extension: ext,
+    maestro_identity: maestroIdentity,
     sip_domain: domain,
     sip_proxy: coreServer,
     sip_core_server: coreServer,

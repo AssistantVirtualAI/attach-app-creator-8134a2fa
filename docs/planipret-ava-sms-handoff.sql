@@ -12,7 +12,7 @@ alter table public.planipret_ava_sms_handoff_state enable row level security;
 create or replace function public.pp_ava_sms_handoff(p_user uuid, p_op text, p_args jsonb default '{}')
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare s public.planipret_ava_sms_handoff_state; peer text := p_args->>'peer';
-  active boolean; entry jsonb; k text;
+  active boolean; entry jsonb; k text; claimed_id uuid;
 begin
   if p_user <> 'a7df1872-f25a-4925-b763-a573e7452462'::uuid then raise exception 'pilot_only'; end if;
   insert into public.planipret_ava_sms_handoff_state(user_id) values(p_user) on conflict do nothing;
@@ -46,9 +46,17 @@ begin
     s.queue := s.queue - (p_args->>'message_id');
   elsif p_op='release' then
     if s.busy_job::text = p_args->>'job_id' then s.busy_job := null; end if;
-  elsif p_op not in ('status','check','begin','queue_list') then raise exception 'unknown_operation';
+  elsif p_op not in ('status','check','begin','queue_list','claim') then raise exception 'unknown_operation';
   end if;
   active := s.sessions <> '{}'::jsonb;
+  if p_op='claim' then
+    if active or s.taken_over ? peer or s.busy_job::text is distinct from p_args->>'job_id' then return jsonb_build_object('claimed',false); end if;
+    k := case p_args->>'kind' when 'reply' then 'reply_claimed_at' when 'calendar' then 'calendar_claimed_at' else null end;
+    if k is null then raise exception 'invalid_claim'; end if;
+    execute format('update public.planipret_ava_sms_jobs set %I=now() where id=$1 and user_id=$2 and peer=$3 and status=$4 and %I is null returning id',k,k)
+      into claimed_id using (p_args->>'job_id')::uuid,p_user,peer,p_args->>'status';
+    return jsonb_build_object('claimed',claimed_id is not null);
+  end if;
   if p_op='begin' then
     if active or s.taken_over ? peer or s.busy_job is not null then
       return jsonb_build_object('allowed',false,'paused',true);

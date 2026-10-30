@@ -60,4 +60,21 @@ describe("persisted SMS handoff",()=>{
   expect((await command("takeover",{peer,source_id:"human-row"})).duplicate).toBe(true);
   expect((await command("check",{peer})).paused).toBe(false);
  });
+ it("retains suspended inbound work until a later drain",async()=>{
+  const id="00000000-0000-4000-8000-000000000003";
+  await command("queue",{peer,message_id:id});await command("presence",{session_id:"one",active:true});
+  expect((await command("queue_list")).queue[id]).toBe(peer);
+  await command("presence",{session_id:"one",active:false});expect((await command("queue_list")).queue[id]).toBe(peer);
+  await command("dequeue",{message_id:id});expect((await command("queue_list")).queue[id]).toBeUndefined();
+ });
+ it("atomic adapter claim refuses presence without consuming the one-shot job",async()=>{
+  await db.exec("create table public.planipret_ava_sms_jobs(id uuid,user_id uuid,peer text,status text,reply_claimed_at timestamptz,calendar_claimed_at timestamptz)");
+  await db.query("insert into public.planipret_ava_sms_jobs(id,user_id,peer,status) values($1,$2,$3,'ready')",[job,MARC_SMS_USER_ID,peer]);
+  await command("begin",{peer,job_id:job});await command("presence",{session_id:"one",active:true});
+  expect((await command("claim",{peer,job_id:job,kind:"reply",status:"ready"})).claimed).toBe(false);
+  await command("presence",{session_id:"one",active:false});
+  expect((await command("claim",{peer,job_id:job,kind:"reply",status:"ready"})).claimed).toBe(true);
+  expect((await command("claim",{peer,job_id:job,kind:"reply",status:"ready"})).claimed).toBe(false);
+  await command("release",{job_id:job});
+ });
 });

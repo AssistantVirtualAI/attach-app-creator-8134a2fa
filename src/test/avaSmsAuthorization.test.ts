@@ -5,7 +5,7 @@ function store(){
  const job:any={id:"job",user_id:MARC_SMS_USER_ID,profile_id:MARC_SMS_PROFILE_ID,status:"ready",peer:"+15145551234",reply:"Bonjour",reply_claimed_at:null};
  const profile:any={id:MARC_SMS_PROFILE_ID,user_id:MARC_SMS_USER_ID,extension:"1136",ns_domain:"planipret.ca",ava_chat_enabled:true,ai_consent_at:"2026-10-30",ai_consent_revoked_at:null};
  const config={user_id:MARC_SMS_USER_ID,enabled:true,profile_id:MARC_SMS_PROFILE_ID};
- const admin={rpc:async()=>({data:{paused:false}}),from:(table:string)=>{
+ const admin={rpc:async(_:string,args:any)=>{const column=args.p_args.kind==="reply"?"reply_claimed_at":"calendar_claimed_at";const claimed=!job[column];if(claimed)job[column]="claimed";return {data:{claimed}};},from:(table:string)=>{
   const row=table.endsWith("pilot")?config:table==="planipret_profiles"?profile:job;
   let patch:any=null;const filters:Array<[string,unknown]>=[];
   const q:any={select:()=>q,eq:(key:string,value:unknown)=>{filters.push([key,value]);return q;},is:(key:string,value:unknown)=>{filters.push([key,value]);return q;},update:(value:any)=>{patch=value;return q;},maybeSingle:async()=>{

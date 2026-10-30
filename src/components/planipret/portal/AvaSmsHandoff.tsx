@@ -9,7 +9,7 @@ type Summary = {peer:string;job_id:string;summary:string;read:boolean;greeted:bo
 export default function AvaSmsHandoff({userId,callState}:{userId?:string|null;callState?:string}) {
  const [state,setState]=useState<{online?:boolean;taking_over?:boolean;summaries?:Record<string,Summary>;taken_over?:Record<string,boolean>}>({});
  const [error,setError]=useState<string|null>(null),[playing,setPlaying]=useState(false);
- const session=useRef(crypto.randomUUID());
+ const session=useRef<string>("");
  const audio=useRef<HTMLAudioElement|null>(null),call=useRef(callState),visible=useRef(true),epoch=useRef(0);
  const navigate=useNavigate();call.current=callState;
  const request=useCallback(async(body:Record<string,unknown>)=>{
@@ -33,10 +33,12 @@ export default function AvaSmsHandoff({userId,callState}:{userId?:string|null;ca
  },[request]);
  useEffect(()=>{
   if(userId!==PILOT_OWNER)return;
+  if(!globalThis.crypto?.randomUUID){setError("Relais indisponible dans ce navigateur.");return;}
+  const mountedSession=crypto.randomUUID();session.current=mountedSession;
   let disposed=false;
   const update=createHandoffLifecycle(async active=>{
    try{
-   const result=await request({action:"presence",session_id:session.current,active});
+   const result=await request({action:"presence",session_id:mountedSession,active});
     if(disposed||!active)return;
     setState(result);setError(null);
     const next=Object.values(result.summaries??{}).find((row:any)=>!row.greeted) as Summary|undefined;

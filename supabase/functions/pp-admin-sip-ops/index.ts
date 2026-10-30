@@ -70,6 +70,20 @@ Deno.serve(async (req) => {
   const action = String(body?.action ?? "status");
 
   try {
+    // Admin-only removal of a legacy device on one extension. Canonical
+    // <ext>M / <ext>W / <ext>x devices can never be removed here.
+    if (action === "delete_device") {
+      const ext = String(body?.extension ?? "").trim();
+      const device = String(body?.device ?? "").trim();
+      if (!/^\d{2,6}$/.test(ext) || !device.startsWith(ext)) return json({ error: "invalid_device" }, 400);
+      const suffix = device.slice(ext.length);
+      if (["M", "W", "x"].includes(suffix)) return json({ error: "canonical_device_protected" }, 400);
+      const path = `/domains/${encodeURIComponent(NS_DOMAIN)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(device)}`;
+      const del = await ns(path, { method: "DELETE" });
+      const check = await ns(path);
+      return json({ success: del.ok && check.status === 404, delete_status: del.status, readback_status: check.status });
+    }
+
     if (action === "status") {
       const limit = Math.max(1, Math.min(120, Number(body?.limit ?? 40)));
       let wanted: string[] = Array.isArray(body?.extensions) ? body.extensions.map(String) : [];

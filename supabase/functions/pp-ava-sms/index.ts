@@ -3,7 +3,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { generateText, Output } from "npm:ai@6";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
-import { eligibleInbound, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, safeThread, smsPeer } from "../_shared/ava-sms-policy.ts";
+import { eligibleInbound, explicitBookingRequest, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, safeThread, smsPeer } from "../_shared/ava-sms-policy.ts";
 import { buildAvaPrompt } from "../_shared/ava-prompt.ts";
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});
 const requestSchema=z.object({action:z.enum(["status","configure","process","approve","decline"]),message_id:z.string().uuid().optional(),job_id:z.string().uuid().optional(),enabled:z.boolean().optional(),reply:z.string().trim().min(1).max(1200).optional()});
@@ -102,7 +102,7 @@ POLITIQUE SMS PRIORITAIRE: Tu es AVA, l'assistante chaleureuse de Marc Maglieri 
    let proposal:any={kind:suspicious?"sensitive":output.kind};
    if(proposal.kind==="appointment") {
     const start=Date.parse(output.start??""),end=Date.parse(output.end??"");
-    if(!/[Z+-]\d*:?\d*$/.test(output.start??"")||!Number.isFinite(start)||!Number.isFinite(end)||start<=Date.now()||end<=start||end-start>2*3600000)proposal={kind:"sensitive"};
+    if(!explicitBookingRequest(String(message.body??""))||!/(Z|[+-]\d{2}:\d{2})$/.test(output.start??"")||!/(Z|[+-]\d{2}:\d{2})$/.test(output.end??"")||!Number.isFinite(start)||!Number.isFinite(end)||start<=Date.now()||end<=start||end-start>2*3600000)proposal={kind:"sensitive"};
     else proposal={kind:"appointment",start:output.start,end:output.end};
    }
    const status=proposal.kind==="sensitive"?"needs_review":"ready";

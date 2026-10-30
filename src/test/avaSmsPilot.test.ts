@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eligibleInbound, hasCalendarConflict, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, safeThread, smsPeer } from "../../supabase/functions/_shared/ava-sms-policy";
+import { eligibleInbound, explicitBookingRequest, hasCalendarConflict, MARC_SMS_PROFILE_ID, MARC_SMS_USER_ID, pilotOwner, safeThread, smsPeer } from "../../supabase/functions/_shared/ava-sms-policy";
 const marc = { id: MARC_SMS_PROFILE_ID, user_id: MARC_SMS_USER_ID, extension: "1136", ns_domain: "planipret.ca" };
 describe("Marc-only SMS policy", () => {
  it("requires exact Marc owner and 1136", () => {
@@ -26,5 +26,10 @@ describe("Marc-only SMS policy", () => {
  });
  it("normalizes peers without granting authentication",()=>{
   expect(smsPeer("1136")).toBe("1136"); expect(smsPeer("Jannie 1136")).toBeNull();
+ });
+ it("never books an ambiguous or merely informational request",()=>{
+  expect(explicitBookingRequest("Réserve un rendez-vous le 2026-11-02 à 14h00 pour 30 minutes")).toBe(true);
+  expect(explicitBookingRequest("Je suis libre demain")).toBe(false);
+  expect(explicitBookingRequest("Quels rendez-vous as-tu le 2026-11-02 à 14h00 pour 30 minutes?")).toBe(false);
  });
 });

@@ -21,6 +21,15 @@ export function eligibleInbound(row: any, config: any, profile: any) {
     && smsPeer(row.from_number) !== smsPeer(row.to_number) && !row.metadata?.ava_sms_job;
 }
 export function hasCalendarConflict(start: string, end: string, events: any[]) {
-  return events.some(event => Date.parse(event.start?.dateTime ?? event.start) < Date.parse(end)
-    && Date.parse(event.end?.dateTime ?? event.end) > Date.parse(start));
+  return events.some(event => {
+    const from=Date.parse(event.start?.dateTime??event.start),to=Date.parse(event.end?.dateTime??event.end);
+    return !Number.isFinite(from)||!Number.isFinite(to)||(from<Date.parse(end)&&to>Date.parse(start));
+  });
+}
+export function explicitBookingRequest(text:string) {
+  return /\b(réserve|reserver|réserver|book|prendre|fixer|planifier)\b/i.test(text)
+    && /rendez[- ]?vous|appointment|rencontre/i.test(text)
+    && /\b\d{1,2}(?:h\d{0,2}|:\d{2})\b/.test(text)
+    && /\b\d{4}-\d{2}-\d{2}\b/.test(text)
+    && /\b\d{1,3}\s*(?:minutes?|min)\b/i.test(text);
 }

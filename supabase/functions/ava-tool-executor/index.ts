@@ -34,6 +34,7 @@ import {
 import { addWallMinutes, graphWallTime } from "./calendarWallTime.ts";
 import { ms365ActionResult } from "./ms365ActionResult.ts";
 import { normalizeAvaEmailPayload } from "./emailPayload.ts";
+import { createTaskWithOutlook, outlookTaskRecurrence } from "../_shared/ava-task-calendar.ts";
 
 
 const DOMAIN = "planipret.ca";
@@ -943,14 +944,23 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     }
     if (!notes) return { success: false, error: "clarification_needed", message: "Quelle note veux-tu inscrire sur la tâche ?" };
     if (!due_at) return { success: false, error: "clarification_needed", message: "Pour quelle date et heure (fuseau America/Toronto) ?" };
-    const r = await taskApi(ctx, {
+    const startWall = graphWallTime(due_at, "America/Toronto");
+    try {
+      if (!startWall) throw new Error("invalid_start_datetime");
+      outlookTaskRecurrence(p?.recurrence, startWall);
+      if (p?.link_outlook === true && (!Number.isFinite(Number(p?.duration_minutes ?? 30)) || Number(p?.duration_minutes ?? 30) <= 0)) throw new Error("invalid_duration");
+    } catch (error) {
+      return { success: false, error: String(error instanceof Error ? error.message : error), message: "Précise une date, une fréquence et une heure valides; rien n’a été créé." };
+    }
+    const r = await createTaskWithOutlook({
       // No target → the gateway auto-targets and auto-assigns the broker.
       action: "create", target, target_type, notes, due_at,
       description: p?.description, assignee_id: p?.assignee_id ?? p?.users_id, status: p?.status,
       sync_calendar: p?.sync_calendar === true, notification: p?.notification === true,
-      recurrence: p?.recurrence ?? null,
-    });
-    if ((r as any)?.success) await broadcastTasks(ctx, "created", (r as any).task_id);
+      recurrence: p?.recurrence ? { ...p.recurrence, value: p.recurrence.value ?? 1 } : null,
+      link_outlook: p?.link_outlook === true, duration_minutes: p?.duration_minutes,
+    }, (input) => taskApi(ctx, input), (input) => TOOLS.create_calendar_event(ctx, input));
+    if ((r as any)?.success || (r as any)?.task_created) await broadcastTasks(ctx, "created", (r as any).task_id);
     return r;
   },
 
@@ -1268,6 +1278,9 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const endWall = graphWallTime(p.end_datetime, timezone)
       ?? addWallMinutes(startWall, Number(p.duration_minutes ?? 30));
     const subject = p.subject ?? p.title ?? "Rendez-vous";
+    let recurrence;
+    try { recurrence = outlookTaskRecurrence(p.recurrence, startWall, timezone); }
+    catch (error) { return { success: false, error: error instanceof Error ? error.message : "invalid_recurrence" }; }
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
@@ -1281,6 +1294,8 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
           body: p.body ?? p.notes,
           attendees,
           isOnlineMeeting: p.is_online ?? true,
+          recurrence: p.recurrence,
+          transactionId: p.transaction_id,
         },
       }),
     });
@@ -1299,7 +1314,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
         raw: j,
       };
     }
-    return { ...result, event_id: result.id, web_link: j?.event?.webLink, attendees };
+    return { ...result, event_id: result.id, web_link: j?.event?.webLink, attendees, recurrence };
   },
 
   async move_calendar_event(ctx, p) {

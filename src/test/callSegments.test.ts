@@ -20,3 +20,14 @@ describe("groupCallSegments", () => {
     expect(moved.status).toBe("Orig: Bye");
   });
 });
+
+describe("groupCallSegments stored rows", () => {
+  it("groups rows with flat metadata or ns_parent_callid", () => {
+    const out = groupCallSegments<any>([
+      { id: "a", started_at: "2026-10-30T10:00:00Z", duration_seconds: 30, metadata: { "call-parent-call-id": "P1", "call-disconnect-reason-text": "Retrieved" } },
+      { id: "b", started_at: "2026-10-30T10:00:31Z", duration_seconds: 90, ns_parent_callid: "P1", metadata: {} },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].duration_seconds).toBe(120);
+  });
+});

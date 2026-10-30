@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Prepare AVA recurring Maestro task + direct recurring Outlook event creation, preserving confirmations, ownership and duplicate prevention; test Monday mornings and partial failures. No deployment/publication or real task creation without authorization.
+
 - [x] Prepare all-broker iPhone line labels using validated resolved M identity rather than stale profile extension; preserve existing Maestro resolver/native registration, no deployment/publication/telecom changes.
 - [ ] Verify Scott's installed iPhone registers and answers on 110M after fresh sign-in; physical device/version and next approved app release for updated labels required.
 

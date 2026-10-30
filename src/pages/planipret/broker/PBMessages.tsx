@@ -22,6 +22,8 @@ import { brokerSelect, searchFilter, periodStartISO, PERIOD_OPTIONS, type Broker
 import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
 import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
 import ppBanner from "@/assets/planipret/banner-messages.jpg";
+import { AvaSmsPilotPanel } from "@/components/planipret/admin/AvaSmsPilotPanel";
+import { MARC_SMS_USER_ID } from "../../../../supabase/functions/_shared/ava-sms-policy";
 
 type Thread = { key: string; peer: string; last: any; messages: any[]; unread: number };
 
@@ -148,6 +150,7 @@ export default function PBMessages() {
         subtitle={lang === "en" ? "SMS conversations and exchanged volume" : "Conversations SMS et volume échangé"}
       />
       <PPActivityCharts kind="messages" lang={lang === "en" ? "en" : "fr"} userId={userId} />
+      {authUserId === MARC_SMS_USER_ID && <AvaSmsPilotPanel />}
 
       <PAPageHeader
         icon={<MessageSquare className="w-4 h-4" />}

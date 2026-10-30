@@ -218,6 +218,20 @@
       "when": 1793129825659,
       "tag": "0030_grant_ava_chat_enabled_select",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793335250934,
+      "tag": "0031_ava_sms_marc_pilot",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793335464188,
+      "tag": "0032_ava_sms_calendar_serialization",
+      "breakpoints": true
     }
   ]
 }

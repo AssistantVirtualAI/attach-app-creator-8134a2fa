@@ -9767,6 +9767,99 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_ava_sms_calendar_lock: {
+        Row: {
+          created_at: string
+          job_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          job_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          job_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      planipret_ava_sms_jobs: {
+        Row: {
+          calendar_claimed_at: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          message_id: string
+          peer: string
+          profile_id: string
+          proposal: Json | null
+          reply: string | null
+          reply_claimed_at: string | null
+          result: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calendar_claimed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          message_id: string
+          peer: string
+          profile_id: string
+          proposal?: Json | null
+          reply?: string | null
+          reply_claimed_at?: string | null
+          result?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calendar_claimed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          message_id?: string
+          peer?: string
+          profile_id?: string
+          proposal?: Json | null
+          reply?: string | null
+          reply_claimed_at?: string | null
+          result?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      planipret_ava_sms_pilot: {
+        Row: {
+          activated_at: string
+          enabled: boolean
+          profile_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activated_at?: string
+          enabled?: boolean
+          profile_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activated_at?: string
+          enabled?: boolean
+          profile_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_billing_items: {
         Row: {
           activation_fee: number

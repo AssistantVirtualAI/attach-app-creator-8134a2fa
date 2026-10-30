@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { displayStatus, type DisplayStatus } from "@/lib/planipret/avaConfirmationStatus";
 import { toast } from "sonner";
+import { AvaSmsPilotPanel } from "@/components/planipret/admin/AvaSmsPilotPanel";
 
 type Row = {
   id: string; user_id: string | null; broker_id: string | null; call_id: string | null;
@@ -205,6 +206,7 @@ export default function PAAvaConfirmations() {
         )}
       />
 
+      <AvaSmsPilotPanel />
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="relative">
           <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />

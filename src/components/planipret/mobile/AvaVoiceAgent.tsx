@@ -1,6 +1,7 @@
 // AvaVoiceAgent — full ElevenLabs Conversational AI overlay for AVA Planiprêt.
 // Replaces the legacy VoiceAgent.tsx with rich state visualization, live
 // transcript, tool execution notifications and confirmation modal.
+import { describeVoiceStartError } from "@/lib/planipret/avaVoiceFailure";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { lastPageBeforeAva } from "@/lib/planipret/avaFeedback";
 import { useNavigate } from "react-router-dom";
@@ -548,7 +549,8 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat, onPla
             } else if (code === "profile_not_found") {
               fallback(L("Profil courtier introuvable — contactez le support.", "Broker profile not found — contact support."), "profile_not_found");
             } else {
-              fallback(L("Connexion vocale échouée", "Voice connection failed"), "start_failed");
+              const detail = `webrtc=${describeVoiceStartError(webrtcErr)} | websocket=${describeVoiceStartError(wsErr)}`;
+              fallback(`${L("Connexion vocale échouée", "Voice connection failed")} — ${detail}`, "start_failed");
             }
             return;
           }

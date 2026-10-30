@@ -10,6 +10,7 @@ type Dashboard = {
   brokers_enabled: number;
   errors_24h: number;
   top_errors: Array<{ reason: string; count: number }>;
+  recent_errors?: Array<{ code: string; message: string; at: string }>;
   brokers: any[];
 };
 
@@ -76,6 +77,13 @@ export default function AvaVoiceHealthPanel({ onData }: { onData?: (d: Dashboard
               </span>
             ))}
           </div>
+          {!!data.recent_errors?.length && (
+            <ul className="mt-2 space-y-1 text-[11px] text-amber-900">
+              {data.recent_errors.map((e, i) => (
+                <li key={i} className="font-mono break-all">{new Date(e.at).toLocaleString("fr-CA", { timeZone: "America/Toronto" })} — {e.message || e.code}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>

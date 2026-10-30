@@ -348,6 +348,7 @@ Deno.serve(async (req) => {
     sip_auth_user: resolvedId,
     sip_password: sipPassword,
     sip_extension: ext,
+    maestro_identity: maestroIdentity,
     sip_domain: domain,
     sip_proxy: coreServer,
     sip_core_server: coreServer,

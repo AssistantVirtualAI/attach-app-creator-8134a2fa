@@ -29,15 +29,9 @@ function isPhoneLike(value: string): boolean {
  * Models occasionally place a person name in `number` or `recipient`; this
  * moves it to `contactName` so the server can perform a broker-scoped lookup.
  */
-/** Extracts a North-American phone number typed by the user (never from a name). */
-export function extractPhoneFromText(text: unknown): string {
-  const m = String(text ?? "").match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
-  return m ? m[0].trim() : "";
-}
-
-export function normalizeAvaSmsRecipient(payload: SuggestionPayload, userText?: string): AvaSmsRecipient {
+export function normalizeAvaSmsRecipient(payload: SuggestionPayload): AvaSmsRecipient {
   const p = payload ?? {};
-  const rawTarget = firstText(p.number, p.to, p.phone, p.phone_number, p.to_number, p.destination, p.numero, p.telephone, p.mobile, p.cell);
+  const rawTarget = firstText(p.number, p.to, p.phone, p.phone_number, p.to_number, p.destination);
   const rawRecipient = firstText(p.recipient, p.recipient_name);
   let number = rawTarget;
   let contactName = firstText(p.contact_name, p.recipient_name, p.client_name, p.full_name, p.name);
@@ -51,8 +45,6 @@ export function normalizeAvaSmsRecipient(payload: SuggestionPayload, userText?: 
     if (isPhoneLike(rawRecipient)) number = rawRecipient;
     else contactName ||= rawRecipient;
   }
-
-  if (!number) number = extractPhoneFromText(userText);
 
   return {
     number,

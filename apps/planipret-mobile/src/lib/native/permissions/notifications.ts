@@ -1,6 +1,5 @@
 import { isNative, getPlatform, setPref, type PermStatus } from "./platform";
 import { supabase } from "@/integrations/supabase/client";
-import { getMobileDeviceId } from "@/lib/planipret/singleDevice";
 import { ensureIncomingCallActionType, showIncomingCallNotification } from "./localCallNotifications";
 
 let listenersRegistered = false;
@@ -105,10 +104,9 @@ export async function registerPushListeners(extension?: string) {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           const { error } = await supabase.functions.invoke("mobile-register-push", {
-            body: { token: token.value, platform, extension: currentExtension, device_id: getMobileDeviceId() },
+            body: { token: token.value, platform, extension: currentExtension },
           });
           if (!error) { apnsTokenUploaded = true; return; }
-          if ((error as any)?.context?.status === 409) return; // autre appareil actif
           console.warn("[push] register rejected", error);
         } catch (e) {
           console.warn("[push] register failed", e);
@@ -195,23 +193,6 @@ export async function registerPushListeners(extension?: string) {
       await ensureIncomingCallActionType();
       LocalNotifications.addListener("localNotificationActionPerformed", (event) => {
         const data = (event.notification?.extra ?? {}) as Record<string, string>;
-        if (data.type === "quick_reply") {
-          void import("@/lib/planipret/quickReply").then(async (m) => {
-            const r = await m.handleQuickReplyAction(event.actionId, data, (event as any).inputValue);
-            if (r === "open") {
-              // Tap ou « Personnalisé » sans texte : ouvrir le fil texto du client.
-              const route = `/mplanipret/messages?tab=sms&to=${encodeURIComponent(data.to || "")}`;
-              window.history.pushState(window.history.state, "", route);
-              window.dispatchEvent(new PopStateEvent("popstate"));
-              return;
-            }
-            const lang = localStorage.getItem("mplanipret-lang") === "en" ? "en" : "fr";
-            const { toast } = await import("sonner");
-            if (r.ok) toast.success(lang === "fr" ? "Texto envoyé" : "Text sent");
-            else if (r.error !== "expired") toast.error(m.quickReplyErrorText(r.error, lang));
-          });
-          return;
-        }
         // Native PpSipKeepAlive uses pp_call_id; JS-scheduled notifications use
         // callId. Accept both so a banner tap always restores the ringing UI.
         const callId = data.callId ?? data.pp_call_id ?? "";

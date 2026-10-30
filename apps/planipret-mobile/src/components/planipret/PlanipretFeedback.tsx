@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import {
   Bug, Camera as CameraIcon, ChevronDown, ChevronRight, ImagePlus, Loader2, MessageSquare, Plus, RefreshCw, Search, Send, Trash2, X,
 } from "lucide-react";
-import { notifyFeedbackReply } from "@/lib/planipret/feedbackReply";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/camera";
@@ -135,13 +134,6 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
   }, []);
 
   useEffect(() => { void load(); void loadCounts(); }, [load, loadCounts]);
-
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("report");
-    if (!id || !reports.some(r => r.id === id)) return;
-    setOpenThread(id); setCollapsed(c => ({ ...c, [id]: false }));
-    void loadComments(id);
-  }, [reports, loadComments]);
 
   useEffect(() => {
     if (!me?.id) return;
@@ -280,15 +272,10 @@ export default function PlanipretFeedback({ source = "portal", compact = false }
     const text = draft.trim();
     if (!text || sending || !me) return;
     setSending(true);
-    try {
-      const { data, error } = await db.from("pp_feedback_comments").insert({ report_id: id, author_id: me.id, author_name: me.name, body: text }).select("id").single();
-      if (error) { toast.error(error.message); return; }
-      setDraft(""); void loadComments(id); void loadCounts();
-      if (data?.id && !(await notifyFeedbackReply(data.id))) {
-        toast.warning(t("Réponse enregistrée; certaines alertes ne sont pas confirmées.", "Reply saved; some alerts are not confirmed."));
-      }
-    } catch { toast.error(t("Impossible d’enregistrer la réponse.", "Unable to save the reply.")); }
-    finally { setSending(false); }
+    const { error } = await db.from("pp_feedback_comments").insert({ report_id: id, author_id: me.id, author_name: me.name, body: text });
+    setSending(false);
+    if (error) { toast.error(error.message); return; }
+    setDraft(""); void loadComments(id); void loadCounts();
   };
 
   const chip = (active: boolean, s?: Status): React.CSSProperties => s && active

@@ -40,12 +40,9 @@ const MUTATING_ACTIONS = new Set([
 const CONFIRM_RE = /^(oui|ok|okay|confirm[eé]?|confirm[eé] pour envoyer|j['’]?autorise|autorise|vas-y|go|envoie|envoyer|appelle|appel|cr[eé]e|supprime|delete|yes|yep|approved?|approuv[eé])\b/i;
 const CANCEL_RE = /^(non|annule|annuler|stop|cancel|cancelled?|no|n\b)/i;
 
-export type AvaHost = { openDialer?: (number?: string, autoDial?: boolean) => void; softphone?: any };
-
-export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
+export default function MAvaChat() {
   const [userId, setUserId] = useState<string | null>(null);
   const [voiceAgentAllowed, setVoiceAgentAllowed] = useState(false);
-  const [chatAllowed, setChatAllowed] = useState(true);
   const [aiConsent, setAiConsentState] = useState<boolean>(() => hasAiConsent());
   const [mode, setMode] = useState<"chat" | "voice">(() => (localStorage.getItem("ava_mode") as any) || "chat");
   const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
@@ -67,8 +64,7 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const avaContext = useAvaContext();
-  const outletCtx = useOutletContext<PlanipretMobileContext>() as any;
-  const outlet = host ?? outletCtx;
+  const outlet = useOutletContext<PlanipretMobileContext>() as any;
   const { t, lang } = useMplanipretLang();
 
   const switchMode = (m: "chat" | "voice") => { setMode(m); localStorage.setItem("ava_mode", m); };
@@ -80,11 +76,10 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
       setUserId(data.user.id);
       const { data: prof } = await supabase
         .from("planipret_profiles")
-        .select("voice_agent_enabled, ava_chat_enabled")
+        .select("voice_agent_enabled")
         .eq("user_id", data.user.id)
         .maybeSingle();
       setVoiceAgentAllowed(!!(prof as any)?.voice_agent_enabled);
-      setChatAllowed((prof as any)?.ava_chat_enabled !== false);
       const { data: s } = await supabase
         .from("planipret_ava_chat_sessions")
         .select("id,title,last_message_at")
@@ -94,24 +89,6 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
       if (s?.[0]) setSessionId(s[0].id);
     })();
   }, []);
-
-  useEffect(() => {
-    if (!userId) return;
-    const ch = supabase.channel(`pp-ava-access-${userId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "planipret_profiles", filter: `user_id=eq.${userId}` }, (p: any) => {
-        const r = p?.new ?? {};
-        if ("voice_agent_enabled" in r) setVoiceAgentAllowed(!!r.voice_agent_enabled);
-        if ("ava_chat_enabled" in r) setChatAllowed(r.ava_chat_enabled !== false);
-      })
-      .subscribe();
-    const onFocus = async () => {
-      const { data: prof } = await supabase.from("planipret_profiles").select("voice_agent_enabled, ava_chat_enabled").eq("user_id", userId).maybeSingle();
-      if (prof) { setVoiceAgentAllowed(!!(prof as any).voice_agent_enabled); setChatAllowed((prof as any).ava_chat_enabled !== false); }
-    };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
-    return () => { supabase.removeChannel(ch); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); };
-  }, [userId]);
 
   useEffect(() => {
     if (!sessionId) { setMessages([]); return; }
@@ -243,8 +220,7 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
     setRunningSuggestion(suggestion.id);
     try {
       if (suggestion.kind === "call") {
-        const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.message;
-        const number = normalizeAvaSmsRecipient(suggestion.payload, lastUserText).number;
+        const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
         if (!number) throw new Error(t("avaChat.callMissingNumber"));
         // Un seul propriétaire de l'appel : le dialer/softphone mobile.
         if (typeof outlet?.openDialer === "function") outlet.openDialer(number, true);
@@ -275,11 +251,10 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
       }
 
       if (suggestion.kind === "sms") {
-        const lastUserText = [...messages].reverse().find((m) => m.role === "user")?.message;
-        const recipient = normalizeAvaSmsRecipient(suggestion.payload, lastUserText);
+        const recipient = normalizeAvaSmsRecipient(suggestion.payload);
         const number = recipient.number;
         const body = recipient.message;
-        if (!number && !recipient.contactName) throw new Error(t("avaChat.smsMissingNumber"));
+        if (!number && !recipient.contactName) throw new Error(t("avaChat.callMissingNumber"));
         if (!body) throw new Error(t("avaChat.smsRefused"));
         const { data, error } = await supabase.functions.invoke("ava-tool-executor", {
           body: {
@@ -394,13 +369,6 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
 
   const currentTitle = useMemo(() => sessions.find((s) => s.id === sessionId)?.title ?? t("avaChat.newChatShort"), [sessions, sessionId]);
 
-  if (userId && !chatAllowed && !voiceAgentAllowed) {
-    return <AvaAccessLocked lang={lang} what="both" />;
-  }
-  if (userId && mode === "chat" && !chatAllowed) {
-    return <AvaAccessLocked lang={lang} what="chat" onSwitch={voiceAgentAllowed ? () => switchMode("voice") : undefined} />;
-  }
-
   if (mode === "voice" && voiceAgentAllowed && userId) {
     return (
       <div className="relative min-h-full">
@@ -436,7 +404,7 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100dvh - 242px)", minHeight: 400, background: "var(--pp-bg-base)" }}>
-      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 100%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full"><Menu className="w-5 h-5" /></Button>
@@ -617,7 +585,7 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 backdrop-blur-xl px-3 pb-3 pt-2" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 100%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
+      <div className="sticky bottom-0 z-10 backdrop-blur-xl px-3 pb-3 pt-2" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 70%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
        <div className="flex items-end gap-2 max-w-3xl w-full mx-auto rounded-full pl-2 pr-1.5 py-1.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", boxShadow: "0 10px 30px -10px rgba(124,58,237,0.25)" }}>
         <button
           onClick={recording ? stopRec : startRec}
@@ -653,7 +621,7 @@ export default function MAvaChat({ host }: { host?: AvaHost } = {}) {
       </div>
 
       {pendingConfirm && (
-        <div className="sticky bottom-0 left-0 right-0 z-20 px-3 py-2 flex flex-col gap-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 100%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
+        <div className="sticky bottom-0 left-0 right-0 z-20 px-3 py-2 flex flex-col gap-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 92%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
           <div className="text-sm" style={{ color: "var(--pp-text-primary)" }}>{t("avaChat.confirmPrefix")} : {pendingConfirm.label}</div>
           <div className="flex gap-2">
             <Button variant="ghost" className="flex-1" onClick={() => setPendingConfirm(null)}>{t("avaChat.cancel")}</Button>
@@ -707,26 +675,4 @@ function parseAvaReply(raw: string, suggestions: AvaSuggestion[]): { text: strin
     text: cleanReply(raw),
     suggestions: suggestions.length ? suggestions : found,
   };
-}
-
-
-function AvaAccessLocked({ lang, what, onSwitch }: { lang: string; what: "chat" | "voice" | "both"; onSwitch?: () => void }) {
-  const en = lang === "en";
-  const name = what === "both" ? "AVA Chat / AVA Voice" : what === "chat" ? "AVA Chat" : (en ? "AVA Voice" : "AVA Voix");
-  return (
-    <div className="flex flex-col items-center justify-center text-center px-6 py-16 gap-3" style={{ minHeight: 400 }}>
-      <div className="text-4xl">🔒</div>
-      <div className="font-semibold text-base" style={{ color: "var(--pp-text-primary)" }}>
-        {en ? `${name} is not enabled on your account` : `${name} n'est pas activé sur votre compte`}
-      </div>
-      <div className="text-sm" style={{ color: "var(--pp-text-muted)" }}>
-        {en ? "Contact your administrator to activate this feature." : "Contactez votre administrateur pour activer cette fonctionnalité."}
-      </div>
-      {onSwitch && (
-        <button onClick={onSwitch} className="mt-2 px-4 py-2 rounded-full text-sm font-semibold" style={{ background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", color: "#fff" }}>
-          {en ? "Use AVA Voice" : "Utiliser AVA Voix"}
-        </button>
-      )}
-    </div>
-  );
 }

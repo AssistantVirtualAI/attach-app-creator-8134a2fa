@@ -27,7 +27,6 @@ import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import PostCallConsentSheet from "@/components/planipret/mobile/PostCallConsentSheet";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { tr } from "@/lib/i18n/tr";
 import { ROUTES } from "@/lib/routes";
 import { recordRedirect } from "@/lib/debug/navDebug";
 import { invokeEdge, onAuthRequired } from "@/lib/planipret/edgeAuth";
@@ -43,7 +42,6 @@ import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "
 import { useRemoteConfig } from "@/hooks/useRemoteConfig";
 import { rememberPageForAva } from "@/lib/planipret/avaFeedback";
 import { rememberLastRoute } from "@/lib/planipret/lastRoute";
-import { useSingleMobileDevice, consumeSignedOutElsewhere } from "@/hooks/useSingleMobileDevice";
 
 import { retryWithBackoff, adaptiveTimeout } from "@/lib/net/resilient";
 
@@ -173,7 +171,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
   const autoDialKeyRef = useRef("");
   useEffect(() => {
     if (open) { setNumber(initial ?? ""); setMode("keypad"); setQuery(""); }
-    else { setNumber(""); autoDialKeyRef.current = ""; }
+    else autoDialKeyRef.current = "";
   }, [open, initial]);
   const append = (c: string) => setNumber((n) => (n + c).slice(0, 20));
   const back = () => setNumber((n) => n.slice(0, -1));
@@ -410,7 +408,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
                   ) : contactsError && contacts.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>
                       <div className="mb-2">{contactsError}</div>
-                      <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>{tr("Réessayer", "Retry")}</button>
+                      <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
                     </div>
                   ) : filtered.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{tokens.length ? t("dialer.noResults") : t("contacts.noDirectory")}</div>
@@ -508,10 +506,6 @@ export default function PlanipretMobile() {
   // Wait for the profile before SIP init so cold starts do not race auth/profile boot.
   const softphone = useMplanipretSoftphone(Boolean(profile?.user_id), { primary: true });
   const attachRestCall = (softphone as any).attachRestCall as ((a: any) => void) | undefined;
-  useSingleMobileDevice(profile?.user_id, String(softphone.snap.callState));
-  useEffect(() => {
-    if (consumeSignedOutElsewhere()) toast.info("Votre compte a été ouvert sur un autre appareil.");
-  }, []);
   const sipCallLive = ["ringing-in", "ringing-out", "active", "held"].includes(
     String(softphone.snap.callState),
   );
@@ -552,18 +546,12 @@ export default function PlanipretMobile() {
     setAvaMode("voice");
     setAvaOpen(true);
   };
-  // Stack of refresh handlers: the most recently mounted page/sub-tab owns the
-  // pull gesture; its cleanup pops only its own entry. Stable identity so page
-  // effects do not re-register on every shell render. Cleared on route change.
   const refreshRegistry = useRef(createRefreshRegistry()).current;
   const registerRefresh = useCallback((fn: (() => Promise<void> | void) | null) => refreshRegistry.register(fn), [refreshRegistry]);
-  const currentRefresh = () => refreshRegistry.current();
-  // Stale-load guard: leaving the page while a refresh runs releases the
-  // spinner immediately; the old page's result can no longer block the new one.
   const pullGen = useRef(0);
   useEffect(() => { pullGen.current += 1; }, [location.pathname]);
   const handlePull = async () => {
-    const fn = currentRefresh(); if (!fn) return;
+    const fn = refreshRegistry.current(); if (!fn) return;
     const gen = pullGen.current;
     const regGen = refreshRegistry.generation;
     await new Promise<void>((resolve) => {
@@ -571,7 +559,7 @@ export default function PlanipretMobile() {
       Promise.resolve().then(fn).catch(() => {}).finally(() => { clearInterval(iv); resolve(); });
     });
   };
-  const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull, 70, () => currentRefresh() != null);
+  const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull, 70, () => refreshRegistry.current() != null);
 
   // Remember each page's scroll position so returning to a tab reopens it
   // where the broker left it instead of jumping back to the top.
@@ -943,18 +931,6 @@ export default function PlanipretMobile() {
       setLoading(false);
       return;
     }
-    // Doit exister comme courtier actif dans NetSapiens (vérifié côté serveur).
-    try {
-      const { data: ns } = await supabase.functions.invoke("pp-ns-access-check", { body: {} });
-      if ((ns as { allowed?: boolean } | null)?.allowed === false) {
-        await supabase.auth.signOut();
-        toast.error("Votre compte n’est pas actif dans la téléphonie. Contactez votre administrateur.");
-        setProfile(null);
-        setAccessError("unauthenticated");
-        setLoading(false);
-        return;
-      }
-    } catch { /* réseau : les autres vérifications serveur restent en place */ }
     // Capture Microsoft 365 tokens once after Azure SSO redirect.
     try {
       const captured = sessionStorage.getItem("pp_ms_captured");
@@ -1240,7 +1216,7 @@ export default function PlanipretMobile() {
         <UniversalSearchBar />
         <div ref={scrollRef} className="pp-mobile-scroll flex-1 overflow-y-auto pb-[130px]">
           <PullIndicator pullDist={pullDist} refreshing={refreshing} threshold={threshold} color={ACCENT} />
-          <PlanipretErrorBoundary key={`${location.pathname}:${lang}`}>
+          <PlanipretErrorBoundary key={location.pathname}>
             <Suspense fallback={<MobileScreenSkeleton />}>
               <Outlet context={{ profile, reloadProfile: loadProfile, openDialer, openAva, registerRefresh, softphone } satisfies PlanipretMobileContext} />
             </Suspense>
@@ -1254,7 +1230,7 @@ export default function PlanipretMobile() {
 
         {/* Right FAB — uniquement sur Home et Calls */}
         {(/^\/mplanipret(\/(home|calls)(\/|$)?)?$/.test(location.pathname) || location.pathname === "/mplanipret") && (
-        <button onClick={activeCallId ? hangupActive : () => openDialer()}
+        <button onClick={activeCallId ? hangupActive : () => setDialerOpen(true)}
           className="absolute z-20 rounded-full flex items-center justify-center text-white active:scale-95 transition"
           style={{
             right: 18, bottom: "calc(env(safe-area-inset-bottom, 0px) + 116px)",
@@ -1348,7 +1324,7 @@ export default function PlanipretMobile() {
 
 
 
-        <Dialer open={dialerOpen} autoDial={dialerAutoDial} onClose={() => { setDialerOpen(false); setDialerAutoDial(false); setDialerInit(undefined); }} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} maestroConfigured={Boolean(profile?.maestro_broker_id)} />
+        <Dialer open={dialerOpen} autoDial={dialerAutoDial} onClose={() => { setDialerOpen(false); setDialerAutoDial(false); }} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} maestroConfigured={Boolean(profile?.maestro_broker_id)} />
         <PpActiveCallScreen softphone={softphone} />
         <PostCallConsentSheet />
         {/* A live WebRTC session owns the UI: PpActiveCallScreen already shows

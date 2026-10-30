@@ -122,7 +122,7 @@ async function fetchMaestroList(kind: "clients" | "brokers", limit: number, refr
   const pageSize = Math.max(1, Math.min(limit, 500));
   const all: any[] = [];
   const seen = new Set<string>();
-  for (let offset = 0, page = 0; page < 100; page++, offset += pageSize) {
+  for (let offset = 0, page = 0; page < 20; page++, offset += pageSize) {
     const { data, error } = await supabase.functions.invoke("maestro-actions", {
       body: { action: kind === "clients" ? "list_clients" : "list_brokers", payload: { limit: pageSize, offset, refresh: refresh && page === 0 } },
     });
@@ -238,7 +238,7 @@ export function invalidatePpContacts(action?: Action) {
 }
 
 /** Synchronous peek — returns a cached value if it exists, even if it's stale (< 24h). */
-/** Verifies the signed-in user, then returns the persisted copy (instant render). */
+/** Verifies the signed-in user, then returns the persisted copy for an instant safe render. */
 export async function peekPpContactsVerified(action: Action): Promise<any[] | null> {
   await ensureAuthenticatedCacheScope();
   return peekPpContacts(action);

@@ -1,4 +1,3 @@
-import { tr } from "@/lib/i18n/tr";
 // Brouillon de texto pour un client : le courtier voit le destinataire et le
 // texte complet, coche une confirmation explicite, puis seulement là le texto
 // part. Fermer ou revenir en arrière = annulation. Une clé d'idempotence
@@ -120,11 +119,11 @@ export default function SmsDraftSheet({
 
   return (
     <div style={wrap} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={card} role="dialog" aria-label={tr("Brouillon de texto", "Text draft")}>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>{tr("Brouillon de texto", "Text draft")}</div>
+      <div style={card} role="dialog" aria-label="Brouillon de texto">
+        <div style={{ fontSize: 12, opacity: 0.7 }}>Brouillon de texto</div>
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 12 }}>{target.name || "Client"}</div>
 
-        <label style={{ fontSize: 12, opacity: 0.75 }}>{tr("Destinataire", "Recipient")}</label>
+        <label style={{ fontSize: 12, opacity: 0.75 }}>Destinataire</label>
         <input
           value={recipient}
           onChange={(e) => { setRecipient(e.target.value); setConfirmed(false); }}
@@ -146,7 +145,7 @@ export default function SmsDraftSheet({
         </div>
 
         {!availability && (
-          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>{tr("Vérification du DID SMS du courtier…", "Checking broker SMS number…")}</div>
+          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>Vérification du DID SMS du courtier…</div>
         )}
         {availability && !didReady && (
           <div style={{ fontSize: 12, color: "#FCD34D", marginTop: 8 }}>
@@ -166,7 +165,7 @@ export default function SmsDraftSheet({
         </label>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={btn("rgba(255,255,255,0.14)")} onClick={onClose} disabled={busy}>{tr("Annuler", "Cancel")}</button>
+          <button style={btn("rgba(255,255,255,0.14)")} onClick={onClose} disabled={busy}>Annuler</button>
           <button
             style={{ ...btn("#16A34A"), opacity: ready ? 1 : 0.6 }}
             disabled={!ready}

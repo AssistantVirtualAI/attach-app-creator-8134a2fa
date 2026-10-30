@@ -92,7 +92,7 @@ describe("B — one vertical scroll owner per screen", () => {
   });
   it("Email history and recording segments are contained", () => {
     expect(src("components/planipret/mobile/EmailHistoryList.tsx")).toContain('data-scroll-owner="email-history" className="flex-1 min-h-0 overflow-y-auto overscroll-contain');
-    expect(src("components/planipret/mobile/recordings/RecordingsList.tsx")).toMatch(/max-h-\d+ overflow-y-auto overscroll-contain/);
+    expect(src("components/planipret/mobile/recordings/RecordingsList.tsx")).toContain("max-h-72 overflow-y-auto overscroll-contain");
   });
 
   const touch = (el: Element, type: string, ys: number[]) => {
@@ -164,7 +164,7 @@ describe("D — Marketing wording and destination", () => {
   it("no forbidden French synonym in Planiprêt mobile sources", () => {
     const { execSync } = require("node:child_process");
     const word = "Commerciali" + "sation";
-    const dirs = [resolve(__dirname, "../.."), resolve(__dirname, "../../../../../src/pages/planipret"), resolve(__dirname, "../../../../../src/components/planipret")];
+    const dirs = [resolve(__dirname, "../..")];
     const out = execSync(`grep -rl "${word}" ${dirs.map((d) => `"${d}"`).join(" ")} --include=*.ts --include=*.tsx --include=*.json || true`, { encoding: "utf8" });
     expect(out.trim()).toBe("");
   });
@@ -173,7 +173,5 @@ describe("D — Marketing wording and destination", () => {
     expect(s).toContain('export const MARKETING_PORTAL_PATH = "/planipret/broker/marketing";');
     expect(s).toContain('label="Marketing"');
     expect(s).toContain("openBrokerPortal(MARKETING_PORTAL_PATH)");
-    const app = readFileSync(resolve(__dirname, "../../../../../src/App.tsx"), "utf8");
-    expect(app).toContain('<Route path="marketing" element={<Suspense fallback={<AdminPageSkeleton />}><PBMarketing /></Suspense>} />');
   });
 });

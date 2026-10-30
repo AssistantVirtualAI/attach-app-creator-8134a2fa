@@ -13,6 +13,15 @@ import { tr } from "@/lib/i18n/tr";
 
 export type OpenPortalResult = { ok: true; portal: "admin" | "broker" } | { ok: false; error: string };
 
+type PortalExternalPlugin = {
+  open(options: { url: string }): Promise<{ ok: boolean }>;
+};
+
+// Le Browser Capacitor confirme parfois l'appel sans présenter sa feuille sur
+// certains iPhone/Android. Le plugin Planiprêt utilise donc directement le
+// navigateur système, après la même validation stricte effectuée ci-dessous.
+const PortalExternal = registerPlugin<PortalExternalPlugin>("PpPortalExternal");
+
 const errorText = (code: string): string | undefined => ({
   not_authenticated: tr("Session expirée. Reconnectez-vous à l'application.", "Session expired. Sign in to the app again."),
   no_planipret_profile: tr("Aucun profil Planiprêt associé à ce compte.", "No Planiprêt profile is linked to this account."),
@@ -40,34 +49,23 @@ function withTimeout<T>(p: Promise<T>, ms: number, code: string): Promise<T> {
   });
 }
 
-type PortalSessionPlugin = { start(o: { url: string; scheme: string; ephemeral?: boolean }): Promise<{ url?: string; cancelled?: boolean }> };
-const PortalSession = registerPlugin<PortalSessionPlugin>("PpAuthSession");
+async function openNativePortal(url: string): Promise<void> {
+  const isNativeExternalPluginAvailable = (Capacitor as typeof Capacitor & {
+    isPluginAvailable?: (name: string) => boolean;
+  }).isPluginAvailable?.("PpPortalExternal") === true;
 
-/**
- * iOS : présente le portail avec la même fenêtre sécurisée que la connexion
- * Microsoft de l'app (ASWebAuthenticationSession, déjà éprouvée dans cette
- * version). Elle s'affiche toujours, contrairement à SFSafariViewController
- * qui peut être ignorée sans message. La promesse ne se résout qu'à la
- * fermeture : seul un refus immédiat compte comme échec.
- * Repli (et Android) : navigateur intégré en « popover », la présentation
- * qui fonctionnait avant, sans fermeture préalable.
- */
-async function openNative(url: string): Promise<boolean> {
-  if (Capacitor.getPlatform() === "ios") {
-    const started = await new Promise<boolean>((resolve) => {
-      const t = setTimeout(() => resolve(true), 1500);
-      PortalSession.start({ url, scheme: "planipret-portal-done", ephemeral: false })
-        .then(() => { clearTimeout(t); resolve(true); }, () => { clearTimeout(t); resolve(false); });
-    });
-    if (started) return true;
+  if (isNativeExternalPluginAvailable) {
+    const result = await withTimeout(PortalExternal.open({ url }), 8000, "timeout");
+    if (!result?.ok) throw new Error("system_browser_unavailable");
+    return;
   }
-  try {
-    const { Browser } = await import("@capacitor/browser");
-    await withTimeout(Browser.open({ url, presentationStyle: "popover" }), 8000, "timeout");
-    return true;
-  } catch {
-    try { window.open(url, "_system"); return true; } catch { return false; }
-  }
+
+  // Compatibilité avec un ancien binaire sans le plugin dédié : ce chemin
+  // reste volontairement secondaire; il ne masque jamais un échec du plugin.
+  const { Browser } = await import("@capacitor/browser");
+  await withTimeout(Browser.close(), 800, "timeout").catch(() => undefined);
+  await new Promise((r) => setTimeout(r, 700));
+  await withTimeout(Browser.open({ url, presentationStyle: "fullscreen" }), 8000, "timeout");
 }
 
 export async function openBrokerPortal(path?: string): Promise<OpenPortalResult> {
@@ -90,8 +88,7 @@ export async function openBrokerPortal(path?: string): Promise<OpenPortalResult>
     }
 
     if (Capacitor.isNativePlatform()) {
-      const opened = await openNative(url);
-      if (!opened) return { ok: false, error: tr("L'iPhone a refusé d'ouvrir le portail. Réessayez.", "The phone refused to open the portal. Try again.") };
+      await openNativePortal(url);
     } else {
       window.open(url, "_blank", "noopener,noreferrer");
     }

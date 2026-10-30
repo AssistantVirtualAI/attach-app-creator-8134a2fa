@@ -1,4 +1,3 @@
-import { tr } from "@/lib/i18n/tr";
 // Écran de fin d'appel : le courtier décide s'il sauvegarde l'appel dans
 // Maestro, et AVA propose (sans jamais envoyer automatiquement) un texto ou un
 // courriel de suivi qu'il doit relire et confirmer avant l'envoi.
@@ -20,7 +19,6 @@ import {
   clientNumberOf,
   followupIdempotencyKey,
   pickEndedCall,
-  requiresPostCallDecision,
   type ConsentCall,
   type EndedDetail,
 } from "@/lib/planipret/postCallConsent";
@@ -76,7 +74,6 @@ export default function PostCallConsentSheet() {
   const sending = useRef(false);
   const handled = useRef<Set<string>>(new Set());
   const loadingFor = useRef<Set<string>>(new Set());
-  const callRef = useRef<ConsentCall | null>(null);
 
   const reset = useCallback(() => {
     setStep("consent"); setKind(null); setDraft(""); setConfirmed(false);
@@ -112,11 +109,9 @@ export default function PostCallConsentSheet() {
           rows = (data as any as ConsentCall[]) ?? [];
           if (rows.length) source = "provider";
         }
-        // L'identifiant SIP local diffère souvent de celui du PBX : on retombe
-        // sur les appels récents du courtier avec le même numéro. Aucune borne
-        // de durée : la feuille doit s'afficher après CHAQUE appel répondu,
-        // peu importe sa longueur. La correspondance exacte est garantie par
-        // pickEndedCall (numéro + sens + ended_at proche de la fin).
+        // Si l'identifiant SIP local ne correspond pas au PBX, on retrouve le
+        // seul appel compatible du courtier par numéro, sens et heure de fin.
+        // La durée de l'appel n'est jamais une limite de recherche.
         if (!rows.length && detail.number) {
           const endMs = Date.parse(endedIso);
           const openSince = new Date(endMs - 12 * 3_600_000).toISOString();
@@ -137,39 +132,8 @@ export default function PostCallConsentSheet() {
       if (!picked || handled.current.has(picked.id)) return;
       handled.current.add(picked.id);
       endedAt.current = endedIso;
-      callRef.current = picked;
       setCall(picked);
       reset();
-  }, [reset]);
-
-  // Balayage de secours : l'événement « fin d'appel » peut être manqué
-  // (raccrochage distant, app en arrière-plan, dossier arrivé en retard).
-  // On relit alors les appels répondus des 12 dernières heures encore sans
-  // décision, à l'ouverture de l'app et à chaque retour au premier plan.
-  const sweepPending = useCallback(async () => {
-    if (callRef.current) return; // une feuille est déjà affichée
-    const { data: auth } = await supabase.auth.getUser();
-    const uid = auth?.user?.id;
-    if (!uid) return;
-    setUserId(uid);
-    const { data: prof } = await supabase
-      .from("planipret_profiles").select("id").eq("user_id", uid).maybeSingle();
-    const owners = [uid, (prof as any)?.id].filter(Boolean).map(String);
-    const since = new Date(Date.now() - 12 * 3_600_000).toISOString();
-    const { data } = await supabase
-      .from("planipret_phone_calls").select(SELECT)
-      .in("user_id", owners)
-      .is("save_consent", null)
-      .or(`ended_at.gte.${since},and(ended_at.is.null,created_at.gte.${since})`)
-      .order("created_at", { ascending: false }).limit(50);
-    const rows = (data as any as ConsentCall[]) ?? [];
-    const candidate = rows.find((r) => requiresPostCallDecision(r) && !handled.current.has(r.id));
-    if (!candidate) return;
-    handled.current.add(candidate.id);
-    endedAt.current = candidate.ended_at ?? candidate.created_at ?? null;
-    callRef.current = candidate;
-    setCall(candidate);
-    reset();
   }, [reset]);
 
   useEffect(() => {
@@ -177,11 +141,7 @@ export default function PostCallConsentSheet() {
       const detail = ((e as CustomEvent).detail ?? {}) as EndedDetail;
       void loadEndedCall(detail);
     };
-    const onResume = () => { void sweepPending(); };
-    const onVisible = () => { if (document.visibilityState === "visible") onResume(); };
     window.addEventListener("pp:call-ended", onEnded as EventListener);
-    window.addEventListener("focus", onResume);
-    document.addEventListener("visibilitychange", onVisible);
     try {
       const raw = localStorage.getItem(PENDING_KEY);
       if (raw) {
@@ -189,29 +149,22 @@ export default function PostCallConsentSheet() {
         void loadEndedCall(pending, pending.endedAt);
       }
     } catch { /* invalid local recovery state is ignored */ }
-    void sweepPending();
-    return () => {
-      window.removeEventListener("pp:call-ended", onEnded as EventListener);
-      window.removeEventListener("focus", onResume);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [loadEndedCall, sweepPending]);
+    return () => window.removeEventListener("pp:call-ended", onEnded as EventListener);
+  }, [loadEndedCall]);
 
   const clientNumber = useMemo(() => (call ? clientNumberOf(call) : ""), [call]);
-  const [failed, setFailed] = useState(false);
   const clientName = useMemo(() => (call ? clientNameOf(call) : ""), [call]);
 
   useEffect(() => {
     if (!call || spokenFor.current === call.id) return;
     spokenFor.current = call.id;
-    speak("Désirez-vous conserver cet appel dans AVA ?");
+    speak("Désirez-vous enregistrer cet appel ou le supprimer ?");
   }, [call]);
 
   const close = useCallback((resolved = false) => {
     if (resolved) {
       try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
     }
-    callRef.current = null;
     setCall(null);
     reset();
     try { window.speechSynthesis?.cancel?.(); } catch { /* ignore */ }
@@ -239,19 +192,18 @@ export default function PostCallConsentSheet() {
         try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
         const started = (data as any)?.ok === true && (data as any)?.processing !== "retryable";
         if (started) {
-          toast.success("Appel conservé dans AVA.");
+          toast.success("Consentement enregistré. Synchronisation avec Maestro en cours.");
         } else {
-          toast.message("Appel conservé dans AVA. Vous pourrez l’envoyer au CRM plus tard.");
+          toast.message("Consentement enregistré. La synchronisation sera relancée automatiquement.");
         }
         setStep("followup");
       } else {
-        toast.success("Appel conservé dans AVA, sans envoi au CRM.");
+        const m = (data as any)?.maestro;
+        toast.success(m?.ok ? "Appel supprimé partout, y compris Maestro." : `Supprimé localement. Maestro : ${m?.detail ?? "échec"}`);
         close(true);
-        void sweepPending();
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Action impossible — rien n'a été envoyé.");
-      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -283,7 +235,6 @@ export default function PostCallConsentSheet() {
       if (!(data as any)?.ok) throw new Error(String((data as any)?.error ?? "Envoi refusé par le serveur."));
       toast.success((data as any)?.idempotent_replay ? "Déjà envoyé — aucun deuxième envoi." : "Suivi envoyé.");
       close(true);
-      void sweepPending();
     } catch (e: any) {
       toast.error(e?.message ?? "Envoi impossible. Rien n'a été envoyé.");
       sending.current = false;
@@ -295,7 +246,7 @@ export default function PostCallConsentSheet() {
   return createPortal(
     <div style={wrap}>
       <div style={card} role="dialog" aria-modal="true" aria-label="Décision après l'appel">
-        <div style={{ fontSize: 12, opacity: 0.7 }}>{tr("Fin d'appel", "Call ended")}</div>
+        <div style={{ fontSize: 12, opacity: 0.7 }}>Fin d'appel</div>
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>{clientName || "Client inconnu"}</div>
         <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 14 }}>
           {call.direction === "in" || call.direction === "inbound" ? "Appel entrant" : "Appel sortant"} · {clientNumber} · {call.duration_seconds ?? 0} s
@@ -307,7 +258,7 @@ export default function PostCallConsentSheet() {
               Que voulez-vous faire avec cet appel ?
             </div>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
-              L’audio, la transcription et le coaching restent dans AVA. L’envoi au CRM se fait uniquement avec le bouton CRM.
+              Enregistrer conserve l'appel et l'envoie dans Maestro. Supprimer efface l'enregistrement, la transcription et le sommaire.
             </div>
             <div style={{ display: "grid", gap: 10 }}>
               <Button
@@ -315,27 +266,22 @@ export default function PostCallConsentSheet() {
                 className="h-12 w-full gap-2"
                 onClick={() => consent("approve")}
               >
-                <Save size={18} /> Conserver dans AVA
+                <Save size={18} /> Enregistrer l'appel
               </Button>
               <Button disabled={busy} variant="destructive" className="h-12 w-full gap-2" onClick={() => consent("delete")}>
-                <Trash2 size={18} /> Garder sans envoyer au CRM
+                <Trash2 size={18} /> Supprimer l'appel
               </Button>
-              {failed && (
-                <Button disabled={busy} variant="ghost" className="h-10 w-full" onClick={() => { setFailed(false); close(false); }}>
-                  Décider plus tard (connexion indisponible)
-                </Button>
-              )}
             </div>
           </>
         )}
 
         {step === "followup" && (
           <>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{tr("Envoyer un suivi au client ?", "Send a follow-up to the client?")}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Envoyer un suivi au client ?</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button style={btn(kind === "sms" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("sms"); setConfirmed(false); }}>{tr("Texto", "Text")}</button>
-              <button style={btn(kind === "email" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("email"); setConfirmed(false); setRecipient(""); }}>{tr("Courriel", "Email")}</button>
-               <button style={btn("rgba(255,255,255,0.14)")} onClick={() => { close(true); void sweepPending(); }}>{tr("Aucun", "None")}</button>
+              <button style={btn(kind === "sms" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("sms"); setConfirmed(false); }}>Texto</button>
+              <button style={btn(kind === "email" ? "#2E9BDC" : "rgba(255,255,255,0.14)")} onClick={() => { setKind("email"); setConfirmed(false); setRecipient(""); }}>Courriel</button>
+               <button style={btn("rgba(255,255,255,0.14)")} onClick={() => close(true)}>Aucun</button>
             </div>
 
             {kind && (

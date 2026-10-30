@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.SHOW_WHEN_LOCKED" />
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme"
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <!--
+            ── Recommandation Google Play #3 : Large Screen / resizability ──────
+            resizeableActivity="true" permet à l'app de s'afficher sur tablettes,
+            Chromebooks et en mode multi-fenêtres (obligatoire pour API 36+).
+            screenOrientation retiré : Google Play pénalise le verrouillage portrait
+            sur les grands écrans. L'orientation est gérée côté React/CSS.
+
+            ── Recommandation Google Play #2 : Picture-in-Picture ───────────────
+            supportsPictureInPicture="true" + configChanges="screenSize|smallestScreenSize"
+            permettent à l'écran d'appel actif de passer en PiP quand l'utilisateur
+            quitte l'app pendant un appel.
+
+            ── Recommandation Google Play #1 : Edge-to-edge ─────────────────────
+            configChanges inclut "density" (requis API 36) pour éviter les recréations
+            d'activité lors des changements de densité (API dépréciée corrigée).
+        -->
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Planiprêt OAuth deep links: Maestro + Microsoft mobile callbacks -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="planipret" android:host="auth" android:pathPrefix="/maestro/callback" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="capacitor" android:host="localhost" android:pathPrefix="/auth/microsoft/callback" />
+                <data android:scheme="capacitor" android:host="localhost" android:pathPrefix="/auth/ms365/callback" />
+            </intent-filter>
+
+        </activity>
+
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+        <!-- SERVICE SIP EN FOREGROUND — maintient la connexion WebSocket SIP en arrière-plan -->
+        <!-- stopWithTask="false" : le service survit même si l'utilisateur swipe l'app --><!-- BOOT RECEIVER — redémarre le service SIP après un reboot du téléphone --><!-- CALL ACTION RECEIVER — traite les boutons Répondre/Refuser des notifications -->
+        <service
+            android:name=".PpSipKeepAliveService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+        <service
+            android:name=".PpFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <receiver
+            android:name=".PpIncomingActionReceiver"
+            android:exported="false" />
+
+    </application>
+
+    <!-- ─── Réseau ────────────────────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+
+    <!-- ─── Notifications (Android 13+) ────────────────────────────────── -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- ─── Audio / Microphone (appels VoIP) ─────────────────────────── -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+
+    <!-- ─── Bluetooth (casques, AirPods) ────────────────────────────────── -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <!-- ─── Service en arrière-plan (appels entrants) ───────────────────── -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- ─── Caméra / Contacts (optionnel) ──────────────────────────────── -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- ─── Stockage (Android ≤ 12) ─────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
+    <!-- ─── Fonctionnalités matérielles ─────────────────────────────────────── -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+</manifest>

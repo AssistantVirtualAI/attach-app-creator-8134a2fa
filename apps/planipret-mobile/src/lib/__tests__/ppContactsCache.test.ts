@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const invoke = vi.fn();
 const getSession = vi.fn();
-const onAuthStateChange = vi.fn((..._a: any[]) => ({ data: { subscription: { unsubscribe: vi.fn() } } }));
+const onAuthStateChange = vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: (...a: any[]) => invoke(...a) },
@@ -79,6 +79,18 @@ describe("ppContactsCache — TTL et anti-concurrence", () => {
       error: null,
     });
     await expect(fresh.getPpContacts("maestro_clients")).resolves.toEqual([{ maestro_client_id: "client-1" }]);
+  });
+
+  it("hydrate le cache Maestro persistant seulement après vérification de la session", async () => {
+    invoke.mockResolvedValueOnce({
+      data: { success: true, maestro_user_id: "maestro-broker-1", clients: [{ maestro_client_id: "client-1" }], total: 1 },
+      error: null,
+    });
+    await expect(mod.getPpContacts("maestro_clients", { force: true })).resolves.toEqual([{ maestro_client_id: "client-1" }]);
+    vi.resetModules();
+    const fresh = await import("../ppContactsCache");
+    expect(fresh.peekPpContacts("maestro_clients")).toBeNull();
+    await expect(fresh.peekPpContactsVerified("maestro_clients")).resolves.toEqual([{ maestro_client_id: "client-1" }]);
   });
 
   it("charge toutes les pages Maestro sans limiter la liste à 500 clients", async () => {

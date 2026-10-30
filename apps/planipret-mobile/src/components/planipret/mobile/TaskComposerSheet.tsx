@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, Plus, Search, X } from "lucide-react";
 import { toApiDateTime, listClientTargets, type ClientTaskTarget } from "@/lib/planipret/tasks";
-import { MILESTONES, QUICK_TASKS, brokerMilestones, catalogLabel, type TaskCatalogItem } from "@/lib/planipret/taskMilestones";
+import { MILESTONES, QUICK_TASKS, catalogLabel, type TaskCatalogItem } from "@/lib/planipret/taskMilestones";
 import { getPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 import { supabase } from "@/integrations/supabase/client";
 import { matchAllTokens, normalizeText, tokenize } from "@/lib/textNormalize";
@@ -120,21 +120,6 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [step, setStep] = useState<"pick" | "form">("pick");
   const [tab, setTab] = useState<"quick" | "custom">("quick");
   const [picked, setPicked] = useState<TaskCatalogItem | null>(null);
-  const [milestones, setMilestones] = useState<TaskCatalogItem[]>(MILESTONES);
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u?.user) return;
-      const { data } = await supabase.from("planipret_tasks_projection" as any)
-        .select("payload->>description, color:payload->raw->>color")
-        .eq("user_id", u.user.id).is("deleted_at", null).limit(2000);
-      const list = brokerMilestones(((data ?? []) as any[]).map((r) => ({ description: r.description, color: r.color })));
-      if (alive && list.length) setMilestones(list);
-    })().catch(() => {});
-    return () => { alive = false; };
-  }, [open]);
   const [clientQuery, setClientQuery] = useState("");
   const [clientName, setClientName] = useState("");
   const [clients, setClients] = useState<any[]>(() => peekPpContacts("maestro") ?? []);
@@ -468,9 +453,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
             <p className={labelCls} style={labelStyle}>{L("Choisir un jalon", "Choose milestone")}</p>
 
             <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-elevated)" }}>
-              {(tab === "quick" ? QUICK_TASKS : milestones).map((item, i) => (
+              {(tab === "quick" ? QUICK_TASKS : MILESTONES).map((item, i) => (
                 <button key={item.id} type="button"
-                  onClick={() => { setPicked(item); setNotes(item.id === "other" ? "" : catalogLabel(item, lang)); if (tab === "custom") setDescription(catalogLabel(item, lang)); setStep("form"); }}
+                  onClick={() => { setPicked(item); setNotes(item.id === "other" ? "" : catalogLabel(item, lang)); setStep("form"); }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left min-h-[52px]"
                   style={{
                     borderTop: i === 0 ? "none" : "1px solid var(--pp-bg-border)",

@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { startMs365Authorize } from "@/lib/planipret/ms365Start";
+import { openMs365Authorize } from "@/lib/ms365OAuth";
 
 /**
  * Kicks off the Microsoft 365 OAuth flow by fetching the admin-configured
@@ -22,7 +22,7 @@ export async function connectMs365(): Promise<void> {
     const tenant = cfg.tenant_id || "common";
     const { data: userData } = await supabase.auth.getUser();
     const state = userData?.user?.id ?? "";
-    await startMs365Authorize({ clientId, tenant, state });
+    await openMs365Authorize({ clientId, tenant, state });
   } catch (e: any) {
     toast.error("Connexion Microsoft impossible", { description: e?.message });
   }

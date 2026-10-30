@@ -7,7 +7,6 @@
 // plain fetch (explicit URL + Authorization header + timeout) so a single
 // transient network hiccup no longer kills the action.
 import { supabase } from "@/integrations/supabase/client";
-import { commissionReportRequest } from "./commissionReportRequest";
 import {
   COMMISSION_CACHE_FNS, commissionCacheKey, dedupeCommission, isCommissionCacheable, isGoodCommissionPayload,
   readCommissionCache, writeCommissionCache,
@@ -59,7 +58,6 @@ export async function ppEdgeInvoke<T = any>(
   body: any,
   opts: { retries?: number; timeoutMs?: number } = {},
 ): Promise<PpEdgeResult<T>> {
-  if (fn === "planipret-commission-reports") body = commissionReportRequest(body);
   // Commission figures (paid + pending): serve a validated copy < 15 min old
   // instantly; only good answers are cached, per signed-in user.
   if (isCommissionCacheable(fn, body)) {

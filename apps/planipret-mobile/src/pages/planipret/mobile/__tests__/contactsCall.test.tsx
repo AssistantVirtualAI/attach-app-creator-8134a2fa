@@ -28,11 +28,7 @@ vi.mock("@/lib/native/permissions/contacts", () => ({
 }));
 vi.mock("@/lib/native/permissions/platform", () => ({ openAppSettings: vi.fn() }));
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { functions: { invoke: vi.fn(async () => ({ data: { success: true }, error: null })) }, auth: {
-      getSession: () => Promise.resolve({ data: { session: null } }),
-      getUser: () => Promise.resolve({ data: { user: null } }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    } },
+  supabase: { functions: { invoke: vi.fn(async () => ({ data: { success: true }, error: null })) } },
 }));
 vi.mock("@/lib/callEdge", () => ({ callEdge: vi.fn(async () => ({ numbers: [] })), toE164: (v: string) => v }));
 vi.mock("@/components/planipret/ava/AvaSummarizeSheet", () => ({ default: () => null }));
@@ -45,13 +41,13 @@ const personal = [{ id: "p1", first_name: "Marc", last_name: "Client", phone: "5
 const directory = [{ id: "d1", first_name: "Sandra", last_name: "Allard", extension: "1037", email: "sandra@planipret.com" }];
 const maestroClients = [{ id: "98765", maestro_client_id: "98765", first_name: "Jeanne", last_name: "Maestro", phone: "5145559999" }];
 
-vi.mock("@/lib/ppContactsCache", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/ppContactsCache")>()),
+vi.mock("@/lib/ppContactsCache", () => ({
   peekPpContacts: (action: string) =>
     action === "list" ? personal : action === "directory" ? directory : action === "maestro_clients" ? maestroClients : [],
+  peekPpContactsVerified: async (action: string) =>
+    action === "maestro_clients" ? maestroClients : [],
   getPpContacts: async (action: string) =>
     action === "list" ? personal : action === "directory" ? directory : action === "maestro_clients" ? maestroClients : [],
-  peekPpContactsVerified: async (action: string) => (action === "list" ? personal : action === "directory" ? directory : action === "maestro_clients" ? maestroClients : []),
   prefetchPpContacts: vi.fn(),
 }));
 

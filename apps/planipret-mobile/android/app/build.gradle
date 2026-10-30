@@ -1,0 +1,105 @@
+apply plugin: 'com.android.application'
+apply plugin: 'com.google.gms.google-services'
+
+import java.util.Properties
+
+final def releaseKeystoreProperties = new Properties()
+final def releaseKeystorePropertiesFile = rootProject.file('keystore.properties')
+if (releaseKeystorePropertiesFile.exists()) {
+    releaseKeystorePropertiesFile.withInputStream { releaseKeystoreProperties.load(it) }
+}
+
+final def releaseStoreFile = releaseKeystoreProperties.getProperty('storeFile') ?: System.getenv('ANDROID_KEYSTORE')
+final def releaseStorePassword = releaseKeystoreProperties.getProperty('storePassword') ?: System.getenv('ANDROID_KEYSTORE_PASSWORD')
+final def releaseKeyAlias = releaseKeystoreProperties.getProperty('keyAlias') ?: System.getenv('ANDROID_KEY_ALIAS')
+final def releaseKeyPassword = releaseKeystoreProperties.getProperty('keyPassword') ?: System.getenv('ANDROID_KEY_PASSWORD')
+final def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+android {
+    namespace = "com.planipret.mobile"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId = "com.planipret.mobile"
+        minSdk = rootProject.ext.minSdkVersion
+        targetSdk = rootProject.ext.targetSdkVersion
+        versionCode = 47
+        versionName = "1.6.4"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate
+             // the asset_pack_config.json and other Capacitor files
+             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.release
+            }
+        }
+        debug {
+            minifyEnabled = false
+            shrinkResources = false
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation "androidx.fragment:fragment:$androidxFragmentVersion"
+    implementation "androidx.webkit:webkit:$androidxWebkitVersion"
+    implementation "androidx.activity:activity:$androidxActivityVersion"
+    implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "com.google.firebase:firebase-messaging:23.3.1"
+}
+
+apply from: 'capacitor.build.gradle'
+
+afterEvaluate {
+    tasks.matching { it.name in ['bundleRelease', 'assembleRelease'] }.configureEach {
+        doFirst {
+            if (!hasReleaseSigning) {
+                throw new GradleException('Signature release absente. Créez android/keystore.properties ou définissez ANDROID_KEYSTORE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS et ANDROID_KEY_PASSWORD.')
+            }
+        }
+    }
+}
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.warn("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

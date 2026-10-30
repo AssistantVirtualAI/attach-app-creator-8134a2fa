@@ -10,11 +10,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { tr } from "@/lib/i18n/tr";
 import { ensureContacts, getContactsPermissionStatus, listDeviceContacts } from "@/lib/native/permissions/contacts";
+import { loadCachedDeviceContacts } from "@/lib/native/deviceContactsCache";
 import { openAppSettings, type PermStatus } from "@/lib/native/permissions/platform";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
-import { peekPpContacts, prefetchPpContacts } from "@/lib/ppContactsCache";
+import { peekPpContacts, peekPpContactsVerified, prefetchPpContacts } from "@/lib/ppContactsCache";
 import { callEdge, toE164 } from "@/lib/callEdge";
 import { createTask as apiCreateTask, listClientTargets } from "@/lib/planipret/tasks";
 import TaskComposerSheet, { type TaskComposerValue } from "@/components/planipret/mobile/TaskComposerSheet";
@@ -45,7 +45,7 @@ type Tab = "personal" | "favorites" | "directory" | "clients";
 
 // ---- Favorites (local, per-device) ----
 const FAV_KEY = "planipret.contacts.favorites.v1";
-const EMPTY_TARGET = { phone: "" };
+const EMPTY_CLIENT_TARGET = { phone: "" };
 type FavEntry = {
   key: string;                 // unique id (source:id/ext/phone)
   source: "personal" | "shared" | "directory" | "maestro" | "native";
@@ -122,18 +122,6 @@ function presenceMeta(raw: string | undefined | null, t: (k: string) => string):
   return { color: "#64748b", label: t("contacts.presence.unknown") || "Unavailable" };
 }
 
-// Device address book is slow to read natively; keep it in memory for 5 minutes.
-let deviceContactsCache: { at: number; rows: any[] } | null = null;
-let deviceContactsInflight: Promise<any[]> | null = null;
-async function loadDeviceContactsCached(force: boolean): Promise<any[]> {
-  if (!force && deviceContactsCache && Date.now() - deviceContactsCache.at < 5 * 60_000) return deviceContactsCache.rows;
-  if (deviceContactsInflight) return deviceContactsInflight;
-  deviceContactsInflight = listDeviceContacts()
-    .then((rows) => { if (rows.length) deviceContactsCache = { at: Date.now(), rows }; return rows; })
-    .finally(() => { deviceContactsInflight = null; });
-  return deviceContactsInflight;
-}
-
 export default function MContacts() {
   const { t, lang } = useMplanipretLang();
   /** t() renvoie la clé si la traduction manque — ce helper garantit un libellé lisible. */
@@ -144,13 +132,11 @@ export default function MContacts() {
   const { openDialer } = useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("personal");
-  const [syncingM365, setSyncingM365] = useState(false);
 
   const [q, setQ] = useState("");
   const [personal, setPersonal] = useState<any[]>(() => {
     const cached = peekPpContacts("list");
-    const ns = cached ? (cached as any[]).map(normalizeContact) : [];
-    return [...(deviceContactsCache?.rows ?? []), ...ns];
+    return cached ? (cached as any[]).map(normalizeContact) : [];
   });
   const [directory, setDirectory] = useState<any[]>(() => peekPpContacts("directory") ?? []);
   const [clients, setClients] = useState<any[]>(() =>
@@ -169,7 +155,7 @@ export default function MContacts() {
   const [sortBy, setSortBy] = useState<"relevance" | "name" | "team" | "department">("relevance");
   const [clientActivity, setClientActivity] = useState<"" | "active" | "recent" | "dormant">("");
   const [clientAdded, setClientAdded] = useState<"" | "7" | "30" | "90" | "365">("");
-  const [clientSort, setClientSort] = useState<"name" | "activity" | "newest" | "oldest">("name");
+  const [clientSort, setClientSort] = useState<"name" | "newest" | "oldest" | "activity">("name");
   const [dialingContactKey, setDialingContactKey] = useState<string | null>(null);
   const loadedTabsRef = useRef<Set<Tab>>(new Set<Tab>([
     "favorites",
@@ -177,6 +163,9 @@ export default function MContacts() {
     ...(peekPpContacts("list") ? (["personal"] as Tab[]) : []),
     ...(peekPpContacts("maestro_clients") ? (["clients"] as Tab[]) : []),
   ]));
+  // Retains the last permission across effect re-renders so an initial granted
+  // result triggers exactly one automatic native contact load.
+  const lastContactsPermissionRef = useRef<PermStatus | null>(null);
 
   useEffect(() => {
     const onChange = () => setFavorites(loadFavs());
@@ -241,7 +230,7 @@ export default function MContacts() {
       } else {
         const [backend, device] = await Promise.allSettled([
           getPpContacts("list", { limit: opts.limit ?? 500, force: opts.force }),
-          loadDeviceContactsCached(!!opts.force),
+          loadCachedDeviceContacts(listDeviceContacts, { force: !!opts.force }),
         ]);
         const nativeContacts = device.status === "fulfilled" ? device.value : [];
         let backendError: string | null = null;
@@ -284,10 +273,11 @@ export default function MContacts() {
   // tab switches render from memory. The five-minute cache avoids an immediate
   // second Maestro request after every navigation.
   useEffect(() => {
-    void import("@/lib/ppContactsCache").then(({ peekPpContactsVerified }) =>
-      peekPpContactsVerified("maestro_clients").then((rows) => {
-        if (rows?.length) setClients((cur) => cur.length ? cur : rows.map((c: any) => ({ ...c, __maestro_kind: "client" })));
-      }));
+    // A persisted Maestro client list is private: hydrate it only after validating
+    // the active signed-in Planiprêt user, then refresh silently in the background.
+    void peekPpContactsVerified("maestro_clients").then((rows) => {
+      if (rows?.length) setClients((current) => current.length ? current : rows.map((contact) => ({ ...contact, __maestro_kind: "client" })));
+    }).catch(() => {});
     prefetchPpContacts(["list", "directory", "maestro_clients", "maestro_brokers"], 500);
     const quick = window.setTimeout(() => {
       void load("directory", { limit: 500, background: true });
@@ -301,16 +291,17 @@ export default function MContacts() {
   // native prompt from an explicit tap. If denied, keep a clear recovery path.
   useEffect(() => {
     let cancelled = false;
-    let prev: PermStatus | null = null;
     const refresh = () => void getContactsPermissionStatus().then((status) => {
       if (cancelled) return;
+      const previous = lastContactsPermissionRef.current;
+      lastContactsPermissionRef.current = status;
       setContactsPerm(status);
-      // Reload only when access was just granted (not on every return to the app).
-      if (status === "granted" && (prev !== "granted") && (prev !== null || !deviceContactsCache)) {
+      // Initial permission and a newly granted permission both load the native
+      // address book automatically. The shared five-minute cache keeps switches fast.
+      if (status === "granted" && previous !== "granted") {
         loadedTabsRef.current.delete("personal");
         void load("personal", { force: true, background: true });
       }
-      prev = status;
     });
     refresh();
     const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
@@ -324,6 +315,7 @@ export default function MContacts() {
       const status = await ensureContacts();
       setContactsPerm(status);
       if (status === "granted") {
+        lastContactsPermissionRef.current = "granted";
         loadedTabsRef.current.delete("personal");
         await load("personal", { force: true });
         toast.success("Contacts autorisés");
@@ -366,9 +358,9 @@ export default function MContacts() {
         out = out.filter((c: any) => { const t0 = ts(c.created_at); return t0 > 0 && now - t0 <= lim; });
       }
       const nm = (c: any) => (c.name || c.display_name || `${c.first_name ?? ""} ${c.last_name ?? ""}`).trim().toLowerCase();
-      out = [...out].sort((a, b) => clientSort === "activity" ? actAt(b) - actAt(a) || nm(a).localeCompare(nm(b), "fr")
-        : clientSort === "newest" ? ts(b.created_at) - ts(a.created_at) || nm(a).localeCompare(nm(b))
+      out = [...out].sort((a, b) => clientSort === "newest" ? ts(b.created_at) - ts(a.created_at) || nm(a).localeCompare(nm(b))
         : clientSort === "oldest" ? (ts(a.created_at) || Infinity) - (ts(b.created_at) || Infinity) || nm(a).localeCompare(nm(b))
+        : clientSort === "activity" ? actAt(b) - actAt(a) || nm(a).localeCompare(nm(b))
         : nm(a).localeCompare(nm(b), "fr"));
     }
     if (tokens.length) {
@@ -523,7 +515,7 @@ export default function MContacts() {
             </div>
             <div className="flex gap-2 mt-2">
               {contactsPerm === "denied" ? (
-                <button onClick={openAppSettings} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>{tr("Activer dans réglages", "Enable in settings")}</button>
+                <button onClick={openAppSettings} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Activer dans réglages</button>
               ) : contactsPerm === "granted" ? (
                 <button onClick={() => void load("personal", { force: true })} disabled={contactsPermBusy || loading} className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)", opacity: contactsPermBusy || loading ? 0.7 : 1 }}>
                   {loading && <Loader2 className="w-3 h-3 animate-spin" />} Actualiser
@@ -563,7 +555,7 @@ export default function MContacts() {
             }}
             className="text-[11px] font-semibold px-2 py-1 rounded-full"
             style={{ background: "var(--pp-brand-accent-2)", color: "#fff", border: "1px solid var(--pp-brand-accent)" }}
-            aria-label={tr("Rechercher partout", "Search everywhere")}>
+            aria-label="Rechercher partout">
             Tout
           </button>
         )}
@@ -624,7 +616,7 @@ export default function MContacts() {
                 <option value="365">{en ? "Last 12 months" : "12 derniers mois"}</option>
               </select>
               <select aria-label={en ? "Sort" : "Trier"} value={clientSort} onChange={(e) => setClientSort(e.target.value as any)} className="text-xs px-2 py-1.5 rounded-full outline-none shrink-0" style={sel(false)}>
-                <option value="name">{en ? "Sort: Name (A–Z)" : "Trier : Nom (A–Z)"}</option>
+                <option value="name">{en ? "Sort: Name" : "Trier : Nom"}</option>
                 <option value="activity">{en ? "Sort: Recent activity" : "Trier : Activité récente"}</option>
                 <option value="newest">{en ? "Sort: Newest" : "Trier : Plus récents"}</option>
                 <option value="oldest">{en ? "Sort: Oldest" : "Trier : Plus anciens"}</option>
@@ -646,7 +638,7 @@ export default function MContacts() {
             <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
               className="text-xs px-2 py-1.5 rounded-full outline-none"
               style={{ background: filterDept ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: filterDept ? "#fff" : "var(--pp-text-secondary)", border: `1px solid ${filterDept ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)"}` }}>
-              <option value="">{tr("Département", "Department")}</option>
+              <option value="">Département</option>
               {deptOptions.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
@@ -654,7 +646,7 @@ export default function MContacts() {
             <select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}
               className="text-xs px-2 py-1.5 rounded-full outline-none"
               style={{ background: filterTeam ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: filterTeam ? "#fff" : "var(--pp-text-secondary)", border: `1px solid ${filterTeam ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)"}` }}>
-              <option value="">{tr("Équipe", "Team")}</option>
+              <option value="">Équipe</option>
               {teamOptions.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
@@ -662,17 +654,17 @@ export default function MContacts() {
             <button onClick={() => { setFilterDept(""); setFilterTeam(""); }}
               className="text-[11px] px-2 py-1 rounded-full font-semibold"
               style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
-              {tr("Effacer", "Clear")}
+              Effacer
             </button>
           )}
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}
             className="ml-auto text-xs px-2 py-1.5 rounded-full outline-none shrink-0"
             style={{ background: "var(--pp-bg-surface)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}
-            aria-label={tr("Trier", "Sort")}>
-            <option value="relevance">{tr("Trier : Pertinence", "Sort: Relevance")}</option>
-            <option value="name">{tr("Trier : Nom", "Sort: Name")}</option>
-            <option value="team">{tr("Trier : Équipe", "Sort: Team")}</option>
-            <option value="department">{tr("Trier : Département", "Sort: Department")}</option>
+            aria-label="Trier">
+            <option value="relevance">Trier : Pertinence</option>
+            <option value="name">Trier : Nom</option>
+            <option value="team">Trier : Équipe</option>
+            <option value="department">Trier : Département</option>
           </select>
         </div>
       )}
@@ -680,11 +672,11 @@ export default function MContacts() {
 
       {loadError && !loading && (
         <div className="rounded-2xl p-4 mb-3 text-sm" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
-          <div className="font-semibold mb-1">{tr("Impossible de charger les contacts", "Unable to load contacts")}</div>
+          <div className="font-semibold mb-1">Impossible de charger les contacts</div>
           <div className="text-xs opacity-80 break-all">{loadError}</div>
           <button onClick={() => load(tab, { force: true })} className="mt-2 text-xs px-3 py-1.5 rounded-full font-semibold"
             style={{ background: "rgba(239,68,68,0.15)", color: "#dc2626" }}>
-            {tr("Réessayer", "Retry")}
+            Réessayer
           </button>
         </div>
       )}
@@ -825,7 +817,7 @@ export default function MContacts() {
                     }}
                     className="flex items-center justify-center active:scale-95 transition"
                     style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", color: "#8b5cf6" }}
-                    aria-label={tr("Courriel", "Email")}>
+                    aria-label="Courriel">
                     <Mail className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -862,7 +854,7 @@ export default function MContacts() {
 
       {createOpen && (
         <CreateMaestroClientSheet
-          target={EMPTY_TARGET}
+          target={EMPTY_CLIENT_TARGET}
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
             setCreateOpen(false);
@@ -1058,7 +1050,7 @@ function ContactDetailSheet({
   return (
     <div className="absolute inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full sm:max-w-md max-h-[88dvh] overflow-y-auto overscroll-contain pb-[calc(1rem+env(safe-area-inset-bottom))] rounded-t-3xl sm:rounded-3xl p-4"
+        className="w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-4"
         style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1086,7 +1078,7 @@ function ContactDetailSheet({
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
           <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!smsTarget} />
           <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={openEmail} disabled={!email} />
-          <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label={tr("Tâche", "Task")} onClick={openTaskComposer} disabled={creatingTask || (!maestroId && !bestPhone)} />
+          <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={openTaskComposer} disabled={creatingTask || (!maestroId && !bestPhone)} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={openAppt} disabled={!maestroId} />
         </div>
 
@@ -1428,7 +1420,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>{tr("Nouveau SMS", "New SMS")}</div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouveau SMS</div>
             <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>
               À {contactName}{smsFrom ? ` · De ${smsFrom}` : ""}
             </div>
@@ -1447,8 +1439,8 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#f59e0b" }} />
             <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">{tr("Aucun numéro SMS assigné", "No SMS number assigned")}</div>
-              <div style={{ color: "var(--pp-text-muted)" }}>{tr("Contactez l'administrateur pour activer l'envoi SMS.", "Contact your administrator to enable SMS.")}</div>
+              <div className="font-semibold">Aucun numéro SMS assigné</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>Contactez l'administrateur pour activer l'envoi SMS.</div>
             </div>
           </div>
         )}
@@ -1457,7 +1449,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">{tr("Vérification impossible", "Unable to verify")}</div>
+              <div className="font-semibold">Vérification impossible</div>
               <div style={{ color: "var(--pp-text-muted)" }}>{preflightErr}</div>
             </div>
           </div>
@@ -1467,7 +1459,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}>
             <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#22c55e" }} />
             <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">{tr("SMS envoyé", "SMS sent")}</div>
+              <div className="font-semibold">SMS envoyé</div>
               <div style={{ color: "var(--pp-text-muted)" }}>Livraison au {toE164(recipient)}</div>
             </div>
           </div>
@@ -1477,7 +1469,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#f59e0b" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">{tr("Téléphonie temporairement indisponible", "Phone service temporarily unavailable")}</div>
+              <div className="font-semibold">Téléphonie temporairement indisponible</div>
               <div style={{ color: "var(--pp-text-muted)" }}>
                 Le service SMS ne répond pas. Aucun message supplémentaire n’est envoyé automatiquement. Vous pouvez réessayer manuellement ; la même clé d’idempotence est conservée.
               </div>
@@ -1489,7 +1481,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">{tr("Échec envoi SMS", "SMS failed")}</div>
+              <div className="font-semibold">Échec envoi SMS</div>
               <div style={{ color: "var(--pp-text-muted)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 {errorMsg || "Erreur inconnue"}
               </div>
@@ -1497,7 +1489,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
           </div>
         )}
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Destinataire", "Recipient")}</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Destinataire</label>
         <input
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
@@ -1516,7 +1508,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={4}
-          placeholder={tr("Écrire un message…", "Write a message…")}
+          placeholder="Écrire un message…"
           disabled={sending || sent}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
@@ -1592,13 +1584,13 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>{tr("Nouvel email", "New email")}</div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouvel email</div>
             <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>À {contactName} · via Microsoft 365</div>
           </div>
           <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
         </div>
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Destinataire", "Recipient")}</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Destinataire</label>
         <input
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
@@ -1607,7 +1599,7 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
         />
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Sujet", "Subject")}</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Sujet</label>
         <input
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
@@ -1624,7 +1616,7 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={6}
-          placeholder={tr("Écrire votre message…", "Write your message…")}
+          placeholder="Écrire votre message…"
           disabled={sending || connecting}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
@@ -1725,11 +1717,11 @@ function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroCl
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>{tr("Nouveau RDV", "New appointment")}</div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouveau RDV</div>
             <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Avec {contactName} · via Maestro</div>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setHistoryOpen(true)} title={tr("Historique des RDV", "Appointment history")}
+            <button onClick={() => setHistoryOpen(true)} title="Historique des RDV"
               className="p-1.5 rounded-lg" style={{ color: "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border-2)" }}>
               <History className="w-4 h-4" />
             </button>
@@ -1742,7 +1734,7 @@ function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroCl
             style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}>
             <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#22c55e" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">{tr("RDV créé", "Appointment created")}</div>
+              <div className="font-semibold">RDV créé</div>
               <div style={{ color: "var(--pp-text-muted)" }}>{new Date(startAt).toLocaleString("fr-CA")} · {duration} min</div>
               <div className="flex gap-2 mt-2">
                 <button onClick={() => setHistoryOpen(true)}
@@ -1753,7 +1745,7 @@ function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroCl
                 <button onClick={onClose}
                   className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
                   style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
-                  {tr("Fermer", "Close")}
+                  Fermer
                 </button>
               </div>
             </div>
@@ -1764,23 +1756,23 @@ function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroCl
             style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
-              <div className="font-semibold">{tr("Échec création RDV", "Failed to create appointment")}</div>
+              <div className="font-semibold">Échec création RDV</div>
               <div style={{ color: "var(--pp-text-muted)" }}>{errorMsg}</div>
             </div>
           </div>
         )}
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Titre", "Title")}</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Titre</label>
         <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving || saved}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Début", "Start")}</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Début</label>
         <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} disabled={saving || saved}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>{tr("Durée (min)", "Duration (min)")}</label>
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Durée (min)</label>
         <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={saving || saved}
           className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}>
@@ -1819,7 +1811,7 @@ function AppointmentHistorySheet({ onClose }: { onClose: () => void }) {
       >
         <div className="flex items-center justify-between mb-3 shrink-0">
           <div>
-            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>{tr("Historique des RDV", "Appointment history")}</div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Historique des RDV</div>
             <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{items.length} enregistrement{items.length > 1 ? "s" : ""}</div>
           </div>
           <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>

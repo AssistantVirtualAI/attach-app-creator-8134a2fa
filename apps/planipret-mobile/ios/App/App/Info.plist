@@ -1,0 +1,843 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+        <string>Planiprêt Mobile</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<!-- iPad : toutes les orientations requises par Apple pour le multitasking (code 90474) -->
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+
+	<!-- ===== URL Schemes — requis pour le callback OAuth Microsoft 365 sur iOS natif ===== -->
+	<!-- Azure App Registration → Mobile and desktop applications → capacitor://localhost/auth/microsoft/callback -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.planipret.mobile</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>capacitor</string>
+				<string>planipret</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- ===== Permissions requises par les plugins Capacitor ===== -->
+
+	<!-- Contacts — requis par @capacitor-community/contacts -->
+	<key>NSContactsUsageDescription</key>
+	<string>Planipret accesses your contacts so you can call and message your clients.</string>
+
+	<!-- Microphone — requis pour les appels VoIP -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Planipret uses the microphone to place and receive VoIP business calls.</string>
+
+	<!-- Notifications push -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>remote-notification</string>
+		<string>voip</string>
+		<string>fetch</string>
+		<!-- processing requis pour BGProcessingTask — doit avoir BGTaskSchedulerPermittedIdentifiers (code 90771) -->
+		<string>processing</string>
+	</array>
+
+		<!-- Caméra (optionnel — photo de profil ou photo jointe au feedback) -->
+		<key>NSCameraUsageDescription</key>
+	<string>Planipret uses the camera so you can set a profile photo or take a screenshot photo for a feedback report.</string>
+
+		<!-- Bibliothèque photos (optionnel — photo de profil ou pièce jointe au feedback) -->
+		<key>NSPhotoLibraryUsageDescription</key>
+	<string>Planipret accesses your photo library so you can pick a profile photo or attach screenshots to a feedback report.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Planipret may save a photo you choose to capture for a feedback report to your photo library.</string>
+
+	<!-- Face ID / Touch ID (optionnel) -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Planiprêt peut utiliser Face ID pour sécuriser l'accès à votre compte.</string>
+
+	<!-- Bluetooth (casques audio, AirPods) -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Planiprêt utilise le Bluetooth pour les casques audio et AirPods lors des appels.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Planiprêt utilise le Bluetooth pour les casques audio lors des appels.</string>
+
+	<!-- Réseau local (requis iOS 14+ pour WebSocket VoIP) -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Planipret uses the local network to establish VoIP call audio.</string>
+
+	<!-- Reconnaissance vocale (assistant AVA) -->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Planipret transcribes your recorded calls when you enable transcription.</string>
+
+	<!-- BGTask : re-registration SIP périodique même en background (iOS 13+) -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.planipret.mobile.sip-refresh</string>
+	</array>
+
+	<!-- Maintien de la connexion Wi-Fi active même en arrière-plan -->
+	<key>UIRequiresPersistentWiFi</key>
+	<true/>
+
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+
+</dict>
+</plist>

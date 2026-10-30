@@ -122,15 +122,17 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         self.beginBackgroundTask()
       }
       NotificationCenter.default.addObserver(forName: Notification.Name("PpCallKitAudioActivated"), object: nil, queue: .main) { [weak self] _ in
-        self?.callKitAudioActive = true
-        // CallKit vient d'activer le périphérique PJSIP. Ne pas reconfigurer
-        // ni réactiver la session ici : la couche WebView écrasait RemoteIO et
-        // causait des appels connectés mais muets dans les deux sens.
-        self?.notifyListeners("audioRouteChanged", data: [
-          "route": self?.currentAudioRoute() ?? "earpiece",
-          "bluetooth": self?.bluetoothAvailable() ?? false,
-          "bluetoothName": self?.bluetoothName() ?? "",
-          "wired": self?.wiredAvailable() ?? false
+        guard let self = self else { return }
+        self.callKitAudioActive = true
+        // CallKit owns activation/category. The explicit route is nevertheless
+        // reset while PJSIP opens RemoteIO immediately after didActivate; only
+        // reassert the selected output (never reactivate or change category).
+        self.reassertCallKitRouteAfterActivation()
+        self.notifyListeners("audioRouteChanged", data: [
+          "route": self.currentAudioRoute(),
+          "bluetooth": self.bluetoothAvailable(),
+          "bluetoothName": self.bluetoothName() ?? "",
+          "wired": self.wiredAvailable()
         ])
       }
       NotificationCenter.default.addObserver(forName: Notification.Name("PpCallKitAudioDeactivated"), object: nil, queue: .main) { [weak self] _ in
@@ -329,6 +331,46 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
 
     private func applyAudioRoute() { applyAudioRoute(retries: 4) }
 
+    /// PJSIP opens RemoteIO shortly after CallKit's didActivate callback and
+    /// may restore the receiver at that point. Keep CallKit as the sole audio
+    /// session owner and repeat only the requested output while the same call
+    /// session remains active. No SIP registration, codec or media bridge is
+    /// changed here.
+    private func reassertCallKitRouteAfterActivation() {
+      applyAudioRoute(retries: 0)
+      for delay in [0.35, 0.9] as [TimeInterval] {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+          guard let self = self, self.callKitAudioActive else { return }
+          self.applyAudioRoute(retries: 0)
+          self.notifyListeners("audioRouteChanged", data: [
+            "route": self.currentAudioRoute(),
+            "bluetooth": self.bluetoothAvailable(),
+            "bluetoothName": self.bluetoothName() ?? "",
+            "wired": self.wiredAvailable()
+          ])
+        }
+      }
+    }
+
+    /// CallKit still owns activation. This changes only the voice-processing
+    /// profile following a user's explicit output choice: `voiceChat` is tuned
+    /// for the receiver while `videoChat` restores the hands-free loudspeaker
+    /// gain and processing. SIP, codecs, media and registration stay untouched.
+    private func applyCallKitSpeakerProfile(_ session: AVAudioSession) {
+      guard callKitAudioActive else { return }
+      var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP]
+      if preferredRoute == "speaker" { options.insert(.defaultToSpeaker) }
+      let wantedMode = modeFor(preferredRoute)
+      guard session.category != .playAndRecord || session.mode != wantedMode || session.categoryOptions != options else { return }
+      do {
+        try session.setCategory(.playAndRecord, mode: wantedMode, options: options)
+        NSLog("[PpSipKeepAlive] CallKit audio profile route=%@ mode=%@", preferredRoute, wantedMode.rawValue)
+      } catch {
+        // The route request below remains safe if iOS temporarily rejects a mode change.
+        NSLog("[PpSipKeepAlive] CallKit audio profile failed: %@", String(describing: error))
+      }
+    }
+
     /// iOS (CallKit, PJSIP, WebKit) réapplique sa propre route juste après
     /// l'activation du média : un simple override est souvent écrasé. On
     /// vérifie donc la route effective et on réessaie.
@@ -344,19 +386,15 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       // catégorie depuis la couche WSS perturbe le périphérique PJSIP. Seul le
       // choix explicite de sortie reste sûr à ce stade.
       if callKitAudioActive {
+        applyCallKitSpeakerProfile(s)
         switch preferredRoute {
         case "speaker":
           try? s.setPreferredInput(nil)
-          // Mode mains-libres calibré (sans toucher la catégorie CallKit) :
-          // `.voiceChat` rend le haut-parleur bas.
-          if s.mode != .videoChat { try? s.setMode(.videoChat) }
           try? s.overrideOutputAudioPort(.speaker)
         case "bluetooth":
-          if s.mode != .voiceChat { try? s.setMode(.voiceChat) }
           try? s.overrideOutputAudioPort(.none)
           if let bt = bluetoothInput() { try? s.setPreferredInput(bt) }
         default:
-          if s.mode != .voiceChat { try? s.setMode(.voiceChat) }
           try? s.overrideOutputAudioPort(.none)
           if let bt = bluetoothInput() { try? s.setPreferredInput(bt) }
         }
@@ -436,16 +474,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
     }
     @objc func declareNativeEngineOwnsAor(_ call: CAPPluginCall) {
-      var owns = call.getBool("owns") ?? true
-      #if canImport(pjsua)
-      // Binaire avec PJSIP lié : `<ext>M` appartient au moteur natif TLS. Une
-      // restitution demandée par la WebView (sonde échouée, reload) relançait
-      // la pile WSS sur la même ligne et détournait les INVITE entrants.
-      if !owns {
-        NSLog("[PpSipKeepAlive] nativeEngineOwnsAor=false refused — pjsua linked")
-        owns = true
-      }
-      #endif
+      let owns = call.getBool("owns") ?? true
       DispatchQueue.main.async {
         nativeEngineOwnsAor = owns
         NSLog("[PpSipKeepAlive] nativeEngineOwnsAor=%@", owns ? "true" : "false")

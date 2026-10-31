@@ -92,6 +92,11 @@ Deno.serve(async (req) => {
   // Sending disallowed overrides closes the WS right after connect.
   const overrides_allowed = { prompt: false, first_message: false, language: false, voice: false };
   let agent_status: string | null = null;
+  // Tool-list diagnostic: null means "could not read", never "has none".
+  let tools_live: string[] | null = null;
+  let tools_missing: string[] | null = null;
+  let tools_unexpected: string[] | null = null;
+
   const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
   if (ELEVENLABS_API_KEY) {
     try {
@@ -101,7 +106,17 @@ Deno.serve(async (req) => {
       if (r.ok) {
         const agent = await r.json();
         agent_status = "ok";
+        // Read-only diagnostic on the SAME response: which tools does the agent
+        // really carry, versus the ones the code expects.
+        tools_live = readLiveToolNames(agent);
+        if (tools_live) {
+          const live = new Set(tools_live);
+          const expected = new Set<string>(TOOL_NAMES);
+          tools_missing = TOOL_NAMES.filter((name) => !live.has(name));
+          tools_unexpected = tools_live.filter((name) => !expected.has(name));
+        }
         const ov = agent?.platform_settings?.overrides?.conversation_config_override ?? {};
+
         overrides_allowed.prompt = !!ov?.agent?.prompt?.prompt;
         overrides_allowed.first_message = !!ov?.agent?.first_message;
         overrides_allowed.language = !!ov?.agent?.language;
@@ -112,6 +127,12 @@ Deno.serve(async (req) => {
         if (!overrides_allowed.first_message || !overrides_allowed.prompt || !overrides_allowed.language || !overrides_allowed.voice) {
           agent_status = "overrides_incomplete_admin_sync_required";
         }
+        // Incomplete overrides stay the priority signal: only a clean override
+        // probe is re-labelled when the agent is missing expected tools.
+        if (agent_status === "ok" && tools_missing && tools_missing.length > 0) {
+          agent_status = "tools_out_of_sync_admin_sync_required";
+        }
+
       } else {
         agent_status = `error_${r.status}`;
       }
@@ -141,5 +162,9 @@ Deno.serve(async (req) => {
     overrides_allowed,
     agent_status,
     tools: TOOL_NAMES,
+    tools_live,
+    tools_missing,
+    tools_unexpected,
   });
+
 });

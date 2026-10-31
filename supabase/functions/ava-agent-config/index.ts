@@ -10,6 +10,38 @@ const DEFAULT_VOICE_ID = "cgSgspJ2msm6clMCkdW9"; // Jessica — voix unique pour
 
 const TOOL_NAMES = EXPECTED_TOOL_NAMES;
 
+// Read-only diagnostic: pull the tool names actually configured on the
+// ElevenLabs agent out of the agent payload we already fetched. Two API shapes
+// are supported: `conversation_config.agent.prompt.tools` (objects with `name`)
+// and `conversation_config.agent.prompt.tool_ids`. When neither shape exists
+// the result is null = INDETERMINATE, which must never be reported as "no
+// tools".
+function collectToolNames(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const names: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry === "string") {
+      if (entry.trim()) names.push(entry.trim());
+      continue;
+    }
+    if (entry && typeof entry === "object") {
+      const rec = entry as Record<string, unknown>;
+      const candidate = rec.name ?? rec.tool_name ?? rec.id ?? rec.tool_id;
+      if (typeof candidate === "string" && candidate.trim()) names.push(candidate.trim());
+    }
+  }
+  return names;
+}
+
+function readLiveToolNames(agent: any): string[] | null {
+  const prompt = agent?.conversation_config?.agent?.prompt;
+  if (!prompt || typeof prompt !== "object") return null;
+  const fromTools = collectToolNames(prompt.tools);
+  if (fromTools) return fromTools;
+  return collectToolNames(prompt.tool_ids);
+}
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -60,6 +92,11 @@ Deno.serve(async (req) => {
   // Sending disallowed overrides closes the WS right after connect.
   const overrides_allowed = { prompt: false, first_message: false, language: false, voice: false };
   let agent_status: string | null = null;
+  // Tool-list diagnostic: null means "could not read", never "has none".
+  let tools_live: string[] | null = null;
+  let tools_missing: string[] | null = null;
+  let tools_unexpected: string[] | null = null;
+
   const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
   if (ELEVENLABS_API_KEY) {
     try {
@@ -69,7 +106,17 @@ Deno.serve(async (req) => {
       if (r.ok) {
         const agent = await r.json();
         agent_status = "ok";
+        // Read-only diagnostic on the SAME response: which tools does the agent
+        // really carry, versus the ones the code expects.
+        tools_live = readLiveToolNames(agent);
+        if (tools_live) {
+          const live = new Set(tools_live);
+          const expected = new Set<string>(TOOL_NAMES);
+          tools_missing = TOOL_NAMES.filter((name) => !live.has(name));
+          tools_unexpected = tools_live.filter((name) => !expected.has(name));
+        }
         const ov = agent?.platform_settings?.overrides?.conversation_config_override ?? {};
+
         overrides_allowed.prompt = !!ov?.agent?.prompt?.prompt;
         overrides_allowed.first_message = !!ov?.agent?.first_message;
         overrides_allowed.language = !!ov?.agent?.language;
@@ -80,6 +127,12 @@ Deno.serve(async (req) => {
         if (!overrides_allowed.first_message || !overrides_allowed.prompt || !overrides_allowed.language || !overrides_allowed.voice) {
           agent_status = "overrides_incomplete_admin_sync_required";
         }
+        // Incomplete overrides stay the priority signal: only a clean override
+        // probe is re-labelled when the agent is missing expected tools.
+        if (agent_status === "ok" && tools_missing && tools_missing.length > 0) {
+          agent_status = "tools_out_of_sync_admin_sync_required";
+        }
+
       } else {
         agent_status = `error_${r.status}`;
       }
@@ -109,5 +162,9 @@ Deno.serve(async (req) => {
     overrides_allowed,
     agent_status,
     tools: TOOL_NAMES,
+    tools_live,
+    tools_missing,
+    tools_unexpected,
   });
+
 });

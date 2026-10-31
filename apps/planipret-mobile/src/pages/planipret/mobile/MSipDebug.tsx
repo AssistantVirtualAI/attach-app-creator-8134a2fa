@@ -222,6 +222,7 @@ export default function MSipDebug() {
               {version
                 ? `${version.native}${version.build && version.build !== "—" ? ` (${version.build})` : ""}${version.ota ? ` + ${version.ota}` : ""}`
                 : "—"}</div>
+            <div className="col-span-2"><span className="opacity-60">{lang === "fr" ? "Plateforme" : "Platform"}</span> {Capacitor.getPlatform()}</div>
           </div>
           {diag && !diag.pluginPresent && (
             <p className="text-[11px]" style={{ color: "#F59E0B" }}>

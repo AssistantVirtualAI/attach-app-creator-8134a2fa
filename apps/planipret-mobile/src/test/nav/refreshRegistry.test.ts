@@ -1,28 +1,66 @@
 import { describe, it, expect, vi } from "vitest";
 import { createRefreshRegistry } from "@/lib/planipret/refreshRegistry";
 
-describe("refreshRegistry (P2R contextuel)", () => {
-  it("le dernier propriétaire visible possède le geste", () => {
-    const r = createRefreshRegistry(); const a = vi.fn(); const b = vi.fn();
-    r.register(a); r.register(b); r.current()!(); expect(b).toHaveBeenCalled(); expect(a).not.toHaveBeenCalled();
+describe("refreshRegistry — rafraîchissement contextuel", () => {
+  it("le dernier onglet visible possède seul le geste", () => {
+    const registry = createRefreshRegistry();
+    const recent = vi.fn();
+    const recordings = vi.fn();
+
+    registry.register(recent);
+    registry.register(recordings);
+    registry.current()?.();
+
+    expect(recordings).toHaveBeenCalledOnce();
+    expect(recent).not.toHaveBeenCalled();
   });
-  it("SMS→Teams→Courriels→SMS : aucun ancien callback ne survit", () => {
-    const r = createRefreshRegistry(); const sms = vi.fn();
-    let un = r.register(sms); un();            // SMS caché
-    expect(r.current()).toBeNull();           // Teams : refreshDisabled
-    expect(r.current()).toBeNull();           // Courriels : refreshDisabled
-    un = r.register(sms); expect(r.size).toBe(1); r.current()!(); expect(sms).toHaveBeenCalledTimes(1);
+
+  it("SMS → Teams → Courriels → SMS ne laisse aucun ancien callback", () => {
+    const registry = createRefreshRegistry();
+    const sms = vi.fn();
+
+    let unregister = registry.register(sms);
+    unregister(); // SMS becomes hidden when Teams opens.
+    expect(registry.current()).toBeNull();
+
+    // Teams and email intentionally have no pull-to-refresh owner.
+    expect(registry.current()).toBeNull();
+
+    unregister = registry.register(sms); // SMS is visible again.
+    registry.current()?.();
+    expect(sms).toHaveBeenCalledOnce();
+    unregister();
+    expect(registry.current()).toBeNull();
   });
-  it("désinscription par identité, jamais un pop aveugle", () => {
-    const r = createRefreshRegistry(); const parent = vi.fn(); const child = vi.fn();
-    const unP = r.register(parent); const unC = r.register(child);
-    unP(); expect(r.current()).toBe(child); unC(); unC(); expect(r.current()).toBeNull();
+
+  it("une désinscription d’onglet caché ne supprime jamais l’onglet courant", () => {
+    const registry = createRefreshRegistry();
+    const parent = vi.fn();
+    const child = vi.fn();
+    const unregisterParent = registry.register(parent);
+    const unregisterChild = registry.register(child);
+
+    unregisterParent();
+    registry.current()?.();
+    expect(child).toHaveBeenCalledOnce();
+    expect(parent).not.toHaveBeenCalled();
+
+    unregisterChild();
+    unregisterChild();
+    expect(registry.current()).toBeNull();
   });
-  it("register(null) = aucun propriétaire, aucun indicateur", () => {
-    const r = createRefreshRegistry(); r.register(null)(); expect(r.current()).toBeNull(); expect(r.size).toBe(0);
+
+  it("register(null) laisse le geste sans propriétaire ni indicateur", () => {
+    const registry = createRefreshRegistry();
+    registry.register(null)();
+    expect(registry.current()).toBeNull();
+    expect(registry.size).toBe(0);
   });
-  it("tout changement d'onglet incrémente la génération (spinner libéré)", () => {
-    const r = createRefreshRegistry(); const g0 = r.generation; const un = r.register(vi.fn()); un();
-    expect(r.generation).toBe(g0 + 2);
+  it("tout changement de propriétaire incrémente la génération pour libérer le spinner", () => {
+    const registry = createRefreshRegistry();
+    const initial = registry.generation;
+    const unregister = registry.register(vi.fn());
+    unregister();
+    expect(registry.generation).toBe(initial + 2);
   });
 });

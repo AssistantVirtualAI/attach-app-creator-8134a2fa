@@ -13,7 +13,6 @@ import {
 import { pinnedCoreHost } from "./sipEdgePolicy";
 import { trackRegisterAttempt, logRegisterMetricsSummary, type RegisterTracker } from "./registerMetrics";
 import { requestPlanipretCallKitAnswer } from "./nativePpSipService";
-import { validatedMobileCredentialIdentity } from "./mobileCredentialIdentity";
 
 
 
@@ -285,17 +284,10 @@ export class NativeSipService {
     }
 
 
-    // Fail closed before initializing: W/x credentials must never be renamed
-    // to M with a password belonging to another device.
-    const identity = validatedMobileCredentialIdentity(creds);
-    if (!identity) {
-      lastNativeFailure = "mobile_identity_mismatch";
-      this.setState("failed");
-      return false;
-    }
-    const username = identity.username;
+    // Invariant : l'AOR mobile est TOUJOURS `<ext>M` (jamais `<ext>_mobile`).
+    const username = normalizeMobileAor(String(creds.sip_username ?? creds.sip_extension ?? ""));
     this.username = username;
-    this.extension = identity.extension;
+    this.extension = String(creds.sip_extension ?? aorExtension(username));
 
     // Same single-core invariant as the WSS path: NS sometimes reports the
     // portal host in `core-server`; a registration held by the portal is never
@@ -612,16 +604,6 @@ export class NativeSipService {
   async setHold(onHold: boolean) { await getPjsip()?.setHold({ onHold }).catch(() => {}); }
   async setSpeaker(enabled: boolean) { await getPjsip()?.setSpeaker({ enabled }).catch(() => {}); }
   async sendDTMF(digits: string) { await getPjsip()?.sendDTMF({ digits }).catch(() => {}); }
-
-  /** Libère la ligne quand le compte est ouvert sur un autre appareil. */
-  async releaseForSignOut(): Promise<void> {
-    const pjsip = getPjsip();
-    if (!pjsip) return;
-    try { await pjsip.unregister(); } catch { /* best effort */ }
-    this.registered = false;
-    this.setState("unregistered");
-    releaseAorFromNative("signed_out_elsewhere");
-  }
 
   async refreshState() {
     const pjsip = getPjsip();

@@ -42,9 +42,7 @@ public class PpAuthSession: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPres
                 call.resolve(["url": callbackUrl.absoluteString])
             }
             authSession.presentationContextProvider = self
-            // Reconnection may request an isolated browser session so iOS does
-            // not silently restore the previous Maestro account from Safari.
-            authSession.prefersEphemeralWebBrowserSession = call.getBool("ephemeral") ?? false
+            authSession.prefersEphemeralWebBrowserSession = false
             self.session = authSession
             if !authSession.start() {
                 self.session = nil

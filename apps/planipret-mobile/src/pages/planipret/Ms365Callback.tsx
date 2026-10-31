@@ -1,4 +1,3 @@
-import { consumeMs365ReturnTo, clearMs365ReturnTo } from "@/lib/planipret/ms365ReturnTo";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,9 +96,6 @@ export default function Ms365Callback() {
   // Protection: if a Supabase session already exists (magic-link verified, or the
   // code was consumed by a previous delivery of the same deep link), never show an
   // error — land the user on the home page.
-  // Every early/cancel/anti-replay/failure exit to Home drops the remembered destination.
-  const exitHome = () => { clearMs365ReturnTo(); navigate("/mplanipret/home", { replace: true }); };
-
   const homeIfSignedIn = async (): Promise<boolean> => {
     try {
       const { data } = await supabase.auth.getSession();
@@ -107,7 +103,7 @@ export default function Ms365Callback() {
         clearRememberedMs365RedirectUri();
         await clearMicrosoftSignInIntentAsync();
         setStatus("ok");
-        exitHome();
+        navigate("/mplanipret/home", { replace: true });
         return true;
       }
     } catch {}
@@ -115,7 +111,6 @@ export default function Ms365Callback() {
   };
 
   const failWithGuard = async (message: string) => {
-    clearMs365ReturnTo();
     if (await homeIfSignedIn()) return;
     setStatus("error");
     setError(message);
@@ -132,7 +127,7 @@ export default function Ms365Callback() {
     const freshCode = currentCode;
     if (freshCode && exchangedCodes.has(freshCode)) {
       exchangeStarted.current = true;
-      exitHome();
+      navigate("/mplanipret/home", { replace: true });
       return;
     }
     if (exchangeInFlight) return;
@@ -149,9 +144,9 @@ export default function Ms365Callback() {
         const code = recovered.code;
         const err = recovered.error;
         if (err) { await failWithGuard(err); return; }
-        if (!code) { exitHome(); return; }
+        if (!code) { navigate("/mplanipret/home", { replace: true }); return; }
         if (code !== currentCode && exchangedCodes.has(code)) {
-          exitHome();
+          navigate("/mplanipret/home", { replace: true });
           return;
         }
         exchangedCodes.add(code);
@@ -161,7 +156,7 @@ export default function Ms365Callback() {
         const state = recovered.state;
         const code_verifier = await getRememberedMs365CodeVerifierAsync(state);
         if (!code_verifier) {
-          exitHome();
+          navigate("/mplanipret/home", { replace: true });
           return;
         }
         const isMicrosoftLogin = (await getMicrosoftSignInIntentAsync()) === "login" || Boolean(state?.startsWith("login:"));
@@ -210,7 +205,7 @@ export default function Ms365Callback() {
         }).catch((err) => console.warn("ms365 webhook setup skipped", err?.message ?? err));
         try { void supabase.functions.invoke("ms365-full-import", { body: { mode: "initial" } }).catch(() => {}); } catch {}
         setStatus("ok");
-        navigate(`${consumeMs365ReturnTo()}?ms365=ok`, { replace: true });
+        navigate("/mplanipret/home?ms365=ok", { replace: true });
       } finally {
         exchangeInFlight = false;
       }

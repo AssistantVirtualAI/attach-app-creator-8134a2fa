@@ -25,14 +25,11 @@ import { getPpContacts } from "@/lib/ppContactsCache";
 import RecipientAutocomplete from "@/components/planipret/mobile/RecipientAutocomplete";
 import EmailHistoryList from "@/components/planipret/mobile/EmailHistoryList";
 import EmailBodyFrame from "@/components/planipret/mobile/EmailBodyFrame";
-import { useSmsThreadState, smsThreadKey, effectiveUnread, isHidden } from "@/lib/planipret/smsThreadState";
-import { confirmDialog } from "@/lib/confirmDialog";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
 import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365ConnectionNotice";
 import { useMs365Status } from "@/hooks/useMs365Status";
 import { canSendWithSmsAvailability, getSmsAvailability, type SmsAvailability } from "@/lib/planipret/smsAvailability";
 import { getSmsSubmission, type SmsSubmission } from "@/lib/planipret/smsSendGuard";
-import { smsDeliveryLabel, preserveSmsDelivery } from "@/lib/planipret/smsDelivery";
 import { emailBodyCache } from "@/lib/planipret/persistentMediaCache";
 
 import DOMPurify from "dompurify";
@@ -119,9 +116,9 @@ export default function MMessages() {
 
 
   return (
-    <div className="h-full min-h-0 flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
+    <div className="h-full flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
       <div
-        className="shrink-0 px-4 pt-5 pb-3"
+        className="px-4 pt-5 pb-3"
         style={{ background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
       >
         <h1 className="text-2xl font-bold mb-3" style={{ color: "var(--pp-text-primary)" }}>{t("messages.title")}</h1>
@@ -164,7 +161,7 @@ export default function MMessages() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 overflow-hidden">
         {visited.has("sms") && <div className="h-full" hidden={sub !== "sms"}><SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} active={sub === "sms"} initialTo={qTo} /></div>}
         {visited.has("team") && <div className="h-full" hidden={sub !== "team"}><TeamChat profile={profile} /></div>}
         {visited.has("teams365") && <div className="h-full" hidden={sub !== "teams365"}><Teams365Panel profile={profile} /></div>}
@@ -214,9 +211,6 @@ type NsMessage = {
   created_at?: string;
   sent_at?: string;
   read_at?: string | null;
-  status?: string;
-  provider_status?: string;
-  metadata?: Record<string, unknown>;
 };
 
 const threadId = (t: any) =>
@@ -289,8 +283,7 @@ const dedupeMessages = (list: any[], myExt: string, peer?: string) => {
     });
     if (idx === -1) { kept.push(m); continue; }
     // conserve la version sortante si l'une des deux l'est
-    if (!msgIsOut(kept[idx], myExt, peer) && msgIsOut(m, myExt, peer)) kept[idx] = preserveSmsDelivery(m, kept[idx]);
-    else kept[idx] = preserveSmsDelivery(kept[idx], m);
+    if (!msgIsOut(kept[idx], myExt, peer) && msgIsOut(m, myExt, peer)) kept[idx] = m;
   }
   return kept;
 };
@@ -340,14 +333,6 @@ function SmsList({ profile, openDialer, registerRefresh, active = true, initialT
   const userId = String(profile?.user_id ?? profile?.id ?? "");
   const initialCache = userId ? smsThreadCache.get(userId) : null;
   const [threads, setThreads] = useState<NsThread[]>(() => initialCache?.value ?? []);
-  const { state: smsState, act: smsAct0 } = useSmsThreadState(profile?.user_id);
-  const smsAct = (keys: string[], action: "read" | "unread" | "hide", lastAt: Record<string, string>) => {
-    if (!smsAct0(keys, action, lastAt)) toast.error(tr("Impossible d'enregistrer sur cet appareil.", "Could not save on this device."));
-  };
-  const keyOf = (th: NsThread) => smsThreadKey(threadId(th), threadPeer(th));
-  const lastMap: Record<string, string> = Object.fromEntries(threads.map((th) => [keyOf(th), String(threadTime(th))]));
-  const visibleThreads = threads.filter((th) => !isHidden(smsState, keyOf(th), String(threadTime(th))));
-  const totalUnread = visibleThreads.reduce((n, th) => n + effectiveUnread(smsState, keyOf(th), String(threadTime(th)), th.unread ?? th.unread_count ?? 0), 0);
   const [loading, setLoading] = useState(() => !initialCache?.value);
   const [error, setError] = useState<string | null>(null);
   const [activeThread, setActiveThread] = useState<{ id: string; number: string; body?: string; autoSend?: boolean } | null>(null);
@@ -465,10 +450,7 @@ function SmsList({ profile, openDialer, registerRefresh, active = true, initialT
   }
 
   return (
-    <div
-      className="h-full min-h-0 overflow-y-auto overscroll-contain p-3"
-      style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
-    >
+    <div className="p-3">
       <div className="flex justify-end mb-2 gap-2">
         <button
           onClick={() => void load(true)}
@@ -506,22 +488,14 @@ function SmsList({ profile, openDialer, registerRefresh, active = true, initialT
             {t("common.retry") ?? "Réessayer"}
           </button>
         </div>
-      ) : visibleThreads.length === 0 ? (
+      ) : threads.length === 0 ? (
         <EmptyState Icon={MessageSquare} title={t("messages.noMessages")} sub={t("messages.startNew")} />
       ) : (
         <ul className="space-y-1.5">
-          {totalUnread > 0 && (
-            <li className="flex justify-end">
-              <button onClick={() => smsAct(visibleThreads.map(keyOf), "read", lastMap)} className="px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1" style={{ color: "var(--pp-brand-accent)" }}>
-                <CheckCircle2 className="w-3.5 h-3.5" /> {tr("Tout marquer lu", "Mark all read")}
-              </button>
-            </li>
-          )}
-          {visibleThreads.map((th, index) => {
+          {threads.map((th, index) => {
             const id = threadId(th);
             const peer = threadPeer(th);
-            const k = keyOf(th);
-            const unread = effectiveUnread(smsState, k, threadTime(th), th.unread ?? th.unread_count ?? 0);
+            const unread = th.unread ?? th.unread_count ?? 0;
             const preview = (th as any).last_message ?? (th as any).preview ?? (th as any)["messagesession-last-message"] ?? (th as any).last_message_text ?? (th as any).body ?? (th as any).message ?? (th as any).snippet ?? "";
             return (
               <ThreadRow
@@ -531,11 +505,7 @@ function SmsList({ profile, openDialer, registerRefresh, active = true, initialT
                 unread={unread}
                 preview={preview}
                 time={threadTime(th)}
-                onOpen={() => { smsAct([k], "read", lastMap); openSmsThread({ id, number: peer }); }}
-                onToggleRead={() => smsAct([k], unread > 0 ? "read" : "unread", lastMap)}
-                onDelete={async () => {
-                  if (await confirmDialog({ title: tr("Supprimer cette conversation ?", "Delete this conversation?"), message: tr("Elle sera retirée de cette liste sur cet appareil. Un nouveau texto la fera réapparaître.", "It will be removed from this list on this device. A new text will bring it back."), confirmLabel: tr("Supprimer", "Delete"), destructive: true })) smsAct([k], "hide", lastMap);
-                }}
+                onOpen={() => openSmsThread({ id, number: peer })}
                 emptyLabel={t("messages.noContent")}
               />
             );
@@ -685,9 +655,9 @@ function NewSmsSheet({ onClose, onStart }: { onClose: () => void; onStart: (numb
   );
 }
 
-function ThreadRow({ id, peer, unread, preview, time, onOpen, onToggleRead, onDelete, emptyLabel }: {
+function ThreadRow({ id, peer, unread, preview, time, onOpen, emptyLabel }: {
   id: string; peer: string; unread: number; preview: string; time: string;
-  onOpen: () => void; onToggleRead: () => void; onDelete: () => void; emptyLabel: string;
+  onOpen: () => void; emptyLabel: string;
 }) {
   const { lang } = useMplanipretLang();
   const resolved = useCallerNames([peer]);
@@ -727,14 +697,6 @@ function ThreadRow({ id, peer, unread, preview, time, onOpen, onToggleRead, onDe
           )}
         </div>
       </button>
-      <div className="flex justify-end gap-1 -mt-1 pr-1">
-        <button onClick={onToggleRead} className="p-1.5 rounded-full" aria-label={unread > 0 ? tr("Marquer lu", "Mark read") : tr("Marquer non lu", "Mark unread")} style={{ color: unread > 0 ? "var(--pp-brand-accent)" : "var(--pp-text-faint)" }}>
-          {unread > 0 ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-        </button>
-        <button onClick={onDelete} className="p-1.5 rounded-full" aria-label={tr("Supprimer", "Delete")} style={{ color: "var(--pp-danger)" }}>
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
     </li>
   );
 }
@@ -881,11 +843,11 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       if (v) {
         console.info("[pp-ns-sms] verification", v);
         if (!v.saved) {
-          toast.warning("Accepté, mais non enregistré dans l'historique.", { duration: 6000 });
+          toast.warning("Envoyé, mais non enregistré dans l'historique.", { duration: 6000 });
         } else if (!v.did_match) {
-          toast.warning(`Accepté avec le numéro ${v.stored_from ?? "?"} au lieu de ${v.expected_from ?? "?"}.`, { duration: 8000 });
+          toast.warning(`Envoyé avec le numéro ${v.stored_from ?? "?"} au lieu de ${v.expected_from ?? "?"}.`, { duration: 8000 });
         } else {
-          toast.success(`Accepté depuis ${v.stored_from} · enregistré`, { duration: 2500 });
+          toast.success(`Envoyé depuis ${v.stored_from} · enregistré`, { duration: 2500 });
         }
       }
       // Refresh from server to reconcile optimistic message
@@ -1007,7 +969,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
                     {body && <p className="whitespace-pre-wrap break-words">{body}</p>}
                   </div>
                   <p className={`text-[10px] mt-1 ${out ? "text-right" : "text-left"}`} style={{ color: "var(--pp-text-faint)" }}>
-                    {fmtTime(msgTime(m), lang, t)}{out ? ` · ${smsDeliveryLabel(m, lang)}` : ""}
+                    {fmtTime(msgTime(m), lang, t)}{String(m.id ?? "").startsWith("tmp-") ? ` · ${t("common.sending")}` : ""}
                   </p>
                 </div>
               </div>
@@ -2324,7 +2286,7 @@ function TeamRoster({ profile, openDialer, onSwitchTab }: { profile: any; openDi
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <ActionPill Icon={Phone} label={tr("Appeler", "Call")} disabled={!m.extension} onClick={() => m.extension && openDialer(m.extension)} />
+                  <ActionPill Icon={Phone} label="Appeler" disabled={!m.extension} onClick={() => m.extension && openDialer(m.extension)} />
                   <ActionPill Icon={MessageSquare} label="SMS" disabled={!m.extension} onClick={() => { if (m.extension) { onSwitchTab("sms"); toast(`SMS vers ${m.extension}`); } }} />
                   <ActionPill
                     Icon={Mail}
@@ -2931,7 +2893,7 @@ function TeamsThreadView({ target, onClose }: {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={tr("Écrire un message…", "Write a message…")}
+          placeholder="Écrire un message…"
           className="flex-1 text-sm px-3 py-2 rounded-full outline-none"
           style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)" }}
         />

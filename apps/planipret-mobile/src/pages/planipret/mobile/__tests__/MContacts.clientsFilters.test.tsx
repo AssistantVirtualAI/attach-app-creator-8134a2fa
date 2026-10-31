@@ -19,11 +19,15 @@ vi.mock("@/lib/native/permissions/contacts", () => ({
 }));
 vi.mock("@/lib/native/permissions/platform", () => ({ openAppSettings: vi.fn() }));
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { functions: { invoke: vi.fn(async () => ({ data: { success: true }, error: null })) }, auth: {
-      getSession: () => Promise.resolve({ data: { session: null } }),
-      getUser: () => Promise.resolve({ data: { user: null } }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    } },
+  supabase: {
+    functions: { invoke: vi.fn(async (_fn: string, options: any) => {
+      const action = options?.body?.action;
+      if (action === "list_clients") return { data: { success: true, maestro_user_id: "test-broker", clients: [], total: 0 }, error: null };
+      if (action === "list_brokers") return { data: { success: true, maestro_user_id: "test-broker", brokers: [], total: 0 }, error: null };
+      return { data: {}, error: null };
+    }) },
+    auth: { getSession: vi.fn(async () => ({ data: { session: null } })), onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })) },
+  },
 }));
 vi.mock("@/lib/callEdge", () => ({ callEdge: vi.fn(async () => ({ numbers: [] })), toE164: (v: string) => v }));
 vi.mock("@/components/planipret/ava/AvaSummarizeSheet", () => ({ default: () => null }));
@@ -35,15 +39,14 @@ const ago = (d: number) => new Date(Date.now() - d * DAY).toISOString();
 // Alice: added 3 days ago, active. Bruno: 20 days. Chloé: 60 days. Denis: 200 days, dormant.
 const clients = [
   { id: "4", name: "Denis Dormant", cell_phone: "4385550004", created_at: ago(200), last_activity_at: ago(200) },
-  { id: "2", name: "Bruno Vingt", phone: "5145550002", created_at: ago(20), last_activity_at: ago(20) },
+  { id: "2", name: "Bruno Vingt", phone: "5145550002", created_at: ago(20), last_activity_at: ago(0.2) },
   { id: "1", name: "Alice Recente", cell_phone: "5145559911", created_at: ago(3), last_activity_at: ago(1) },
   { id: "3", name: "Chloe Soixante", phone: "5145550003", created_at: ago(60), last_activity_at: ago(60) },
 ];
-vi.mock("@/lib/ppContactsCache", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/ppContactsCache")>()),
+vi.mock("@/lib/ppContactsCache", () => ({
+  peekPpContactsVerified: vi.fn(async () => []),
   peekPpContacts: (a: string) => (a === "maestro_clients" ? clients : []),
   getPpContacts: async (a: string) => (a === "maestro_clients" ? clients : []),
-  peekPpContactsVerified: async (a: string) => (a === "maestro_clients" ? clients : []),
   prefetchPpContacts: vi.fn(),
 }));
 
@@ -101,13 +104,15 @@ describe("MContacts — Clients filters", () => {
     expect(order()).toHaveLength(4);
   });
 
-  it("sorts by name, newest, oldest", async () => {
+  it("sorts by name, newest, oldest and recent activity", async () => {
     await open();
     expect(order()).toEqual(NAMES);
     pick("Trier", "newest");
     expect(order()).toEqual(["Alice Recente", "Bruno Vingt", "Chloe Soixante", "Denis Dormant"]);
     pick("Trier", "oldest");
     expect(order()).toEqual(["Denis Dormant", "Chloe Soixante", "Bruno Vingt", "Alice Recente"]);
+    pick("Trier", "activity");
+    expect(order()).toEqual(["Bruno Vingt", "Alice Recente", "Chloe Soixante", "Denis Dormant"]);
   });
 
   it("handles zero result and the Clear button restores the list", async () => {

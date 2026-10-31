@@ -8,16 +8,28 @@ import { resolve } from "node:path";
 const h = vi.hoisted(() => ({
   invoke: vi.fn(),
   getSession: vi.fn(async () => ({ data: { session: { access_token: "tok" } } })),
+  native: false,
+  nativeExternal: false,
+  externalOpen: vi.fn(),
+  browserClose: vi.fn(),
+  browserOpen: vi.fn(),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { auth: { getSession: h.getSession, refreshSession: vi.fn() }, functions: { invoke: h.invoke } },
 }));
-vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => false }, registerPlugin: () => ({}) }));
+vi.mock("@capacitor/core", () => ({
+  Capacitor: {
+    isNativePlatform: () => h.native,
+    isPluginAvailable: (name: string) => name === "PpPortalExternal" && h.nativeExternal,
+  },
+  registerPlugin: () => ({ open: h.externalOpen }),
+}));
+vi.mock("@capacitor/browser", () => ({ Browser: { close: h.browserClose, open: h.browserOpen } }));
 
 import { validPortalHandoffUrl } from "@/lib/planipret/portalHandoffUrl";
 import { openBrokerPortal } from "@/lib/planipret/openBrokerPortal";
 import { normalizeTask as appNormalize } from "@/lib/planipret/shared/planipretTasks";
-import { normalizeTask as edgeNormalize, normalizeRecurrence } from "../../../../../supabase/functions/_shared/planipret-tasks";
+import { normalizeTask as edgeNormalize, normalizeRecurrence } from "../../../supabase/functions/_shared/planipret-tasks";
 import { recurrenceLabel } from "@/lib/planipret/recurrenceLabel";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
@@ -25,7 +37,14 @@ const P = "https://courtierai.planipret.com";
 const src = (p: string) => readFileSync(resolve(__dirname, "../..", p), "utf8");
 
 describe("A — Plus → Marketing portal handoff", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h.native = false;
+    h.nativeExternal = false;
+    h.externalOpen.mockResolvedValue({ ok: true });
+    h.browserClose.mockResolvedValue({});
+    h.browserOpen.mockResolvedValue({});
+  });
   it("accepts broker root, broker sub-paths incl. marketing, admin and legacy", () => {
     for (const p of ["/planipret/broker", "/planipret/broker/marketing", "/planipret/admin", "/planipret/admin/overview", "/planipret/portal-handoff"]) {
       const u = `${P}${p}?th=x&em=y`;
@@ -57,6 +76,41 @@ describe("A — Plus → Marketing portal handoff", () => {
     expect(open).toHaveBeenCalledWith(url, "_blank", "noopener,noreferrer");
     open.mockRestore();
   });
+  it("native iOS opens Marketing with the dedicated system-browser plugin", async () => {
+    const url = `${P}/planipret/broker/marketing?th=abc&em=b%40x.ca`;
+    h.native = true;
+    h.nativeExternal = true;
+    h.invoke.mockResolvedValueOnce({ data: { ok: true, url, portal: "broker" }, error: null });
+
+    const r = await openBrokerPortal("/planipret/broker/marketing");
+
+    expect(r).toEqual({ ok: true, portal: "broker" });
+    expect(h.externalOpen).toHaveBeenCalledWith({ url });
+    expect(h.browserClose).not.toHaveBeenCalled();
+    expect(h.browserOpen).not.toHaveBeenCalled();
+  });
+  it("uses Browser only for a legacy native build that lacks the dedicated plugin", async () => {
+    const url = `${P}/planipret/broker?th=abc&em=b%40x.ca`;
+    h.native = true;
+    h.invoke.mockResolvedValueOnce({ data: { ok: true, url, portal: "broker" }, error: null });
+
+    await expect(openBrokerPortal()).resolves.toEqual({ ok: true, portal: "broker" });
+    expect(h.externalOpen).not.toHaveBeenCalled();
+    expect(h.browserClose).toHaveBeenCalledTimes(1);
+    expect(h.browserOpen).toHaveBeenCalledWith({ url, presentationStyle: "fullscreen" });
+  });
+  it("does not report success when the system browser rejects the verified URL", async () => {
+    const url = `${P}/planipret/broker/marketing?th=abc&em=b%40x.ca`;
+    h.native = true;
+    h.nativeExternal = true;
+    h.externalOpen.mockRejectedValueOnce(new Error("system_browser_unavailable"));
+    h.invoke.mockResolvedValueOnce({ data: { ok: true, url, portal: "broker" }, error: null });
+
+    await expect(openBrokerPortal("/planipret/broker/marketing")).resolves.toEqual({
+      ok: false,
+      error: "Ouverture du portail impossible.",
+    });
+  });
   it("invalid returned URL is refused and nothing is opened", async () => {
     h.invoke.mockResolvedValueOnce({ data: { ok: true, url: "https://evil.example/planipret/broker?th=x&em=y" }, error: null });
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
@@ -66,7 +120,7 @@ describe("A — Plus → Marketing portal handoff", () => {
     open.mockRestore();
   });
   it("portal copy has the same validator", () => {
-    expect(src("lib/planipret/portalHandoffUrl.ts")).toBe(readFileSync(resolve(__dirname, "../../../../../src/lib/planipret/portalHandoffUrl.ts"), "utf8"));
+    expect(src("lib/planipret/portalHandoffUrl.ts")).toBe(readFileSync(resolve(__dirname, "../../lib/planipret/portalHandoffUrl.ts"), "utf8"));
   });
 });
 

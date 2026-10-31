@@ -24,7 +24,6 @@ describe("CreateMaestroClientSheet", () => {
       />,
     );
 
-    // The sheet formats the incoming number for Maestro (formatMaestroPhone).
     await screen.findByDisplayValue("(514) 555-1234");
     const title = screen.getByText("Créer le client dans Maestro");
     const overlay = title.closest("[data-client-create-overlay]");
@@ -36,5 +35,20 @@ describe("CreateMaestroClientSheet", () => {
     expect(panel).toHaveClass("overflow-y-auto", "overscroll-contain");
     expect(panel?.getAttribute("style")).toContain("safe-area-inset-bottom");
     expect(panel?.getAttribute("style")).toContain("120px");
+  });
+
+  it("présente les sections Maestro et bloque une création incomplète", async () => {
+    render(
+      <CreateMaestroClientSheet
+        target={{ phone: "", name: null }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("Identité")).toBeInTheDocument();
+    expect(screen.getByText("Coordonnées")).toBeInTheDocument();
+    expect(screen.getByText("Adresse Maestro")).toBeInTheDocument();
+    expect(screen.getByText(/fiche client complète dans Maestro/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /créer le client/i })).toBeDisabled();
   });
 });

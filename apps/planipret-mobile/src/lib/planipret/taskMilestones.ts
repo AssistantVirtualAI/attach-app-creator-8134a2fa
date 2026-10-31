@@ -55,32 +55,3 @@ export const MILESTONES: TaskCatalogItem[] = [
 ];
 
 export const catalogLabel = (item: TaskCatalogItem, lang: "fr" | "en") => (lang === "en" ? item.en : item.fr);
-
-/** Maestro colour names → swatch. */
-const MAESTRO_COLORS: Record<string, string> = {
-  blue: "#2563EB", clay: "#B45309", sun: "#FACC15", lilac: "#C4B5FD", aqua: "#22D3EE", sky: "#38BDF8",
-  cream: "#FDE7CE", lime: "#84CC16", heather: "#A78BFA", orchid: "#DA70D6", bubblegum: "#F9A8D4",
-  bumblebee: "#F5EF1E", geko: "#4ADE80", lawn: "#22C55E", black: "#111827", mint: "#6EE7B7",
-  moss: "#65A30D", rose: "#FB7185", navy: "#1E3A8A", red: "#DC2626", crimson: "#B91C1C",
-  yellow: "#FDE047", grotto: "#0E7490", cobalt: "#1D4ED8", ash: "#9CA3AF", forest: "#166534",
-};
-
-/**
- * Builds the Custom Tasks list from the broker's own Maestro tasks
- * (description + colour), most used first. Each broker has their own
- * milestones in Maestro, so a fixed list never matches.
- */
-export function brokerMilestones(rows: Array<{ description?: unknown; color?: unknown }>, max = 60): TaskCatalogItem[] {
-  const seen = new Map<string, { label: string; color?: string; n: number }>();
-  for (const r of rows) {
-    const label = String(r.description ?? "").replace(/\s+/g, " ").trim();
-    if (!label || label.length > 120) continue;
-    const key = label.toLocaleLowerCase("fr");
-    const color = MAESTRO_COLORS[String(r.color ?? "").toLowerCase()];
-    const cur = seen.get(key);
-    if (cur) { cur.n++; if (!cur.color && color) cur.color = color; }
-    else seen.set(key, { label, color, n: 1 });
-  }
-  return [...seen.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label, "fr")).slice(0, max)
-    .map((m, i) => ({ id: `maestro_${i}`, fr: m.label, en: m.label, color: m.color }));
-}

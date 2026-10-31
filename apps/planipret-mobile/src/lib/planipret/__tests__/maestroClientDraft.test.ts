@@ -32,9 +32,11 @@ describe("Maestro client creation draft", () => {
     expect(hasRequiredMaestroClientFields({ ...complete, phone: "1136" })).toBe(false);
   });
 
-  it("formats Canadian numbers for display and sends Maestro ten digits", () => {
-    expect(formatMaestroPhone("14389535011")).toBe("(438) 953-5011");
-    expect(maestroPhoneDigits("+1 (438) 953-5011")).toBe("4389535011");
+  it("normalizes a Canadian phone before the Maestro request", () => {
+    expect(maestroPhoneDigits("+1 (514) 555-0123")).toBe("5145550123");
+    expect(formatMaestroPhone("5145550123")).toBe("(514) 555-0123");
+    expect(hasRequiredMaestroClientFields({ ...complete, phone: "1 (514) 555-0123" })).toBe(true);
+    expect(hasRequiredMaestroClientFields({ ...complete, phone: "151455501234" })).toBe(false);
   });
 
   it("keeps submit disabled for every mandatory Maestro classification field", () => {

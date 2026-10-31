@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { callAiErrorMessage, callAiResultMessage } from "@/lib/planipret/callAiError";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -133,21 +134,27 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
   const hasAiContent = !!(call.ai_summary || call.ai_summary_short || call.ai_analysis_json);
 
   const runAiAnalysis = async () => {
+    const segments = Array.isArray(call.transcript_segments) ? call.transcript_segments : [];
+    const transcript = call.transcript
+      ?? segments.map((segment: any) => `${segment?.speaker ?? "Speaker"}: ${segment?.text ?? ""}`).filter((line: string) => !line.endsWith(": ")).join("\n");
+    const fallback = lang === "fr" ? "Analyse IA indisponible, réessayez." : "AI analysis unavailable, try again.";
     setAnalyzing(true);
     try {
       const { data, error } = await supabase.functions.invoke("pp-coach-call", {
-        body: { call_id: call.id },
+        // The server keeps the per-call cache. `force` only authorizes the
+        // transcript already visible in the app while database replication lags.
+        body: { call_id: call.id, transcript, force: true },
       });
-      const ctx: any = (error as any)?.context instanceof Response ? await (error as any).context.clone().json().catch(() => ({})) : {};
-      if (error || (data as any)?.success === false) {
-        const d: any = data ?? ctx;
-        toast.error(t("maestro.aiFailed"), { description: d?.message ?? d?.error ?? ctx?.message ?? error?.message });
+      if (error) {
+        toast.error(t("maestro.aiFailed"), { description: await callAiErrorMessage(error, fallback) });
+      } else if ((data as any)?.success === false) {
+        toast.error(t("maestro.aiFailed"), { description: callAiResultMessage(data, fallback) });
       } else {
         toast.success(t("maestro.aiGenerated"));
         onUpdated();
       }
-    } catch (e: any) {
-      toast.error(t("maestro.aiFailed"), { description: e?.message });
+    } catch {
+      toast.error(t("maestro.aiFailed"), { description: fallback });
     } finally {
       setAnalyzing(false);
     }
@@ -161,10 +168,8 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
         body: { call_id: call.id, force: true, explicit_user_action: true },
       });
 
-      const ctx: any = (error as any)?.context instanceof Response ? await (error as any).context.clone().json().catch(() => ({})) : {};
       if (error || (data as any)?.success === false) {
-        const d: any = data ?? ctx;
-        toast.error(t("maestro.pushFailed"), { description: d?.message ?? d?.error ?? ctx?.message ?? error?.message });
+        toast.error(t("maestro.pushFailed"), { description: (data as any)?.error ?? error?.message });
       } else {
         toast.success(t("maestro.pushSuccess"));
         onUpdated();

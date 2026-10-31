@@ -6,8 +6,6 @@ import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail 
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { mergeVoicemailList, voicemailFolder, voicemailCaller } from "@/lib/voicemailList";
-import { useSpeakerCtx } from "@/components/planipret/mobile/call/transcriptSpeakers";
 
 const PRIMARY = "var(--pp-brand-accent-2)";
 const ACCENT = "var(--pp-brand-accent)";
@@ -50,7 +48,6 @@ export default function MVoicemail() {
   const { profile, openDialer, registerRefresh, reloadProfile } = useOutletContext<PlanipretMobileContext>();
   const [tab, setTab] = useState<"greeting" | "inbox" | "saved">("greeting");
   const [items, setItems] = useState<VM[]>([]);
-  const callerDirectory = useSpeakerCtx(tab !== "greeting");
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [forwardFor, setForwardFor] = useState<VM | null>(null);
@@ -65,14 +62,12 @@ export default function MVoicemail() {
     setLoading(true);
     try {
       // 1) NS-API live via pp-ns-voicemail (segmenté par extension côté serveur)
-      // Reconcile both visible folders so stale cache rows never replace the PBX.
       const folder = tab === "saved" ? "saved" : "inbox";
       const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", {
-        body: { action: "sync" },
+        body: { action: "list", folder },
       });
       if (error) throw error;
-      if (data?.error || data?.needs_link) throw new Error(data.error || "Telephone account not linked");
-      if ((data as any)?.ok !== true) throw new Error("Voicemail synchronization failed");
+      const nsItems: any[] = ((data as any)?.items ?? []);
 
       // 2) Fallback / enrichissement cache local
       const { data: local } = await supabase
@@ -81,8 +76,33 @@ export default function MVoicemail() {
         .eq("user_id", profile.id ?? profile.user_id)
         .order("created_at", { ascending: false });
 
+      const byVmId = new Map<string, VM>();
+      (local ?? []).forEach((r: any) => { if (r.vm_id || r.ns_vm_id) byVmId.set(r.vm_id ?? r.ns_vm_id, r); });
+
+      const merged: VM[] = nsItems.length
+        ? nsItems.map((v: any, i: number) => {
+            const id = v.vm_id ?? v.id ?? `ns-${i}`;
+            const enriched = byVmId.get(id);
+            return {
+              id: enriched?.id ?? id,
+              user_id: profile.user_id,
+              ns_vm_id: id,
+              folder,
+              from_number: v.from_number ?? v.caller ?? null,
+              from_name: v.from_name ?? v.caller_name ?? null,
+              duration_seconds: v.duration ?? v.duration_seconds ?? null,
+              audio_url: enriched?.audio_url ?? null,
+              transcript: enriched?.transcript ?? null,
+              is_read: v.is_read ?? v.read ?? enriched?.is_read ?? false,
+              received_at: v.created_at ?? v.timestamp ?? null,
+              created_at: v.created_at ?? new Date().toISOString(),
+              ...(enriched ?? {}),
+            } as VM;
+          })
+        : (local ?? []) as VM[];
+
       if (!live()) return;
-      setItems((local ?? []) as VM[]);
+      setItems(merged);
     } catch (e: any) {
       if (!live()) return;
       console.error("[pp-ns-voicemail] list failed", e);
@@ -92,13 +112,13 @@ export default function MVoicemail() {
         .select("*")
         .eq("user_id", profile.id ?? profile.user_id)
         .order("created_at", { ascending: false });
-      if (live()) setItems(mergeVoicemailList([], (data ?? []) as VM[], profile.id ?? profile.user_id, tab));
+      if (live()) setItems((data ?? []) as VM[]);
     } finally {
       if (live()) setLoading(false);
     }
   };
 
-  useEffect(() => { vmGen.current += 1; setItems([]); setExpanded(null); setForwardFor(null); if (tab === "greeting") setLoading(false); load(); /* eslint-disable-next-line */ }, [profile?.id, profile?.user_id, tab]);
+  useEffect(() => { vmGen.current += 1; if (tab === "greeting") setLoading(false); load(); /* eslint-disable-next-line */ }, [profile?.user_id, tab]);
   useEffect(() => () => { vmGen.current += 1; }, []);
   const vmLoadRef = useRef(load); vmLoadRef.current = load;
   // Greeting: no list refresh owner. Inbox/Saved: own folder only.
@@ -110,66 +130,48 @@ export default function MVoicemail() {
       .channel(`mplanipret-vm-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "planipret_voicemails", filter: `user_id=eq.${profile.id ?? profile.user_id}` }, (payload) => {
         const v = payload.new as VM;
-        setItems((p) => mergeVoicemailList([], [v, ...p.filter((item) => item.id !== v.id)], profile.id ?? profile.user_id, tab));
+        setItems((p) => [v, ...p]);
         toast(`📬 ${t("voicemail.newFrom")} ${v.from_number ?? t("voicemail.unknownLower")}`);
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [profile?.id, profile?.user_id]);
+  }, [profile?.user_id]);
 
-  const filtered = items.filter((v) => voicemailFolder(v.folder) === tab);
+  const filtered = items.filter((v) => v.folder === tab);
   const unreadInbox = items.filter((v) => v.folder === "inbox" && !v.is_read).length;
 
   const markRead = async (vm: VM) => {
     if (vm.is_read) return;
-    try {
-      if (vm.ns_vm_id) {
-        const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", {
-          body: { action: "mark-read", vm_id: vm.ns_vm_id, from_folder: vm.folder ?? "inbox" },
-        });
-        if (error || (data as any)?.ok !== true) throw new Error("mark_read_failed");
-      } else {
-        await supabase.from("planipret_voicemails").update({ is_read: true }).eq("id", vm.id);
-      }
-      setItems((p) => p.map((x) => x.id === vm.id ? { ...x, is_read: true } : x));
-    } catch {
-      toast.error(t("voicemail.loadFailed") || "Impossible de mettre à jour ce voicemail");
+    setItems((p) => p.map((x) => x.id === vm.id ? { ...x, is_read: true } : x));
+    await supabase.from("planipret_voicemails").update({ is_read: true }).eq("id", vm.id);
+    if (vm.ns_vm_id) {
+      supabase.functions.invoke("pp-ns-voicemail", {
+        body: { action: "mark-read", vm_id: vm.ns_vm_id },
+      }).catch(() => null);
     }
   };
 
   const removeVm = async (vm: VM) => {
     if (!confirm(t("voicemail.deleteConfirm"))) return;
-    try {
-      if (vm.ns_vm_id) {
-        const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", {
-          body: { action: "delete", vm_id: vm.ns_vm_id, from_folder: vm.folder ?? "inbox" },
-        });
-        if (error || (data as any)?.ok !== true) throw new Error("delete_failed");
-      } else {
-        await supabase.from("planipret_voicemails").delete().eq("id", vm.id);
-      }
-      setItems((p) => p.filter((x) => x.id !== vm.id));
-      toast.success(t("voicemail.deleted"));
-    } catch {
-      toast.error(t("voicemail.loadFailed") || "Impossible de supprimer ce voicemail");
+    if (vm.ns_vm_id) {
+      await supabase.functions.invoke("pp-ns-voicemail", {
+        body: { action: "delete", vm_id: vm.ns_vm_id },
+      }).catch(() => null);
     }
+    await supabase.from("planipret_voicemails").delete().eq("id", vm.id);
+    setItems((p) => p.filter((x) => x.id !== vm.id));
+    toast.success(t("voicemail.deleted"));
   };
 
   const saveVm = async (vm: VM) => {
-    try {
-      if (vm.ns_vm_id) {
-        const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", {
-          body: { action: "move", vm_id: vm.ns_vm_id, from_folder: vm.folder ?? "inbox", folder: "saved" },
-        });
-        if (error || (data as any)?.ok !== true) throw new Error("move_failed");
-      } else {
-        await supabase.from("planipret_voicemails").update({ folder: "saved" }).eq("id", vm.id);
-      }
-      setItems((p) => p.map((x) => x.id === vm.id ? { ...x, folder: "saved" } : x));
-      toast.success(t("voicemail.saved"));
-    } catch {
-      toast.error(t("voicemail.loadFailed") || "Impossible de sauvegarder ce voicemail");
+    if (vm.ns_vm_id) {
+      await supabase.functions.invoke("pp-ns-voicemail", {
+        body: { action: "move", vm_id: vm.ns_vm_id, folder: "saved" },
+      }).catch(() => null);
     }
+    await supabase.from("planipret_voicemails").update({ folder: "saved" }).eq("id", vm.id);
+    setItems((p) => p.map((x) => x.id === vm.id ? { ...x, folder: "saved" } : x));
+    toast.success(t("voicemail.saved"));
   };
 
   const fetchTranscript = async (vm: VM) => {
@@ -338,11 +340,8 @@ export default function MVoicemail() {
                           className={`text-[13px] truncate ${vm.is_read ? "font-medium" : "font-semibold"}`}
                           style={{ color: "var(--pp-text-primary)" }}
                         >
-                          {voicemailCaller(vm, callerDirectory).name || voicemailCaller(vm, callerDirectory).phone || t("common.unknown")}
+                          {vm.from_name || vm.from_number || t("common.unknown")}
                         </p>
-                        {voicemailCaller(vm, callerDirectory).name && voicemailCaller(vm, callerDirectory).phone && (
-                          <p className="text-[11px] truncate text-muted-foreground">{voicemailCaller(vm, callerDirectory).phone}</p>
-                        )}
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-[10.5px] text-slate-500">{fmtDate(vm.received_at ?? vm.created_at, lang, t)}</span>
                           <span className="w-1 h-1 rounded-full bg-slate-300" />
@@ -422,8 +421,7 @@ function ActionBtn({ icon, label, onClick, danger }: { icon: React.ReactNode; la
 
 function AudioPlayer({ vm }: { vm: VM }) {
   const { t } = useMplanipretLang();
-  // Persisted provider URLs expire: always request a fresh owner-checked URL.
-  const [src, setSrc] = useState<string | null>(null);
+  const [src, setSrc] = useState<string | null>(vm.audio_url);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [dur, setDur] = useState(vm.duration_seconds ?? 0);
@@ -431,36 +429,30 @@ function AudioPlayer({ vm }: { vm: VM }) {
   const [buffering, setBuffering] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const audioGeneration = useRef(0);
   const loadingAudio = !src;
 
   const fetchAudio = async () => {
-    const generation = ++audioGeneration.current;
     setLoadError(false);
     const id = vm.ns_vm_id ?? vm.id;
     try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id, folder: voicemailFolder(vm.folder) } });
+      const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id } });
       if (error) throw error;
-      if (generation !== audioGeneration.current) return;
       const url = (data as any)?.url ?? (data as any)?.audio_url;
       if (url) setSrc(url); else setLoadError(true);
     } catch {
-      if (generation === audioGeneration.current) setLoadError(true);
+      setLoadError(true);
     }
   };
 
   useEffect(() => {
-    setSrc(null); setPlaying(false); setProgress(0); setBuffering(false);
+    if (src) return;
     fetchAudio();
-    return () => { audioGeneration.current += 1; audioRef.current?.pause(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vm.id, vm.folder]);
+  }, [vm.id]);
 
-  const toggle = async () => {
+  const toggle = () => {
     const a = audioRef.current; if (!a) return;
-    if (a.paused) {
-      try { await a.play(); } catch { setPlaying(false); setLoadError(true); }
-    } else { a.pause(); setPlaying(false); }
+    if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
   };
 
   const cycleSpeed = () => {
@@ -620,7 +612,7 @@ function ForwardModal({ vm, onClose }: { vm: VM; onClose: () => void }) {
   const submit = async () => {
     if (!ext.trim()) return;
     setBusy(true);
-    const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "forward", vm_id: vm.ns_vm_id ?? vm.id, from_folder: vm.folder ?? "inbox", to_user: ext.trim() } });
+    const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "forward", vm_id: vm.ns_vm_id ?? vm.id, to_user: ext.trim() } });
     setBusy(false);
     if (error || (data as any)?.success === false) { toast.error(t("voicemail.forwardFailed")); return; }
     toast.success(t("voicemail.forwarded"));

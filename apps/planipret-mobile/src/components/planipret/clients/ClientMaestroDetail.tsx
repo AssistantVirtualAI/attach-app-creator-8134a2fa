@@ -60,27 +60,7 @@ export default function ClientMaestroDetail({
   const [contractsError, setContractsError] = useState<string | null>(null);
   const [emails, setEmails] = useState<any[]>([]);
 
-  // Calls/texts are stored under the broker's Planiprêt profile id, not the
-  // auth user id: resolve every alias so the history is never empty.
-  const rawIdsKey = [...new Set(userIds.filter(Boolean))].sort().join(",");
-  const [idsKey, setIdsKey] = useState("");
-  useEffect(() => {
-    let alive = true;
-    const base = rawIdsKey ? rawIdsKey.split(",") : [];
-    if (!base.length) { setIdsKey(""); return; }
-    void Promise.all(base.map((id) => supabase.rpc("planipret_broker_ids", { _uid: id })))
-      .then((results) => {
-        if (!alive) return;
-        const all = new Set(base);
-        for (const r of results) for (const v of ((r as any).data ?? []) as any[]) {
-          const id = typeof v === "string" ? v : v?.planipret_broker_ids;
-          if (id) all.add(String(id));
-        }
-        setIdsKey([...all].sort().join(","));
-      })
-      .catch(() => { if (alive) setIdsKey(rawIdsKey); });
-    return () => { alive = false; };
-  }, [rawIdsKey]);
+  const idsKey = userIds.filter(Boolean).sort().join(",");
 
   const loadActivity = useCallback(async () => {
     const ids = idsKey ? idsKey.split(",") : [];

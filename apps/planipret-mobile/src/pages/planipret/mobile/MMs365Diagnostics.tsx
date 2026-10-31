@@ -7,8 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMs365Status } from "@/components/planipret/Ms365StatusBadge";
 import { ArrowLeft, RefreshCw, LogIn, Copy, Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { getMs365RedirectUri } from "@/lib/ms365OAuth";
-import { startMs365Authorize } from "@/lib/planipret/ms365Start";
+import { buildMs365AuthorizeUrl, getMs365RedirectUri } from "@/lib/ms365OAuth";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 export default function MMs365Diagnostics() {
@@ -39,11 +38,11 @@ export default function MMs365Diagnostics() {
       toast.error(t("screens.ms365Diag.missingConfigToast"));
       return;
     }
-    await startMs365Authorize({
+    window.location.href = await buildMs365AuthorizeUrl({
       clientId: data.detection.client_id,
       tenant: data.detection.tenant_id,
       prompt: "select_account",
-    }, "redirect");
+    });
   }
 
   async function testTeams() {

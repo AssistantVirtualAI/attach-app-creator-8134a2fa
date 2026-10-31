@@ -15,7 +15,7 @@ export type MaestroClientDraft = {
 
 export function maestroPhoneDigits(value: string): string {
   const digits = value.replace(/\D/g, "");
-  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits.slice(0, 10);
+  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
 }
 
 export function formatMaestroPhone(value: string): string {

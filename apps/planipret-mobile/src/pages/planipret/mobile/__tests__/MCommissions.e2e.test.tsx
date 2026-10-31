@@ -1,298 +1,64 @@
 /**
- * E2E (parité portail) — écran mobile Commissions.
- *
- * Couvre :
- *  - chargement initial (summary + deposits) et KPIs
- *  - garde de rôle (non courtier / non admin)
- *  - erreur de l'API et affichage du message
- *  - changement de période -> nouvel appel avec la bonne fenêtre
- *  - pagination "Charger plus"
- *  - ouverture du détail d'un dépôt
+ * Régression de composition: l'app mobile ne possède plus un deuxième moteur de
+ * rapports. Elle rend exactement les sections qui servent au portail, avec la
+ * portée explicite admin globale ou personnelle.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 
-const invokeMock = vi.fn();
-// Chainable Realtime channel mock (channel().on().on().subscribe(), removeChannel).
-const channels: { name: string; handlers: Array<() => void>; removed: boolean }[] = [];
-const makeChannel = (name: string) => {
-  const entry = { name, handlers: [] as Array<() => void>, removed: false };
-  channels.push(entry);
-  const ch: any = {
-    on: (_t: string, _f: unknown, cb: () => void) => { entry.handlers.push(cb); return ch; },
-    subscribe: () => ch,
-    __entry: entry,
-  };
-  return ch;
-};
-let outletProfile: any = { role: "broker" };
-let currentLang: "fr" | "en" = "fr";
+let outletProfile: any = { role: "broker", maestro_broker_id: "123", user_id: "broker-1" };
+const sections = vi.fn();
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    functions: { invoke: (fn: string, opts: any) => invokeMock(fn, opts) },
-    channel: (name: string) => makeChannel(name),
-    removeChannel: (ch: any) => { if (ch?.__entry) ch.__entry.removed = true; return Promise.resolve("ok"); },
-    auth: {
-      getUser: () => Promise.resolve({ data: { user: { id: "u1" } } }),
-      getSession: () => Promise.resolve({ data: { session: { access_token: "t" } } }),
-    },
+vi.mock("@/components/planipret/commissions/CommissionSections", () => ({
+  default: (props: any) => {
+    sections(props);
+    return <output data-testid="sections">{JSON.stringify({
+      scope: props.scope,
+      personalUsersId: props.personalUsersId ?? null,
+      defaultSection: props.defaultSection,
+      presentation: props.presentation,
+      cacheScope: props.cacheScope,
+    })}</output>;
   },
 }));
-
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<any>("react-router-dom");
-  return {
-    ...actual,
-    useNavigate: () => vi.fn(),
-    useOutletContext: () => ({ profile: outletProfile }),
-    useSearchParams: () => [new URLSearchParams(""), vi.fn()],
-  };
+  return { ...actual, useNavigate: () => vi.fn(), useOutletContext: () => ({ profile: outletProfile }) };
 });
-
-vi.mock("@/hooks/useMplanipretLang", () => ({
-  useMplanipretLang: () => ({ lang: currentLang, t: (k: string) => k }),
-}));
-
-// Recharts ne se rend pas dans jsdom (pas de layout) — on neutralise le conteneur.
-vi.mock("recharts", async () => {
-  const React = await import("react");
-  const Stub = ({ children }: any) => React.createElement("div", { "data-testid": "chart" }, children);
-  return {
-    ResponsiveContainer: Stub, BarChart: Stub, ComposedChart: Stub, AreaChart: Stub,
-    LineChart: Stub, PieChart: Stub, Pie: Stub, Cell: () => null,
-    Bar: () => null, Line: () => null, Area: () => null, Legend: () => null,
-    XAxis: () => null, YAxis: () => null, Tooltip: () => null, CartesianGrid: () => null,
-  };
-
-});
+vi.mock("@/hooks/useMplanipretLang", () => ({ useMplanipretLang: () => ({ lang: "fr" }) }));
 
 import MCommissions from "../MCommissions";
 
-const SUMMARY = {
-  total_commission: 156282.05,
-  deposit_count: 75,
-  deal_count: 30,
-  average_commission: 2083.76,
-  total_loan_volume: 19277881,
-  adjustments: 0,
-  top_institutions: [{ institution: "BNC", amount: 69606.74, count: 21 }],
-  by_date: [{ date: "2026-08-01", amount: 12000, count: 3 }],
-  truncated: false,
-};
+beforeEach(() => { sections.mockClear(); outletProfile = { role: "broker", maestro_broker_id: "123", user_id: "broker-1" }; });
 
-const makeRow = (i: number) => ({
-  number: `C-${i}`,
-  institution: i % 2 ? "BNC" : "Desjardins",
-  amount: 1500 + i,
-  loan_amt: 300000 + i,
-  date_trans: "2026-08-05",
-  commission_type: "base",
-  split_type: "planipret",
-  primary_client_name: `Client ${i}`,
-  is_adjustment: 0,
-});
-
-const PAGE_1 = Array.from({ length: 25 }, (_, i) => makeRow(i));
-const PAGE_2 = Array.from({ length: 5 }, (_, i) => makeRow(100 + i));
-
-function respond(fn: string, opts: any) {
-  const action = opts?.body?.action;
-  if (action === "summary") return Promise.resolve({ data: { summary: SUMMARY }, error: null });
-  if (action === "deposits") {
-    const page = opts?.body?.filters?.page ?? 1;
-    return Promise.resolve({
-      data: { rows: page === 1 ? PAGE_1 : PAGE_2, pagination: { total: 30, page } },
-      error: null,
-    });
-  }
-  if (action === "institutions") return Promise.resolve({ data: { institutions: [{ id: 1, label: "BNC" }] }, error: null });
-  if (action === "agents") return Promise.resolve({ data: { agents: [] }, error: null });
-  if (action === "preference") return Promise.resolve({ data: { ava_include_commissions: true }, error: null });
-  return Promise.resolve({ data: {}, error: null });
-}
-
-
-/** Compare un montant sans dépendre des espaces insécables de fr-CA. */
-const norm = (s: string) => s.replace(/[\s\u00A0\u202F]/g, "");
-const money = (expected: string) =>
-  screen.getByText((_, el) => !!el && el.children.length === 0 && norm(el.textContent ?? "") === norm(expected));
-
-beforeEach(() => {
-  localStorage.clear();
-  channels.length = 0;
-  invokeMock.mockReset();
-  invokeMock.mockImplementation(respond);
-  outletProfile = { role: "broker" };
-  currentLang = "fr";
-});
-
-describe("MCommissions (mobile)", () => {
-  it("sépare les rapports déboursés et en attente", async () => {
+describe("MCommissions — même architecture que le portail", () => {
+  it("utilise une seule section portail pour un courtier", () => {
     render(<MCommissions />);
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    expect(screen.getByRole("tab", { name: "Déboursées" })).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(screen.getByRole("tab", { name: "En attente" }));
-    expect(screen.getByRole("tab", { name: "En attente" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.queryByText("Unités uniques")).not.toBeInTheDocument();
+    expect(screen.getByTestId("sections")).toHaveTextContent('"scope":"broker"');
+    expect(screen.getByTestId("sections")).toHaveTextContent('"defaultSection":"paid"');
+    expect(screen.getByTestId("sections")).toHaveTextContent('"presentation":"mobile"');
+    expect(screen.getByTestId("sections")).toHaveTextContent('"cacheScope":"mobile:broker-1:personal"');
+    expect(screen.queryByRole("button", { name: "Tous les courtiers" })).not.toBeInTheDocument();
   });
 
-  it("affiche les onglets et rapports en anglais", async () => {
-    currentLang = "en";
+  it("donne à un administrateur une seule vue globale, puis sa vue personnelle", () => {
+    outletProfile = { role: "admin", maestro_broker_id: "456", user_id: "admin-1" };
     render(<MCommissions />);
-    await waitFor(() => expect(screen.getByText("Unique units")).toBeInTheDocument());
-    expect(screen.getByRole("tab", { name: "Paid" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Pending" }));
-    expect(screen.getAllByText("Pending commissions").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("sections")).toHaveTextContent('"scope":"admin"');
+    expect(screen.getByTestId("sections")).toHaveTextContent('"personalUsersId":null');
+    expect(screen.getByTestId("sections")).toHaveTextContent('"cacheScope":"mobile:admin-1:global"');
+    fireEvent.click(screen.getByRole("button", { name: "Mes commissions" }));
+    expect(screen.getByTestId("sections")).toHaveTextContent('"scope":"broker"');
+    expect(screen.getByTestId("sections")).toHaveTextContent('"personalUsersId":"456"');
+    expect(screen.getByTestId("sections")).toHaveTextContent('"cacheScope":"mobile:admin-1:personal"');
+    expect(screen.getByRole("button", { name: "Mes commissions" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("charge le résumé et affiche les KPIs", async () => {
+  it("ne fabrique pas de vue personnelle avec un identifiant Maestro absent ou invalide", () => {
+    outletProfile = { role: "admin", maestro_broker_id: "not-an-id", user_id: "admin-2" };
     render(<MCommissions />);
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    expect(screen.getByText("Unités uniques")).toBeInTheDocument();
-    expect(screen.getByText("30")).toBeInTheDocument();
-    expect(money("19 277 881 $")).toBeInTheDocument();
-    expect(invokeMock).toHaveBeenCalledWith(
-      "planipret-commission-reports",
-      expect.objectContaining({ body: expect.objectContaining({ action: "summary" }) }),
-    );
-  });
-
-  it("bloque l'accès pour un rôle non autorisé", async () => {
-    outletProfile = { role: "client" };
-    render(<MCommissions />);
-    expect(
-      await screen.findByText(/réservés aux courtiers et administrateurs/i),
-    ).toBeInTheDocument();
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  it("affiche l'erreur renvoyée par l'API", async () => {
-    invokeMock.mockImplementation((fn: string, opts: any) =>
-      opts?.body?.action === "summary"
-        ? Promise.resolve({ data: null, error: { message: "maestro_not_configured" } })
-        : respond(fn, opts),
-    );
-    render(<MCommissions />);
-    expect(await screen.findByText("maestro_not_configured")).toBeInTheDocument();
-  });
-
-  it("recharge avec une nouvelle fenêtre quand la période change", async () => {
-    render(<MCommissions />);
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    const firstFrom = invokeMock.mock.calls.find((c) => c[1]?.body?.action === "summary")?.[1].body.filters.date_from;
-
-    fireEvent.click(screen.getByText("Année en cours"));
-
-    await waitFor(() => {
-      const calls = invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "summary");
-      const lastFrom = calls[calls.length - 1][1].body.filters.date_from;
-      expect(lastFrom).not.toBe(firstFrom);
-      expect(lastFrom).toMatch(/^\d{4}-01-01/);
-    });
-  });
-
-  it("pagine les dépôts avec « Charger plus »", async () => {
-    render(<MCommissions />);
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    const more = await screen.findByText(/charger plus/i);
-    fireEvent.click(more);
-    await waitFor(() =>
-      expect(
-        invokeMock.mock.calls.some((c) => c[1]?.body?.action === "deposits" && c[1]?.body?.filters?.page === 2),
-      ).toBe(true),
-    );
-  });
-
-  it("ouvre le détail d'un dépôt", async () => {
-    render(<MCommissions />);
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    const rows = screen.getAllByText("Desjardins");
-    fireEvent.click(rows[0].closest("button")!);
-    await waitFor(() => expect(screen.getAllByLabelText("Fermer").length).toBeGreaterThan(0));
-  });
-
-  it("permet à un administrateur de basculer entre la vue cabinet et sa vue personnelle", async () => {
-    outletProfile = { role: "admin", maestro_broker_id: "123", user_id: "admin-1" };
-    render(<MCommissions />);
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-
-    const summaryCalls = () => invokeMock.mock.calls
-      .filter((c) => c[1]?.body?.action === "summary");
-    expect(summaryCalls()[0][1].body.filters.users_id).toBeUndefined();
-
-    fireEvent.click(screen.getByText("Mes commissions"));
-    await waitFor(() => {
-      const calls = summaryCalls();
-      expect(calls[calls.length - 1][1].body.filters.users_id).toBe("123");
-    });
-  });
-
-  it("affiche une cause utile quand le jeton Maestro administrateur manque", async () => {
-    outletProfile = { role: "admin", maestro_broker_id: "123", user_id: "admin-1" };
-    invokeMock.mockImplementation((fn: string, opts: any) =>
-      opts?.body?.action === "summary" || opts?.body?.action === "deposits"
-        ? Promise.resolve({
-          data: {
-            success: false,
-            error: "admin_scope_unavailable",
-            message: "server implementation detail",
-          },
-          error: null,
-        })
-        : respond(fn, opts),
-    );
-
-    render(<MCommissions />);
-    expect(await screen.findByText(/requiert un accès Maestro administrateur/i)).toBeInTheDocument();
-    expect(screen.queryByText("server implementation detail")).not.toBeInTheDocument();
-  });
-
-  it("filtres : frappe dans le brouillon = zéro appel avant Appliquer, puis un seul cycle", async () => {
-    render(<MCommissions />);
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    const before = invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "summary").length;
-    fireEvent.click(screen.getByLabelText("Filtres"));
-    const sheet = screen.getByRole("dialog");
-    expect(sheet.className).toMatch(/overflow-y-auto/);
-    expect(sheet.className).toMatch(/min-h-0/);
-    expect(sheet.getAttribute("style") ?? "").toMatch(/safe-area-inset-bottom/);
-    fireEvent.change(screen.getByPlaceholderText("ex. 2026"), { target: { value: "20" } });
-    fireEvent.change(screen.getByPlaceholderText("ex. 2026"), { target: { value: "2026" } });
-    await new Promise((r) => setTimeout(r, 50));
-    expect(invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "summary").length).toBe(before);
-    fireEvent.click(screen.getByText("Appliquer"));
-    await waitFor(() => {
-      const s = invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "summary");
-      expect(s.length).toBe(before + 1);
-      expect(s[s.length - 1][1].body.filters.number_prefix).toBe("2026");
-    });
-  });
-
-  it("réponse ancienne ignorée après changement de période", async () => {
-    let releaseOld!: () => void;
-    let first = true;
-    invokeMock.mockImplementation((fn: string, opts: any) => {
-      if (first && opts?.body?.action === "summary") {
-        first = false;
-        return new Promise((r) => { releaseOld = () => r({ data: { summary: { ...SUMMARY, deposit_count: 999 } }, error: null }); });
-      }
-      return respond(fn, opts);
-    });
-    render(<MCommissions />);
-    fireEvent.click(screen.getByText("Année en cours"));
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    releaseOld();
-    await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByText("999")).toBeNull();
-  });
-
-  it("double tap « Charger plus » = une seule requête page 2", async () => {
-    render(<MCommissions />);
-    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
-    const more = await screen.findByText(/charger plus/i);
-    fireEvent.click(more); fireEvent.click(more);
-    await waitFor(() => expect(invokeMock.mock.calls.some((c) => c[1]?.body?.filters?.page === 2)).toBe(true));
-    expect(invokeMock.mock.calls.filter((c) => c[1]?.body?.action === "deposits" && c[1]?.body?.filters?.page === 2)).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Mes commissions" }));
+    expect(screen.getByTestId("sections")).toHaveTextContent('"scope":"broker"');
+    expect(screen.getByTestId("sections")).toHaveTextContent('"personalUsersId":null');
   });
 });

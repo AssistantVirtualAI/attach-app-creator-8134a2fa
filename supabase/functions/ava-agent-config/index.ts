@@ -10,6 +10,38 @@ const DEFAULT_VOICE_ID = "cgSgspJ2msm6clMCkdW9"; // Jessica — voix unique pour
 
 const TOOL_NAMES = EXPECTED_TOOL_NAMES;
 
+// Read-only diagnostic: pull the tool names actually configured on the
+// ElevenLabs agent out of the agent payload we already fetched. Two API shapes
+// are supported: `conversation_config.agent.prompt.tools` (objects with `name`)
+// and `conversation_config.agent.prompt.tool_ids`. When neither shape exists
+// the result is null = INDETERMINATE, which must never be reported as "no
+// tools".
+function collectToolNames(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const names: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry === "string") {
+      if (entry.trim()) names.push(entry.trim());
+      continue;
+    }
+    if (entry && typeof entry === "object") {
+      const rec = entry as Record<string, unknown>;
+      const candidate = rec.name ?? rec.tool_name ?? rec.id ?? rec.tool_id;
+      if (typeof candidate === "string" && candidate.trim()) names.push(candidate.trim());
+    }
+  }
+  return names;
+}
+
+function readLiveToolNames(agent: any): string[] | null {
+  const prompt = agent?.conversation_config?.agent?.prompt;
+  if (!prompt || typeof prompt !== "object") return null;
+  const fromTools = collectToolNames(prompt.tools);
+  if (fromTools) return fromTools;
+  return collectToolNames(prompt.tool_ids);
+}
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
